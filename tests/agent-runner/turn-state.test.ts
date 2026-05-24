@@ -1,0 +1,227 @@
+import { describe, expect, it, vi, afterEach } from "vitest";
+
+import {
+  appendReasoningText,
+  composeSessionId,
+  consumeReviewSummary,
+  createTurnState,
+  deleteReasoningBuffer,
+  recordCompletedTurn,
+  recordReviewSummary,
+  waitForTurnCompletion,
+} from "../../src/agent-runner/turn-state.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("turn state", () => {
+  it("returns a buffered completed turn when notification arrives before the waiter", async () => {
+    const state = createTurnState();
+    const completedPayload = { turn: { id: "turn-1", status: "completed" } };
+    recordCompletedTurn(state, "turn-1", completedPayload);
+
+    await expect(
+      waitForTurnCompletion(state, {
+        turnId: "turn-1",
+        signal: new AbortController().signal,
+        timeoutMs: 1000,
+      }),
+    ).resolves.toEqual(completedPayload);
+    expect(state.completedTurnNotifications.has("turn-1")).toBe(false);
+  });
+
+  it("resolves a pending waiter when the completion notification arrives later", async () => {
+    const state = createTurnState();
+    const controller = new AbortController();
+    const pending = waitForTurnCompletion(state, {
+      turnId: "turn-2",
+      signal: controller.signal,
+      timeoutMs: 1000,
+    });
+
+    recordCompletedTurn(state, "turn-2", { turn: { id: "turn-2", status: "completed" } });
+
+    await expect(pending).resolves.toEqual({
+      turn: { id: "turn-2", status: "completed" },
+    });
+    expect(state.turnCompletionResolvers.has("turn-2")).toBe(false);
+  });
+
+  it("appends reasoning text deltas in order", () => {
+    const state = createTurnState();
+
+    appendReasoningText(state, "reason-1", "I need to ");
+    appendReasoningText(state, "reason-1", "run a query.");
+
+    expect(state.reasoningBuffers.get("reason-1")).toBe("I need to run a query.");
+  });
+
+  it("rejects with timeout error when no completion arrives", async () => {
+    vi.useFakeTimers();
+    const state = createTurnState();
+    const promise = waitForTurnCompletion(state, {
+      turnId: "turn-timeout",
+      signal: new AbortController().signal,
+      timeoutMs: 500,
+    });
+    vi.advanceTimersByTime(501);
+    await expect(promise).rejects.toMatchObject({
+      message: "timed out waiting for turn completion after 500ms",
+    });
+    expect(state.turnCompletionResolvers.has("turn-timeout")).toBe(false);
+  });
+
+  it("rejects when abort signal fires before completion", async () => {
+    const state = createTurnState();
+    const controller = new AbortController();
+    const promise = waitForTurnCompletion(state, {
+      turnId: "turn-abort",
+      signal: controller.signal,
+      timeoutMs: 5000,
+    });
+    controller.abort();
+    await expect(promise).rejects.toMatchObject({
+      message: "turn completion interrupted",
+    });
+    expect(state.turnCompletionResolvers.has("turn-abort")).toBe(false);
+  });
+
+  it("registers the abort listener with once semantics", () => {
+    vi.useFakeTimers();
+    const state = createTurnState();
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const signal = {
+      aborted: false,
+      addEventListener,
+      removeEventListener,
+    } as unknown as AbortSignal;
+
+    waitForTurnCompletion(state, {
+      turnId: "turn-once",
+      signal,
+      timeoutMs: 5000,
+    }).catch(() => undefined);
+
+    expect(addEventListener).toHaveBeenCalledTimes(1);
+    expect(addEventListener.mock.calls[0]?.[0]).toBe("abort");
+    expect(typeof addEventListener.mock.calls[0]?.[1]).toBe("function");
+    expect(addEventListener.mock.calls[0]?.[2]).toEqual({ once: true });
+  });
+
+  it("removes the abort listener when the waiter times out", async () => {
+    vi.useFakeTimers();
+    const state = createTurnState();
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const signal = {
+      aborted: false,
+      addEventListener,
+      removeEventListener,
+    } as unknown as AbortSignal;
+
+    const promise = waitForTurnCompletion(state, {
+      turnId: "turn-timeout-cleanup",
+      signal,
+      timeoutMs: 500,
+    });
+
+    vi.advanceTimersByTime(501);
+    await expect(promise).rejects.toMatchObject({
+      message: "timed out waiting for turn completion after 500ms",
+    });
+    expect(removeEventListener).toHaveBeenCalledWith("abort", addEventListener.mock.calls[0]?.[1]);
+  });
+
+  it("removes the abort listener when the waiter resolves successfully", async () => {
+    const state = createTurnState();
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const signal = {
+      aborted: false,
+      addEventListener,
+      removeEventListener,
+    } as unknown as AbortSignal;
+
+    const promise = waitForTurnCompletion(state, {
+      turnId: "turn-resolve-cleanup",
+      signal,
+      timeoutMs: 5000,
+    });
+
+    recordCompletedTurn(state, "turn-resolve-cleanup", { ok: true });
+
+    await expect(promise).resolves.toEqual({ ok: true });
+    expect(removeEventListener).toHaveBeenCalledWith("abort", addEventListener.mock.calls[0]?.[1]);
+  });
+
+  it("handles multiple concurrent waiters on different turnIds", async () => {
+    const state = createTurnState();
+    const controller = new AbortController();
+    const p1 = waitForTurnCompletion(state, {
+      turnId: "t1",
+      signal: controller.signal,
+      timeoutMs: 5000,
+    });
+    const p2 = waitForTurnCompletion(state, {
+      turnId: "t2",
+      signal: controller.signal,
+      timeoutMs: 5000,
+    });
+
+    recordCompletedTurn(state, "t2", { id: "t2", done: true });
+    recordCompletedTurn(state, "t1", { id: "t1", done: true });
+
+    await expect(p1).resolves.toEqual({ id: "t1", done: true });
+    await expect(p2).resolves.toEqual({ id: "t2", done: true });
+  });
+
+  it("appendReasoningText is a no-op for null itemId or text", () => {
+    const state = createTurnState();
+    appendReasoningText(state, null, "some text");
+    appendReasoningText(state, "item-1", null);
+    expect(state.reasoningBuffers.size).toBe(0);
+  });
+
+  it("deleteReasoningBuffer removes the buffer", () => {
+    const state = createTurnState();
+    appendReasoningText(state, "item-1", "data");
+    expect(state.reasoningBuffers.has("item-1")).toBe(true);
+    deleteReasoningBuffer(state, "item-1");
+    expect(state.reasoningBuffers.has("item-1")).toBe(false);
+  });
+
+  it("deleteReasoningBuffer is a no-op for null itemId", () => {
+    const state = createTurnState();
+    deleteReasoningBuffer(state, null);
+    expect(state.reasoningBuffers.size).toBe(0);
+  });
+
+  it("recordCompletedTurn is a no-op for null turnId", () => {
+    const state = createTurnState();
+    recordCompletedTurn(state, null, { something: true });
+    expect(state.completedTurnNotifications.size).toBe(0);
+  });
+
+  it("records and consumes review summaries by turn id", () => {
+    const state = createTurnState();
+    recordReviewSummary(state, "turn-review", "Looks solid overall.");
+    expect(consumeReviewSummary(state, "turn-review")).toBe("Looks solid overall.");
+    expect(consumeReviewSummary(state, "turn-review")).toBeNull();
+  });
+});
+
+describe("composeSessionId", () => {
+  it("returns null when threadId is null", () => {
+    expect(composeSessionId(null, "turn-1")).toBeNull();
+  });
+
+  it("returns threadId when turnId is null", () => {
+    expect(composeSessionId("thread-1", null)).toBe("thread-1");
+  });
+
+  it("returns combined string when both are present", () => {
+    expect(composeSessionId("thread-1", "turn-1")).toBe("thread-1-turn-1");
+  });
+});

@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "comment": "Quarantine ledger for the v0.1.0 curated snapshot import. Items here are preserved for Step 6 reshape under the Workflow Run primitive (ADR-0001). See IMPORT_MANIFEST.md for full context.",
+  "version": "0.1.0",
+  "imported_at": "2026-05-24",
+  "imported_from": "OmerFarukOruc/risoluto-legacy",
+  "items": [
+    {
+      "path": "src/agent-runner/",
+      "reason": "Role Execution Runtime currently keyed on Issue/Attempt. Natural home of Role Execution after Step 6 reshape.",
+      "target_step": 6
+    },
+    {
+      "path": "src/automation/",
+      "reason": "Linear automation webhook server; issue-centric. Maps to Tracker Adapter intake after reshape.",
+      "target_step": 6
+    },
+    {
+      "path": "src/config/",
+      "reason": "Config schemas embed TrackerConfig/AgentConfig that are issue-adjacent. Reshape to Workflow Run-centric schemas.",
+      "target_step": 6
+    },
+    {
+      "path": "src/core/",
+      "reason": "Contains types/issue.ts as first-class primitive. Reshape Issue → WorkflowRun; keep event-bus.ts and lifecycle-events.ts as core.",
+      "target_step": 6,
+      "renames": [
+        { "from": "src/core/types/issue.ts", "to": "src/core/types/workflow-run.ts" },
+        { "from": "src/core/types/issue-config-port.ts", "to": "src/core/types/run-config-port.ts" }
+      ]
+    },
+    {
+      "path": "src/dispatch/",
+      "reason": "Dispatch keyed on Issue+ModelSelection. Natural home of Scheduler/Retry/Dispatch surface after reshape.",
+      "target_step": 6
+    },
+    {
+      "path": "src/http/",
+      "reason": "46 issue-centric handlers. HTTP API is support/internal surface per spine; reshape under Workflow Run.",
+      "target_step": 6
+    },
+    {
+      "path": "src/linear/",
+      "reason": "Linear tracker adapter (kept in adapter bucket), but specific filenames are issue-centric and need renaming during Step 6.",
+      "target_step": 6,
+      "renames": [
+        { "from": "src/linear/issue-parser.ts", "to": "src/linear/intake-parser.ts" },
+        { "from": "src/linear/nightly-failures.ts", "to": "src/linear/run-failure-summary.ts" }
+      ]
+    },
+    {
+      "path": "src/orchestrator/",
+      "reason": "Largest quarantined module. Natural home of Workflow Run engine post-reshape. Preserve implementation intelligence.",
+      "target_step": 6,
+      "renames": [{ "from": "src/orchestrator/issue-locator.ts", "to": "src/orchestrator/run-locator.ts" }]
+    },
+    {
+      "path": "src/persistence/",
+      "reason": "SQLite stores keyed on issueId/identifier. Reshape to workflowRunId; introduce ArtifactStore + EventLogStore + WorkflowRunStore ports.",
+      "target_step": 6
+    },
+    {
+      "path": "src/prompt/",
+      "reason": "Template store port is issue-agnostic, but template content may embed issue-specific prompts. Pending content audit.",
+      "target_step": 6
+    },
+    {
+      "path": "src/workflow/columns.ts",
+      "reason": "Linear board column definitions (misclassified). Move to src/linear/board-columns.ts in Step 6 with reference updates.",
+      "target_step": 6,
+      "renames": [{ "from": "src/workflow/columns.ts", "to": "src/linear/board-columns.ts" }]
+    },
+    {
+      "path": "package.json",
+      "reason": "Contains frontend deps (Vite, React, Playwright browser, vitest browser, @testing-library/*). Prune + regenerate pnpm-lock.yaml in Step 6/7.",
+      "target_step": 7
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "reason": "Locks frontend deps. Regenerate after package.json prune.",
+      "target_step": 7
+    },
+    {
+      "path": "tsconfig.json",
+      "reason": "References frontend paths. Prune in Step 6/7.",
+      "target_step": 7
+    },
+    {
+      "path": "tsconfig.typecheck.json",
+      "reason": "References frontend paths.",
+      "target_step": 7
+    },
+    {
+      "path": "tsconfig.eslint.json",
+      "reason": "References frontend paths.",
+      "target_step": 7
+    },
+    {
+      "path": "vitest.config.ts",
+      "reason": "May reference frontend plugins/paths.",
+      "target_step": 7
+    },
+    {
+      "path": "vitest.integration.config.ts",
+      "reason": "Verify no frontend-only plugins after prune.",
+      "target_step": 7
+    },
+    {
+      "path": "vitest.live.config.ts",
+      "reason": "Live tests; verify post-prune.",
+      "target_step": 7
+    },
+    {
+      "path": "vitest.load.config.ts",
+      "reason": "Load tests; scope verify.",
+      "target_step": 7
+    },
+    {
+      "path": "eslint.config.js",
+      "reason": "Frontend rule sections need removal.",
+      "target_step": 7
+    },
+    {
+      "path": "knip.json",
+      "reason": "Frontend entry points listed.",
+      "target_step": 7
+    },
+    {
+      "path": "knip.config.ts",
+      "reason": "Same as knip.json.",
+      "target_step": 7
+    },
+    {
+      "path": "stryker.config.json",
+      "reason": "Mutation testing config; verify v1 scope.",
+      "target_step": 7
+    },
+    {
+      "path": "typedoc.json",
+      "reason": "Scope to backend only.",
+      "target_step": 7
+    },
+    {
+      "path": "commitlint.config.ts",
+      "reason": "Allowed-scope enum still includes 'frontend'. Remove during Step 7.",
+      "target_step": 7
+    },
+    {
+      "path": "anvil.config.yaml",
+      "reason": "Kept per B3; reviewed during Step 6 alongside skill-pack design.",
+      "target_step": 6
+    },
+    {
+      "path": ".agents/PLANS.md",
+      "reason": "ExecPlan template format preserved as-is. Rewrite under v1 framing in Step 6.",
+      "target_step": 6
+    },
+    {
+      "path": ".github/",
+      "reason": "Legacy CI workflows. Rebuild for v1 in Step 7.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/nightly-evidence-links.ts",
+      "reason": "Nightly CI helper; tied to legacy CI design.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/nightly-failure-summary.ts",
+      "reason": "Nightly CI helper.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/nightly-history-r2.ts",
+      "reason": "Nightly CI helper.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/nightly-linear-intake.ts",
+      "reason": "Nightly CI helper; Linear-specific.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/nightly-validation-fail.ts",
+      "reason": "Nightly CI helper.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/quarantine-heal.ts",
+      "reason": "Quarantine machinery; re-evaluate in Step 6.",
+      "target_step": 6
+    },
+    {
+      "path": "scripts/quarantine-shared.ts",
+      "reason": "Quarantine machinery.",
+      "target_step": 6
+    },
+    {
+      "path": "scripts/quarantine.ts",
+      "reason": "Quarantine machinery.",
+      "target_step": 6
+    },
+    {
+      "path": "scripts/sync-labels.sh",
+      "reason": "GitHub labels sync; may survive in Step 7.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/upload-nightly-artifacts-r2.ts",
+      "reason": "CI artifact upload to R2.",
+      "target_step": 7
+    },
+    {
+      "path": "scripts/.pipeline/",
+      "reason": "CI pipeline definitions; rebuild in Step 7.",
+      "target_step": 7
+    },
+    {
+      "path": "tests/orchestrator/",
+      "reason": "Issue-centric flows. Reshape alongside src/orchestrator/.",
+      "target_step": 6
+    },
+    {
+      "path": "tests/persistence/",
+      "reason": "Issue-keyed persistence tests.",
+      "target_step": 6
+    },
+    {
+      "path": "tests/http/",
+      "reason": "Issue-centric HTTP handler tests.",
+      "target_step": 6
+    },
+    {
+      "path": "tests/config/",
+      "reason": "Config schema tests; reshape with src/config/.",
+      "target_step": 6
+    },
+    {
+      "path": "tests/integration/",
+      "reason": "Integration tests against quarantined surfaces.",
+      "target_step": 6
+    }
+  ]
+}

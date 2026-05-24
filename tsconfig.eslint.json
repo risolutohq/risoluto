@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "lib": ["ES2022"]
+  },
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "frontend/src/**/*",
+    "frontend/*.ts",
+    "scripts/**/*",
+    "playwright.config.ts",
+    "playwright.fullstack.config.ts",
+    "commitlint.config.ts"
+  ]
+}

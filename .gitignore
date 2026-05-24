@@ -1,0 +1,96 @@
+node_modules/
+bun.lock
+dist/
+.desloppify/
+.symphony/
+.sisyphus/
+.stitch/
+design-handoff/
+
+# Generated wiki signal — refreshed by .claude/hooks/wiki-signal.sh
+.cache/
+
+# Logs and local runtime output
+*.log
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# Coverage and test artifacts
+coverage/
+reports/
+.stryker-tmp/
+
+# Playwright E2E test artifacts
+playwright-report/
+test-results/
+blob-report/
+.e2e-artifacts/
+
+# agent-browser visual verification artifacts
+docs/archive/screenshots/
+docs/archive/dogfood-output/
+*.auth-state.json
+
+# Environment secrets
+.env
+.env.*
+
+# Superset local overrides
+.superset/config.local.json
+
+# Personal Claude preferences
+CLAUDE.local.md
+# CocoIndex Code (ccc)
+/.cocoindex_code/
+.gstack/
+.factory/
+.qwen/
+.mintlify/
+!docs-site/.mintlify/
+docs-site/.mintlify/*
+!docs-site/.mintlify/Assistant.md
+
+# E2E lifecycle test
+scripts/e2e-config.yaml
+e2e-reports/
+.claude/worktrees/
+
+# Archived runtime data (contains secrets)
+archives/
+
+# Generated output
+dogfood-output/
+outputs/
+
+# UI Polish pipeline
+.ui-polish/
+screenshots/
+
+# External tool state
+.omx/
+sast/
+.codex/*
+!.codex/config.toml
+!.codex/hooks.json
+!.codex/agents/
+!.codex/agents/*.toml
+!.codex/hooks/
+!.codex/hooks/*.py
+.codex/hooks/__pycache__/
+
+# Claude Code / ui-test artifacts
+.context/
+.worktrees
+
+# Autoresearch / mutation-research tooling artifacts
+autoresearch-*
+research-results-*
+
+# oh-my-anvil v3 — transient run state (specs and legacy are tracked)
+.anvil/runs/
+.anvil/ACTIVE_RUN
+.anvil/ACTIVE_RUNS/
+.env.seed

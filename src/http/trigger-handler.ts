@@ -1,0 +1,292 @@
+import { tokensMatch } from "./token-compare.js";
+import type { Request, Response } from "express";
+
+import type { ConfigStore } from "../config/store.js";
+import type { RisolutoLogger } from "../core/types.js";
+import type { OrchestratorPort } from "../orchestrator/port.js";
+import type { TrackerIssueCreateInput, TrackerPort } from "../tracker/port.js";
+import type { VerifiedWebhookDeliveryStore } from "../webhook/delivery-workflow.js";
+import { WebhookDeliveryWorkflow } from "../webhook/delivery-workflow.js";
+import type { ApiErrorResponse } from "./service-errors.js";
+
+export interface TriggerHandlerDeps {
+  configStore?: ConfigStore;
+  tracker?: TrackerPort;
+  orchestrator: Pick<OrchestratorPort, "executeCommand" | "requestRefresh" | "requestTargetedRefresh">;
+  webhookInbox?: VerifiedWebhookDeliveryStore;
+  logger: RisolutoLogger;
+}
+
+type TriggerConfig = ReturnType<ConfigStore["getConfig"]>["triggers"];
+type ActiveTriggerConfig = TriggerConfig & { apiKey: string };
+
+interface TriggerDispatchContext {
+  action: string;
+  body: Record<string, unknown>;
+  issueId: string | null;
+  issueIdentifier: string | null;
+}
+
+function sendError(response: Response, status: number, code: string, message: string): void {
+  response.status(status).json({ error: { code, message } } satisfies ApiErrorResponse);
+}
+
+function extractApiKey(request: Request): string | null {
+  const header = request.get("x-risoluto-trigger-key");
+  if (header && header.trim()) {
+    return header.trim();
+  }
+  const authorization = request.get("authorization");
+  if (!authorization) {
+    return null;
+  }
+  const bearerPrefix = "Bearer ";
+  if (!authorization.startsWith(bearerPrefix)) {
+    return null;
+  }
+  return authorization.slice(bearerPrefix.length).trim() || null;
+}
+
+function pickString(record: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function requireTriggerConfig(
+  response: Response,
+  triggerConfig: TriggerConfig | undefined,
+): ActiveTriggerConfig | null {
+  if (triggerConfig?.apiKey) {
+    return {
+      ...triggerConfig,
+      apiKey: triggerConfig.apiKey,
+    };
+  }
+
+  sendError(response, 503, "trigger_not_configured", "Trigger API key is not configured");
+  return null;
+}
+
+function authorizeTriggerRequest(request: Request, response: Response, apiKey: string): boolean {
+  const provided = extractApiKey(request);
+  if (tokensMatch(provided, apiKey)) {
+    return true;
+  }
+
+  sendError(response, 401, "unauthorized", "Invalid trigger API key");
+  return false;
+}
+
+function parseTriggerDispatchContext(
+  request: Request,
+  response: Response,
+  allowedActions: readonly string[],
+): TriggerDispatchContext | null {
+  const body = request.body as Record<string, unknown>;
+  const action = pickString(body, "action");
+  if (!action) {
+    sendError(response, 400, "validation_error", "action is required");
+    return null;
+  }
+
+  if (!allowedActions.includes(action)) {
+    sendError(response, 403, "action_not_allowed", `Action ${action} is not enabled`);
+    return null;
+  }
+
+  return {
+    action,
+    body,
+    issueId: pickString(body, "issue_id", "issueId"),
+    issueIdentifier: pickString(body, "issue_identifier", "issueIdentifier"),
+  };
+}
+
+function getIdempotencyKey(request: Request, body: Record<string, unknown>): string | null {
+  return request.get("Idempotency-Key") ?? pickString(body, "idempotency_key", "idempotencyKey");
+}
+
+async function handleDuplicateTriggerDelivery(
+  deps: TriggerHandlerDeps,
+  request: Request,
+  response: Response,
+  dispatch: TriggerDispatchContext,
+): Promise<boolean> {
+  const idempotencyKey = getIdempotencyKey(request, dispatch.body);
+  if (!idempotencyKey) {
+    return false;
+  }
+
+  const workflow = new WebhookDeliveryWorkflow(deps.logger, deps.webhookInbox);
+  const isNew = await workflow.ensureNew({
+    deliveryId: idempotencyKey,
+    type: "Trigger",
+    action: dispatch.action,
+    entityId: null,
+    issueId: dispatch.issueId,
+    issueIdentifier: dispatch.issueIdentifier,
+    webhookTimestamp: null,
+    payloadJson: JSON.stringify(dispatch.body),
+  });
+  if (isNew) {
+    return false;
+  }
+
+  deps.logger.debug(
+    { deliveryId: idempotencyKey, action: dispatch.action, type: "Trigger" },
+    "duplicate trigger delivery skipped",
+  );
+  response.status(200).json({ ok: true, action: dispatch.action, duplicate: true });
+  return true;
+}
+
+async function handleRePollTrigger(deps: TriggerHandlerDeps, response: Response): Promise<void> {
+  const refresh =
+    typeof deps.orchestrator.executeCommand === "function"
+      ? await deps.orchestrator.executeCommand({ type: "refresh", reason: "trigger:re_poll" })
+      : deps.orchestrator.requestRefresh("trigger:re_poll");
+  response.status(202).json({ ok: true, action: "re_poll", queued: refresh.queued, coalesced: refresh.coalesced });
+}
+
+async function handleRefreshIssueTrigger(
+  deps: TriggerHandlerDeps,
+  response: Response,
+  dispatch: Pick<TriggerDispatchContext, "action" | "issueId" | "issueIdentifier">,
+): Promise<void> {
+  if (dispatch.issueId && dispatch.issueIdentifier) {
+    const refresh =
+      typeof deps.orchestrator.executeCommand === "function"
+        ? await deps.orchestrator.executeCommand({
+            type: "refresh",
+            issueId: dispatch.issueId,
+            issueIdentifier: dispatch.issueIdentifier,
+            reason: "trigger:refresh_issue",
+          })
+        : (deps.orchestrator.requestTargetedRefresh(
+            dispatch.issueId,
+            dispatch.issueIdentifier,
+            "trigger:refresh_issue",
+          ),
+          {
+            queued: true,
+            coalesced: false,
+            requestedAt: new Date().toISOString(),
+            targeted: true,
+            issueId: dispatch.issueId,
+            issueIdentifier: dispatch.issueIdentifier,
+          });
+    response.status(202).json({
+      ok: true,
+      action: dispatch.action,
+      targeted: refresh.targeted,
+      issueId: refresh.issueId,
+      issueIdentifier: refresh.issueIdentifier,
+    });
+    return;
+  }
+
+  const refresh =
+    typeof deps.orchestrator.executeCommand === "function"
+      ? await deps.orchestrator.executeCommand({ type: "refresh", reason: "trigger:refresh_issue" })
+      : deps.orchestrator.requestRefresh("trigger:refresh_issue");
+  response.status(202).json({
+    ok: true,
+    action: dispatch.action,
+    targeted: false,
+    queued: refresh.queued,
+    coalesced: refresh.coalesced,
+  });
+}
+
+async function handleCreateIssueTrigger(
+  deps: TriggerHandlerDeps,
+  response: Response,
+  body: Record<string, unknown>,
+): Promise<void> {
+  if (!deps.tracker) {
+    sendError(response, 503, "tracker_not_configured", "Tracker is not available");
+    return;
+  }
+
+  const title = pickString(body, "title");
+  if (!title) {
+    sendError(response, 400, "validation_error", "title is required for create_issue");
+    return;
+  }
+
+  const input: TrackerIssueCreateInput = {
+    title,
+    description: pickString(body, "description"),
+    stateName: pickString(body, "state_name", "stateName"),
+  };
+  const created = await deps.tracker.createIssue(input);
+  if (typeof deps.orchestrator.executeCommand === "function") {
+    await deps.orchestrator.executeCommand({
+      type: "refresh",
+      issueId: created.issueId,
+      issueIdentifier: created.identifier,
+      reason: "trigger:create_issue",
+    });
+  } else {
+    deps.orchestrator.requestTargetedRefresh(created.issueId, created.identifier, "trigger:create_issue");
+  }
+  response.status(202).json({
+    ok: true,
+    action: "create_issue",
+    issueId: created.issueId,
+    issueIdentifier: created.identifier,
+    issueUrl: created.url,
+  });
+}
+
+async function dispatchTriggerAction(
+  deps: TriggerHandlerDeps,
+  response: Response,
+  dispatch: TriggerDispatchContext,
+): Promise<void> {
+  switch (dispatch.action) {
+    case "re_poll":
+      await handleRePollTrigger(deps, response);
+      return;
+    case "refresh_issue":
+      await handleRefreshIssueTrigger(deps, response, dispatch);
+      return;
+    case "create_issue":
+      await handleCreateIssueTrigger(deps, response, dispatch.body);
+      return;
+    default:
+      deps.logger.warn({ action: dispatch.action }, "trigger action reached unexpected fallback");
+      sendError(response, 400, "validation_error", `Unsupported action ${dispatch.action}`);
+  }
+}
+
+export async function handleTriggerDispatch(
+  deps: TriggerHandlerDeps,
+  request: Request,
+  response: Response,
+): Promise<void> {
+  const triggerConfig = requireTriggerConfig(response, deps.configStore?.getConfig().triggers);
+  if (!triggerConfig) {
+    return;
+  }
+
+  if (!authorizeTriggerRequest(request, response, triggerConfig.apiKey)) {
+    return;
+  }
+
+  const dispatch = parseTriggerDispatchContext(request, response, triggerConfig.allowedActions);
+  if (!dispatch) {
+    return;
+  }
+
+  if (await handleDuplicateTriggerDelivery(deps, request, response, dispatch)) {
+    return;
+  }
+
+  await dispatchTriggerAction(deps, response, dispatch);
+}

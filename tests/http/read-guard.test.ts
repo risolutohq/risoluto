@@ -1,0 +1,187 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { createReadGuard } from "../../src/http/read-guard.js";
+
+function createResponse() {
+  const response = {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
+  };
+  return response;
+}
+
+describe("createReadGuard", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("allows protected reads from loopback without a token", () => {
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/state",
+      socket: { remoteAddress: "127.0.0.1" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it("rejects protected reads from remote addresses without configured tokens", () => {
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/state",
+      socket: { remoteAddress: "192.168.1.10" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(403);
+  });
+
+  it("allows protected reads with RISOLUTO_READ_TOKEN via bearer auth", () => {
+    vi.stubEnv("RISOLUTO_READ_TOKEN", "read-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/state",
+      socket: { remoteAddress: "192.168.1.10" },
+      get: vi
+        .fn()
+        .mockImplementation((header: string) => (header === "authorization" ? "Bearer read-secret" : undefined)),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it("allows protected reads with RISOLUTO_READ_TOKEN via Authorization header", () => {
+    vi.stubEnv("RISOLUTO_READ_TOKEN", "read-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/events",
+      socket: { remoteAddress: "10.0.0.5" },
+      get: vi.fn().mockReturnValue("Bearer read-secret"),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it("allows SSE reads with valid ?read_token= query param (EventSource cannot send headers)", () => {
+    vi.stubEnv("RISOLUTO_WRITE_TOKEN", "write-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/events",
+      socket: { remoteAddress: "10.0.0.5" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: { read_token: "write-secret" },
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid ?read_token= query param", () => {
+    vi.stubEnv("RISOLUTO_WRITE_TOKEN", "write-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/events",
+      socket: { remoteAddress: "10.0.0.5" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: { read_token: "wrong-token" },
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(401);
+  });
+
+  it("rejects header tokens with the wrong length even when they share a prefix", () => {
+    vi.stubEnv("RISOLUTO_READ_TOKEN", "read-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/state",
+      socket: { remoteAddress: "10.0.0.5" },
+      get: vi.fn().mockReturnValue("Bearer read-sec"),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(401);
+  });
+
+  it("skips public runtime reads", () => {
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/runtime",
+      socket: { remoteAddress: "203.0.113.10" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "/api/v1/prs",
+    "/api/v1/observability",
+    "/api/v1/recovery",
+    "/api/v1/notifications",
+    "/api/v1/automations",
+    "/api/v1/alerts/history",
+    "/api/v1/setup/status",
+    "/api/v1/codex/admin",
+  ])("protects sensitive operator read route %s", (path) => {
+    vi.stubEnv("RISOLUTO_READ_TOKEN", "read-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path,
+      socket: { remoteAddress: "203.0.113.10" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(401);
+  });
+});

@@ -1,0 +1,15 @@
+#!/bin/sh
+# ── Pre-commit: fast staged-file checks ──────────────────────────────
+# lint-staged runs eslint --fix + prettier --write on staged *.ts files.
+# This is the formatting/linting gate — pre-push does NOT re-run these.
+
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+
+# ── Gitleaks: scan staged changes for secrets ─────────────────────────
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --config .gitleaks.toml --verbose
+else
+  echo "⚠️  gitleaks not installed — skipping secret scan."
+fi
+
+pnpm exec lint-staged

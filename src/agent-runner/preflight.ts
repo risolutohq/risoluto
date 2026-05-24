@@ -1,0 +1,56 @@
+import type { RisolutoLogger } from "../core/types.js";
+import { asRecord } from "./helpers.js";
+import { toErrorString } from "../utils/type-guards.js";
+import { CODEX_METHOD } from "../codex/methods.js";
+
+/** Minimal interface for the JSON-RPC request method used by preflight. */
+export interface PreflightConnection {
+  request(method: string, params: unknown): Promise<unknown>;
+}
+
+export interface PreflightResult {
+  passed: boolean;
+  failedCommand?: string;
+  output?: string;
+}
+
+export async function runPreflight(
+  connection: PreflightConnection,
+  commands: string[],
+  logger: RisolutoLogger,
+): Promise<PreflightResult> {
+  if (commands.length === 0) {
+    return { passed: true };
+  }
+
+  for (const command of commands) {
+    try {
+      const result = await connection.request(CODEX_METHOD.CommandExec, { command: ["sh", "-lc", command] });
+      const data = asRecord(result);
+      const exitCode = typeof data.exitCode === "number" ? data.exitCode : -1;
+      const output =
+        typeof data.output === "string"
+          ? data.output
+          : [data.stdout, data.stderr]
+              .filter((value): value is string => typeof value === "string")
+              .join("\n")
+              .trim();
+      if (exitCode !== 0) {
+        logger.warn({ command, exitCode }, "preflight command failed");
+        return {
+          passed: false,
+          failedCommand: command,
+          output: output || undefined,
+        };
+      }
+    } catch (error) {
+      logger.warn({ command, error: toErrorString(error) }, "preflight command/exec request failed");
+      return {
+        passed: false,
+        failedCommand: command,
+      };
+    }
+  }
+
+  return { passed: true };
+}
