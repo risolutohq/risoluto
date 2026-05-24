@@ -82,7 +82,7 @@ Reach a coherent `1.0.0` Foundation Baseline for `risolutohq/risoluto`: clean re
 
 - The implementation still contains issue-centric names because the copied backend source predates the Workflow Run model.
 - Live tests require configured sandbox Linear/GitHub/model credentials.
-- `typecheck:tests` is informational until the remaining copied test typing debt is removed.
+- `typecheck:tests` remains available as a local debt scanner until the remaining copied test typing debt is removed, but it is not a CI gate.
 
 ## Current Test Surface Without Frontend
 
