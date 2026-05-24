@@ -32,7 +32,16 @@ Omer then widened the dependency instruction to update everything to latest, inc
 - [x] Fix dependency update blockers.
 - [x] Check GitHub Actions versions and CI assumptions.
 - [x] Run final verification.
-- [ ] Commit, push, open PR, and check remote CI.
+- [x] Commit, push, open PR, and check remote CI.
+
+## Final State
+
+- Branch: `codex/v1-drift-deps-cleanup`.
+- PR: `https://github.com/risolutohq/risoluto/pull/3`.
+- Dependency/update commit: `91b1f92 chore(deps): refresh v1 foundation dependencies`.
+- Remote CI unblock commit: `2dcdc6a ci: keep dependency review non-blocking until graph is available`.
+- Latest remote CI run checked: `26368524168`, completed successfully.
+- Dependency Review remains visible in CI but non-blocking because GitHub reports Dependency Graph support unavailable for this repository; local `pnpm audit --prod` is clean.
 
 ## Open Decisions
 
