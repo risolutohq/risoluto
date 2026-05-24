@@ -1,0 +1,26 @@
+# Build artifacts & dependencies
+node_modules/
+dist/
+
+# Development files
+.git/
+.github/
+tests/
+docs/archive/
+skills/
+
+# Config & docs (keep tsconfig.json — needed by Docker build)
+*.md
+!WORKFLOW.docker.md
+.eslintrc*
+.prettierrc*
+.jscpd.json
+vitest*.config.*
+knip.json
+
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

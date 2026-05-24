@@ -1,0 +1,268 @@
+import os from "node:os";
+
+import type { PathRegistry } from "../workspace/path-registry.js";
+import type { SandboxConfig } from "../core/types.js";
+
+const CONTAINER_HOME = "/home/agent";
+/**
+ * Container-internal path — isolated from host filesystem and kept under
+ * HOME so Codex can safely install helper binaries when needed.
+ */
+const CONTAINER_CODEX_HOME = "/home/agent/.codex-runtime";
+
+export interface DockerRunInput {
+  sandboxConfig: SandboxConfig;
+  runId: string;
+  command: string;
+  workspacePath: string;
+  archiveDir: string;
+  extraMountPaths?: string[];
+  pathRegistry?: PathRegistry;
+  runtimeConfigToml: string;
+  runtimeAuthJsonBase64?: string | null;
+  requiredEnv?: string[];
+  issueIdentifier?: string;
+  model?: string;
+  /** Bare-clone dir for worktree workspaces — mounted read-only so git resolves inside the container. */
+  gitBaseDir?: string;
+}
+
+interface DockerRunResult {
+  program: string;
+  args: string[];
+  containerName: string;
+  cacheVolumeName: string;
+}
+
+function collectMounts(input: DockerRunInput): Array<[string, string, string?]> {
+  const { workspacePath, archiveDir, extraMountPaths = [], pathRegistry, gitBaseDir } = input;
+  const translate = (mountPath: string) => pathRegistry?.translate(mountPath) ?? mountPath;
+  const mounts: Array<[string, string, string?]> = [
+    [translate(workspacePath), workspacePath],
+    [translate(archiveDir), archiveDir],
+  ];
+  // gitBaseDir added BEFORE extraMountPaths so the read-only mount wins
+  // dedup when both reference the same bare-clone directory.
+  if (gitBaseDir) {
+    mounts.push([translate(gitBaseDir), gitBaseDir, "ro"]);
+  }
+  for (const mountPath of extraMountPaths) {
+    mounts.push([translate(mountPath), mountPath]);
+  }
+  return mounts;
+}
+
+function buildMountArgs(args: string[], input: DockerRunInput, cacheVolumeName: string): void {
+  const seenMounts = new Set<string>();
+  for (const [host, container, mode] of collectMounts(input)) {
+    if (seenMounts.has(container)) continue;
+    seenMounts.add(container);
+    args.push("-v", mode ? `${host}:${container}:${mode}` : `${host}:${container}`);
+  }
+  args.push("-v", `${cacheVolumeName}:${CONTAINER_HOME}`);
+  for (const mount of input.sandboxConfig.extraMounts) {
+    args.push("-v", mount);
+  }
+}
+
+function buildEnvArgs(args: string[], input: DockerRunInput): void {
+  const {
+    sandboxConfig,
+    runtimeConfigToml,
+    runtimeAuthJsonBase64 = null,
+    command,
+    requiredEnv = [],
+    workspacePath,
+  } = input;
+  const trustedProjectConfig = `${runtimeConfigToml}\n[projects.${JSON.stringify(workspacePath)}]\ntrust_level = "trusted"\n`;
+  args.push(
+    "-e",
+    `HOME=${CONTAINER_HOME}`,
+    "-e",
+    `CODEX_HOME=${CONTAINER_CODEX_HOME}`,
+    "-e",
+    `RISOLUTO_CODEX_CONFIG_TOML=${trustedProjectConfig}`,
+  );
+  if (runtimeAuthJsonBase64) {
+    args.push("-e", `RISOLUTO_CODEX_AUTH_JSON_B64=${runtimeAuthJsonBase64}`);
+  }
+  args.push("-e", `RISOLUTO_CODEX_COMMAND=${command}`);
+
+  const envNames = new Set([...sandboxConfig.envPassthrough, ...requiredEnv]);
+  for (const envName of envNames) {
+    const value = process.env[envName];
+    if (value !== undefined) {
+      args.push("-e", `${envName}=${value}`);
+    }
+  }
+}
+
+function buildSecurityArgs(args: string[], sandboxConfig: SandboxConfig): void {
+  if (sandboxConfig.security.dropCapabilities) {
+    args.push("--cap-drop=ALL");
+  }
+  if (sandboxConfig.security.noNewPrivileges) {
+    args.push("--security-opt=no-new-privileges");
+  }
+  if (sandboxConfig.security.gvisor) {
+    args.push("--runtime=runsc");
+  }
+  if (sandboxConfig.security.seccompProfile) {
+    args.push(`--security-opt=seccomp=${sandboxConfig.security.seccompProfile}`);
+  }
+}
+
+function buildResourceAndLogArgs(args: string[], sandboxConfig: SandboxConfig): void {
+  args.push(
+    "--memory",
+    sandboxConfig.resources.memory,
+    "--memory-reservation",
+    sandboxConfig.resources.memoryReservation,
+    "--memory-swap",
+    sandboxConfig.resources.memorySwap,
+    "--cpus",
+    sandboxConfig.resources.cpus,
+    "--tmpfs",
+    `/tmp:exec,size=${sandboxConfig.resources.tmpfsSize}`,
+    "--log-driver",
+    sandboxConfig.logs.driver,
+    "--log-opt",
+    `max-size=${sandboxConfig.logs.maxSize}`,
+    "--log-opt",
+    `max-file=${sandboxConfig.logs.maxFile}`,
+  );
+}
+
+function buildEntrypointScript(egressAllowlist: string[], options?: { unsetApiKey?: boolean }): string {
+  const steps = ["set -euo pipefail", "umask 077"];
+
+  if (egressAllowlist.length > 0) {
+    steps.push(
+      'if command -v iptables >/dev/null 2>&1 && [ -n "${RISOLUTO_EGRESS_ALLOWLIST:-}" ]; then',
+      "  iptables -A OUTPUT -o lo -j ACCEPT",
+      "  iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+      "  iptables -A OUTPUT -p udp --dport 53 -j ACCEPT",
+      "  iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT",
+      "  for domain in $RISOLUTO_EGRESS_ALLOWLIST; do",
+      "    for ip in $(getent hosts \"$domain\" 2>/dev/null | awk '{print $1}' | head -5); do",
+      '      iptables -A OUTPUT -d "$ip" -j ACCEPT',
+      "    done",
+      "  done",
+      "  iptables -A OUTPUT -j REJECT 2>/dev/null || iptables -A OUTPUT -j DROP",
+      "fi",
+    );
+  }
+
+  steps.push(
+    'rm -rf "$CODEX_HOME"',
+    'mkdir -p "$CODEX_HOME"',
+    'printf "%s" "$RISOLUTO_CODEX_CONFIG_TOML" > "$CODEX_HOME/config.toml"',
+    // Disable bwrap inside Docker — the container IS the sandbox.
+    // Without this, Codex fails with "bwrap: No permissions to create new namespace"
+    // on kernels that restrict unprivileged user namespaces.
+    'printf "\\n[features]\\nuse_linux_sandbox_bwrap = false\\n" >> "$CODEX_HOME/config.toml"',
+    'if [ -n "${RISOLUTO_CODEX_AUTH_JSON_B64:-}" ]; then printf "%s" "$RISOLUTO_CODEX_AUTH_JSON_B64" | base64 -d > "$CODEX_HOME/auth.json"; fi',
+  );
+
+  // When using openai_login auth, prevent stale OPENAI_API_KEY from the host
+  // environment from overriding the token-based auth flow inside Codex CLI.
+  if (options?.unsetApiKey) {
+    steps.push("unset OPENAI_API_KEY 2>/dev/null || true");
+  }
+
+  steps.push('echo "risoluto:container_ready"', 'exec bash -lc "$RISOLUTO_CODEX_COMMAND"');
+
+  return steps.join("; ");
+}
+
+export function buildDockerRunArgs(input: DockerRunInput): DockerRunResult {
+  const { sandboxConfig, runId, workspacePath } = input;
+  const containerName = `risoluto-${runId}`;
+  const cacheVolumeName = `risoluto-cache-${runId}`;
+  const uid = os.userInfo().uid;
+  const gid = os.userInfo().gid;
+
+  const args: string[] = ["run", "-i", "--name", containerName];
+  args.push("--user", `${uid}:${gid}`, "--workdir", workspacePath);
+
+  buildMountArgs(args, input, cacheVolumeName);
+  buildEnvArgs(args, input);
+  args.push("--add-host=host.docker.internal:host-gateway");
+
+  if (sandboxConfig.network) {
+    args.push("--network", sandboxConfig.network);
+  }
+
+  buildResourceAndLogArgs(args, sandboxConfig);
+  buildSecurityArgs(args, sandboxConfig);
+
+  if (input.issueIdentifier) {
+    args.push("--label", `risoluto.issue=${input.issueIdentifier}`);
+  }
+  if (input.model) {
+    args.push("--label", `risoluto.model=${input.model}`);
+  }
+  args.push(
+    "--label",
+    `risoluto.workspace=${workspacePath}`,
+    "--label",
+    `risoluto.started-at=${new Date().toISOString()}`,
+  );
+
+  const egressAllowlist = sandboxConfig.egressAllowlist ?? [];
+  if (egressAllowlist.length > 0) {
+    args.push("--cap-add=NET_ADMIN", "-e", `RISOLUTO_EGRESS_ALLOWLIST=${egressAllowlist.join(" ")}`);
+  }
+
+  args.push(
+    sandboxConfig.image,
+    "bash",
+    "-lc",
+    buildEntrypointScript(egressAllowlist, {
+      unsetApiKey: Boolean(input.runtimeAuthJsonBase64),
+    }),
+  );
+
+  return { program: "docker", args, containerName, cacheVolumeName };
+}
+
+/**
+ * Initialize a Docker named volume with correct ownership for the host user.
+ *
+ * Docker creates new named volumes with root ownership by default. When the
+ * container runs as a non-root user (via --user uid:gid), it cannot write
+ * to the volume root. This function runs a one-shot init container as root
+ * to chown the volume to the specified uid/gid before the main container
+ * starts.
+ */
+export interface InitCacheVolumeInput {
+  volumeName: string;
+  uid: number;
+  gid: number;
+}
+
+export interface InitCacheVolumeResult {
+  program: string;
+  args: string[];
+}
+
+/**
+ * Build the Docker command to initialize a cache volume with correct ownership.
+ *
+ * @param input - Volume name and target uid/gid
+ * @returns Docker command and args for the init container
+ */
+export function buildInitCacheVolumeArgs(input: InitCacheVolumeInput): InitCacheVolumeResult {
+  const args: string[] = [
+    "run",
+    "--rm",
+    "-v",
+    `${input.volumeName}:/mnt`,
+    "alpine:3.21",
+    "chown",
+    `${input.uid}:${input.gid}`,
+    "/mnt",
+  ];
+
+  return { program: "docker", args };
+}

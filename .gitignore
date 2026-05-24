@@ -1,0 +1,29 @@
+# Build & dependency outputs
+node_modules/
+dist/
+.cache/
+
+# Test outputs
+coverage/
+reports/
+.stryker-tmp/
+
+# Runtime outputs (from quarantined modules + future v1 code)
+archives/
+outputs/
+
+# Logs
+*.log
+
+# Secrets
+.env
+.env.*
+*.auth-state.json
+
+# Personal Claude preferences (project-local override)
+CLAUDE.local.md
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/

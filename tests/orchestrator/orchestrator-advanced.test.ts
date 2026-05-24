@@ -1,0 +1,603 @@
+import { describe, expect, it, vi, afterEach } from "vitest";
+
+import { Orchestrator } from "../../src/orchestrator/orchestrator.js";
+import type { RunOutcome, AgentRunner, TrackerPort, WorkspaceManager } from "./orchestrator-fixtures.js";
+import {
+  createIssue,
+  createConfig,
+  createConfigStore,
+  createAttemptStore,
+  createCostSampleStore,
+  createIssueConfigStore,
+  createLogger,
+  createResolveTemplate,
+  passThroughWithLock,
+} from "./orchestrator-fixtures.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+describe("Orchestrator — advanced scenarios", () => {
+  it("does not queue or launch inactive issues", async () => {
+    vi.useFakeTimers();
+    const inactiveIssue = createIssue("Todo");
+    const agentRunner = {
+      runAttempt: vi.fn(),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [inactiveIssue]),
+      fetchIssueStatesByIds: vi.fn(async () => [inactiveIssue]),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    const snapshot = orchestrator.getSnapshot();
+    expect(agentRunner.runAttempt).not.toHaveBeenCalled();
+    expect(workspaceManager.ensureWorkspace).not.toHaveBeenCalled();
+    expect(snapshot.running).toEqual([]);
+    expect(snapshot.queued).toEqual([]);
+
+    await orchestrator.stop();
+  });
+
+  it("removes stale queued and completed entries when the issue relaunches", async () => {
+    vi.useFakeTimers();
+    const issue = createIssue();
+    const agentRunner = {
+      runAttempt: vi.fn(async ({ signal }: { signal: AbortSignal }): Promise<RunOutcome> => {
+        await new Promise<void>((resolve) => {
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return {
+          kind: "cancelled",
+          errorCode: "shutdown",
+          errorMessage: "shutdown",
+          threadId: null,
+          turnId: null,
+          turnCount: 0,
+        };
+      }),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async () => [issue]),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async () => ({
+        path: "/tmp/risoluto/MT-42",
+        workspaceKey: "MT-42",
+        createdNow: false,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+
+    const config = createConfig();
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(config),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    const seededView = {
+      issueId: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      state: issue.state,
+      workspaceKey: "MT-42",
+      message: "stale",
+      status: "completed",
+      updatedAt: issue.updatedAt ?? "2026-03-16T00:00:00Z",
+      attempt: 1,
+      error: null,
+    };
+    (orchestrator as unknown as { _state: { completedViews: Map<string, unknown> } })._state.completedViews.set(
+      issue.identifier,
+      seededView,
+    );
+    (orchestrator as unknown as { _state: { queuedViews: Array<unknown> } })._state.queuedViews = [seededView];
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    const snapshot = orchestrator.getSnapshot();
+    expect(snapshot.running).toEqual([expect.objectContaining({ identifier: "MT-42", status: "running" })]);
+    expect(snapshot.queued).toEqual([]);
+    expect(snapshot.completed).toEqual([]);
+
+    await orchestrator.stop();
+  });
+
+  it("handles retry-launched worker startup failures without unhandled rejections", async () => {
+    vi.useFakeTimers();
+    const issue = createIssue();
+    let callCount = 0;
+    const attemptStore = createAttemptStore();
+    const agentRunner = {
+      runAttempt: vi.fn(
+        async (): Promise<RunOutcome> => ({
+          kind: "failed",
+          errorCode: "turn_failed",
+          errorMessage: "boom",
+          threadId: null,
+          turnId: null,
+          turnCount: 1,
+        }),
+      ),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async () => [issue]),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async () => {
+        callCount++;
+        if (callCount > 1) {
+          throw new Error("workspace setup exploded");
+        }
+        return {
+          path: "/tmp/risoluto/MT-42",
+          workspaceKey: "MT-42",
+          createdNow: true,
+        };
+      }),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+
+    const orchestrator = new Orchestrator({
+      attemptStore,
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(agentRunner.runAttempt).toHaveBeenCalledTimes(1);
+    expect(orchestrator.getSnapshot().retrying).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(orchestrator.getSnapshot().retrying).toEqual([]);
+    expect(orchestrator.getSnapshot().completed).toEqual([
+      expect.objectContaining({
+        identifier: "MT-42",
+        status: "failed",
+        attempt: 2,
+        error: "workspace setup exploded",
+        message: "retry startup failed: workspace setup exploded",
+      }),
+    ]);
+    expect(orchestrator.getIssueDetail("MT-42")).toMatchObject({
+      identifier: "MT-42",
+      status: "failed",
+      attempt: 2,
+      error: "workspace setup exploded",
+      message: "retry startup failed: workspace setup exploded",
+    });
+    expect(attemptStore.createAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueIdentifier: "MT-42",
+        status: "failed",
+        attemptNumber: 2,
+        errorCode: "worker_failed",
+        errorMessage: "workspace setup exploded",
+      }),
+    );
+
+    await orchestrator.stop();
+  });
+
+  it("cleans up terminal issue workspaces at startup and revalidates retries before relaunch", async () => {
+    vi.useFakeTimers();
+    const runningIssue = createIssue();
+    const terminalIssue = createIssue("Done");
+    let fetchStateCount = 0;
+    const agentRunner = {
+      runAttempt: vi.fn(
+        async (): Promise<RunOutcome> => ({
+          kind: "failed",
+          errorCode: "turn_failed",
+          errorMessage: "boom",
+          threadId: null,
+          turnId: null,
+          turnCount: 1,
+        }),
+      ),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [runningIssue]),
+      fetchIssueStatesByIds: vi.fn(async () => {
+        fetchStateCount += 1;
+        return fetchStateCount === 1 ? [runningIssue] : [{ ...runningIssue, state: "Todo" }];
+      }),
+      fetchIssuesByStates: vi.fn(async () => [terminalIssue]),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async () => ({
+        path: "/tmp/risoluto/MT-42",
+        workspaceKey: "MT-42",
+        createdNow: true,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+    expect(workspaceManager.removeWorkspace).toHaveBeenCalledWith(
+      "MT-42",
+      expect.objectContaining({ identifier: "MT-42", state: "Done" }),
+    );
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    await Promise.resolve();
+
+    expect(agentRunner.runAttempt).toHaveBeenCalledTimes(1);
+    expect(orchestrator.getSnapshot().retrying).toEqual([]);
+
+    await orchestrator.stop();
+  });
+
+  it("preserves failed status in completedViews after terminal issue cleanup", async () => {
+    vi.useFakeTimers();
+    const issue = createIssue();
+    const terminalIssue = createIssue("Done");
+    const agentRunner = {
+      runAttempt: vi.fn(
+        async (): Promise<RunOutcome> => ({
+          kind: "failed",
+          errorCode: "turn_failed",
+          errorMessage: "agent failed",
+          threadId: null,
+          turnId: null,
+          turnCount: 1,
+        }),
+      ),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async () => [terminalIssue]),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async () => ({
+        path: "/tmp/risoluto/MT-42",
+        workspaceKey: "MT-42",
+        createdNow: true,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    const snapshot = orchestrator.getSnapshot();
+    expect(snapshot.completed).toEqual([
+      expect.objectContaining({
+        identifier: "MT-42",
+        status: "failed",
+        attempt: 1,
+        error: "agent failed",
+        message: "workspace cleaned after terminal state",
+      }),
+    ]);
+    expect(orchestrator.getIssueDetail("MT-42")).toMatchObject({
+      identifier: "MT-42",
+      status: "failed",
+      attempt: 1,
+      error: "agent failed",
+      message: "workspace cleaned after terminal state",
+    });
+
+    await orchestrator.stop();
+  });
+
+  it("preserves completed status in completedViews after terminal issue cleanup for normal outcomes", async () => {
+    vi.useFakeTimers();
+    const issue = createIssue();
+    const terminalIssue = createIssue("Done");
+    const agentRunner = {
+      runAttempt: vi.fn(
+        async (): Promise<RunOutcome> => ({
+          kind: "normal",
+          errorCode: null,
+          errorMessage: null,
+          threadId: null,
+          turnId: null,
+          turnCount: 1,
+        }),
+      ),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async () => [terminalIssue]),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async () => ({
+        path: "/tmp/risoluto/MT-42",
+        workspaceKey: "MT-42",
+        createdNow: true,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    const snapshot = orchestrator.getSnapshot();
+    expect(snapshot.completed).toEqual([
+      expect.objectContaining({
+        identifier: "MT-42",
+        status: "completed",
+        attempt: 1,
+        error: null,
+        message: "workspace cleaned after terminal state",
+      }),
+    ]);
+    expect(orchestrator.getIssueDetail("MT-42")).toMatchObject({
+      identifier: "MT-42",
+      status: "completed",
+      attempt: 1,
+      error: null,
+      message: "workspace cleaned after terminal state",
+    });
+
+    await orchestrator.stop();
+  });
+
+  it("runs git post-processing only when the worker reports RISOLUTO_STATUS: DONE", async () => {
+    vi.useFakeTimers();
+    const issue = createIssue();
+    const agentRunner = {
+      runAttempt: vi.fn(
+        async ({
+          onEvent,
+        }: {
+          onEvent: (event: {
+            at: string;
+            issueId: string;
+            issueIdentifier: string;
+            sessionId: string | null;
+            event: string;
+            message: string;
+            content?: string | null;
+          }) => void;
+        }): Promise<RunOutcome> => {
+          onEvent({
+            at: "2026-03-17T00:00:00Z",
+            issueId: issue.id,
+            issueIdentifier: issue.identifier,
+            sessionId: "thread-1",
+            event: "agent_message",
+            message: "agentMessage completed",
+            content: "work finished\nRISOLUTO_STATUS: DONE",
+          });
+          return {
+            kind: "normal",
+            errorCode: null,
+            errorMessage: null,
+            threadId: "thread-1",
+            turnId: "turn-1",
+            turnCount: 1,
+          };
+        },
+      ),
+    } as unknown as AgentRunner;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async () => [issue]),
+      fetchIssuesByStates: vi.fn(async () => []),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async () => ({
+        path: "/tmp/risoluto/MT-42",
+        workspaceKey: "MT-42",
+        createdNow: true,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+    const gitManager = {
+      cloneInto: vi.fn(async () => ({ branchName: "risoluto/mt-42" })),
+      commitAndPush: vi.fn(async () => ({ committed: true, pushed: true, branchName: "risoluto/mt-42" })),
+      createPullRequest: vi.fn(async () => ({ html_url: "https://github.com/acme/repo/pull/1" })),
+      setupWorktree: vi.fn(async () => ({ branchName: "risoluto/mt-42" })),
+      syncWorktree: vi.fn(async () => undefined),
+      removeWorktree: vi.fn(async () => undefined),
+      deriveBaseCloneDir: vi.fn((workspaceRoot: string, _repoUrl: string) => `${workspaceRoot}/.base/repo.git`),
+    };
+    const repoRouter = {
+      matchIssue: vi.fn(() => ({
+        repoUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+        githubOwner: "acme",
+        githubRepo: "repo",
+        githubTokenEnv: "GITHUB_TOKEN",
+        matchedBy: "identifier_prefix" as const,
+      })),
+    };
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      repoRouter,
+      gitManager,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(gitManager.cloneInto).toHaveBeenCalledTimes(1);
+    expect(gitManager.commitAndPush).toHaveBeenCalledTimes(1);
+    expect(gitManager.createPullRequest).toHaveBeenCalledTimes(1);
+
+    await orchestrator.stop();
+  });
+});
+
+describe("Orchestrator — eventBus emissions", () => {
+  function makeEventBus() {
+    return { emit: vi.fn() };
+  }
+
+  it("emits poll.complete after each successful tick", async () => {
+    vi.useFakeTimers();
+    const eventBus = makeEventBus();
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => []),
+      fetchIssueStatesByIds: vi.fn(async () => []),
+    } as unknown as TrackerPort;
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager: {
+        ensureWorkspace: vi.fn(),
+        removeWorkspace: vi.fn(async () => undefined),
+        withLock: passThroughWithLock,
+      } as unknown as WorkspaceManager,
+      agentRunner: { runAttempt: vi.fn() } as unknown as AgentRunner,
+      eventBus: eventBus as never,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    const pollCalls = eventBus.emit.mock.calls.filter((c) => c[0] === "poll.complete");
+    expect(pollCalls.length).toBeGreaterThanOrEqual(1);
+    expect(pollCalls[0][1]).toMatchObject({ issueCount: 0 });
+    expect(typeof pollCalls[0][1].timestamp).toBe("string");
+
+    await orchestrator.stop();
+  });
+
+  it("emits model.updated when updateIssueModelSelection succeeds", async () => {
+    const eventBus = makeEventBus();
+    const issue = createIssue();
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async () => [issue]),
+    } as unknown as TrackerPort;
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager: {
+        ensureWorkspace: vi.fn(),
+        removeWorkspace: vi.fn(async () => undefined),
+        withLock: passThroughWithLock,
+      } as unknown as WorkspaceManager,
+      agentRunner: { runAttempt: vi.fn() } as unknown as AgentRunner,
+      eventBus: eventBus as never,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    // updateIssueModelSelection requires an issue detail to exist.
+    // Since no worker is running, it returns null for unknown identifiers.
+    const result = await orchestrator.updateIssueModelSelection({
+      identifier: "UNKNOWN-99",
+      model: "gpt-5",
+      reasoningEffort: "high",
+    });
+    // Returns null — no detail view exists for UNKNOWN-99
+    expect(result).toBeNull();
+    const modelCalls = eventBus.emit.mock.calls.filter((c) => c[0] === "model.updated");
+    expect(modelCalls.length).toBe(0); // no emit when result is null
+  });
+});

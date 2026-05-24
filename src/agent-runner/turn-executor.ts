@@ -1,0 +1,281 @@
+import {
+  asRecord,
+  asString,
+  extractRateLimits,
+  extractTokenUsageSnapshot,
+  extractTurnId,
+  getTurnSandboxPolicy,
+} from "./helpers.js";
+import { classifyRunError, failureOutcome, outcomeForAbort } from "./abort-outcomes.js";
+import { extractCodexErrorInfo } from "./error-classifier.js";
+import { classifyExitState } from "./exit-classifier.js";
+import { composeSessionId, waitForTurnCompletion } from "./turn-state.js";
+import { detectStopSignal } from "../core/signal-detection.js";
+import { isActiveState } from "../state/policy.js";
+import { sanitizeContent } from "../core/content-sanitizer.js";
+import type {
+  AgentRunnerTurnExecutionInput,
+  AgentRunnerTurnExecutionState,
+  TurnResult,
+} from "./turn-executor-types.js";
+import type { RunOutcome } from "../core/types.js";
+import { compactThread } from "./thread-compact.js";
+import { CODEX_METHOD } from "../codex/methods.js";
+
+const CONTINUATION_PROMPT_PARTS = [
+  "Continue the current issue, make concrete progress, and stop only when done or blocked.",
+  "When the issue is complete, end your final message with `RISOLUTO_STATUS: DONE`.",
+  "If you are blocked and cannot proceed, end your final message with `RISOLUTO_STATUS: BLOCKED`.",
+] as const;
+
+function getContinuationPrompt(): string {
+  return CONTINUATION_PROMPT_PARTS.join(" ");
+}
+
+const STRUCTURED_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    status: { type: "string", enum: ["DONE", "BLOCKED", "CONTINUE"] },
+    summary: { type: "string" },
+  },
+  required: ["status", "summary"],
+} as const;
+
+function checkFatalFailure(state: AgentRunnerTurnExecutionState): RunOutcome | null {
+  return failureOutcome(state.getFatalFailure(), state.threadId, state.turnId, state.turnCount);
+}
+
+function isContextWindowError(errorMessage: string, completedError: Record<string, unknown>): boolean {
+  const errorType = asString(completedError.type) ?? asString(asRecord(completedError.codexErrorInfo).type);
+  if (errorType === "ContextWindowExceeded") return true;
+  const lower = errorMessage.toLowerCase();
+  return lower.includes("context window") || lower.includes("context length exceeded");
+}
+
+function classifyTurnResult(
+  completedStatus: string,
+  completedError: Record<string, unknown>,
+  state: AgentRunnerTurnExecutionState,
+): TurnResult | null {
+  if (completedStatus === "failed") {
+    const errorMessage = asString(completedError.message) ?? "turn failed";
+    const codexErrorInfo = extractCodexErrorInfo(completedError);
+    if (isContextWindowError(errorMessage, completedError)) {
+      return { kind: "compact_needed" };
+    }
+    return {
+      kind: "outcome",
+      outcome: {
+        kind: "failed",
+        errorCode: "turn_failed",
+        errorMessage,
+        codexErrorInfo,
+        threadId: state.threadId,
+        turnId: state.turnId,
+        turnCount: state.turnCount,
+      },
+    };
+  }
+  if (completedStatus === "interrupted") {
+    return {
+      kind: "outcome",
+      outcome: {
+        kind: "cancelled",
+        errorCode: "interrupted",
+        errorMessage: asString(completedError.message) ?? "turn interrupted",
+        threadId: state.threadId,
+        turnId: state.turnId,
+        turnCount: state.turnCount,
+      },
+    };
+  }
+  return null;
+}
+
+function emitTurnCompletedEvent(
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+  completedStatus: string,
+  completedError: Record<string, unknown>,
+  completedUsage: ReturnType<typeof extractTokenUsageSnapshot>,
+  turnResult: unknown,
+): void {
+  const fallbackMessage = `turn ${state.turnCount} ended with status ${completedStatus}`;
+  let rawMessage: string;
+  if (completedStatus === "completed") {
+    rawMessage = `turn ${state.turnCount} completed`;
+  } else {
+    const errorMessage = completedError.message;
+    rawMessage =
+      errorMessage === undefined
+        ? fallbackMessage
+        : typeof errorMessage === "string"
+          ? errorMessage
+          : JSON.stringify(errorMessage);
+  }
+
+  const message = sanitizeContent(rawMessage);
+  input.runInput.onEvent({
+    at: new Date().toISOString(),
+    issueId: input.runInput.issue.id,
+    issueIdentifier: input.runInput.issue.identifier,
+    sessionId: composeSessionId(state.threadId, state.turnId),
+    event: "turn_completed",
+    message: message || fallbackMessage,
+    usage: completedUsage ?? undefined,
+    rateLimits: extractRateLimits(turnResult) ?? undefined,
+  });
+}
+
+async function runSingleTurn(
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+  prompt: string,
+): Promise<TurnResult> {
+  state.turnCount += 1;
+  const turnResult = await input.connection.request(CODEX_METHOD.TurnStart, {
+    threadId: state.threadId,
+    cwd: input.runInput.workspace.path,
+    title: `${input.runInput.issue.identifier}: ${input.runInput.issue.title}`,
+    model: input.runInput.modelSelection.model,
+    effort: input.runInput.modelSelection.reasoningEffort,
+    approvalPolicy: input.config.codex.approvalPolicy,
+    sandboxPolicy: getTurnSandboxPolicy(input.config, input.runInput.workspace.path),
+    summary: "detailed",
+    input: [{ type: "text", text: prompt }],
+    ...(input.config.codex.structuredOutput ? { outputSchema: STRUCTURED_OUTPUT_SCHEMA } : {}),
+  });
+  state.turnId = extractTurnId(turnResult);
+  if (!state.turnId) {
+    throw new Error("turn/start did not return a turn identifier");
+  }
+  input.setActiveTurnId(state.turnId);
+
+  const completedTurn = await waitForTurnCompletion(input.turnState, {
+    turnId: state.turnId,
+    signal: input.runInput.signal,
+    timeoutMs: input.config.codex.turnTimeoutMs,
+  });
+
+  const completedTurnRecord = asRecord(asRecord(completedTurn).turn);
+  const completedStatus = asString(completedTurnRecord.status) ?? "failed";
+  const completedError = asRecord(completedTurnRecord.error);
+  const completedUsage = resolveTokenUsage(completedTurnRecord, completedTurn, turnResult);
+
+  emitTurnCompletedEvent(input, state, completedStatus, completedError, completedUsage, turnResult);
+
+  const fatalOutcome = checkFatalFailure(state);
+  if (fatalOutcome) return { kind: "outcome", outcome: fatalOutcome };
+
+  const classifiedResult = classifyTurnResult(completedStatus, completedError, state);
+  if (classifiedResult) return classifiedResult;
+
+  const latestIssue = (await input.tracker.fetchIssueStatesByIds([input.runInput.issue.id]))[0];
+  if (!latestIssue || !isActiveState(latestIssue.state, input.config)) return { kind: "stop" };
+  return { kind: "continue" };
+}
+
+function resolveTokenUsage(
+  turnRecord: Record<string, unknown>,
+  completedTurn: unknown,
+  turnResult: unknown,
+): ReturnType<typeof extractTokenUsageSnapshot> {
+  return (
+    extractTokenUsageSnapshot(turnRecord.usage) ??
+    extractTokenUsageSnapshot(turnRecord.tokenUsage) ??
+    extractTokenUsageSnapshot(asRecord(completedTurn).usage) ??
+    extractTokenUsageSnapshot(asRecord(completedTurn).tokenUsage) ??
+    extractTokenUsageSnapshot(asRecord(turnResult).usage) ??
+    extractTokenUsageSnapshot(asRecord(turnResult).tokenUsage)
+  );
+}
+
+function checkAbort(input: AgentRunnerTurnExecutionInput, state: AgentRunnerTurnExecutionState): RunOutcome | null {
+  if (input.runInput.signal.aborted) {
+    return outcomeForAbort(input.runInput.signal, state.threadId, state.turnId, state.turnCount);
+  }
+  return null;
+}
+
+/** Attempts thread compaction. Returns undefined to continue looping, or a RunOutcome to exit. */
+async function tryCompactAndRetry(
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+): Promise<RunOutcome | undefined> {
+  const compacted =
+    state.threadId && input.logger ? await compactThread(input.connection, state.threadId, input.logger) : false;
+  if (compacted) {
+    state.turnCount -= 1; // Retriable failure — should not consume the turn budget
+    return undefined;
+  }
+  return {
+    kind: "failed",
+    errorCode: "context_window_exceeded",
+    errorMessage: "context window exceeded and compaction failed",
+    threadId: state.threadId,
+    turnId: state.turnId,
+    turnCount: state.turnCount,
+  };
+}
+
+/** Maps a TurnResult to a loop action: RunOutcome or null to exit, undefined to continue looping. */
+async function resolveTurnResult(
+  result: TurnResult,
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+): Promise<RunOutcome | null | undefined> {
+  if (result.kind === "stop") return null;
+  if (result.kind === "outcome") return result.outcome;
+  if (result.kind === "compact_needed") return tryCompactAndRetry(input, state);
+  // kind === "continue" — check for early stop signal.
+  // Prefer the pre-truncation stop signal extracted from raw content by the
+  // notification handler; fall back to content-based detection for safety.
+  if (input.getLastStopSignal?.() != null) return null;
+  const lastContent = input.getLastAgentMessageContent?.() ?? null;
+  if (detectStopSignal(lastContent) !== null) return null;
+  return undefined;
+}
+
+async function handleTurnLoop(
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+): Promise<RunOutcome | null> {
+  if (state.turnCount >= input.config.agent.maxTurns) {
+    return null;
+  }
+
+  const abortOutcome = checkAbort(input, state);
+  if (abortOutcome) return abortOutcome;
+
+  const prompt = state.turnCount === 0 ? input.prompt : getContinuationPrompt();
+  const result = await runSingleTurn(input, state, prompt);
+  const resolved = await resolveTurnResult(result, input, state);
+  if (resolved !== undefined) return resolved;
+  return handleTurnLoop(input, state);
+}
+
+function handleExecutionError(
+  error: unknown,
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+): RunOutcome {
+  const fatalOutcome = checkFatalFailure(state);
+  if (fatalOutcome) return fatalOutcome;
+
+  if (input.runInput.signal.aborted) {
+    return outcomeForAbort(input.runInput.signal, state.threadId, state.turnId, state.turnCount);
+  }
+  return classifyRunError(error, state.threadId, state.turnId, state.turnCount);
+}
+
+export async function executeTurns(
+  input: AgentRunnerTurnExecutionInput,
+  state: AgentRunnerTurnExecutionState,
+): Promise<RunOutcome> {
+  try {
+    const loopOutcome = await handleTurnLoop(input, state);
+    return loopOutcome ?? classifyExitState(input, state);
+  } catch (error) {
+    return handleExecutionError(error, input, state);
+  }
+}

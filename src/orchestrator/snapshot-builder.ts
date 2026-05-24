@@ -1,0 +1,676 @@
+import { buildWorkflowColumns } from "../linear/board-columns.js";
+import { computeAttemptCostUsd } from "../core/model-pricing.js";
+import { nowIso } from "./views.js";
+import {
+  projectCompletedViewsForSnapshot,
+  projectOutcomeIssueView,
+  projectRetryIssueView,
+  projectRunningIssueView,
+} from "./core/snapshot-projection.js";
+import { type IssueLocatorCallbacks, resolveIssue, toIssueView } from "./issue-locator.js";
+import type {
+  AttemptRecord,
+  CostSampleView,
+  HealthChecks,
+  Issue,
+  RecentEvent,
+  RuntimeIssueView,
+  RuntimeSnapshot,
+  ServiceConfig,
+  ModelSelection,
+  StallEventView,
+  SystemHealth,
+  Workspace,
+} from "../core/types.js";
+import type { RunningEntry, RetryRuntimeEntry } from "./runtime-types.js";
+import type { LifecycleState } from "./core/lifecycle-state.js";
+
+/* ------------------------------------------------------------------ */
+/*  Issue-view builders                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Converts a RunningEntry to a RuntimeIssueView. */
+export function buildRunningIssueView(
+  entry: RunningEntry,
+  resolveModelSelection: (identifier: string) => ModelSelection,
+): RuntimeIssueView {
+  return projectRunningIssueView(entry, resolveModelSelection);
+}
+
+/** Converts a RetryRuntimeEntry to a RuntimeIssueView. */
+export function buildRetryIssueView(
+  entry: RetryRuntimeEntry,
+  resolveModelSelection: (identifier: string) => ModelSelection,
+): RuntimeIssueView {
+  return projectRetryIssueView(entry, resolveModelSelection);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Outcome-view builder                                               */
+/* ------------------------------------------------------------------ */
+
+export interface OutcomeViewInput {
+  issue: Issue;
+  workspace: Workspace;
+  entry: RunningEntry;
+  configuredSelection: ModelSelection;
+  overrides: {
+    status: string;
+    attempt?: number | null;
+    error?: string | null;
+    message?: string | null;
+    pullRequestUrl?: string | null;
+  };
+}
+
+export function buildOutcomeView(
+  issue: Issue,
+  workspace: Workspace,
+  entry: RunningEntry,
+  configuredSelection: ModelSelection,
+  overrides: {
+    status: string;
+    attempt?: number | null;
+    error?: string | null;
+    message?: string | null;
+    pullRequestUrl?: string | null;
+  },
+): RuntimeIssueView {
+  return projectOutcomeIssueView(issue, workspace, entry, configuredSelection, overrides);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Snapshot serialization (snake_case wire format)                    */
+/* ------------------------------------------------------------------ */
+
+export function serializeSnapshot(snapshot: RuntimeSnapshot): Record<string, unknown> {
+  return {
+    generated_at: snapshot.generatedAt,
+    counts: snapshot.counts,
+    queued: snapshot.queued ?? [],
+    running: snapshot.running,
+    retrying: snapshot.retrying,
+    completed: snapshot.completed ?? [],
+    workflow_columns: (snapshot.workflowColumns ?? []).map((column) => ({
+      key: column.key,
+      label: column.label,
+      kind: column.kind,
+      terminal: Boolean(column.terminal),
+      count: column.count ?? column.issues?.length ?? 0,
+      issues: column.issues ?? [],
+    })),
+    codex_totals: {
+      input_tokens: snapshot.codexTotals.inputTokens,
+      output_tokens: snapshot.codexTotals.outputTokens,
+      total_tokens: snapshot.codexTotals.totalTokens,
+      seconds_running: snapshot.codexTotals.secondsRunning,
+      cost_usd: snapshot.codexTotals.costUsd,
+    },
+    rate_limits: snapshot.rateLimits,
+    recent_events: snapshot.recentEvents.map((event) => ({
+      at: event.at,
+      issue_id: event.issueId,
+      issue_identifier: event.issueIdentifier,
+      session_id: event.sessionId,
+      event: event.event,
+      message: event.message,
+      content: event.content ?? null,
+      metadata: event.metadata ?? null,
+    })),
+    stall_events: snapshot.stallEvents?.map((event) => ({
+      at: event.at,
+      issue_id: event.issueId,
+      issue_identifier: event.issueIdentifier,
+      silent_ms: event.silentMs,
+      timeout_ms: event.timeoutMs,
+    })),
+    cost_samples: snapshot.costSamples?.map((sample) => ({
+      at_ms: sample.atMs,
+      cost_usd: sample.costUsd,
+      input_tokens: sample.inputTokens,
+      output_tokens: sample.outputTokens,
+      seconds_running: sample.secondsRunning,
+      headroom_pct: sample.headroomPct,
+    })),
+    health_checks: snapshot.healthChecks
+      ? {
+          github: serializeHealthProbe(snapshot.healthChecks.github),
+          linear: serializeHealthProbe(snapshot.healthChecks.linear),
+          docker: serializeHealthProbe(snapshot.healthChecks.docker),
+        }
+      : undefined,
+    system_health: snapshot.systemHealth
+      ? {
+          status: snapshot.systemHealth.status,
+          checked_at: snapshot.systemHealth.checkedAt,
+          running_count: snapshot.systemHealth.runningCount,
+          message: snapshot.systemHealth.message,
+        }
+      : undefined,
+    webhook_health: snapshot.webhookHealth
+      ? {
+          status: snapshot.webhookHealth.status,
+          effective_interval_ms: snapshot.webhookHealth.effectiveIntervalMs,
+          stats: {
+            deliveries_received: snapshot.webhookHealth.stats.deliveriesReceived,
+            last_delivery_at: snapshot.webhookHealth.stats.lastDeliveryAt,
+            last_event_type: snapshot.webhookHealth.stats.lastEventType,
+          },
+          last_delivery_at: snapshot.webhookHealth.lastDeliveryAt,
+          last_event_type: snapshot.webhookHealth.lastEventType,
+        }
+      : undefined,
+  };
+}
+
+export interface AttemptSummary {
+  attemptId: string;
+  attemptNumber: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  status: string;
+  model: string;
+  reasoningEffort: string | null;
+  tokenUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null;
+  costUsd: number | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  appServerBadge?: AttemptAppServerBadgeView;
+  issueIdentifier?: string;
+  title?: string;
+  workspacePath?: string | null;
+  workspaceKey?: string | null;
+  modelSource?: string;
+  turnCount?: number;
+  threadId?: string | null;
+  turnId?: string | null;
+}
+
+export interface AttemptAppServerBadgeView {
+  effectiveProvider: string | null;
+  threadStatus: string | null;
+}
+
+export interface AttemptAppServerView extends AttemptAppServerBadgeView {
+  effectiveModel: string | null;
+  reasoningEffort: string | null;
+  approvalPolicy: string | null;
+  threadName: string | null;
+  threadStatusPayload: Record<string, unknown> | null;
+  allowedApprovalPolicies: string[] | null;
+  allowedSandboxModes: string[] | null;
+  networkRequirements: Record<string, unknown> | null;
+}
+
+export interface SnapshotBuilderDeps {
+  attemptStore: {
+    getAttempt: (attemptId: string) => AttemptRecord | null;
+    getEvents: (attemptId: string) => RecentEvent[];
+    getAttemptsForIssue: (issueIdentifier: string) => AttemptRecord[];
+    sumArchivedSeconds: () => number;
+    sumCostUsd: () => number;
+    sumArchivedTokens: () => { inputTokens: number; outputTokens: number; totalTokens: number };
+  };
+}
+
+export interface SnapshotBuilderCallbacks {
+  getConfig: () => ServiceConfig;
+  resolveModelSelection: (identifier: string) => ModelSelection;
+  getDetailViews: () => Map<string, RuntimeIssueView>;
+  getCompletedViews: () => Map<string, RuntimeIssueView>;
+  getRunningEntries: () => Map<string, RunningEntry>;
+  getRetryEntries: () => Map<string, RetryRuntimeEntry>;
+  getQueuedViews: () => RuntimeIssueView[];
+  getRecentEvents: () => RecentEvent[];
+  getRateLimits: () => unknown;
+  getCodexTotals: () => {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    secondsRunning: number;
+    costUsd?: number;
+  };
+  getStallEvents?: () => StallEventView[];
+  getSystemHealth?: () => SystemHealth | null;
+  getWebhookHealth?: () => RuntimeSnapshot["webhookHealth"] | undefined;
+  getTemplateOverride?: (identifier: string) => string | null;
+  getTemplateName?: (templateId: string) => string | null;
+  getCostSamples?: () => CostSampleView[];
+  getHealthChecks?: () => HealthChecks | undefined;
+}
+
+export interface RuntimeReadModel {
+  buildSnapshot(): RuntimeSnapshot;
+  buildIssueDetail(identifier: string): IssueDetailView | null;
+  buildAttemptDetail(attemptId: string): AttemptDetailView | null;
+}
+
+export interface RuntimeReadModelStateInput {
+  state: Pick<
+    LifecycleState,
+    | "detailViews"
+    | "completedViews"
+    | "runningEntries"
+    | "retryEntries"
+    | "queuedViews"
+    | "recentEvents"
+    | "rateLimits"
+    | "codexTotals"
+    | "stallEvents"
+    | "issueTemplateOverrides"
+  >;
+  getConfig: () => ServiceConfig;
+  resolveModelSelection: (identifier: string) => ModelSelection;
+  getSystemHealth?: () => SystemHealth | null;
+  getWebhookHealth?: () => RuntimeSnapshot["webhookHealth"] | undefined;
+  getTemplateName?: (templateId: string) => string | null;
+  getCostSamples?: () => CostSampleView[];
+  getHealthChecks?: () => HealthChecks | undefined;
+}
+
+export function createRuntimeReadModel(
+  deps: SnapshotBuilderDeps,
+  callbacks: SnapshotBuilderCallbacks,
+): RuntimeReadModel {
+  return {
+    buildSnapshot: () => buildSnapshotInternal(deps, callbacks),
+    buildIssueDetail: (identifier: string) => buildIssueDetailInternal(identifier, deps, callbacks),
+    buildAttemptDetail: (attemptId: string) => buildAttemptDetailInternal(attemptId, deps),
+  };
+}
+
+export function createRuntimeReadModelFromState(
+  deps: SnapshotBuilderDeps,
+  input: RuntimeReadModelStateInput,
+): RuntimeReadModel {
+  return createRuntimeReadModel(deps, {
+    getConfig: input.getConfig,
+    resolveModelSelection: input.resolveModelSelection,
+    getDetailViews: () => input.state.detailViews,
+    getCompletedViews: () => input.state.completedViews,
+    getRunningEntries: () => input.state.runningEntries,
+    getRetryEntries: () => input.state.retryEntries,
+    getQueuedViews: () => input.state.queuedViews,
+    getRecentEvents: () => input.state.recentEvents,
+    getRateLimits: () => input.state.rateLimits,
+    getCodexTotals: () => input.state.codexTotals,
+    getStallEvents: () => input.state.stallEvents,
+    getSystemHealth: input.getSystemHealth,
+    getWebhookHealth: input.getWebhookHealth,
+    getTemplateOverride: (identifier: string) => input.state.issueTemplateOverrides.get(identifier) ?? null,
+    getTemplateName: input.getTemplateName,
+    getCostSamples: input.getCostSamples,
+    getHealthChecks: input.getHealthChecks,
+  });
+}
+
+export function buildSnapshot(deps: SnapshotBuilderDeps, callbacks: SnapshotBuilderCallbacks): RuntimeSnapshot {
+  return buildSnapshotInternal(deps, callbacks);
+}
+
+function buildSnapshotInternal(deps: SnapshotBuilderDeps, callbacks: SnapshotBuilderCallbacks): RuntimeSnapshot {
+  const running = [...callbacks.getRunningEntries().values()].map((entry) =>
+    buildRunningIssueView(entry, callbacks.resolveModelSelection),
+  );
+  const retrying = [...callbacks.getRetryEntries().values()].map((entry) =>
+    buildRetryIssueView(entry, callbacks.resolveModelSelection),
+  );
+  const queued = callbacks.getQueuedViews();
+  const completed = projectCompletedViewsForSnapshot(callbacks.getCompletedViews().values());
+  const codexTotals = callbacks.getCodexTotals();
+
+  return {
+    generatedAt: nowIso(),
+    counts: {
+      running: callbacks.getRunningEntries().size,
+      retrying: callbacks.getRetryEntries().size,
+    },
+    running,
+    retrying,
+    queued,
+    completed,
+    workflowColumns: buildWorkflowColumns(callbacks.getConfig(), {
+      running,
+      retrying,
+      queued,
+      completed: [...completed, ...callbacks.getDetailViews().values()],
+    }),
+    codexTotals: {
+      inputTokens: computeArchivedTokenField(deps.attemptStore, codexTotals, "inputTokens"),
+      outputTokens: computeArchivedTokenField(deps.attemptStore, codexTotals, "outputTokens"),
+      totalTokens: computeArchivedTokenField(deps.attemptStore, codexTotals, "totalTokens"),
+      secondsRunning: computeSecondsRunning(deps.attemptStore, () => callbacks.getRunningEntries()),
+      costUsd: computeCostUsd(deps.attemptStore, () => callbacks.getRunningEntries()),
+    },
+    rateLimits: callbacks.getRateLimits(),
+    recentEvents: [...callbacks.getRecentEvents()],
+    stallEvents: callbacks.getStallEvents ? [...callbacks.getStallEvents()] : undefined,
+    systemHealth: callbacks.getSystemHealth ? (callbacks.getSystemHealth() ?? undefined) : undefined,
+    webhookHealth: callbacks.getWebhookHealth ? callbacks.getWebhookHealth() : undefined,
+    costSamples: callbacks.getCostSamples ? [...callbacks.getCostSamples()] : undefined,
+    healthChecks: callbacks.getHealthChecks ? callbacks.getHealthChecks() : undefined,
+  };
+}
+
+function serializeHealthProbe(probe: import("../core/types/health.js").HealthProbeResult): Record<string, unknown> {
+  return {
+    status: probe.status,
+    failure_kind: probe.failureKind,
+    checked_at: probe.checkedAt,
+    last_success_at: probe.lastSuccessAt,
+    last_failure_at: probe.lastFailureAt,
+    latency_ms: probe.latencyMs,
+    detail: probe.detail,
+    subprobes: probe.subprobes.map((sub) => ({
+      name: sub.name,
+      status: sub.status,
+      failure_kind: sub.failureKind,
+      latency_ms: sub.latencyMs,
+      detail: sub.detail,
+    })),
+    window_ok: probe.windowOk,
+    window_failed: probe.windowFailed,
+  };
+}
+
+/** Typed detail view for a single issue, including its attempt history and live events. */
+export interface IssueDetailView extends RuntimeIssueView {
+  recentEvents: RecentEvent[];
+  attempts: AttemptSummary[];
+  currentAttemptId: string | null;
+}
+
+function resolveRelatedEvents(
+  identifier: string,
+  archivedAttempts: AttemptRecord[],
+  runningEntry: RunningEntry | null,
+  retryEntry: RetryRuntimeEntry | null,
+  deps: SnapshotBuilderDeps,
+  callbacks: SnapshotBuilderCallbacks,
+  eventsCache: Map<string, RecentEvent[]>,
+): RecentEvent[] {
+  if (runningEntry) return deps.attemptStore.getEvents(runningEntry.runId);
+  if (retryEntry || archivedAttempts.length === 0) {
+    return callbacks.getRecentEvents().filter((event) => event.issueIdentifier === identifier);
+  }
+  return archivedAttempts.flatMap((attempt) => {
+    let events = eventsCache.get(attempt.attemptId);
+    if (!events) {
+      events = deps.attemptStore.getEvents(attempt.attemptId);
+      eventsCache.set(attempt.attemptId, events);
+    }
+    return events;
+  });
+}
+
+function enrichFromArchive(detail: RuntimeIssueView, archivedAttempts: AttemptRecord[]): RuntimeIssueView {
+  if (archivedAttempts.length === 0) return detail;
+  const enriched: RuntimeIssueView = { ...detail };
+  if (!enriched.tokenUsage) {
+    enriched.tokenUsage = archivedAttempts.reduce(
+      (acc, attempt) => {
+        if (!attempt.tokenUsage) return acc;
+        return {
+          inputTokens: acc.inputTokens + attempt.tokenUsage.inputTokens,
+          outputTokens: acc.outputTokens + attempt.tokenUsage.outputTokens,
+          totalTokens: acc.totalTokens + attempt.tokenUsage.totalTokens,
+        };
+      },
+      { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    );
+  }
+  if (!enriched.startedAt) {
+    enriched.startedAt = archivedAttempts.at(0)?.startedAt ?? null;
+  }
+  return enriched;
+}
+
+export function buildIssueDetail(
+  identifier: string,
+  deps: SnapshotBuilderDeps,
+  callbacks: SnapshotBuilderCallbacks,
+): IssueDetailView | null {
+  return buildIssueDetailInternal(identifier, deps, callbacks);
+}
+
+function buildIssueDetailInternal(
+  identifier: string,
+  deps: SnapshotBuilderDeps,
+  callbacks: SnapshotBuilderCallbacks,
+): IssueDetailView | null {
+  const locatorCallbacks: IssueLocatorCallbacks = {
+    getRunningEntries: callbacks.getRunningEntries,
+    getRetryEntries: callbacks.getRetryEntries,
+    getCompletedViews: callbacks.getCompletedViews,
+    getDetailViews: callbacks.getDetailViews,
+    resolveModelSelection: callbacks.resolveModelSelection,
+  };
+  const location = resolveIssue(identifier, locatorCallbacks);
+  if (!location) {
+    return null;
+  }
+
+  const detail = toIssueView(location, locatorCallbacks);
+  const runningEntry = location.kind === "running" ? location.entry : null;
+  const retryEntry = location.kind === "retry" ? location.entry : null;
+
+  const archivedAttempts = deps.attemptStore.getAttemptsForIssue(identifier);
+  const eventsCache = new Map<string, RecentEvent[]>();
+  const relatedEvents = resolveRelatedEvents(
+    identifier,
+    archivedAttempts,
+    runningEntry,
+    retryEntry,
+    deps,
+    callbacks,
+    eventsCache,
+  );
+  const enriched = enrichFromArchive(detail, archivedAttempts);
+
+  const templateId = callbacks.getTemplateOverride ? callbacks.getTemplateOverride(identifier) : null;
+  const templateName = templateId && callbacks.getTemplateName ? callbacks.getTemplateName(templateId) : null;
+
+  return {
+    ...enriched,
+    configuredTemplateId: templateId,
+    configuredTemplateName: templateName,
+    recentEvents: relatedEvents,
+    attempts: archivedAttempts.map((attempt) => {
+      const events = eventsCache.get(attempt.attemptId) ?? deps.attemptStore.getEvents(attempt.attemptId);
+      return buildAttemptSummary(attempt, events);
+    }),
+    currentAttemptId: runningEntry?.runId ?? null,
+  };
+}
+
+/** Typed detail view for a single attempt, including its event stream. */
+export interface AttemptDetailView extends AttemptSummary {
+  events: RecentEvent[];
+  summary?: string | null;
+  appServer?: AttemptAppServerView;
+}
+
+export function buildAttemptDetail(attemptId: string, deps: SnapshotBuilderDeps): AttemptDetailView | null {
+  return buildAttemptDetailInternal(attemptId, deps);
+}
+
+function buildAttemptDetailInternal(attemptId: string, deps: SnapshotBuilderDeps): AttemptDetailView | null {
+  const attempt = deps.attemptStore.getAttempt(attemptId);
+  if (!attempt) {
+    return null;
+  }
+  const events = deps.attemptStore.getEvents(attemptId);
+  return {
+    ...buildAttemptSummary(attempt, events),
+    events,
+    summary: attempt.summary ?? null,
+    appServer: buildAttemptAppServer(attempt, events),
+  };
+}
+
+export function computeSecondsRunning(
+  attemptStore: SnapshotBuilderDeps["attemptStore"],
+  getRunningEntries: () => Map<string, RunningEntry>,
+): number {
+  const archivedSeconds = attemptStore.sumArchivedSeconds();
+  const liveSeconds = [...getRunningEntries().values()].reduce(
+    (total, entry) => total + Math.max(0, (Date.now() - entry.startedAtMs) / 1000),
+    0,
+  );
+  return archivedSeconds + liveSeconds;
+}
+
+export function computeCostUsd(
+  attemptStore: SnapshotBuilderDeps["attemptStore"],
+  getRunningEntries?: () => Map<string, RunningEntry>,
+): number {
+  const archivedCost = attemptStore.sumCostUsd();
+  if (!getRunningEntries) return archivedCost;
+  const liveCost = [...getRunningEntries().values()].reduce((total, entry) => {
+    const cost = computeAttemptCostUsd({
+      model: entry.modelSelection.model,
+      tokenUsage: entry.tokenUsage ?? null,
+    });
+    return total + (cost ?? 0);
+  }, 0);
+  return archivedCost + liveCost;
+}
+
+// Live counters can race ahead of archived data when workers are still running,
+// but after a restart the in-memory counters reset to 0 while archives persist.
+function computeArchivedTokenField(
+  attemptStore: SnapshotBuilderDeps["attemptStore"],
+  liveCodexTotals: { inputTokens: number; outputTokens: number; totalTokens: number },
+  field: "inputTokens" | "outputTokens" | "totalTokens",
+): number {
+  const archived = attemptStore.sumArchivedTokens();
+  return Math.max(archived[field], liveCodexTotals[field]);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function asStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const strings = value.filter((entry): entry is string => typeof entry === "string");
+  return strings;
+}
+
+function findLatestEvent(events: RecentEvent[], eventName: string): RecentEvent | null {
+  for (const event of [...events].reverse()) {
+    if (event?.event === eventName) {
+      return event ?? null;
+    }
+  }
+  return null;
+}
+
+function extractThreadStatusPayload(event: RecentEvent | null): Record<string, unknown> | null {
+  const metadata = asRecord(event?.metadata);
+  return asRecord(metadata?.threadStatus) ?? asRecord(metadata?.status);
+}
+
+function hasAppServerData(value: AttemptAppServerView): boolean {
+  return Object.values(value).some((entry) => entry !== null);
+}
+
+function buildAttemptAppServerBadge(
+  appServer: AttemptAppServerView | undefined,
+): AttemptAppServerBadgeView | undefined {
+  if (!appServer) {
+    return undefined;
+  }
+  const badge: AttemptAppServerBadgeView = {
+    effectiveProvider: appServer.effectiveProvider,
+    threadStatus: appServer.threadStatus,
+  };
+  return Object.values(badge).some((entry) => entry !== null) ? badge : undefined;
+}
+
+function buildConfigSummary(
+  attempt: AttemptRecord,
+  events: RecentEvent[],
+): Pick<AttemptAppServerView, "effectiveProvider" | "effectiveModel" | "reasoningEffort" | "approvalPolicy"> {
+  const configMetadata = asRecord(findLatestEvent(events, "codex_config_loaded")?.metadata);
+  return {
+    effectiveProvider: asString(configMetadata?.modelProvider),
+    effectiveModel: asString(configMetadata?.model) ?? attempt.model,
+    reasoningEffort: asString(configMetadata?.reasoningEffort) ?? attempt.reasoningEffort,
+    approvalPolicy: asString(configMetadata?.approvalPolicy),
+  };
+}
+
+function buildRequirementsSummary(
+  events: RecentEvent[],
+): Pick<AttemptAppServerView, "allowedApprovalPolicies" | "allowedSandboxModes" | "networkRequirements"> {
+  const requirementsMetadata = asRecord(findLatestEvent(events, "codex_requirements_loaded")?.metadata);
+  return {
+    allowedApprovalPolicies: asStringArray(requirementsMetadata?.allowedApprovalPolicies),
+    allowedSandboxModes: asStringArray(requirementsMetadata?.allowedSandboxModes),
+    networkRequirements: asRecord(requirementsMetadata?.network),
+  };
+}
+
+function buildThreadSummary(
+  events: RecentEvent[],
+): Pick<AttemptAppServerView, "threadName" | "threadStatus" | "threadStatusPayload"> {
+  const threadLoadedMetadata = asRecord(findLatestEvent(events, "thread_loaded")?.metadata);
+  const threadLoadedStatus = asRecord(threadLoadedMetadata?.status);
+  const threadStatusPayload =
+    extractThreadStatusPayload(findLatestEvent(events, "thread_status")) ?? threadLoadedStatus ?? null;
+  return {
+    threadName: asString(threadLoadedMetadata?.name),
+    threadStatus: asString(threadStatusPayload?.type),
+    threadStatusPayload,
+  };
+}
+
+function buildAttemptAppServer(attempt: AttemptRecord, events: RecentEvent[]): AttemptAppServerView | undefined {
+  const summary: AttemptAppServerView = {
+    ...buildConfigSummary(attempt, events),
+    ...buildThreadSummary(events),
+    ...buildRequirementsSummary(events),
+  };
+  return hasAppServerData(summary) ? summary : undefined;
+}
+
+function buildAttemptSummary(attempt: AttemptRecord, events: RecentEvent[] = []): AttemptSummary {
+  const costUsd = computeAttemptCostUsd(attempt);
+  const appServer = buildAttemptAppServer(attempt, events);
+  return {
+    attemptId: attempt.attemptId,
+    attemptNumber: attempt.attemptNumber,
+    startedAt: attempt.startedAt,
+    endedAt: attempt.endedAt,
+    status: attempt.status,
+    model: attempt.model,
+    reasoningEffort: attempt.reasoningEffort,
+    tokenUsage: attempt.tokenUsage,
+    costUsd,
+    errorCode: attempt.errorCode,
+    errorMessage: attempt.errorMessage,
+    appServerBadge: buildAttemptAppServerBadge(appServer),
+    issueIdentifier: attempt.issueIdentifier,
+    title: attempt.title,
+    workspacePath: attempt.workspacePath,
+    workspaceKey: attempt.workspaceKey,
+    modelSource: attempt.modelSource,
+    turnCount: attempt.turnCount,
+    threadId: attempt.threadId,
+    turnId: attempt.turnId,
+  };
+}
