@@ -29,7 +29,7 @@ describe("AuditLogger SSE emission", () => {
         tableName: "config",
         key: "test-key",
         operation: "update",
-        actor: "dashboard",
+        actor: "operator",
       }),
     );
   });

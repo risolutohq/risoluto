@@ -4,12 +4,12 @@
 
 ## Versioning Model
 
-| Version | Meaning |
-|---|---|
-| `0.1.0` | Curated legacy snapshot. First repo history starts here. No old git history grafted. |
-| `0.x` | Foundation shaping. Spine surfaces are being built. Allowed: red / incomplete CI. |
-| `1.0.0` | **Foundation Baseline.** Coherent — every spine surface defined, key surfaces implemented, dogfood loop proven. |
-| `>= 1.0.0` | Standard SemVer. Breaking changes bump `MAJOR`. |
+| Version    | Meaning                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `0.1.0`    | Curated backend/app snapshot. First repo history starts here. No old git history grafted.                       |
+| `0.x`      | Foundation shaping. Spine surfaces are being built. Allowed: red / incomplete CI.                               |
+| `1.0.0`    | **Foundation Baseline.** Coherent — every spine surface defined, key surfaces implemented, dogfood loop proven. |
+| `>= 1.0.0` | Standard SemVer. Breaking changes bump `MAJOR`.                                                                 |
 
 ## `0.x` Allowances
 
@@ -22,7 +22,7 @@
 
 All of the following must be true before tagging `v1.0.0`:
 
-- [ ] Curated snapshot import complete; everything classified or quarantined.
+- [ ] Curated snapshot import complete; all kept source mapped to the current spine or listed in the transition goal.
 - [ ] [Product Spine](./product-spine.md) written and current.
 - [ ] [Technical Spine](./technical-spine.md) written and current.
 - [ ] [Decisions Register](./decisions.md) created and current.
@@ -38,12 +38,12 @@ All of the following must be true before tagging `v1.0.0`:
 
 ## CI Requirements By Band
 
-| Band | Required |
-|---|---|
-| `0.1.0` | Snapshot tagged. CI may be red — this is the curated import baseline, not a working build. |
-| `0.x` | Build green by end of band. Critical paths green. PR live tests landing incrementally. Red CI acceptable while spine surfaces are being reshaped. |
-| `1.0.0` | All required CI green. Release live qualification passes. |
-| `>= 1.0.0` | All required CI green per release. Release live qualification per release. |
+| Band       | Required                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0.1.0`    | Snapshot tagged. CI may be red — this is the curated import baseline, not a working build.                                                        |
+| `0.x`      | Build green by end of band. Critical paths green. PR live tests landing incrementally. Red CI acceptable while spine surfaces are being reshaped. |
+| `1.0.0`    | All required CI green. Release live qualification passes.                                                                                         |
+| `>= 1.0.0` | All required CI green per release. Release live qualification per release.                                                                        |
 
 ## Mandatory PR Live Tests
 
@@ -66,7 +66,7 @@ All of the following must be true before tagging `v1.0.0`:
 
 ## Changelog Policy
 
-- `CHANGELOG.md` starts clean from `0.1.0`. No legacy history grafted.
+- `CHANGELOG.md` starts clean from `0.1.0`. No old release history grafted.
 - Entries follow Keep-a-Changelog format.
 - Every release tag has a changelog entry.
 - ADR-grade changes are linked from the changelog entry.

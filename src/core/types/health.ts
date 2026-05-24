@@ -1,9 +1,9 @@
 /**
  * Risoluto health contracts.
  *
- * `SystemHealth` is the legacy composite watchdog status driven by the
- * orchestrator's polling loop. It stays as-is to keep the existing UI
- * + alerting pipeline working.
+ * `SystemHealth` is the existing composite watchdog status driven by the
+ * orchestrator's polling loop. It stays as-is to keep the current alerting
+ * pipeline working.
  *
  * `HealthChecks` is the new per-subsystem probe surface fed by
  * `HealthRunner` — a real reachability probe that runs every tick (with

@@ -14,11 +14,11 @@ describe("detectStopSignal", () => {
     expect(detectStopSignal("I am stuck.\n\nRISOLUTO_STATUS: BLOCKED")).toBe("blocked");
   });
 
-  it("returns 'done' for legacy SYMPHONY_STATUS: DONE", () => {
+  it("returns 'done' for previous SYMPHONY_STATUS: DONE", () => {
     expect(detectStopSignal("Task complete.\n\nSYMPHONY_STATUS: DONE")).toBe("done");
   });
 
-  it("returns 'blocked' for legacy SYMPHONY_STATUS: BLOCKED", () => {
+  it("returns 'blocked' for previous SYMPHONY_STATUS: BLOCKED", () => {
     expect(detectStopSignal("I am stuck.\n\nSYMPHONY_STATUS: BLOCKED")).toBe("blocked");
   });
 

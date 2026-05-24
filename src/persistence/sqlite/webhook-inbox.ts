@@ -76,7 +76,7 @@ export interface WebhookInboxStore {
   /** Get current inbox statistics. */
   getStats(): Promise<WebhookInboxStats>;
 
-  /** Get recent deliveries for dashboard display. */
+  /** Get recent deliveries for operator display. */
   getRecent(limit?: number): Promise<WebhookDeliveryRecord[]>;
 }
 

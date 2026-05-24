@@ -392,7 +392,7 @@ describe("configHistory table schema", () => {
     expect(col.primaryKey).toBe(true);
   });
 
-  it("actor defaults to 'dashboard'", () => {
+  it("actor defaults to 'operator'", () => {
     const col = getColumnMap(configHistory)["actor"];
     expect(col.hasDefault).toBe(true);
     expect(col.notNull).toBe(true);

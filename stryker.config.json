@@ -11,6 +11,6 @@
   "concurrency": 4,
   "incremental": true,
   "incrementalFile": "reports/mutation/incremental.json",
-  "ignorePatterns": [".agents", ".claude", "docs", "skills", "dist", "frontend"],
+  "ignorePatterns": ["docs", "dist"],
   "thresholds": { "high": 80, "low": 60, "break": 0 }
 }

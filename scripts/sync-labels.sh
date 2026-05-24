@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-REPO="OmerFarukOruc/risoluto"
+REPO="risolutohq/risoluto"
 
 labels=(
   # Priority
@@ -18,9 +18,9 @@ labels=(
   "chore|e4e669|Maintenance and housekeeping"
   "documentation|0075ca|Documentation updates"
   # Area
-  "area: core|5319e7|Orchestrator and agent runner"
+  "area: core|5319e7|Workflow engine and role execution runtime"
   "area: api|1d76db|HTTP API and endpoints"
-  "area: dashboard|bfd4f2|Web dashboard UI"
+  "area: operator-surface|bfd4f2|CLI, TUI, and operator-facing surfaces"
   "area: infra|d4c5f9|CI/CD, tooling, infrastructure"
   # Workflow
   "triage|ededed|Needs initial review"

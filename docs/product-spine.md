@@ -20,28 +20,28 @@ A workflow-run engine for autonomous engineering work, with:
 
 These are the names every other doc, code symbol, and ADR uses. If a piece of code calls the same concept by a different name, the code is wrong.
 
-| Term | Meaning |
-|---|---|
-| **Engineering Intent** | Raw work request from Linear, Jira, GitHub, GitLab, CLI, webhook, schedule, PRD slice, or operator command. |
-| **Workflow Run** | Durable execution instance; the core primitive. |
-| **Workflow Definition** | Reusable state-machine / graph template for executing an intent. |
-| **Workflow State** | Named lifecycle point — `classify`, `plan`, `implement`, `review`, `validate`, `publish`, `blocked`, `done`. |
-| **Transition** | Explicit rule moving a run between workflow states. |
-| **Background Agent** | Category term for an autonomous engineering agent that runs outside the developer's active session. |
-| **AFK Agent** | Risoluto product term for a Background Agent configured to perform a role while the operator is away. |
-| **Agent Role** | Reusable job definition — complexity analyst, planner, implementer, reviewer, tester, release operator. |
-| **Role Execution** | One invocation of an Agent Role inside a Workflow Run. |
-| **Worker Process** | Actual harness / container / process executing the role. |
-| **Artifact** | Durable output of a Role Execution or deterministic process. |
-| **Artifact Contract** | Typed schema / meaning of an Artifact so another role can consume it. |
-| **Validation Gate** | Proof requirement before a transition can advance. |
-| **Hook** | Extension or side-effect point in the workflow. |
-| **Tracker Adapter** | Integration layer for Linear, GitHub Issues, GitLab, Jira, etc. |
-| **Tracker Mirror** | External tracker's representation of a Workflow Run. |
-| **Board Projection Contract** | Tracker board semantics exposed by an adapter. |
-| **Kanban Projection** | Tracker-faithful board view plus Risoluto overlays. |
-| **Operator** | Person running / controlling Risoluto. |
-| **Enterprise Environment** | Customer-owned engineering environment — its own tracker, repos, CI, secrets, policies, model gateways. |
+| Term                          | Meaning                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Engineering Intent**        | Raw work request from Linear, Jira, GitHub, GitLab, CLI, webhook, schedule, PRD slice, or operator command.  |
+| **Workflow Run**              | Durable execution instance; the core primitive.                                                              |
+| **Workflow Definition**       | Reusable state-machine / graph template for executing an intent.                                             |
+| **Workflow State**            | Named lifecycle point — `classify`, `plan`, `implement`, `review`, `validate`, `publish`, `blocked`, `done`. |
+| **Transition**                | Explicit rule moving a run between workflow states.                                                          |
+| **Background Agent**          | Category term for an autonomous engineering agent that runs outside the developer's active session.          |
+| **AFK Agent**                 | Risoluto product term for a Background Agent configured to perform a role while the operator is away.        |
+| **Agent Role**                | Reusable job definition — complexity analyst, planner, implementer, reviewer, tester, release operator.      |
+| **Role Execution**            | One invocation of an Agent Role inside a Workflow Run.                                                       |
+| **Worker Process**            | Actual harness / container / process executing the role.                                                     |
+| **Artifact**                  | Durable output of a Role Execution or deterministic process.                                                 |
+| **Artifact Contract**         | Typed schema / meaning of an Artifact so another role can consume it.                                        |
+| **Validation Gate**           | Proof requirement before a transition can advance.                                                           |
+| **Hook**                      | Extension or side-effect point in the workflow.                                                              |
+| **Tracker Adapter**           | Integration layer for Linear, GitHub Issues, GitLab, Jira, etc.                                              |
+| **Tracker Mirror**            | External tracker's representation of a Workflow Run.                                                         |
+| **Board Projection Contract** | Tracker board semantics exposed by an adapter.                                                               |
+| **Kanban Projection**         | Tracker-faithful board view plus Risoluto overlays.                                                          |
+| **Operator**                  | Person running / controlling Risoluto.                                                                       |
+| **Enterprise Environment**    | Customer-owned engineering environment — its own tracker, repos, CI, secrets, policies, model gateways.      |
 
 ## Architecture Principles
 

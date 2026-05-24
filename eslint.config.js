@@ -42,12 +42,6 @@ export default tseslint.config(
     },
   },
   {
-    files: ["frontend/**/*.ts"],
-    rules: {
-      complexity: ["warn", { max: 30 }],
-    },
-  },
-  {
     // Test files are naturally longer (setup + teardown + assertions in describe blocks)
     files: ["tests/**/*.ts"],
     rules: {

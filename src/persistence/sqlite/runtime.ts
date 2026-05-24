@@ -30,7 +30,7 @@ export interface PersistenceRuntime {
   db: RisolutoDatabase;
   /** Attempt store — backed by SQLite. */
   attemptStore: AttemptStorePort;
-  /** Cost-sample time-series store for the dashboard sparkline. */
+  /** Cost-sample time-series store for operator cost trends. */
   costSampleStore: CostSampleStorePort;
   /** Per-subsystem health probe sample store — 7d ring buffer. */
   healthProbeStore: HealthProbeStorePort;

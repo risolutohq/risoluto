@@ -1,7 +1,4 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-import express, { type Express } from "express";
+import type { Express } from "express";
 
 import { createMetricsCollector } from "../observability/metrics.js";
 import { validateHttpDeps } from "./dep-validator.js";
@@ -15,12 +12,7 @@ import { registerSystemRoutes } from "./routes/system.js";
 import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 
-const frontendDist = join(process.cwd(), "dist/frontend");
-
 export function registerHttpRoutes(app: Express, deps: HttpRouteDeps): void {
-  const staticRoot = deps.frontendDir ?? frontendDist;
-  const spaIndexPath = join(staticRoot, "index.html");
-  let cachedSpaIndexHtml: string | null = null;
   const routeDeps = {
     ...deps,
     metrics: deps.metrics ?? createMetricsCollector(),
@@ -28,8 +20,6 @@ export function registerHttpRoutes(app: Express, deps: HttpRouteDeps): void {
   } satisfies HttpRouteDeps;
 
   validateHttpDeps(routeDeps);
-
-  app.use(express.static(staticRoot));
 
   registerSystemRoutes(app, routeDeps);
   registerCodexRoutes(app, routeDeps);
@@ -40,19 +30,12 @@ export function registerHttpRoutes(app: Express, deps: HttpRouteDeps): void {
   registerIssueRoutes(app, routeDeps);
   registerWebhookRoutes(app, routeDeps);
 
-  // Prevent the SPA catch-all from swallowing unknown webhook paths.
+  // Keep unmatched webhook deliveries on the same JSON error contract as API routes.
   app.all("/webhooks/*path", (_request, response) => {
     response.status(404).json({ error: { code: "not_found", message: "Not found" } });
   });
 
-  app.use((request, response) => {
-    if (request.path.startsWith("/api/") || request.path === "/metrics") {
-      response.status(404).json({ error: { code: "not_found", message: "Not found" } });
-      return;
-    }
-    if (cachedSpaIndexHtml === null) {
-      cachedSpaIndexHtml = readFileSync(spaIndexPath, "utf8");
-    }
-    response.type("html").send(cachedSpaIndexHtml);
+  app.use((_request, response) => {
+    response.status(404).json({ error: { code: "not_found", message: "Not found" } });
   });
 }

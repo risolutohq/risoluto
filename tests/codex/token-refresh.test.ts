@@ -146,7 +146,7 @@ describe("refreshAccessToken", () => {
     expect(params.get("refresh_token")).toBe("rt_test_refresh_token");
   });
 
-  it("upgrades legacy flat auth.json into the nested Codex CLI schema", async () => {
+  it("upgrades previous flat auth.json into the nested Codex CLI schema", async () => {
     const dir = await createTempDir();
     const authPath = path.join(dir, "auth.json");
     await writeFile(

@@ -40,7 +40,6 @@ export interface HttpRouteDeps {
   alertHistoryStore?: AlertHistoryStorePort;
   templateStore?: TemplateStorePort;
   auditLogger?: AuditLoggerPort;
-  frontendDir?: string;
   archiveDir?: string;
   webhookHandlerDeps?: WebhookHandlerDeps;
   metrics?: MetricsCollector;

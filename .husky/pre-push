@@ -5,8 +5,8 @@
 #   2. Broken tests (vitest)
 #   3. Type errors (typecheck)
 #
-# Everything else (lint, format, knip, jscpd, playwright,
-# typecheck:coverage) is handled by pre-commit hooks, Claude hooks,
+# Everything else (lint, format, knip, typecheck:coverage) is handled by
+# pre-commit hooks, agent hooks,
 # or CI — where it runs in parallel on clean containers.
 #
 # Escape hatches:
@@ -43,9 +43,7 @@ if [ "${FULL_CHECK:-0}" = "1" ]; then
   pnpm run format:check
   pnpm test
   pnpm run typecheck
-  pnpm run typecheck:frontend
   pnpm run knip
-  pnpm exec playwright test --project=smoke
   command -v gitleaks >/dev/null 2>&1 && gitleaks detect --config .gitleaks.toml --verbose || echo "⚠️  gitleaks not installed — skipping."
   pnpm run typecheck:coverage
   echo "✅ Full CI-mirror suite passed!"
@@ -61,6 +59,5 @@ pnpm test
 
 echo "🔎 Type-checking..."
 pnpm run typecheck
-pnpm run typecheck:frontend
 
 echo "✅ Pre-push checks passed! (use FULL_CHECK=1 for the full suite)"

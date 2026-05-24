@@ -21,7 +21,7 @@ describe("notification config normalization", () => {
     vi.unstubAllEnvs();
   });
 
-  it("normalizes legacy slack config and mirrors it into channels", () => {
+  it("normalizes previous slack config and mirrors it into channels", () => {
     const result = normalizeNotifications({
       slack: { webhook_url: "https://hooks.slack.com/services/T000/B000/XXX", verbosity: "verbose" },
     });

@@ -38,10 +38,10 @@ describe("normalizeIssue", () => {
   it("lowercases label names", () => {
     const issue = normalizeIssue(
       makeRawIssue({
-        labels: { nodes: [{ name: "Bug" }, { name: "FRONTEND" }, { name: "back-End" }] },
+        labels: { nodes: [{ name: "Bug" }, { name: "OPS" }, { name: "back-End" }] },
       }),
     );
-    expect(issue.labels).toEqual(["bug", "frontend", "back-end"]);
+    expect(issue.labels).toEqual(["bug", "ops", "back-end"]);
   });
 
   it("filters null label names", () => {

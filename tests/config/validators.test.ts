@@ -370,7 +370,7 @@ describe("collectDispatchWarnings", () => {
       makeConfig({
         repos: [
           {
-            repoUrl: " https://github.com/OmerFarukOruc/risoluto.git ",
+            repoUrl: " https://github.com/risolutohq/risoluto.git ",
             defaultBranch: "main",
             identifierPrefix: "NIN",
             label: "Self test",
@@ -533,8 +533,8 @@ describe("normalizeRepoTarget", () => {
   });
 
   it("trims, lowercases, strips .git, and normalizes github ssh formats", () => {
-    expect(normalizeRepoTarget("  HTTPS://GitHub.com/OmerFarukOruc/Risoluto.git  ")).toBe(
-      "https://github.com/omerfarukoruc/risoluto",
+    expect(normalizeRepoTarget("  HTTPS://GitHub.com/risolutohq/Risoluto.git  ")).toBe(
+      "https://github.com/risolutohq/risoluto",
     );
     expect(normalizeRepoTarget("git@github.com:Owner/Repo.git")).toBe("https://github.com/owner/repo");
     expect(normalizeRepoTarget("ssh://git@github.com/Owner/Repo.git")).toBe("https://github.com/owner/repo");

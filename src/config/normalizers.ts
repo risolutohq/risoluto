@@ -396,8 +396,8 @@ export function normalizeTurnSandboxPolicy(value: Record<string, unknown>): { ty
  * Passes through strings, returns default for empty objects.
  */
 
-/** Legacy string aliases that predate the Codex 0.117+ AskForApproval enum. */
-const LEGACY_APPROVAL_ALIASES: Record<string, string> = {
+/** Previous string aliases that predate the Codex 0.117+ AskForApproval enum. */
+const PREVIOUS_APPROVAL_ALIASES: Record<string, string> = {
   "auto-edit": "never",
   "auto-approve": "never",
   reject: "never",
@@ -407,11 +407,11 @@ const LEGACY_APPROVAL_ALIASES: Record<string, string> = {
 // Codex AskForApproval accepts string | { granular: {...} } — mixed return is intentional.
 export function normalizeApprovalPolicy(value: unknown): string | Record<string, unknown> {
   if (typeof value === "string") {
-    return LEGACY_APPROVAL_ALIASES[value] ?? (VALID_APPROVAL_POLICIES.has(value) ? value : "never");
+    return PREVIOUS_APPROVAL_ALIASES[value] ?? (VALID_APPROVAL_POLICIES.has(value) ? value : "never");
   }
   const record = asRecord(value);
   if (Object.keys(record).length === 0) return defaultApprovalPolicy();
-  // Migrate legacy { reject: { ... } } → { granular: { ... } }
+  // Migrate previous { reject: { ... } } shape to { granular: { ... } }.
   if ("reject" in record && !("granular" in record)) {
     return { granular: record.reject };
   }

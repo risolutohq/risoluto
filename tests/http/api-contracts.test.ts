@@ -111,7 +111,6 @@ beforeAll(async () => {
   registerHttpRoutes(app, {
     orchestrator: orchestrator as never,
     logger: makeLogger() as never,
-    frontendDir: "/tmp",
   });
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => {

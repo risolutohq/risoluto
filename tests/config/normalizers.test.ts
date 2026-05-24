@@ -127,7 +127,7 @@ describe("normalizeNotifications", () => {
     expect(result.slack?.verbosity).toBe("critical");
   });
 
-  it("accepts camelCase webhookUrl in legacy slack config", () => {
+  it("accepts camelCase webhookUrl in previous slack config", () => {
     const result = normalizeNotifications({
       slack: { webhookUrl: "https://hooks.slack.com/services/T000/B000/camel", verbosity: "verbose" },
     });
@@ -136,9 +136,9 @@ describe("normalizeNotifications", () => {
     expect(result.channels[0].type).toBe("slack");
   });
 
-  it("does not promote legacy slack when channels already has a 'slack' named entry", () => {
+  it("does not promote previous slack config when channels already has a 'slack' named entry", () => {
     const result = normalizeNotifications({
-      slack: { webhook_url: "https://hooks.slack.com/services/T000/B000/legacy" },
+      slack: { webhook_url: "https://hooks.slack.com/services/T000/B000/previous" },
       channels: [
         {
           type: "slack",
@@ -148,23 +148,23 @@ describe("normalizeNotifications", () => {
         },
       ],
     });
-    // channels already has name "slack" — legacy must NOT be prepended (no duplication)
+    // channels already has name "slack"; the previous shape must not be prepended.
     expect(result.channels).toHaveLength(1);
     expect(result.channels[0].webhookUrl).toBe("https://hooks.slack.com/services/T000/B000/explicit");
   });
 
-  it("promotes legacy slack alongside non-Slack channels when no Slack channel exists", () => {
+  it("promotes previous slack config alongside non-Slack channels when no Slack channel exists", () => {
     const result = normalizeNotifications({
       slack: { webhook_url: "https://hooks.slack.com/services/T000/B000/XXX", verbosity: "critical" },
       channels: [{ type: "desktop", name: "desktop-local" }],
     });
-    // desktop channel should remain; legacy slack should be prepended
+    // desktop channel should remain; previous slack config should be prepended.
     expect(result.channels).toHaveLength(2);
     expect(result.channels[0].type).toBe("slack");
     expect(result.channels[1].type).toBe("desktop");
   });
 
-  it("preserves all fields from legacy slack config in the promoted channel", () => {
+  it("preserves all fields from previous slack config in the promoted channel", () => {
     const result = normalizeNotifications({
       slack: { webhook_url: "https://hooks.slack.com/services/T000/B000/XXX", verbosity: "verbose" },
     });
@@ -189,7 +189,7 @@ describe("normalizeNotifications", () => {
     expect(result.channels).toHaveLength(2);
     expect(result.channels[0].enabled).toBe(true);
     expect(result.channels[1].enabled).toBe(false);
-    // no legacy slack → slack field is null
+    // no previous slack config means the slack field is null.
     expect(result.slack).toBe(null);
   });
 
@@ -203,7 +203,7 @@ describe("normalizeNotifications", () => {
     expect(result.channels).toEqual([]);
   });
 
-  it("returns channels[] with only non-Slack entries when no legacy Slack is configured", () => {
+  it("returns channels[] with only non-Slack entries when no previous Slack config is configured", () => {
     const result = normalizeNotifications({
       channels: [{ type: "desktop", name: "my-desktop" }],
     });
@@ -347,7 +347,7 @@ describe("normalizeApprovalPolicy", () => {
     expect(normalizeApprovalPolicy("on-request")).toBe("on-request");
   });
 
-  it("migrates legacy string aliases to valid Codex values", () => {
+  it("migrates previous string aliases to valid Codex values", () => {
     expect(normalizeApprovalPolicy("auto-edit")).toBe("never");
     expect(normalizeApprovalPolicy("auto-approve")).toBe("never");
     expect(normalizeApprovalPolicy("reject")).toBe("never");
@@ -363,9 +363,9 @@ describe("normalizeApprovalPolicy", () => {
     expect(normalizeApprovalPolicy(policy)).toEqual(policy);
   });
 
-  it("migrates legacy reject key to granular", () => {
-    const legacy = { reject: { sandbox_approval: true, rules: true, mcp_elicitations: true } };
-    expect(normalizeApprovalPolicy(legacy)).toEqual({
+  it("migrates previous reject key to granular", () => {
+    const previous = { reject: { sandbox_approval: true, rules: true, mcp_elicitations: true } };
+    expect(normalizeApprovalPolicy(previous)).toEqual({
       granular: { sandbox_approval: true, rules: true, mcp_elicitations: true },
     });
   });

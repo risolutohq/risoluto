@@ -564,8 +564,7 @@ export class Orchestrator implements OrchestratorPort {
 
 /**
  * Reads `remaining / limit` from the loosely-typed rateLimits record and
- * returns the headroom as a 0–100 percentage. Mirrors the frontend's
- * `formatRateLimitHeadroom` logic so the sample matches what the UI shows.
+ * returns the headroom as a 0–100 percentage for operator-facing projections.
  */
 function extractHeadroomPct(rateLimits: unknown): number | null {
   if (!rateLimits || typeof rateLimits !== "object") return null;

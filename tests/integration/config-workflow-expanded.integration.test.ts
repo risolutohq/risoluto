@@ -752,7 +752,7 @@ describe("normalizers — edge cases", () => {
     expect(normalizeApprovalPolicy("unknown-policy")).toBe("never");
   });
 
-  it("normalizeApprovalPolicy maps legacy aliases correctly", async () => {
+  it("normalizeApprovalPolicy maps previous aliases correctly", async () => {
     const { normalizeApprovalPolicy } = await import("../../src/config/normalizers.js");
     expect(normalizeApprovalPolicy("auto-edit")).toBe("never");
     expect(normalizeApprovalPolicy("auto-approve")).toBe("never");
@@ -775,7 +775,7 @@ describe("normalizers — edge cases", () => {
     expect((result as Record<string, unknown>).granular).toBeDefined();
   });
 
-  it("normalizeApprovalPolicy migrates legacy { reject: {...} } to { granular: {...} }", async () => {
+  it("normalizeApprovalPolicy migrates previous { reject: {...} } to { granular: {...} }", async () => {
     const { normalizeApprovalPolicy } = await import("../../src/config/normalizers.js");
     const result = normalizeApprovalPolicy({ reject: { sandbox_approval: false } });
     expect(typeof result).toBe("object");

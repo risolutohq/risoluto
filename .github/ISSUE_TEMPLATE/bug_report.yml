@@ -20,8 +20,8 @@ body:
       label: Steps to Reproduce
       description: How can we reproduce this issue?
       placeholder: |
-        1. Start the orchestrator with `node dist/cli.js ./WORKFLOW.md`
-        2. Open the dashboard at http://127.0.0.1:4000
+        1. Start Risoluto with `node dist/cli/index.js --port 4000`
+        2. Call the relevant CLI command or HTTP endpoint
         3. ...
     validations:
       required: true

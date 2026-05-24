@@ -5,7 +5,7 @@
 
 ## Context
 
-The legacy Risoluto implementation treated **Issue** (specifically a Linear issue) as the core domain object. Worker lifecycle, attempt storage, dispatch, and persistence were all keyed on issue identity. This made:
+The pre-v1 Risoluto implementation treated **Issue** (specifically a Linear issue) as the core domain object. Worker lifecycle, attempt storage, dispatch, and persistence were all keyed on issue identity. This made:
 
 - Adding a second tracker (GitHub Issues, GitLab, Jira) a translation problem instead of an adapter problem.
 - Adding non-tracker intake (CLI command, schedule, PRD slice, webhook from a non-tracker source) awkward — there was no neutral primitive to attach the work to.
@@ -34,7 +34,7 @@ Concretely:
 
 **Negative.**
 
-- The legacy issue-keyed code does not survive the curated snapshot import as-is. Persistence, dispatch, and attempt storage are all rebuilt against Workflow Run.
+- The pre-v1 issue-keyed code does not survive the curated snapshot import as-is. Persistence, dispatch, and attempt storage are all rebuilt against Workflow Run.
 - Operator-facing language has to be re-taught — "issue" stops being the unit of work in internal terminology.
 - Tracker-mirroring is a write-back surface from the start; the adapter must keep tracker state coherent with workflow state.
 

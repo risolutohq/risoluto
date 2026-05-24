@@ -4,13 +4,13 @@
 
 ## Surfaces
 
-| Surface | Role |
-|---|---|
-| **Linear** | Canonical planning. All accepted work lands here first. |
+| Surface                                   | Role                                                                                             |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Linear**                                | Canonical planning. All accepted work lands here first.                                          |
 | **GitHub Issues** (`risolutohq/risoluto`) | **Public intake / mirror.** Selective public exposure of accepted work; not the planning source. |
-| **`research/` submodule** (private) | Per-target peer / competitor / reference ledgers. Operator intel. |
-| **`docs/`** (this repo) | Current-truth product / technical / decision docs. |
-| **Operator's wiki / Obsidian vault** | Long-tail thinking; opt-in retrieval via future skills. |
+| **`research/` submodule** (private)       | Per-target peer / competitor / reference ledgers. Operator intel.                                |
+| **`docs/`** (this repo)                   | Current-truth product / technical / decision docs.                                               |
+| **Operator's wiki / Obsidian vault**      | Long-tail thinking; opt-in retrieval via future skills.                                          |
 
 ## Flow
 
@@ -33,7 +33,7 @@ $grill-me
 - **Skills.** Tooling for the steps above. `$grill-me`, `$grill-with-docs`, `$to-prd`, `$to-issues` are explicit invocations, not auto-triggers.
 - **Risoluto runtime.** Consumes Linear tickets as Engineering Intents; produces PRs back into canonical / mirror repos.
 
-## What This Workflow Is *Not*
+## What This Workflow Is _Not_
 
 - A ticket-management substitute for Linear. Tickets live in Linear.
 - A backlog database. The backlog lives in [capability-backlog.md](./capability-backlog.md) as a summary; tickets are the detail.

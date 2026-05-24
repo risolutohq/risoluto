@@ -1,12 +1,12 @@
 # Risoluto — Technical Spine
 
-> The v1 technical spine is **maximal** — it names every layer Risoluto's foundation must accommodate, even if v1 does not ship a complete implementation of each. The spine governs **import classification** (which legacy code maps where) and **boundary discipline** (what crosses which plane).
+> The v1 technical spine is **maximal** — it names every layer Risoluto's foundation must accommodate, even if v1 does not ship a complete implementation of each. The spine governs source classification and boundary discipline.
 
 ---
 
 ## Scope
 
-These are the v1 spine surfaces. Every line of source code in the v1 import classifies into one of them (or into quarantine, or it is excluded).
+These are the v1 spine surfaces. Kept source should map to one of them, or be removed/deferred with the reason captured in [v1-transition-goal.md](./v1-transition-goal.md).
 
 1. **Core workflow engine** — Workflow Run lifecycle, transitions, gate evaluation.
 2. **Workflow Run model** — durable, retryable, replayable execution record.
@@ -73,13 +73,13 @@ Top-down:
 
 ## Adapter Surfaces (v1 contracts only, not full implementations)
 
-| Surface | v1 Contract | v1 Implementation |
-|---|---|---|
-| Tracker | `TrackerPort` (intake, mirror, board projection) | Linear (first), CLI / direct ingest (second) |
-| PR / MR | `PrPort` (open, comment, status) | GitHub PRs |
-| Harness | `HarnessPort` (spawn role, collect artifacts, stream evidence) | Codex (first) |
-| Model / provider | `ModelProvider` config | Anthropic, OpenAI (explicit name-based) |
-| Persistence | `WorkflowRunStore`, `ArtifactStore`, `EventLogStore`, `MemoryStore` | SQLite + filesystem (single-node) |
+| Surface          | v1 Contract                                                         | v1 Implementation                            |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------- |
+| Tracker          | `TrackerPort` (intake, mirror, board projection)                    | Linear (first), CLI / direct ingest (second) |
+| PR / MR          | `PrPort` (open, comment, status)                                    | GitHub PRs                                   |
+| Harness          | `HarnessPort` (spawn role, collect artifacts, stream evidence)      | Codex (first)                                |
+| Model / provider | `ModelProvider` config                                              | Anthropic, OpenAI (explicit name-based)      |
+| Persistence      | `WorkflowRunStore`, `ArtifactStore`, `EventLogStore`, `MemoryStore` | SQLite + filesystem (single-node)            |
 
 Other tracker / PR / harness implementations are backlog (see [capability backlog](./capability-backlog.md)).
 

@@ -80,7 +80,7 @@ export class AuditLogger implements AuditLoggerPort {
   log(entry: AuditEntry): void {
     const isSecret = entry.tableName === "secrets";
     const path = entry.path ?? null;
-    const actor = entry.actor ?? "dashboard";
+    const actor = entry.actor ?? "operator";
     const timestamp = new Date().toISOString();
 
     this.db
@@ -169,7 +169,7 @@ function rowToAuditRecord(row: Record<string, unknown>): AuditRecord {
     operation: row.operation as string,
     previousValue: (row.previous_value as string) ?? null,
     newValue: (row.new_value as string) ?? null,
-    actor: (row.actor as string) ?? "dashboard",
+    actor: (row.actor as string) ?? "operator",
     requestId: (row.request_id as string) ?? null,
     timestamp: row.timestamp as string,
   };

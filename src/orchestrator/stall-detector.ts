@@ -4,7 +4,7 @@
  * Detects running agents that have emitted no events for longer than
  * `config.codex.stallTimeoutMs` and aborts them so the retry mechanism can
  * requeue the work.  A `StallEvent` record is stored per detected stall for
- * dashboard display (stall timeline widget).
+ * operator status projection.
  */
 
 import type { RuntimeEventSink } from "../core/lifecycle-events.js";
@@ -30,7 +30,7 @@ export interface StallDetectorContext {
   };
 }
 
-/** Maximum stall events kept in memory for the dashboard timeline. */
+/** Maximum stall events kept in memory for the operator timeline. */
 export const MAX_STALL_EVENTS = 100;
 
 export interface StallDetectorResult {

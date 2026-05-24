@@ -15,15 +15,15 @@
 <!-- Describe what tests you ran and how. -->
 
 ```bash
-npm run build
-npm test
-npm run lint
+pnpm run build
+pnpm test
+pnpm run lint
 ```
 
 ## Checklist
 
-- [ ] Build passes (`npm run build`)
-- [ ] Tests pass (`npm test`)
-- [ ] Lint passes (`npm run lint`)
+- [ ] Build passes (`pnpm run build`)
+- [ ] Tests pass (`pnpm test`)
+- [ ] Lint passes (`pnpm run lint`)
 - [ ] Docs updated if behavior changed
 - [ ] No secrets in committed files

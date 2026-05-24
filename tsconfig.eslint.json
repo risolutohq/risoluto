@@ -11,14 +11,5 @@
     "noEmit": true,
     "lib": ["ES2022"]
   },
-  "include": [
-    "src/**/*",
-    "tests/**/*",
-    "frontend/src/**/*",
-    "frontend/*.ts",
-    "scripts/**/*",
-    "playwright.config.ts",
-    "playwright.fullstack.config.ts",
-    "commitlint.config.ts"
-  ]
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*", "commitlint.config.ts", "knip.config.ts", "vitest*.config.ts"]
 }

@@ -1,7 +1,7 @@
 /**
  * Port for the cost-sample time-series store.
  *
- * Each tick of the orchestrator appends one sample so the dashboard can
+ * Each tick of the orchestrator appends one sample so operator surfaces can
  * render a session-cumulative cost sparkline backed by real data, not
  * fabricated trends. Samples persist across restarts and are truncated
  * to a 7-day window on every append.

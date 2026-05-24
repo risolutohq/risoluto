@@ -3,7 +3,7 @@ import express from "express";
 import http from "node:http";
 
 /**
- * Minimal app that mirrors the SPA catch-all and webhook 404 handler
+ * Minimal app that mirrors the webhook 404 handler and final JSON fallback
  * ordering from `routes.ts`.
  */
 function startApp(): Promise<{ port: number; server: http.Server }> {
@@ -15,14 +15,14 @@ function startApp(): Promise<{ port: number; server: http.Server }> {
     res.json({ ok: true });
   });
 
-  // JSON 404 for unmatched webhook paths — before SPA catch-all
+  // JSON 404 for unmatched webhook paths.
   app.all("/webhooks/*path", (_req, res) => {
     res.status(404).json({ error: { code: "not_found", message: "Not found" } });
   });
 
-  // SPA catch-all (returns HTML)
+  // Final API-first fallback.
   app.use((_req, res) => {
-    res.type("html").send("<html><body>SPA</body></html>");
+    res.status(404).json({ error: { code: "not_found", message: "Not found" } });
   });
 
   return new Promise((resolve) => {
@@ -79,12 +79,12 @@ describe("webhook 404 handler", () => {
     expect(body.error.code).toBe("not_found");
   });
 
-  it("does NOT return JSON for non-webhook paths (SPA catch-all still works)", async () => {
+  it("returns JSON 404 for non-webhook paths", async () => {
     const { port, server: s } = await startApp();
     server = s;
 
     const response = await fetch(`http://127.0.0.1:${port}/some-random-path`);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toMatch(/text\/html/);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toMatch(/application\/json/);
   });
 });

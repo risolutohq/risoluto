@@ -105,7 +105,7 @@ const CREATE_TABLES_SQL = `
     operation       TEXT NOT NULL,
     previous_value  TEXT,
     new_value       TEXT,
-    actor           TEXT NOT NULL DEFAULT 'dashboard',
+    actor           TEXT NOT NULL DEFAULT 'operator',
     request_id      TEXT,
     timestamp       TEXT NOT NULL
   );

@@ -17,31 +17,31 @@ function makeSummary(overrides: Partial<Record<string, unknown>> = {}) {
     workflow: "CI",
     runId: "12345",
     sha: "abc123",
-    refName: "main",
+    refName: "master",
     jobs: [
-      { job: "fullstack-e2e", result: "failure" },
-      { job: "visual-regression", result: "success" },
+      { job: "integration", result: "failure" },
+      { job: "live-provider-smoke", result: "success" },
     ],
-    failedJobs: ["fullstack-e2e"],
+    failedJobs: ["integration"],
     failingTests: [
       {
-        file: "tests/e2e/specs/fullstack/webhook-to-ui.fullstack.spec.ts",
-        title: "webhook propagates to UI",
-        projectName: "fullstack",
+        file: "tests/integration/config-workflow.integration.test.ts",
+        title: "config workflow validates adapters",
+        projectName: null,
         error: "TimeoutError: expected state update",
       },
     ],
     artifactUrls: {
-      runUrl: "https://github.com/OmerFarukOruc/risoluto/actions/runs/12345",
+      runUrl: "https://github.com/risolutohq/risoluto/actions/runs/12345",
       intakeArtifactName: "nightly-linear-intake-abc123",
-      htmlReportArtifactName: "fullstack-e2e-report-abc123",
-      jsonReportPath: "test-results/playwright-fullstack-results.json",
-      htmlReportUrl: "https://github.com/OmerFarukOruc/risoluto/actions/runs/12345#artifacts",
-      traceUrl: "https://github.com/OmerFarukOruc/risoluto/actions/runs/12345#artifacts",
-      videoUrl: "https://github.com/OmerFarukOruc/risoluto/actions/runs/12345#artifacts",
-      intakeArtifactUrl: "https://github.com/OmerFarukOruc/risoluto/actions/runs/12345#artifacts",
+      htmlReportArtifactName: null,
+      jsonReportPath: "reports/vitest-results.json",
+      htmlReportUrl: null,
+      traceUrl: null,
+      videoUrl: null,
+      intakeArtifactUrl: "https://github.com/risolutohq/risoluto/actions/runs/12345#artifacts",
     },
-    suggestedRepro: ["pnpm exec playwright test --config playwright.fullstack.config.ts"],
+    suggestedRepro: ["pnpm run test:integration"],
     ...overrides,
   };
 }
@@ -63,10 +63,8 @@ describe("nightly failure helpers", () => {
     const body = buildFailureIssueBody(summary, fingerprint, "https://example.test/failure");
     expect(buildFailureIssueTitle(summary, fingerprint)).toContain("[Nightly]");
     expect(body).toContain("Failing tests");
-    expect(body).toContain("HTML report:");
-    expect(body).toContain("Trace bundle:");
-    expect(body).toContain("Video bundle:");
     expect(body).toContain("JSON intake artifact:");
+    expect(body).toContain("JSON report path:");
     expect(body).toContain("Suggested repro");
     expect(body).toContain("TimeoutError: expected state update");
   });

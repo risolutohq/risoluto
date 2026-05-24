@@ -10,7 +10,6 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.ts"],
       exclude: [
-        "src/dashboard/template.ts",
         // Type-only files with no executable code
         "src/orchestrator/context.ts",
         "src/orchestrator/runtime-types.ts",
@@ -19,8 +18,6 @@ export default defineConfig({
         // CLI entrypoint (requires integration test)
         "src/dispatch/entrypoint.ts",
         "src/cli/index.ts",
-        // Frontend — needs browser testing, not Node unit tests
-        "frontend/src/**",
         // Route handlers / auth flows — require integration tests
         "src/audit/api.ts",
         "src/prompt/api.ts",

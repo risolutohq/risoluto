@@ -46,7 +46,7 @@ function collectJobsFromEnv(): NightlyJobStatus[] {
 }
 
 function reportPaths(): string[] {
-  const paths = (process.env.PLAYWRIGHT_JSON_REPORT_PATHS ?? process.env.PLAYWRIGHT_JSON_REPORT_PATH ?? "")
+  const paths = (process.env.VITEST_JSON_REPORT_PATHS ?? process.env.VITEST_JSON_REPORT_PATH ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
@@ -129,14 +129,14 @@ function collectFailingTests(): NightlyFailingTest[] {
 
 function buildSuggestedReproCommands(): string[] {
   const commands: string[] = [];
-  if (process.env.NIGHTLY_FAILED_JOB_FULLSTACK_E2E === "true") {
-    commands.push("pnpm exec playwright test --config playwright.fullstack.config.ts");
-  }
-  if (process.env.NIGHTLY_FAILED_JOB_VISUAL_REGRESSION === "true") {
-    commands.push("pnpm exec playwright test --project=visual");
-  }
   if (process.env.NIGHTLY_FAILED_JOB_LIVE_PROVIDER_SMOKE === "true") {
     commands.push("pnpm run test:integration:live");
+  }
+  if (process.env.NIGHTLY_FAILED_JOB_INTEGRATION === "true") {
+    commands.push("pnpm run test:integration");
+  }
+  if (process.env.NIGHTLY_FAILED_JOB_TEST === "true") {
+    commands.push("pnpm test");
   }
   return commands;
 }
@@ -153,7 +153,7 @@ function buildArtifactUrls(runUrl: string | null): NightlySummary["artifactUrls"
     runUrl,
     intakeArtifactName: process.env.NIGHTLY_INTAKE_ARTIFACT_NAME ?? null,
     htmlReportArtifactName: process.env.NIGHTLY_HTML_ARTIFACT_NAME ?? null,
-    jsonReportPath: process.env.PLAYWRIGHT_JSON_REPORT_PATHS ?? process.env.PLAYWRIGHT_JSON_REPORT_PATH ?? null,
+    jsonReportPath: process.env.VITEST_JSON_REPORT_PATHS ?? process.env.VITEST_JSON_REPORT_PATH ?? null,
     htmlReportUrl: process.env.NIGHTLY_HTML_REPORT_URL ?? null,
     traceUrl: process.env.NIGHTLY_TRACE_URL ?? null,
     videoUrl: process.env.NIGHTLY_VIDEO_URL ?? null,

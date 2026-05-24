@@ -12,7 +12,6 @@ const TEST_SUFFIX = /\.test\.ts$/;
 // (type-only modules, CLI entrypoints covered by integration tests). Kept aligned with
 // the coverage exclusions in vitest.config.ts so mutation scope matches unit-test scope.
 const EXCLUDE_PATHS = new Set([
-  "src/dashboard/template.ts",
   "src/orchestrator/context.ts",
   "src/orchestrator/runtime-types.ts",
   "src/dispatch/types.ts",

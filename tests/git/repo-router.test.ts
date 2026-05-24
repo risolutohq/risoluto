@@ -41,24 +41,24 @@ describe("repo-router", () => {
   it("matches by label before identifier prefix when both match", () => {
     const routes: RepoRoute[] = [
       { identifierPrefix: "NIN", repoUrl: "https://github.com/acme/backend.git", defaultBranch: "main" },
-      { label: " repo:frontend ", repoUrl: "https://github.com/acme/frontend.git", defaultBranch: " develop " },
+      { label: " repo:web ", repoUrl: "https://github.com/acme/web.git", defaultBranch: " develop " },
     ];
 
-    const match = matchIssue(createIssue({ labels: ["repo:frontend"] }), routes);
+    const match = matchIssue(createIssue({ labels: ["repo:web"] }), routes);
     expect(match).toMatchObject({
-      repoUrl: "https://github.com/acme/frontend.git",
+      repoUrl: "https://github.com/acme/web.git",
       matchedBy: "label",
       defaultBranch: "develop",
-      label: "repo:frontend",
+      label: "repo:web",
     });
   });
 
   it("matches labels case-insensitively and ignores surrounding whitespace on issue labels", () => {
-    const routes: RepoRoute[] = [{ label: "repo:frontend", repoUrl: "https://github.com/acme/frontend.git" }];
+    const routes: RepoRoute[] = [{ label: "repo:web", repoUrl: "https://github.com/acme/web.git" }];
 
-    const match = matchIssue(createIssue({ labels: ["  RePo:FrOnTeNd  "] }), routes);
+    const match = matchIssue(createIssue({ labels: ["  RePo:WeB  "] }), routes);
     expect(match).toMatchObject({
-      repoUrl: "https://github.com/acme/frontend.git",
+      repoUrl: "https://github.com/acme/web.git",
       matchedBy: "label",
     });
   });
@@ -67,33 +67,33 @@ describe("repo-router", () => {
     const routes: RepoRoute[] = [
       {
         identifierPrefix: " web ",
-        repoUrl: "https://github.com/acme/frontend.git",
+        repoUrl: "https://github.com/acme/web.git",
         defaultBranch: " develop ",
         githubOwner: " acme ",
-        githubRepo: " frontend ",
-        githubTokenEnv: " FRONTEND_TOKEN ",
+        githubRepo: " web ",
+        githubTokenEnv: " WEB_TOKEN ",
       },
       { label: "repo:api", repoUrl: "https://github.com/acme/api.git" },
     ];
 
-    const match = matchIssue(createIssue({ identifier: "WEB-7", labels: ["repo:frontend"] }), routes);
+    const match = matchIssue(createIssue({ identifier: "WEB-7", labels: ["repo:web"] }), routes);
     expect(match).toMatchObject({
-      repoUrl: "https://github.com/acme/frontend.git",
+      repoUrl: "https://github.com/acme/web.git",
       matchedBy: "identifier_prefix",
       defaultBranch: "develop",
       identifierPrefix: "web",
       githubOwner: "acme",
-      githubRepo: "frontend",
-      githubTokenEnv: "FRONTEND_TOKEN",
+      githubRepo: "web",
+      githubTokenEnv: "WEB_TOKEN",
     });
   });
 
   it("matches identifier prefixes case-insensitively and ignores surrounding whitespace", () => {
-    const routes: RepoRoute[] = [{ identifierPrefix: "web", repoUrl: "https://github.com/acme/frontend.git" }];
+    const routes: RepoRoute[] = [{ identifierPrefix: "web", repoUrl: "https://github.com/acme/web.git" }];
 
     const match = matchIssue(createIssue({ identifier: "  WeB-7  " }), routes);
     expect(match).toMatchObject({
-      repoUrl: "https://github.com/acme/frontend.git",
+      repoUrl: "https://github.com/acme/web.git",
       matchedBy: "identifier_prefix",
     });
   });
@@ -117,7 +117,7 @@ describe("repo-router", () => {
 
   it("skips label routes with blank repo URLs or blank labels", () => {
     const routes: RepoRoute[] = [
-      { label: "repo:frontend", repoUrl: "   " },
+      { label: "repo:web", repoUrl: "   " },
       { label: "   ", repoUrl: "https://github.com/acme/blank.git" },
       { label: "repo:ops", repoUrl: "https://github.com/acme/ops.git" },
     ];
@@ -131,14 +131,14 @@ describe("repo-router", () => {
 
   it("skips a matching label route when repoUrl is missing or only whitespace", () => {
     const routes: RepoRoute[] = [
-      { label: "repo:frontend", repoUrl: undefined },
-      { label: "repo:frontend", repoUrl: "   " },
-      { label: "repo:frontend", repoUrl: "https://github.com/acme/frontend.git" },
+      { label: "repo:web", repoUrl: undefined },
+      { label: "repo:web", repoUrl: "   " },
+      { label: "repo:web", repoUrl: "https://github.com/acme/web.git" },
     ];
 
-    const match = matchIssue(createIssue({ labels: ["repo:frontend"] }), routes);
+    const match = matchIssue(createIssue({ labels: ["repo:web"] }), routes);
     expect(match).toMatchObject({
-      repoUrl: "https://github.com/acme/frontend.git",
+      repoUrl: "https://github.com/acme/web.git",
       matchedBy: "label",
     });
   });
@@ -196,7 +196,7 @@ describe("repo-router", () => {
 
   it("returns null when no route matches", () => {
     const routes: RepoRoute[] = [{ identifierPrefix: "API", repoUrl: "https://github.com/acme/api.git" }];
-    const match = matchIssue(createIssue({ identifier: "WEB-7", labels: ["repo:frontend"] }), routes);
+    const match = matchIssue(createIssue({ identifier: "WEB-7", labels: ["repo:web"] }), routes);
     expect(match).toBeNull();
   });
 

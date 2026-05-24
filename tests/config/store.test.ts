@@ -144,7 +144,7 @@ describe("ConfigStore", () => {
       toMap: vi.fn().mockReturnValue({
         repos: [
           {
-            repo_url: "https://github.com/OmerFarukOruc/risoluto.git",
+            repo_url: "https://github.com/risolutohq/risoluto.git",
             identifier_prefix: "NIN",
           },
         ],

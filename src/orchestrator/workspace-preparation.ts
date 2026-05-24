@@ -1,6 +1,3 @@
-import { lstatSync, readdirSync, rmSync, statSync } from "node:fs";
-import path from "node:path";
-
 import { createLifecycleEvent, type RuntimeEventSink } from "../core/lifecycle-events.js";
 import { toErrorString } from "../utils/type-guards.js";
 import type { Issue, ServiceConfig, Workspace } from "../core/types.js";
@@ -31,35 +28,6 @@ interface WorkspacePreparationContext {
   pushEvent?: RuntimeEventSink;
 }
 
-export function pruneDanglingWorkspaceSkillLinks(workspacePath: string): void {
-  const skillsDir = path.join(workspacePath, ".agents", "skills");
-  try {
-    for (const entry of readdirSync(skillsDir)) {
-      const skillPath = path.join(skillsDir, entry);
-      let info;
-      try {
-        info = lstatSync(skillPath);
-      } catch {
-        continue;
-      }
-      if (!info.isSymbolicLink()) {
-        continue;
-      }
-
-      try {
-        statSync(skillPath);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-          throw error;
-        }
-        rmSync(skillPath, { force: true });
-      }
-    }
-  } catch {
-    return;
-  }
-}
-
 export async function prepareWorkspaceForLaunch(ctx: WorkspacePreparationContext, issue: Issue): Promise<Workspace> {
   const config = ctx.deps.configStore.getConfig();
   const { workspacePath } = resolveWorkspacePath(config.workspace.root, issue.identifier);
@@ -87,7 +55,6 @@ export async function prepareWorkspaceForLaunch(ctx: WorkspacePreparationContext
         );
       }
     }
-    pruneDanglingWorkspaceSkillLinks(workspace.path);
     ctx.pushEvent?.(
       createLifecycleEvent({
         issue,

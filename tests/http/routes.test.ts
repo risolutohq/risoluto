@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi, beforeAll, afterAll } from "vitest";
 import express from "express";
 import http from "node:http";
-import { join } from "node:path";
 
 vi.mock("../../src/codex/model-list.js", () => ({
   fetchCodexModels: vi.fn().mockResolvedValue(null),
@@ -103,7 +102,6 @@ beforeAll(async () => {
     automationScheduler: automationScheduler as never,
     alertHistoryStore: alertHistoryStore as never,
     logger: createMockLogger(),
-    frontendDir: "/tmp",
   });
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => {
@@ -126,11 +124,6 @@ async function fetchRoute(path: string, options?: RequestInit): Promise<Response
 async function loadRoutesModuleWithMocks() {
   vi.resetModules();
 
-  const readFileSyncSpy = vi.fn(() => "<html></html>");
-  const staticMiddleware = vi.fn();
-  const limiterMiddleware = vi.fn();
-  const staticSpy = vi.fn(() => staticMiddleware);
-  const rateLimitSpy = vi.fn(() => limiterMiddleware);
   const createMetricsCollectorSpy = vi.fn(() => ({ record: vi.fn() }));
   const validateHttpDepsSpy = vi.fn();
   const registerSystemRoutesSpy = vi.fn();
@@ -142,15 +135,6 @@ async function loadRoutesModuleWithMocks() {
   const registerIssueRoutesSpy = vi.fn();
   const registerWebhookRoutesSpy = vi.fn();
 
-  vi.doMock("node:fs", () => ({
-    readFileSync: readFileSyncSpy,
-  }));
-  vi.doMock("express", () => ({
-    default: { static: staticSpy },
-  }));
-  vi.doMock("express-rate-limit", () => ({
-    default: rateLimitSpy,
-  }));
   vi.doMock("../../src/observability/metrics.js", () => ({
     createMetricsCollector: createMetricsCollectorSpy,
   }));
@@ -185,10 +169,6 @@ async function loadRoutesModuleWithMocks() {
   const module = await import("../../src/http/routes.js");
   return {
     registerHttpRoutes: module.registerHttpRoutes,
-    staticMiddleware,
-    limiterMiddleware,
-    staticSpy,
-    rateLimitSpy,
     createMetricsCollectorSpy,
     validateHttpDepsSpy,
     registerSystemRoutesSpy,
@@ -199,7 +179,6 @@ async function loadRoutesModuleWithMocks() {
     registerNotificationRoutesSpy,
     registerIssueRoutesSpy,
     registerWebhookRoutesSpy,
-    readFileSyncSpy,
   };
 }
 
@@ -575,15 +554,9 @@ describe("HTTP routes", () => {
 });
 
 describe("registerHttpRoutes wiring", () => {
-  it("uses the default frontend dist path and creates fallback metrics when deps.metrics is absent", async () => {
-    const {
-      registerHttpRoutes,
-      staticMiddleware,
-      staticSpy,
-      createMetricsCollectorSpy,
-      validateHttpDepsSpy,
-      registerSystemRoutesSpy,
-    } = await loadRoutesModuleWithMocks();
+  it("creates fallback metrics when deps.metrics is absent", async () => {
+    const { registerHttpRoutes, createMetricsCollectorSpy, validateHttpDepsSpy, registerSystemRoutesSpy } =
+      await loadRoutesModuleWithMocks();
     const app = { use: vi.fn(), all: vi.fn() };
     const deps = {
       orchestrator: {},
@@ -596,8 +569,6 @@ describe("registerHttpRoutes wiring", () => {
 
     registerHttpRoutes(app as never, deps as never);
 
-    expect(staticSpy).toHaveBeenCalledWith(join(process.cwd(), "dist/frontend"));
-    expect(app.use).toHaveBeenCalledWith(staticMiddleware);
     expect(createMetricsCollectorSpy).toHaveBeenCalledOnce();
     expect(validateHttpDepsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -626,7 +597,6 @@ describe("registerHttpRoutes wiring", () => {
         automationScheduler: {},
         alertHistoryStore: {},
         logger: createMockLogger(),
-        frontendDir: "/custom/frontend",
         metrics: providedMetrics,
       } as never,
     );
@@ -664,7 +634,7 @@ describe("registerHttpRoutes wiring", () => {
     });
   });
 
-  it("uses the SPA fallback only for non-API, non-metrics paths", async () => {
+  it("returns JSON 404 from the final fallback", async () => {
     const { registerHttpRoutes } = await loadRoutesModuleWithMocks();
     const app = { use: vi.fn(), all: vi.fn() };
 
@@ -677,7 +647,6 @@ describe("registerHttpRoutes wiring", () => {
         automationScheduler: {},
         alertHistoryStore: {},
         logger: createMockLogger(),
-        frontendDir: "/custom/frontend",
       } as never,
     );
 
@@ -701,56 +670,15 @@ describe("registerHttpRoutes wiring", () => {
     };
     fallback({ path: "/metrics" } as Request, metricsResponse as never);
     expect(metricsResponse.status).toHaveBeenCalledWith(404);
-    expect(metricsResponse.sendFile).not.toHaveBeenCalled();
 
-    const spaResponse = {
+    const nonApiResponse = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
-      type: vi.fn().mockReturnThis(),
-      send: vi.fn(),
     };
-    fallback({ path: "/dashboard" } as Request, spaResponse as never);
-    expect(spaResponse.type).toHaveBeenCalledWith("html");
-    expect(spaResponse.send).toHaveBeenCalled();
-    expect(spaResponse.status).not.toHaveBeenCalled();
-  });
-
-  it("reads the SPA index once and reuses the cached HTML across fallback requests", async () => {
-    const { registerHttpRoutes, readFileSyncSpy } = await loadRoutesModuleWithMocks();
-    const app = { use: vi.fn(), all: vi.fn() };
-
-    registerHttpRoutes(
-      app as never,
-      {
-        orchestrator: {},
-        notificationStore: {},
-        automationStore: {},
-        automationScheduler: {},
-        alertHistoryStore: {},
-        logger: createMockLogger(),
-        frontendDir: "/custom/frontend",
-      } as never,
-    );
-
-    const fallback = app.use.mock.calls.at(-1)?.[0] as (request: Request, response: Response) => void;
-    const firstResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn().mockReturnThis(),
-      type: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-    };
-    const secondResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn().mockReturnThis(),
-      type: vi.fn().mockReturnThis(),
-      send: vi.fn(),
-    };
-
-    fallback({ path: "/dashboard" } as Request, firstResponse as never);
-    fallback({ path: "/queue" } as Request, secondResponse as never);
-
-    expect(readFileSyncSpy).toHaveBeenCalledTimes(1);
-    expect(firstResponse.send).toHaveBeenCalledWith("<html></html>");
-    expect(secondResponse.send).toHaveBeenCalledWith("<html></html>");
+    fallback({ path: "/runs" } as Request, nonApiResponse as never);
+    expect(nonApiResponse.status).toHaveBeenCalledWith(404);
+    expect(nonApiResponse.json).toHaveBeenCalledWith({
+      error: { code: "not_found", message: "Not found" },
+    });
   });
 });

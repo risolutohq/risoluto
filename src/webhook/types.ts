@@ -4,7 +4,7 @@ import type { WebhookInboxStats as PersistedWebhookInboxStats } from "../persist
  * Shared types for the webhook integration module.
  *
  * These are the contracts that other modules (orchestrator, HTTP server,
- * dashboard) depend on. The health tracker (Unit 4) implements the
+ * operator surfaces) depend on. The health tracker implements the
  * state machine that produces these values.
  */
 

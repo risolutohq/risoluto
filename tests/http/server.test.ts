@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -8,8 +8,6 @@ import { ConfigOverlayStore } from "../../src/config/overlay.js";
 import { HttpServer } from "../../src/http/server.js";
 import { createLogger } from "../../src/core/logger.js";
 import { Orchestrator } from "../../src/orchestrator/orchestrator.js";
-
-const SPA_HTML = `<!doctype html><html><head><title>Risoluto</title></head><body><div id="app"></div></body></html>`;
 
 describe("HttpServer", () => {
   let server: HttpServer | null = null;
@@ -27,13 +25,7 @@ describe("HttpServer", () => {
     return dir;
   }
 
-  async function createFrontendDir(): Promise<string> {
-    const dir = await createTempDir();
-    await writeFile(path.join(dir, "index.html"), SPA_HTML, "utf8");
-    return dir;
-  }
-
-  it("serves SPA and API routes in the expected order with 405 handling", async () => {
+  it("serves API routes in the expected order with 405 handling", async () => {
     const snapshotData = {
       generatedAt: "2026-03-16T00:00:00Z",
       counts: { running: 0, retrying: 0 },
@@ -162,22 +154,20 @@ describe("HttpServer", () => {
           : null,
     } as unknown as Orchestrator;
 
-    const frontendDir = await createFrontendDir();
     server = new HttpServer({
       orchestrator,
       logger: createLogger(),
-      frontendDir,
     });
 
     const started = await server.start(0);
     const baseUrl = `http://127.0.0.1:${started.port}`;
 
     const rootResponse = await fetch(`${baseUrl}/`);
-    expect(rootResponse.status).toBe(200);
+    expect(rootResponse.status).toBe(404);
     expect(rootResponse.headers.get("x-request-id")).toBeTruthy();
-    const rootHtml = await rootResponse.text();
-    expect(rootHtml).toContain('<div id="app">');
-    expect(rootHtml).toContain("<title>Risoluto</title>");
+    expect(await rootResponse.json()).toEqual({
+      error: { code: "not_found", message: "Not found" },
+    });
 
     const stateResponse = await fetch(`${baseUrl}/api/v1/state`);
     expect(stateResponse.status).toBe(200);
@@ -269,11 +259,9 @@ describe("HttpServer", () => {
   });
 
   it("serves /api/v1/runtime with version and config info", async () => {
-    const frontendDir = await createFrontendDir();
     server = new HttpServer({
       orchestrator: {} as unknown as Orchestrator,
       logger: createLogger(),
-      frontendDir,
     });
     const started = await server.start(0);
     const response = await fetch(`http://127.0.0.1:${started.port}/api/v1/runtime`);
@@ -298,19 +286,18 @@ describe("HttpServer", () => {
     expect((body as { error: { code: string } }).error.code).toBe("not_found");
   });
 
-  it("serves SPA index.html for unknown non-API paths", async () => {
-    const frontendDir = await createFrontendDir();
+  it("returns JSON 404 for unknown non-API paths", async () => {
     server = new HttpServer({
       orchestrator: {} as unknown as Orchestrator,
       logger: createLogger(),
-      frontendDir,
     });
     const started = await server.start(0);
-    for (const path of ["/dashboard", "/observability"]) {
+    for (const path of ["/runs", "/observability"]) {
       const response = await fetch(`http://127.0.0.1:${started.port}${path}`);
-      expect(response.status).toBe(200);
-      const html = await response.text();
-      expect(html).toContain('<div id="app">');
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: { code: "not_found", message: "Not found" },
+      });
     }
   });
 

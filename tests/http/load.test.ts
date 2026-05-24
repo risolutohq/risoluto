@@ -88,7 +88,7 @@ beforeAll(async () => {
   app.use(express.json());
   registerHttpRoutes(app, {
     orchestrator: orchestrator as never,
-    frontendDir: "/tmp",
+    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() } as never,
   });
   await new Promise<void>((resolve) => {
     server = app.listen(0, () => {

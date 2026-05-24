@@ -150,7 +150,7 @@ export const configHistory = sqliteTable("config_history", {
   operation: text("operation").notNull(),
   previousValue: text("previous_value"),
   newValue: text("new_value"),
-  actor: text("actor").notNull().default("dashboard"),
+  actor: text("actor").notNull().default("operator"),
   requestId: text("request_id"),
   timestamp: text("timestamp").notNull(),
 });
@@ -309,7 +309,7 @@ export const healthProbeSamples = sqliteTable("health_probe_samples", {
 
 /**
  * Time-series of orchestrator cost / token / headroom samples. One row per
- * tick. Used to render the dashboard cost sparkline. Truncated to a 7-day
+ * tick. Used for operator cost trend projections. Truncated to a 7-day
  * window on every append.
  */
 export const costSamples = sqliteTable("cost_samples", {

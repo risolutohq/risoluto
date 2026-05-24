@@ -20,7 +20,7 @@
  *
  * 1. Stop the running Risoluto service.
  * 2. Restart — migration runs automatically on first boot (SQLite is the only backend).
- * 3. Verify data in the dashboard, then optionally archive the legacy
+ * 3. Verify data through operator surfaces, then optionally archive the previous
  *    `attempts/` and `events/` directories.
  *
  * ### Idempotency guarantees

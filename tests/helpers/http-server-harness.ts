@@ -186,8 +186,6 @@ export interface TestServerOverrides {
   webhookSecret?: string;
   /** Whether to open a real SQLite database in the temp dir (Tier 2). */
   withDatabase?: boolean;
-  /** Path to a directory containing a built frontend (index.html). */
-  frontendDir?: string;
   /** Provide a config store for config/transitions routes (Tier 2). */
   configStore?: ConfigStore;
   /** Provide a config overlay store for overlay CRUD routes (Tier 2). */
@@ -286,7 +284,6 @@ export async function startTestServer(overrides: TestServerOverrides = {}): Prom
     logger,
     eventBus: eventBus ?? undefined,
     webhookHandlerDeps,
-    frontendDir: overrides.frontendDir,
     archiveDir: dataDir,
     configStore: overrides.configStore,
     configOverlayStore: overrides.configOverlayStore,

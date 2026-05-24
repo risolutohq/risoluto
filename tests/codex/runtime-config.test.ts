@@ -144,7 +144,7 @@ describe("prepareCodexRuntimeConfig", () => {
     expect(runtimeConfig.authJsonBase64).toBeTruthy();
   });
 
-  it("normalizes legacy flat auth.json into Codex CLI's nested token format", async () => {
+  it("normalizes previous flat auth.json into Codex CLI's nested token format", async () => {
     const sourceHome = await createTempDir();
     await writeFile(
       path.join(sourceHome, "auth.json"),

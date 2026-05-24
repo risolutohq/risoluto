@@ -2,7 +2,7 @@
  * Workflow watchdog — periodic background health monitor.
  *
  * Runs on a configurable interval (default 60 s) and exposes a health
- * status endpoint consumed by the dashboard's System Health indicator.
+ * status endpoint consumed by operator health surfaces.
  *
  * Health states:
  *   healthy   — all agents active, no recent stalls
@@ -107,7 +107,7 @@ export class Watchdog {
   }
 }
 
-/** Build a snapshot of watchdog health suitable for HTTP API / dashboard. */
+/** Build a snapshot of watchdog health suitable for HTTP API and operator surfaces. */
 export function buildHealthSnapshot(health: WatchdogHealth): Record<string, unknown> {
   return {
     status: health.status,

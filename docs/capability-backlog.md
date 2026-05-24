@@ -1,16 +1,16 @@
 # Capability Backlog
 
-> The **living** post-foundation work ledger. Replaces the legacy `ROADMAP_AND_STATUS.md` model. No preplanned v2 / v3 / v4 — work enters as capabilities the foundation makes possible, gets prioritized when an operator-observed gap is real, and exits when shipped (or explicitly dropped).
+> The **living** post-foundation work ledger. Replaces static roadmap/status ledgers. No preplanned v2 / v3 / v4 — work enters as capabilities the foundation makes possible, gets prioritized when an operator-observed gap is real, and exits when shipped (or explicitly dropped).
 
 ## Status Vocabulary
 
-| Status | Meaning |
-|---|---|
-| **idea** | Named; needs more thinking before it's actionable. |
-| **ready** | Scoped enough to start work on; awaiting capacity / priority. |
-| **in-flight** | Active Linear work; usually has issues mirrored to GitHub. |
-| **shipped** | Merged in canonical repo; reflected in [release-rules.md](./release-rules.md) cadence. |
-| **dropped** | Explicitly killed; reason captured. |
+| Status        | Meaning                                                                                |
+| ------------- | -------------------------------------------------------------------------------------- |
+| **idea**      | Named; needs more thinking before it's actionable.                                     |
+| **ready**     | Scoped enough to start work on; awaiting capacity / priority.                          |
+| **in-flight** | Active Linear work; usually has issues mirrored to GitHub.                             |
+| **shipped**   | Merged in canonical repo; reflected in [release-rules.md](./release-rules.md) cadence. |
+| **dropped**   | Explicitly killed; reason captured.                                                    |
 
 ## Categories
 
@@ -36,7 +36,7 @@ These are the buckets v1's foundation makes possible. Backlog entries fall under
 
 ## Initial Entries
 
-*(Empty at v1 cut. First entries land after the curated snapshot import surfaces reusable code and after the first dogfood Workflow Run reveals real pain.)*
+_(Empty at v1 cut. First entries land after the curated snapshot import surfaces reusable code and after the first dogfood Workflow Run reveals real pain.)_
 
 ## Relation to Linear / GitHub
 
