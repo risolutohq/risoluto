@@ -36,7 +36,39 @@ These are the buckets v1's foundation makes possible. Backlog entries fall under
 
 ## Initial Entries
 
-_(Empty at v1 cut. First entries land after the curated snapshot import surfaces reusable code and after the first dogfood Workflow Run reveals real pain.)_
+<!-- BEGIN risoluto-synthesizer:idea-rows -->
+
+| slug                      | name                      | category | status | evidence_idea                                      |
+| ------------------------- | ------------------------- | -------- | ------ | -------------------------------------------------- |
+| activity-signal           | Activity Signal           | TBD      | idea   | research/ideas/activity-signal/README.md           |
+| adversarial-debate        | Adversarial Debate        | TBD      | idea   | research/ideas/adversarial-debate/README.md        |
+| agent-tools               | Agent Tools               | TBD      | idea   | research/ideas/agent-tools/README.md               |
+| auth-management           | Auth Management           | TBD      | idea   | research/ideas/auth-management/README.md           |
+| cli-reviewer              | Cli Reviewer              | TBD      | idea   | research/ideas/cli-reviewer/README.md              |
+| code-aware-verification   | Code Aware Verification   | TBD      | idea   | research/ideas/code-aware-verification/README.md   |
+| context-gathering         | Context Gathering         | TBD      | idea   | research/ideas/context-gathering/README.md         |
+| convergence-detection     | Convergence Detection     | TBD      | idea   | research/ideas/convergence-detection/README.md     |
+| dual-sdk                  | Dual Sdk                  | TBD      | idea   | research/ideas/dual-sdk/README.md                  |
+| feature-analysis          | Feature Analysis          | TBD      | idea   | research/ideas/feature-analysis/README.md          |
+| git-worktree-isolation    | Git Worktree Isolation    | TBD      | idea   | research/ideas/git-worktree-isolation/README.md    |
+| inline-pr-comments        | Inline Pr Comments        | TBD      | idea   | research/ideas/inline-pr-comments/README.md        |
+| lifecycle-state-machine   | Lifecycle State Machine   | TBD      | idea   | research/ideas/lifecycle-state-machine/README.md   |
+| mcp                       | Mcp                       | TBD      | idea   | research/ideas/mcp/README.md                       |
+| multi-ai-review           | Multi Ai Review           | TBD      | idea   | research/ideas/multi-ai-review/README.md           |
+| orchestrator-as-agent     | Orchestrator As Agent     | TBD      | idea   | research/ideas/orchestrator-as-agent/README.md     |
+| parallel-execution        | Parallel Execution        | TBD      | idea   | research/ideas/parallel-execution/README.md        |
+| plugin-architecture       | Plugin Architecture       | TBD      | idea   | research/ideas/plugin-architecture/README.md       |
+| provider-abstraction      | Provider Abstraction      | TBD      | idea   | research/ideas/provider-abstraction/README.md      |
+| reaction-engine           | Reaction Engine           | TBD      | idea   | research/ideas/reaction-engine/README.md           |
+| sandboxed-execution       | Sandboxed Execution       | TBD      | idea   | research/ideas/sandboxed-execution/README.md       |
+| session-management        | Session Management        | TBD      | idea   | research/ideas/session-management/README.md        |
+| session-persistence       | Session Persistence       | TBD      | idea   | research/ideas/session-persistence/README.md       |
+| structured-output-parsing | Structured Output Parsing | TBD      | idea   | research/ideas/structured-output-parsing/README.md |
+| tool-registry             | Tool Registry             | TBD      | idea   | research/ideas/tool-registry/README.md             |
+| tracker-integration       | Tracker Integration       | TBD      | idea   | research/ideas/tracker-integration/README.md       |
+| webhook-triggers          | Webhook Triggers          | TBD      | idea   | research/ideas/webhook-triggers/README.md          |
+
+<!-- END risoluto-synthesizer:idea-rows -->
 
 ## Relation to Linear / GitHub
 
