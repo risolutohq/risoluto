@@ -225,7 +225,7 @@ Goal: turn captured targets into idea clusters.
 
 Goal: take an idea from "interesting cluster" to "Linear Project + greppable PRD".
 
-- [ ] **3.1** Build `skills/risoluto-grill/`:
+- [x] **3.1** Build `skills/risoluto-grill/`: _(cc76686)_
   - Input: `<idea-slug>` or path to `research/ideas/<slug>/README.md`
   - Pre-loads: idea README, every cited target's README, relevant `RISOLUTO_FEATURES.md` bundles, `capability-backlog.md`
   - Runs grill loop framed for the research→product seam: "you have N peers doing X, why us, why now, smallest cut"
