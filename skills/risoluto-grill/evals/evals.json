@@ -1,0 +1,53 @@
+{
+  "skill_name": "risoluto-grill",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "ok the synthesizer surfaced `provider-abstraction` with composio + magpie as evidence. can you grill me on it? i want to know if risoluto should actually ship this or if we're chasing peers.",
+      "expected_output": "Triggers risoluto-grill. Runs preload.mjs to gather the idea README, the composio + magpie target READMEs, the backlog row, and any RISOLUTO_FEATURES.md hits. Opens the grill loop with peer landscape → right-to-ship → timing → failure mode → smallest cut → open questions, one question at a time. Drafts Why us / why now and Smallest shippable shape paragraphs, shows them to Omer, then writes via grill-write.mjs. Asks about flipping the backlog row to ready.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "/risoluto-grill multi-ai-review",
+      "expected_output": "Triggers risoluto-grill immediately. Runs preload.mjs for the multi-ai-review idea, confirms it exists in research/ideas/, then proceeds with the grill loop.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "i'm pretty sure `convergence-detection` is ready to promote. can you fill in the why us / why now section and flip its backlog status?",
+      "expected_output": "Triggers risoluto-grill. Drives the grill loop to crystallise Why us / why now and Smallest shippable shape, then runs grill-write.mjs with --flip-to-ready to promote the backlog row from idea to ready. Idempotent — re-running on an already-ready row is a no-op.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "what's the thinnest slice of `sandboxed-execution` we could ship to prove the bet?",
+      "expected_output": "Triggers risoluto-grill scoped at the smallest-shippable-shape branch. Pre-loads the sandboxed-execution idea + cited targets + features-spine mentions, then runs the loop focused on tracer-cut scoping. Writes the Smallest shippable shape section via grill-write.mjs.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "rerun the grill on provider-abstraction, i changed my mind about the smallest cut",
+      "expected_output": "Triggers risoluto-grill. Re-runs preload.mjs, walks the loop again (the previous Why us / why now content is in the file and visible to the agent), drafts a new Smallest shippable shape, calls grill-write.mjs which overwrites the section. The synthesizer-owned block and Analyst notes / Open questions are not touched.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "explain to me what the differentiator is for risoluto vs cursor in the multi-agent space",
+      "expected_output": "Does NOT trigger risoluto-grill. This is a generic explanation request without a specific idea slug or a write target. The agent should answer directly using the corpus, or suggest the operator pick a specific idea slug if they want to formalise the grill.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "can you stress test my plan for adding webhook triggers to risoluto?",
+      "expected_output": "Triggers risoluto-grill because `webhook-triggers` is a slug in the corpus and the operator is asking for a stress test in the research→product seam. Confirms the slug exists in research/ideas/, then runs preload + grill loop.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "grill me on my approach to refactoring the http server tests",
+      "expected_output": "Does NOT trigger risoluto-grill. This is a generic plan-review request unrelated to the research corpus and the idea-slug surface. The generic grill-me skill is the right fit, not risoluto-grill.",
+      "files": []
+    }
+  ]
+}
