@@ -42,6 +42,12 @@
 - **Planning** (heavy): researcher → synthesizer → grill → PRD → issues. Mostly text and decisions.
 - **Implementation** (lighter): TDD loop per ticket. The Linear ticket is the unit of work.
 
+### Gating step: `/grill-with-docs`
+
+Between `/risoluto-grill` and `/risoluto-to-prd`, the operator invokes the generic `/grill-with-docs` skill **whenever the idea touches existing docs or ADRs** — e.g. it contradicts `docs/technical-spine.md`, requires updating `docs/product-spine.md`, or warrants a new ADR under `docs/adr/`. Output is updated `docs/*.md` files and/or a new ADR; nothing is written to `research/` or Linear at this step.
+
+If the idea is purely additive and touches no existing canon, skip this step and go straight to `/risoluto-to-prd`. This is an operator judgement call — there is no skill that detects it automatically, and no Risoluto-specific fork; the global `~/.claude/skills/grill-with-docs/` skill is used as-is.
+
 ## Roles
 
 - **Operator.** Owns the queue, decides what enters Linear, runs skills explicitly.
