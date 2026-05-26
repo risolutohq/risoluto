@@ -21,10 +21,19 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { diffSections, fetchProjectDescription, parsePrdFile, requireApiKey, type SectionDiff } from "./prd-linear.js";
+import {
+  diffSections,
+  fetchProjectDescription,
+  normalizeForComparison,
+  parsePrdFile,
+  requireApiKey,
+  type SectionDiff,
+} from "./prd-linear.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ZERO_SHA = "0000000000000000000000000000000000000000";
+/** Linear project descriptions are capped at 255 characters. */
+const LINEAR_DESCRIPTION_MAX = 255;
 
 interface PushRef {
   localRef: string;
@@ -131,11 +140,21 @@ async function checkPrdDrift(apiKey: string, relPath: string): Promise<DriftResu
   const { frontmatter, body } = await parsePrdFile(absPath);
 
   const project = await fetchProjectDescription(apiKey, frontmatter.slugId);
-  const sectionDiffs = diffSections(body, project.description ?? "");
+  const linearDesc = project.description ?? "";
 
-  if (sectionDiffs.length === 0) {
+  // Linear caps project descriptions at 255 chars. Compare the first 255 chars
+  // of the normalized local PRD body against the Linear description. If they
+  // match, the Linear side is a correct prefix — no drift.
+  const localTruncated = normalizeForComparison(body).slice(0, LINEAR_DESCRIPTION_MAX).trimEnd();
+  const linearNormalized = normalizeForComparison(linearDesc);
+
+  if (localTruncated === linearNormalized) {
     return { prdFile: relPath, slug: frontmatter.slug, linearProject: frontmatter.linearProject, status: "match" };
   }
+
+  // For the drift report, use section-level diff on the truncated local body
+  // so the operator sees which sections diverge.
+  const sectionDiffs = diffSections(localTruncated, linearDesc);
 
   return {
     prdFile: relPath,
@@ -148,8 +167,6 @@ async function checkPrdDrift(apiKey: string, relPath: string): Promise<DriftResu
 }
 
 async function main(): Promise<void> {
-  const apiKey = requireApiKey();
-
   const useAll = process.argv.includes("--all");
   const allCandidates = useAll ? getAllPrdFiles() : getChangedPrdsFromRefs(readPushRefsFromStdin());
   const changedPrds = allCandidates.filter(isPrdFile);
@@ -164,6 +181,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  const apiKey = requireApiKey();
   process.stderr.write(`📋 Checking ${changedPrds.length} PRD file(s) for drift...\n`);
 
   const results: DriftResult[] = [];
