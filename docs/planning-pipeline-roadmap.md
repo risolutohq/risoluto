@@ -163,7 +163,7 @@ Synthesizer / skill-owned sections are **regenerated** on every run. Operator-ow
 
 Each phase is independently shippable and dogfoodable. Don't build phase N+1 before phase N produces real artifacts. **Skill subtasks (anything under `skills/risoluto-*/`) must be scaffolded with `/skill-creator`** — never hand-rolled. See [planning-pipeline-workflow.md](./planning-pipeline-workflow.md) for the build/review prompt pattern used to drive these phases across sessions.
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation _(completed 2026-05-26, 87f4613)_
 
 Goal: capture targets, write the contract, scope the vault.
 
