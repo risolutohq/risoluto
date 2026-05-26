@@ -103,9 +103,9 @@ Read from `/tmp/researcher-<target-slug>/`:
 
 **2b.3b — Feature extraction (80/20)**
 
-Extract a lightweight feature inventory from the clone. This is NOT the full citation-backed spine that `risoluto-features` produces for Risoluto itself — it's a quick scan for user-observable and backend-surface features. Aim for 5–15 features.
+Extract a lightweight feature inventory from the clone. This is NOT the full citation-backed spine that `risoluto-features` produces for Risoluto itself — it's a quick scan for user-observable and backend-surface features. Extract what's there — no numeric target.
 
-Scan these signals:
+Common signals to scan (not exhaustive — follow anything else that reveals capabilities):
 
 | Signal | Where to look | What it reveals |
 | ------ | ------------- | --------------- |
@@ -136,7 +136,7 @@ Write the body file (`/tmp/researcher-<target-slug>-body.md`) with these section
 
 ## Features
 
-<5–15 bullet-point features extracted from source, grouped by bundle if natural>
+<bullet-point features extracted from source, grouped by bundle if natural>
 
 ## Dependencies
 
