@@ -1,0 +1,72 @@
+name: Post-Merge PRD Automation
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  prd-post-merge:
+    name: Flip PRD status + back-comment Linear
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract from:prd-* label
+        id: prd-label
+        run: |
+          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          PRD_LABEL=$(echo "$LABELS" | python3 -c "
+          import sys, json
+          labels = json.load(sys.stdin)
+          matches = [l for l in labels if l.startswith('from:prd-')]
+          if matches:
+              print(matches[0])
+          ")
+          if [ -z "$PRD_LABEL" ]; then
+            echo "No from:prd-* label found — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            SLUG="${PRD_LABEL#from:prd-}"
+            echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.prd-label.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        if: steps.prd-label.outputs.skip != 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.prd-label.outputs.skip != 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+        if: steps.prd-label.outputs.skip != 'true'
+
+      - name: Flip PRD status and back-comment Linear
+        if: steps.prd-label.outputs.skip != 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PRD_SLUG: ${{ steps.prd-label.outputs.slug }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        run: node scripts/post-merge-prd.mjs "$PRD_SLUG" --pr-url "$PR_URL" --pr-number "$PR_NUMBER" --merge-commit "$MERGE_COMMIT"
+
+      - name: Commit PRD status change
+        if: steps.prd-label.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "docs/prds/${{ steps.prd-label.outputs.slug }}.md"
+          git diff --cached --quiet || git commit -m "chore: flip ${{ steps.prd-label.outputs.slug }} PRD status to shipped"
+          git push

@@ -1,0 +1,23 @@
+{
+  "skill_name": "risoluto-to-issues",
+  "evals": [
+    {
+      "id": 1,
+      "name": "extract-slices-and-create-issues",
+      "prompt": "Break the provider-abstraction PRD into Linear issues.",
+      "expected_output": "LLM extracts slices from the PRD body, presents them for operator review, then creates flat Linear Issues under the provider-abstraction Project with blocked-by relations, labels (bundle:*, tracer, slice:hitl|slice:afk, from:prd-provider-abstraction), and issue bodies following the template."
+    },
+    {
+      "id": 2,
+      "name": "refuses-when-no-prd",
+      "prompt": "Break the nonexistent-slug PRD into issues.",
+      "expected_output": "The skill refuses with a clear error pointing the operator to /risoluto-to-prd first."
+    },
+    {
+      "id": 3,
+      "name": "refuses-when-issues-exist",
+      "prompt": "Break the provider-abstraction PRD into issues (issues already exist with from:prd-provider-abstraction label).",
+      "expected_output": "The skill refuses, reporting that issues already exist for this PRD. No duplicate issues created."
+    }
+  ]
+}

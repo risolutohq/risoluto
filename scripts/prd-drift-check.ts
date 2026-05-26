@@ -18,9 +18,10 @@
  */
 
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchProjectDescription, normalizeForComparison, parsePrdFile, requireApiKey } from "./prd-linear.js";
+import { diffSections, fetchProjectDescription, parsePrdFile, requireApiKey, type SectionDiff } from "./prd-linear.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ZERO_SHA = "0000000000000000000000000000000000000000";
@@ -38,10 +39,23 @@ interface DriftResult {
   linearProject: string;
   status: "match" | "drift" | "error";
   detail?: string;
+  sectionDiffs?: SectionDiff[];
+}
+
+function isPrdFile(relPath: string): boolean {
+  try {
+    const content = readFileSync(path.join(REPO_ROOT, relPath), "utf8");
+    if (!content.startsWith("---")) return false;
+    const end = content.indexOf("\n---", 3);
+    if (end === -1) return false;
+    return /^linear_project:/m.test(content.slice(3, end));
+  } catch {
+    return false;
+  }
 }
 
 function readPushRefsFromStdin(): PushRef[] {
-  const input = execSync("cat", { encoding: "utf8" });
+  const input = readFileSync(0, "utf8");
   return input
     .trim()
     .split("\n")
@@ -93,15 +107,33 @@ function getAllPrdFiles(): string[] {
   return output.trim().split("\n").filter(Boolean);
 }
 
+function formatSectionDiff(diff: SectionDiff): string {
+  if (diff.kind === "only-in-local") return `       - ## ${diff.heading} (only in local)\n`;
+  if (diff.kind === "only-in-linear") return `       + ## ${diff.heading} (only in Linear)\n`;
+  return `       ~ ## ${diff.heading} (differs)\n`;
+}
+
+function printResult(result: DriftResult): void {
+  if (result.status === "match") {
+    process.stderr.write(`  ✅ ${result.prdFile} — in sync\n`);
+    return;
+  }
+  if (result.status === "drift") {
+    process.stderr.write(`  ❌ ${result.prdFile} — DRIFT: ${result.detail}\n`);
+    for (const diff of result.sectionDiffs ?? []) process.stderr.write(formatSectionDiff(diff));
+    return;
+  }
+  process.stderr.write(`  ⚠️  ${result.prdFile} — ERROR: ${result.detail}\n`);
+}
+
 async function checkPrdDrift(apiKey: string, relPath: string): Promise<DriftResult> {
   const absPath = path.join(REPO_ROOT, relPath);
   const { frontmatter, body } = await parsePrdFile(absPath);
 
   const project = await fetchProjectDescription(apiKey, frontmatter.slugId);
-  const localNormalized = normalizeForComparison(body);
-  const remoteNormalized = normalizeForComparison(project.description ?? "");
+  const sectionDiffs = diffSections(body, project.description ?? "");
 
-  if (localNormalized === remoteNormalized) {
+  if (sectionDiffs.length === 0) {
     return { prdFile: relPath, slug: frontmatter.slug, linearProject: frontmatter.linearProject, status: "match" };
   }
 
@@ -110,16 +142,22 @@ async function checkPrdDrift(apiKey: string, relPath: string): Promise<DriftResu
     slug: frontmatter.slug,
     linearProject: frontmatter.linearProject,
     status: "drift",
-    detail: `Linear project "${project.name}" description differs from local PRD`,
+    detail: `Linear project "${project.name}" diverges in ${sectionDiffs.length} section(s)`,
+    sectionDiffs,
   };
 }
 
 async function main(): Promise<void> {
   const apiKey = requireApiKey();
-  if (!apiKey) return;
 
   const useAll = process.argv.includes("--all");
-  const changedPrds = useAll ? getAllPrdFiles() : getChangedPrdsFromRefs(readPushRefsFromStdin());
+  const allCandidates = useAll ? getAllPrdFiles() : getChangedPrdsFromRefs(readPushRefsFromStdin());
+  const changedPrds = allCandidates.filter(isPrdFile);
+  const skipped = allCandidates.filter((p) => !isPrdFile(p));
+
+  for (const skip of skipped) {
+    process.stderr.write(`  ⏭️  ${skip} — skipped (no linear_project frontmatter)\n`);
+  }
 
   if (changedPrds.length === 0) {
     process.stderr.write("📋 No PRD files changed — skipping drift check.\n");
@@ -146,15 +184,7 @@ async function main(): Promise<void> {
   const drifted = results.filter((result) => result.status === "drift");
   const errors = results.filter((result) => result.status === "error");
 
-  for (const result of results) {
-    if (result.status === "match") {
-      process.stderr.write(`  ✅ ${result.prdFile} — in sync\n`);
-    } else if (result.status === "drift") {
-      process.stderr.write(`  ❌ ${result.prdFile} — DRIFT: ${result.detail}\n`);
-    } else {
-      process.stderr.write(`  ⚠️  ${result.prdFile} — ERROR: ${result.detail}\n`);
-    }
-  }
+  for (const result of results) printResult(result);
 
   if (errors.length > 0) {
     process.stderr.write(`\n⚠️  ${errors.length} PRD(s) had errors — failing check.\n`);

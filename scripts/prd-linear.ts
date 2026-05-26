@@ -124,12 +124,55 @@ export function normalizeForComparison(text: string): string {
     .trim();
 }
 
-/** Get the LINEAR_API_KEY or exit gracefully if not set. */
-export function requireApiKey(): string | null {
+/** Split markdown body into a Map<heading, sectionBody>. Preamble before the first `## ` is keyed as `(preamble)`. */
+export function sectionMap(body: string): Map<string, string> {
+  const sections = new Map<string, string>();
+  let currentHeading = "(preamble)";
+  let currentBody: string[] = [];
+  for (const line of body.split("\n")) {
+    if (line.startsWith("## ")) {
+      sections.set(currentHeading, currentBody.join("\n").trim());
+      currentHeading = line.slice(3).trim();
+      currentBody = [];
+    } else {
+      currentBody.push(line);
+    }
+  }
+  sections.set(currentHeading, currentBody.join("\n").trim());
+  // Drop preamble if empty — most PRDs start with `## ` and have no preamble.
+  if (sections.get("(preamble)") === "") sections.delete("(preamble)");
+  return sections;
+}
+
+export interface SectionDiff {
+  heading: string;
+  kind: "only-in-local" | "only-in-linear" | "differs";
+}
+
+/** Section-by-section diff between two markdown bodies. Returns empty array if identical. */
+export function diffSections(local: string, linear: string): SectionDiff[] {
+  const localSecs = sectionMap(normalizeForComparison(local));
+  const linearSecs = sectionMap(normalizeForComparison(linear));
+  const allHeadings = new Set([...localSecs.keys(), ...linearSecs.keys()]);
+  const diffs: SectionDiff[] = [];
+  for (const heading of allHeadings) {
+    const l = localSecs.get(heading);
+    const r = linearSecs.get(heading);
+    if (l == null && r != null) diffs.push({ heading, kind: "only-in-linear" });
+    else if (l != null && r == null) diffs.push({ heading, kind: "only-in-local" });
+    else if (l !== r) diffs.push({ heading, kind: "differs" });
+  }
+  return diffs;
+}
+
+/** Get the LINEAR_API_KEY or exit with an actionable error. Hard gate — no silent skip. */
+export function requireApiKey(): string {
   const apiKey = process.env.LINEAR_API_KEY;
   if (!apiKey) {
-    process.stderr.write("⚠️  LINEAR_API_KEY not set — skipping PRD drift check.\n");
-    return null;
+    process.stderr.write("❌ LINEAR_API_KEY is required for PRD drift check.\n");
+    process.stderr.write("   Set it via:  export LINEAR_API_KEY=lin_api_...\n");
+    process.stderr.write("   This is a hard gate — no SKIP_HOOKS bypass for missing key.\n");
+    process.exit(1);
   }
   return apiKey;
 }

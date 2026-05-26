@@ -1,0 +1,23 @@
+{
+  "skill_name": "risoluto-tdd",
+  "evals": [
+    {
+      "id": 1,
+      "name": "tdd-with-all-blockers-done",
+      "prompt": "Implement RSL-123 using TDD (all blocked-by tickets are Done).",
+      "expected_output": "Fetches the issue, validates blockers are Done, reads the linked PRD, runs the TDD red-green-refactor loop, opens a PR with the from:prd-<slug> label, and back-comments the Linear ticket with the PR URL."
+    },
+    {
+      "id": 2,
+      "name": "refuses-when-blocker-open",
+      "prompt": "Implement RSL-456 using TDD (blocked by RSL-123 which is In Progress).",
+      "expected_output": "The skill refuses, listing RSL-123 as an open blocker. No implementation begins."
+    },
+    {
+      "id": 3,
+      "name": "refuses-when-no-prd-label",
+      "prompt": "Implement RSL-789 using TDD (issue has no from:prd-* label).",
+      "expected_output": "The skill refuses, reporting that the issue wasn't created by /risoluto-to-issues — no linked PRD found."
+    }
+  ]
+}

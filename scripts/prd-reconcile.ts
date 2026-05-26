@@ -119,11 +119,6 @@ async function main(): Promise<void> {
   }
 
   const apiKey = requireApiKey();
-  if (!apiKey) {
-    process.stderr.write("❌ LINEAR_API_KEY is required for prd:reconcile.\n");
-    process.exit(1);
-  }
-
   await reconcilePrd({ slug, apiKey });
 }
 
