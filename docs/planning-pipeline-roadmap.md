@@ -200,7 +200,7 @@ Goal: capture targets, write the contract, scope the vault.
 
 Goal: turn captured targets into idea clusters.
 
-- [ ] **2.1** Build `skills/risoluto-synthesizer/`:
+- [x] **2.1** Build `skills/risoluto-synthesizer/`: _(3ec924d + research submodule 68fb89c)_
   - Reads `research/targets/*/README.md` frontmatter `ideas:`
   - Rolls up by tag → writes `research/ideas/<slug>/README.md`
   - LLM-suggests new tags **only** when a target has <2 ideas tagged; gates suggestions behind operator confirmation
@@ -215,7 +215,7 @@ Goal: turn captured targets into idea clusters.
   - **Row authorship:** on first creation of an `idea`-status row, the synthesizer LLM-drafts `name` and `category` from the idea README. On subsequent runs, the synthesizer rewrites only `slug` and `evidence_idea` — operator edits to `name` and `category` are sticky. Status field follows the ownership table above.
   - Document how synthesizer writes `idea` rows (template, link convention)
   - **Discovery surface:** `capability-backlog.md` is the canonical place to scan and pick ideas. `research/INDEX.md` and the vault Dataview view are complementary views, not entry points. Phrase this explicitly in the file's preamble so agents don't go fishing elsewhere.
-- [ ] **2.3** Dogfood: capture 3–5 real targets via `/risoluto-researcher`, then run `/risoluto-synthesizer`. Confirm ≥1 idea emerges with evidence from ≥2 targets. **Note:** for this first dogfood, pick targets known to overlap on at least one capability (e.g. two coding-agent frameworks with similar feature shapes). Random sampling will produce zero clusters and block the exit.
+- [x] **2.3** Dogfood: capture 3–5 real targets via `/risoluto-researcher`, then run `/risoluto-synthesizer`. Confirm ≥1 idea emerges with evidence from ≥2 targets. _(87f4613 capture sprint + 3ec924d synthesize; `provider-abstraction` evidences `[composio, magpie]`)_ **Note:** for this first dogfood, pick targets known to overlap on at least one capability (e.g. two coding-agent frameworks with similar feature shapes). Random sampling will produce zero clusters and block the exit.
 
 **Exit criterion:** at least one `research/ideas/<slug>/README.md` exists with synthesizer-owned sections populated and operator-owned sections empty-but-templated.
 
