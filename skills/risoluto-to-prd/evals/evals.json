@@ -1,0 +1,23 @@
+{
+  "skill_name": "risoluto-to-prd",
+  "evals": [
+    {
+      "id": 1,
+      "name": "create-mode-fresh-slug",
+      "prompt": "Promote the provider-abstraction idea to a PRD and Linear Project.",
+      "expected_output": "docs/prds/provider-abstraction.md exists with frontmatter (slug, linear_project URL, synced_at, source_idea, status: draft). A new Linear Project exists on the Ninetech team named provider-abstraction whose description is the PRD body. A pipeline/provider-abstraction-prd branch is pushed and a PR is opened. research/ideas/provider-abstraction/README.md frontmatter has linear_project + prd_file set."
+    },
+    {
+      "id": 2,
+      "name": "sync-mode-idempotent-rerun",
+      "prompt": "Resync the provider-abstraction PRD to Linear — git is canon.",
+      "expected_output": "The existing Linear Project's description is overwritten from docs/prds/provider-abstraction.md. No second Linear Project is created. No new branch, no new PR. The PRD frontmatter synced_at is bumped to a newer ISO timestamp."
+    },
+    {
+      "id": 3,
+      "name": "refuses-when-why-us-empty",
+      "prompt": "Promote the structured-output-parsing idea to a PRD (Why us / why now is unfilled).",
+      "expected_output": "The skill refuses with a clear error pointing the operator to /risoluto-grill first. No Linear Project is created. No PRD file is written."
+    }
+  ]
+}
