@@ -1,6 +1,6 @@
 ---
 name: risoluto-researcher
-description: Capture external research into the `research/` vault — accept a URL plus optional raw paste (provenance), write a folder-shaped target README at `research/targets/<slug>/README.md` and one source file at `research/targets/<slug>/sources/<source-slug>.md` with pipeline-valid frontmatter, then regenerate `research/INDEX.md` as the canonical flat target list. Use this skill whenever Omer says `/risoluto-researcher`, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", or any variation that implies ingesting external content into `research/targets/`. Also trigger when Omer pastes raw text alongside a URL and wants both stored as a source entry — the skill accepts paste provenance, not just URLs. Companion to Phase 1.3 of `docs/planning-pipeline-roadmap.md`.
+description: Capture external research into the `research/` vault — accept a URL plus optional raw paste (provenance), write a folder-shaped target README at `research/targets/<slug>/README.md` and one source file at `research/targets/<slug>/sources/<source-slug>.md` with pipeline-valid frontmatter, then regenerate `research/INDEX.md` as the canonical flat target list. For GitHub repo URLs, performs deep capture via `gh` CLI (metadata, issues, PRs, releases, file tree, contributors, commits) — not just the README. Use this skill whenever Omer says `/risoluto-researcher`, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", or any variation that implies ingesting external content into `research/targets/`. Also trigger when Omer pastes raw text alongside a URL and wants both stored as a source entry — the skill accepts paste provenance, not just URLs. Companion to Phase 1.3 of `docs/planning-pipeline-roadmap.md`.
 ---
 
 # risoluto-researcher
@@ -26,6 +26,8 @@ research/INDEX.md                      # flat list of every captured target
 
 Every file emitted conforms to the frontmatter schemas in `research/.schemas/` (Phase 1.1) and the templates installed by `risoluto-vault` (Phase 1.2). The researcher never modifies operator-owned sections of target READMEs (see ownership table) — it only writes on first creation and updates derived fields on re-runs.
 
+For GitHub repo URLs, the researcher also performs a shallow clone to `/tmp/researcher-<target-slug>/` for deep source analysis. The clone is ephemeral — never committed to the vault.
+
 ## Hard preconditions
 
 Stop and report if any fail:
@@ -36,6 +38,7 @@ Stop and report if any fail:
 | `research/` initialised         | `git submodule status research` starts with space  | Tell Omer to `git submodule update --init research` or `/init-research`.        |
 | `research/templates/` present   | `test -d research/templates`                       | Tell Omer to run `/risoluto-vault` first to install templates and obsidian config. |
 | `research/.schemas/` present    | `test -d research/.schemas`                        | Tell Omer to check that Phase 1.1 schemas are committed and pushed.             |
+| `gh` CLI installed + authed     | `gh auth status` exits 0                           | Tell Omer to run `gh auth login`. Required for deep GitHub capture.             |
 
 ## The pipeline
 
@@ -60,6 +63,75 @@ Fetch the URL content (use a web fetch tool). From the response, extract:
 - **Title** — `<title>` tag, `og:title`, or first `<h1>`. Used as the source file's H1.
 - **Excerpt** — clean the fetched text, distill it into a short excerpt (<200 words) for the source body. If a paste was provided, the paste IS the body — the URL fetch is only used for title/metadata.
 - **Description** (for the target README) — one paragraph: what the target is, what it ships, why Risoluto tracks it.
+
+### Step 2b — Deep GitHub Capture (repo sources only)
+
+When `source-type` is `repo` and the URL is a GitHub repo (`github.com/<owner>/<repo>`), perform deep capture. This replaces the shallow README-only excerpt with a full structural analysis.
+
+**2b.1 — Shallow clone**
+
+```bash
+git clone --depth 1 <url> /tmp/researcher-<target-slug>
+```
+
+If the clone already exists from a previous run, `git pull` instead. The clone is ephemeral — never committed to the research vault.
+
+**2b.2 — gh API metadata**
+
+Run these `gh` commands against `<owner>/<repo>`:
+
+| Data | Command |
+| ---- | ------- |
+| Repo metadata | `gh api repos/<owner>/<repo> --jq '{name,description,language,stargazers_count,forks_count,open_issues_count,topics,license: .license.spdx_id,created_at,updated_at,pushed_at,default_branch,archived,homepage}'` |
+| Languages | `gh api repos/<owner>/<repo>/languages` |
+| Recent issues (top 10 open, by reactions) | `gh api 'repos/<owner>/<repo>/issues?state=open&sort=reactions&per_page=10' --jq '.[] \| {number,title,reactions: .reactions.total_count,labels: [.labels[].name],updated_at}'` |
+| Recent PRs (top 10 merged) | `gh api 'repos/<owner>/<repo>/pulls?state=closed&sort=updated&per_page=10' --jq '.[] \| select(.merged_at != null) \| {number,title,merged_at,labels: [.labels[].name]}'` |
+| Releases (last 5) | `gh api 'repos/<owner>/<repo>/releases?per_page=5' --jq '.[] \| {tag_name,name,published_at,body: (.body \| split("\n") \| .[0:3] \| join(" "))}'` |
+| Contributors (top 10) | `gh api 'repos/<owner>/<repo>/contributors?per_page=10' --jq '.[] \| {login,contributions}'` |
+| Recent commits (last 20) | `gh api 'repos/<owner>/<repo>/commits?per_page=20' --jq '.[] \| {sha: .sha[0:7], message: (.commit.message \| split("\n") \| .[0]), date: .commit.author.date}'` |
+
+**2b.3 — Source analysis from clone**
+
+Read from `/tmp/researcher-<target-slug>/`:
+
+- **File tree** — top 2–3 levels (`find . -maxdepth 3 -not -path '*/node_modules/*' -not -path '*/.git/*' | head -80`)
+- **Dependencies** — `package.json` (deps + devDeps), `pyproject.toml`, `Cargo.toml`, `go.mod`, `requirements.txt`, or equivalent
+- **Config files** — `.env.example`, `docker-compose.yml`, `Dockerfile`, CI configs (`.github/workflows/`)
+- **Entry points** — `main.*`, `index.*`, `cli.*`, `bin/`, `src/cli/`, or whatever the README/docs describe as the entry
+- **Test structure** — `test/`, `tests/`, `__tests__/`, `spec/` — what's tested, framework used
+- **Architecture signals** — monorepo (workspaces, lerna, turborepo)? microservices? single binary? plugin system?
+
+**2b.4 — Compose the body**
+
+Write the body file (`/tmp/researcher-<target-slug>-body.md`) with these sections:
+
+```markdown
+## Repo Overview
+
+<gh metadata: stars, forks, language, license, created, last push>
+
+## Architecture
+
+<file tree summary, entry points, monorepo vs single-package, key directories>
+
+## Dependencies
+
+<notable deps from package.json / equivalent — focus on framework choices, AI/LLM libs, CLI frameworks>
+
+## Issues & Activity
+
+<top open issues by reactions, recent merged PRs, release cadence, contributor count>
+
+## Key Patterns
+
+<architecture patterns observed: multi-agent, plugin system, config approach, testing strategy>
+
+## Why this matters for Risoluto
+
+<one paragraph: what capability does this target demonstrate? What can Risoluto learn from it?>
+```
+
+The agent reads the actual source files to fill Architecture, Dependencies, and Key Patterns — not just the README. This is the deep part.
 
 ### Step 3 — Tag ideas
 
