@@ -186,7 +186,7 @@ Goal: capture targets, write the contract, scope the vault.
   - Create `research/INDEX.md` (does not exist yet) — folder-shaped target list, regenerated on every researcher run. INDEX.md stays even after the vault is in place: Dataview is for opening in Obsidian, INDEX.md is for agents, CI, `cat`, and `git log`.
   - Researcher emits markdown that conforms to the templates installed by `risoluto-vault` (1.2). Templates and skill share the same frontmatter contract — if you change one, change both.
   - **Smoke:** given one URL, produces a target README + one source file that pass `pnpm validate:research`.
-- [ ] **1.4** Update `docs/research-workflow.md`:
+- [x] **1.4** Update `docs/research-workflow.md`: _(df6d77d)_
   - Remove 20-target deferral on synthesizer
   - Document the frontmatter contract
   - Document vault overlay and PRD inversion
