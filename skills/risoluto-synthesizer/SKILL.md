@@ -87,6 +87,17 @@ When the script reports thin targets (`<2 ideas tagged`), the agent's job is to:
 
 Do not auto-add tags. The thin-target signal is intentional friction so the operator stays in the loop on taxonomy growth.
 
+### Step 4.5 — Category drafting for newly-created `idea` rows
+
+The script seeds new backlog rows with `name = TitleCase(slug)` and `category = TBD`. The agent must follow up on every fresh `TBD` (search the `BEGIN risoluto-synthesizer:idea-rows` block in `docs/capability-backlog.md`):
+
+1. For each `TBD` row, read `research/ideas/<slug>/README.md` and the cited target / source files.
+2. Pick a category from the canonical list in `docs/capability-backlog.md` (`Workflow Definitions`, `Tracker Adapters`, `Harness Adapters`, `Memory Manager`, `Board Projection`, `Operator Surfaces`, `Cost / Reliability`, `Plugin API`, `Hosted Modes`, `Skill Packs`). Do not invent new categories — the bucket list is the contract.
+3. Refine `name` if the title-cased slug fumbles an acronym (`mcp` → `MCP`, `cli-reviewer` → `CLI Reviewer`, `dual-sdk` → `Dual SDK`). The script writes a plain Title Case default; the agent owns acronym polishing.
+4. Edit `docs/capability-backlog.md` directly inside the marker block — the sticky merge preserves operator-set `name` and `category` on every subsequent `synthesize.mjs` run, so this edit only happens once per new row.
+
+Show the proposed mapping to Omer **before** writing. Don't auto-categorize silently — the categorization step is where the backlog gets its meaning, and it deserves the same gate as the thin-target tag suggestions in Step 4.
+
 ### Step 5 — Commit
 
 The synthesizer writes into two repos at once: `research/` (submodule, for `research/ideas/`) and the parent repo (for `docs/capability-backlog.md`). Commit submodule first:
@@ -123,8 +134,8 @@ git commit -m "chore: bump research submodule + sync backlog rows from synthesiz
 | Column          | Behaviour                                                                                          |
 | --------------- | -------------------------------------------------------------------------------------------------- |
 | `slug`          | Synthesizer-owned — regenerated every run.                                                         |
-| `name`          | Synthesizer drafts on first creation (Title Case slug); operator edits are sticky on re-run.       |
-| `category`      | Synthesizer drafts `TBD` on first creation; operator picks from `docs/capability-backlog.md` categories list and re-runs preserve the edit. |
+| `name`          | Synthesizer script drafts `TitleCase(slug)`; agent polishes acronyms on first creation (see Step 4.5); operator edits are sticky on re-run. |
+| `category`      | Synthesizer script drafts `TBD`; agent fills from the canonical category list on first creation (see Step 4.5); operator edits sticky on re-run. |
 | `status`        | Synthesizer writes `idea` (active) or `dropped` (orphan); preserved if operator has set `ready` / `in-flight` / `shipped`. |
 | `evidence_idea` | Synthesizer-owned — always `research/ideas/<slug>/README.md`.                                       |
 

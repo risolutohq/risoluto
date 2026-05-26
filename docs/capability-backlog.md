@@ -2,6 +2,8 @@
 
 > The **living** post-foundation work ledger. Replaces static roadmap/status ledgers. No preplanned v2 / v3 / v4 — work enters as capabilities the foundation makes possible, gets prioritized when an operator-observed gap is real, and exits when shipped (or explicitly dropped).
 
+**Canonical discovery surface.** `capability-backlog.md` is the place to scan and pick ideas. `research/INDEX.md` and the vault Dataview view are complementary views, not entry points.
+
 ## Status Vocabulary
 
 | Status        | Meaning                                                                                |
@@ -38,35 +40,35 @@ These are the buckets v1's foundation makes possible. Backlog entries fall under
 
 <!-- BEGIN risoluto-synthesizer:idea-rows -->
 
-| slug                      | name                      | category | status | evidence_idea                                      |
-| ------------------------- | ------------------------- | -------- | ------ | -------------------------------------------------- |
-| activity-signal           | Activity Signal           | TBD      | idea   | research/ideas/activity-signal/README.md           |
-| adversarial-debate        | Adversarial Debate        | TBD      | idea   | research/ideas/adversarial-debate/README.md        |
-| agent-tools               | Agent Tools               | TBD      | idea   | research/ideas/agent-tools/README.md               |
-| auth-management           | Auth Management           | TBD      | idea   | research/ideas/auth-management/README.md           |
-| cli-reviewer              | Cli Reviewer              | TBD      | idea   | research/ideas/cli-reviewer/README.md              |
-| code-aware-verification   | Code Aware Verification   | TBD      | idea   | research/ideas/code-aware-verification/README.md   |
-| context-gathering         | Context Gathering         | TBD      | idea   | research/ideas/context-gathering/README.md         |
-| convergence-detection     | Convergence Detection     | TBD      | idea   | research/ideas/convergence-detection/README.md     |
-| dual-sdk                  | Dual Sdk                  | TBD      | idea   | research/ideas/dual-sdk/README.md                  |
-| feature-analysis          | Feature Analysis          | TBD      | idea   | research/ideas/feature-analysis/README.md          |
-| git-worktree-isolation    | Git Worktree Isolation    | TBD      | idea   | research/ideas/git-worktree-isolation/README.md    |
-| inline-pr-comments        | Inline Pr Comments        | TBD      | idea   | research/ideas/inline-pr-comments/README.md        |
-| lifecycle-state-machine   | Lifecycle State Machine   | TBD      | idea   | research/ideas/lifecycle-state-machine/README.md   |
-| mcp                       | Mcp                       | TBD      | idea   | research/ideas/mcp/README.md                       |
-| multi-ai-review           | Multi Ai Review           | TBD      | idea   | research/ideas/multi-ai-review/README.md           |
-| orchestrator-as-agent     | Orchestrator As Agent     | TBD      | idea   | research/ideas/orchestrator-as-agent/README.md     |
-| parallel-execution        | Parallel Execution        | TBD      | idea   | research/ideas/parallel-execution/README.md        |
-| plugin-architecture       | Plugin Architecture       | TBD      | idea   | research/ideas/plugin-architecture/README.md       |
-| provider-abstraction      | Provider Abstraction      | TBD      | idea   | research/ideas/provider-abstraction/README.md      |
-| reaction-engine           | Reaction Engine           | TBD      | idea   | research/ideas/reaction-engine/README.md           |
-| sandboxed-execution       | Sandboxed Execution       | TBD      | idea   | research/ideas/sandboxed-execution/README.md       |
-| session-management        | Session Management        | TBD      | idea   | research/ideas/session-management/README.md        |
-| session-persistence       | Session Persistence       | TBD      | idea   | research/ideas/session-persistence/README.md       |
-| structured-output-parsing | Structured Output Parsing | TBD      | idea   | research/ideas/structured-output-parsing/README.md |
-| tool-registry             | Tool Registry             | TBD      | idea   | research/ideas/tool-registry/README.md             |
-| tracker-integration       | Tracker Integration       | TBD      | idea   | research/ideas/tracker-integration/README.md       |
-| webhook-triggers          | Webhook Triggers          | TBD      | idea   | research/ideas/webhook-triggers/README.md          |
+| slug                      | name                      | category             | status | evidence_idea                                      |
+| ------------------------- | ------------------------- | -------------------- | ------ | -------------------------------------------------- |
+| activity-signal           | Activity Signal           | Cost / Reliability   | idea   | research/ideas/activity-signal/README.md           |
+| adversarial-debate        | Adversarial Debate        | Workflow Definitions | idea   | research/ideas/adversarial-debate/README.md        |
+| agent-tools               | Agent Tools               | Skill Packs          | idea   | research/ideas/agent-tools/README.md               |
+| auth-management           | Auth Management           | Operator Surfaces    | idea   | research/ideas/auth-management/README.md           |
+| cli-reviewer              | CLI Reviewer              | Harness Adapters     | idea   | research/ideas/cli-reviewer/README.md              |
+| code-aware-verification   | Code-Aware Verification   | Workflow Definitions | idea   | research/ideas/code-aware-verification/README.md   |
+| context-gathering         | Context Gathering         | Memory Manager       | idea   | research/ideas/context-gathering/README.md         |
+| convergence-detection     | Convergence Detection     | Workflow Definitions | idea   | research/ideas/convergence-detection/README.md     |
+| dual-sdk                  | Dual SDK                  | Plugin API           | idea   | research/ideas/dual-sdk/README.md                  |
+| feature-analysis          | Feature Analysis          | Workflow Definitions | idea   | research/ideas/feature-analysis/README.md          |
+| git-worktree-isolation    | Git Worktree Isolation    | Cost / Reliability   | idea   | research/ideas/git-worktree-isolation/README.md    |
+| inline-pr-comments        | Inline PR Comments        | Tracker Adapters     | idea   | research/ideas/inline-pr-comments/README.md        |
+| lifecycle-state-machine   | Lifecycle State Machine   | Workflow Definitions | idea   | research/ideas/lifecycle-state-machine/README.md   |
+| mcp                       | MCP                       | Plugin API           | idea   | research/ideas/mcp/README.md                       |
+| multi-ai-review           | Multi-AI Review           | Workflow Definitions | idea   | research/ideas/multi-ai-review/README.md           |
+| orchestrator-as-agent     | Orchestrator-as-Agent     | Workflow Definitions | idea   | research/ideas/orchestrator-as-agent/README.md     |
+| parallel-execution        | Parallel Execution        | Workflow Definitions | idea   | research/ideas/parallel-execution/README.md        |
+| plugin-architecture       | Plugin Architecture       | Plugin API           | idea   | research/ideas/plugin-architecture/README.md       |
+| provider-abstraction      | Provider Abstraction      | Harness Adapters     | idea   | research/ideas/provider-abstraction/README.md      |
+| reaction-engine           | Reaction Engine           | Workflow Definitions | idea   | research/ideas/reaction-engine/README.md           |
+| sandboxed-execution       | Sandboxed Execution       | Cost / Reliability   | idea   | research/ideas/sandboxed-execution/README.md       |
+| session-management        | Session Management        | Memory Manager       | idea   | research/ideas/session-management/README.md        |
+| session-persistence       | Session Persistence       | Memory Manager       | idea   | research/ideas/session-persistence/README.md       |
+| structured-output-parsing | Structured Output Parsing | Harness Adapters     | idea   | research/ideas/structured-output-parsing/README.md |
+| tool-registry             | Tool Registry             | Skill Packs          | idea   | research/ideas/tool-registry/README.md             |
+| tracker-integration       | Tracker Integration       | Tracker Adapters     | idea   | research/ideas/tracker-integration/README.md       |
+| webhook-triggers          | Webhook Triggers          | Tracker Adapters     | idea   | research/ideas/webhook-triggers/README.md          |
 
 <!-- END risoluto-synthesizer:idea-rows -->
 
