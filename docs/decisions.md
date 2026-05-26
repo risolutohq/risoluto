@@ -44,6 +44,7 @@
 | 26  | 2026-05-24 | Hosted SaaS control plane                                             | deferred | Trigger: after dogfood baseline + first external customer ask.                 | —                                                                             |
 | 27  | 2026-05-24 | User-authored workflow DSL                                            | deferred | Trigger: after at least 3 built-in workflow definitions ship and pain is real. | [ADR-0005](./adr/0005-built-in-typescript-workflow-definitions-before-dsl.md) |
 | 28  | 2026-05-24 | Web dashboard / frontend rebuild                                      | deferred | Trigger: after CLI / TUI parity is hit; only if operator demand justifies it.  | —                                                                             |
+| 29  | 2026-05-27 | Research-to-shipping planning pipeline                                | active   | Five-phase skill chain: research → synthesize → grill → PRD → issues → TDD.    | [ADR-0007](./adr/0007-research-to-shipping-pipeline.md)                       |
 
 ## How to Add an Entry
 

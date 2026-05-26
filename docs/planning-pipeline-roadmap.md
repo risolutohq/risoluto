@@ -1,7 +1,7 @@
 # Planning Pipeline Roadmap
 
-> Living document. Captures the design tree resolved in the grill session of 2026-05-26.
-> Authoritative until superseded by `docs/adr/0007-research-to-shipping-pipeline.md` (Phase 5).
+> **Superseded by [`docs/adr/0007-research-to-shipping-pipeline.md`](./adr/0007-research-to-shipping-pipeline.md).**
+> This document remains as the design tree and build log. For the authoritative decision, see ADR-0007.
 >
 > Companion reading: [planning-pipeline-workflow.md](./planning-pipeline-workflow.md) (build/review prompts for driving this roadmap session-by-session), [research-workflow.md](./research-workflow.md), [capability-backlog.md](./capability-backlog.md), [decisions.md](./decisions.md).
 
@@ -240,7 +240,7 @@ Goal: take an idea from "interesting cluster" to "Linear Project + greppable PRD
   - Update the idea's `linear_project` + `prd_file` frontmatter
   - **Idempotent on re-run.** First invocation on a slug creates the Linear Project + PRD. Subsequent invocations on the same slug overwrite the Linear Project description from the current `docs/prds/<slug>.md` — this is the git→Linear push path used by 3.3's "reject the Linear edit" branch. The skill decides mode from the idea README's `linear_project` frontmatter (null = create, set = sync). No new pnpm command needed.
   - **Smoke:** given an idea slug with `## Why us / why now` populated, creates `docs/prds/<slug>.md` and a matching Linear Project. Second run on the same slug overwrites the Linear description from the current PRD without re-creating the Project.
-- [ ] **3.3** Husky `pre-push` hook + reconcile path:
+- [x] **3.3** Husky `pre-push` hook + reconcile path: _(8fbdbbc)_
   - Diff every changed `docs/prds/*.md` HEAD vs the Linear Project description via MCP
   - Refuse push if Linear has been edited outside the git canonical path
   - **Carved out of `SKIP_HOOKS=1`:** the existing pre-push emergency bypass skips build/test/typecheck. The PRD drift check runs unconditionally — it's cheap (one MCP call per changed PRD file), and a silent canon-drift is worse than a blocked push. Single small `if`-block in `.husky/pre-push` enforces this.
@@ -249,7 +249,7 @@ Goal: take an idea from "interesting cluster" to "Linear Project + greppable PRD
     - _Adopt the Linear edit_ (Linear is right): `pnpm prd:reconcile <slug>` pulls the Linear description back into `docs/prds/<slug>.md` and opens a PR. Operator merges to accept.
     - _Reject the Linear edit_ (git is right): re-run `/risoluto-to-prd <slug>` — the skill is idempotent (see 3.2) and overwrites the Linear Project description from the current PRD. No new pnpm command.
   - Hook stays a hard gate — no `--no-verify` escape hatch.
-- [ ] **3.4** Create `docs/prds/README.md`:
+- [x] **3.4** Create `docs/prds/README.md`: _(ab9f0e4)_
   - Explain: PRDs are canonical in git; Linear Project description is a generated mirror
   - "To edit a PRD, open a PR against `docs/prds/<slug>.md`"
   - Linear UI banner template to paste into Project descriptions
@@ -263,20 +263,20 @@ Goal: take an idea from "interesting cluster" to "Linear Project + greppable PRD
 
 Goal: PRD → Linear Issues → PR loop.
 
-- [ ] **4.1** Fork `~/.claude/skills/to-issues/` to `skills/risoluto-to-issues/`:
+- [x] **4.1** Fork `~/.claude/skills/to-issues/` to `skills/risoluto-to-issues/`: _(c1cdcfb)_
   - Linear MCP only
   - Resolve target Project from PRD frontmatter `linear_project`
   - **Slice graph source:** the skill reads the full PRD body and uses an LLM pass to extract slices and their dependencies (no explicit `## Slices` section required). Non-deterministic — the same PRD may produce slightly different graphs on different runs. Operator reviews the proposed graph before issues are created; rejecting the proposal re-runs the inference with feedback.
   - Create flat Issues with Linear "blocked-by" relations driven by the inferred slice graph
   - Apply labels: `bundle:<x>` (categories from `capability-backlog.md`), `tracer`, `slice:hitl` | `slice:afk`, `from:prd-<slug>`
   - **Smoke:** given a PRD slug, extracts slices via LLM, presents them for operator review, then creates flat Linear Issues with `blocked-by` relations matching the approved graph.
-- [ ] **4.2** Fork `~/.claude/skills/tdd/` to `skills/risoluto-tdd/`:
+- [x] **4.2** Fork `~/.claude/skills/tdd/` to `skills/risoluto-tdd/`: _(c1cdcfb)_
   - Accept `<ticket-ref>` arg (e.g. `RSL-123`)
   - Fetch issue + linked PRD via MCP
   - Validate upstream blocked-by tickets are status: Done
   - On PR open, comment Linear ticket with PR URL, and apply the `from:prd-<slug>` label to the PR so the post-merge workflow (4.3) can find the linked PRD
   - **Smoke:** given a Linear ticket ref with all blocked-by tickets at status Done, opens a PR linked to the ticket, applies the `from:prd-<slug>` label, and back-comments the PR URL.
-- [ ] **4.3** Post-merge automation — first LLM-driven dogfood:
+- [x] **4.3** Post-merge automation — first LLM-driven dogfood: _(c1cdcfb)_
   - Ship `.github/workflows/post-merge.yml` that fires on `pull_request.closed && merged == true` for any PR labeled `from:prd-<slug>`
   - Workflow invokes an OpenCode agent with a scoped prompt: "find the linked PRD from the PR's `from:prd-*` label, flip frontmatter `status: shipped`, back-comment the Linear ticket with the merged PR URL, commit changes to `main`."
   - This is the first place Risoluto-flavored runtime work runs in CI. Same workflow grows future post-merge behaviors (changelog updates, Linear archival, etc.) without rewriting the YAML — just extending the prompt.
@@ -291,13 +291,13 @@ Goal: PRD → Linear Issues → PR loop.
 
 Goal: write down what we built so the next operator (or future you) doesn't re-derive it.
 
-- [ ] **5.1** Write `docs/adr/0007-research-to-shipping-pipeline.md`:
+- [x] **5.1** Write `docs/adr/0007-research-to-shipping-pipeline.md`:
   - Status: active
   - Context: how Risoluto's planning surface evolves from raw research to shipping PRs
   - Decision: this roadmap, with the resolved table from above
   - Consequences: the seam between planning and runtime is the Linear ticket, not the harness
-- [ ] **5.2** Append a row to `docs/decisions.md` referencing the ADR
-- [ ] **5.3** Mark this file (`planning-pipeline-roadmap.md`) as superseded-by ADR-0007
+- [x] **5.2** Append a row to `docs/decisions.md` referencing the ADR
+- [x] **5.3** Mark this file (`planning-pipeline-roadmap.md`) as superseded-by ADR-0007
 
 **Rollback:** records don't get deleted. If the decision reverses, write a new superseding ADR (0008+) and update the status of 0007 to `superseded-by`. This file stays.
 
