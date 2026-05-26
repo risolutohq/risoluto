@@ -2,15 +2,16 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 import type {
   WorkflowRunArtifactReference,
   WorkflowRunEventRecord,
   WorkflowRunSource,
   WorkflowRunStartRecord,
   WorkflowRunTrigger,
-} from "./artifacts.js";
+} from "./contracts.js";
 
-export const DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder";
+export { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 
 export interface WorkflowRunArchiveLocation {
   dataDir?: string;
