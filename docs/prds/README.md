@@ -2,6 +2,8 @@
 
 PRDs in this folder are the **canonical source of truth**. Each `docs/prds/<slug>.md` file is the authoritative copy; the matching Linear Project description is a generated mirror pushed by `/risoluto-to-prd`.
 
+Linear caps Project descriptions at 255 chars, so the mirror is only the first 255 chars of the PRD body — content beyond that lives only in git, and the drift hook only protects the prefix.
+
 ## Editing a PRD
 
 Open a PR against `docs/prds/<slug>.md`. The pre-push drift hook and the `prd-drift` GitHub Action will reject pushes where the Linear Project description has been edited outside this git-canonical path.
