@@ -179,7 +179,7 @@ Goal: capture targets, write the contract, scope the vault.
   - Pinned plugins: Web Clipper, Dataview, Templater (no others). **First-run is not one-shot:** community plugins can't be installed from JSON config alone — the operator opens the vault in Obsidian once and installs them via the UI, then the skill's `community-plugins.json` pins the active list. Skill detects missing plugins and prints the install commands to run.
   - Idempotent — re-run repairs drift (after the first-run manual seed)
   - **Smoke:** given a fresh `research/` submodule, writes `.obsidian/` config + `templates/` + Dataview queries. Re-running on an already-configured vault repairs drift without overwriting operator preferences.
-- [ ] **1.3** Build `skills/risoluto-researcher/` (new — does not exist yet, despite earlier "upgrade" framing):
+- [x] **1.3** Build `skills/risoluto-researcher/` (new — does not exist yet, despite earlier "upgrade" framing): _(aa5284c)_
   - Accept raw paste + URL (provenance), not just URLs
   - Write to `research/targets/<slug>/README.md` (folder shape, not flat `<slug>.md`)
   - Write raw captured material to `research/targets/<slug>/sources/<source-slug>.md` with frontmatter
