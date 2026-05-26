@@ -10,28 +10,42 @@
 # or CI — where it runs in parallel on clean containers.
 #
 # Escape hatches:
-#   SKIP_HOOKS=1 git push        → skip everything (emergency)
+#   SKIP_HOOKS=1 git push        → skip build/test/typecheck (emergency)
 #   FULL_CHECK=1 git push        → run the full CI-mirror suite
+#
+# Note: PRD drift check runs unconditionally — SKIP_HOOKS does NOT bypass it.
 
 set -e
 
-# ── Emergency bypass ─────────────────────────────────────────────────
-if [ "${SKIP_HOOKS:-0}" = "1" ]; then
-  echo "⚠️  SKIP_HOOKS=1 — skipping all pre-push checks."
-  exit 0
-fi
-
-# ── Skip on branch deletes ───────────────────────────────────────────
+# ── Capture push refs (once, for all checks) ────────────────────────
 z40=0000000000000000000000000000000000000000
+refs_file=$(mktemp)
+trap 'rm -f "$refs_file"' EXIT
+cat > "$refs_file"
+
 all_deletes=true
 while read local_ref local_sha remote_ref remote_sha; do
   if [ "$local_sha" != "$z40" ]; then
     all_deletes=false
     break
   fi
-done
+done < "$refs_file"
+
+# ── PRD drift check (unconditional — not affected by SKIP_HOOKS) ────
+if [ "$all_deletes" = false ]; then
+  echo "📋 Checking PRD drift..."
+  pnpm run prd:drift-check < "$refs_file"
+fi
+
+# ── Skip on branch deletes ───────────────────────────────────────────
 if [ "$all_deletes" = true ]; then
   echo "🗑️  Branch delete only — skipping pre-push checks."
+  exit 0
+fi
+
+# ── Emergency bypass ─────────────────────────────────────────────────
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  echo "⚠️  SKIP_HOOKS=1 — skipping build/test/typecheck (PRD drift check already ran)."
   exit 0
 fi
 

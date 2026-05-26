@@ -5,6 +5,7 @@ synced_at: 2026-05-26T21:19:57.161Z
 source_idea: research/ideas/provider-abstraction/README.md
 status: draft
 ---
+
 ## Problem Statement
 
 Risoluto operators today have one harness wired into the runtime — whichever family it was bootstrapped against — and switching to a different one (Claude Code vs OpenCode/Codex CLI) means rewriting how a workflow run dispatches its agent steps. That coupling is structural: the harness's tool-call schema, streaming semantics, and process model leak into the run executor. Two adjacent peers ship a cleaner shape — Composio abstracts SaaS **tool** providers behind one SDK across 1000+ connectors, and Magpie abstracts **LLM CLI** providers (Claude Code, Codex CLI, Gemini, Qwen) behind one adversarial-debate harness — but neither encodes the workflow run as the canonical unit. Risoluto does, which means a provider here is just an effect-carrying step inside the run, not the unit of identity. The wedge is real now: the Claude Code-flavoured and OpenCode/Codex-flavoured harness families are diverging on tool-use semantics fast enough that locking in one will force a rewrite later.

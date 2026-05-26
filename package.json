@@ -29,6 +29,8 @@
     "test:integration:live": "vitest run --config vitest.live.config.ts",
     "live:preflight": "tsx scripts/live-preflight.ts",
     "validate:research": "tsx scripts/validate-research.ts",
+    "prd:drift-check": "tsx scripts/prd-drift-check.ts",
+    "prd:reconcile": "tsx scripts/prd-reconcile.ts",
     "test:all": "pnpm test && pnpm run test:integration",
     "test:docker": "vitest run tests/integration/docker-lifecycle.test.ts",
     "test:load": "vitest run --config vitest.load.config.ts",
