@@ -101,6 +101,26 @@ Read from `/tmp/researcher-<target-slug>/`:
 - **Test structure** — `test/`, `tests/`, `__tests__/`, `spec/` — what's tested, framework used
 - **Architecture signals** — monorepo (workspaces, lerna, turborepo)? microservices? single binary? plugin system?
 
+**2b.3b — Feature extraction (80/20)**
+
+Extract a lightweight feature inventory from the clone. This is NOT the full citation-backed spine that `risoluto-features` produces for Risoluto itself — it's a quick scan for user-observable and backend-surface features. Aim for 5–15 features.
+
+Scan these signals:
+
+| Signal | Where to look | What it reveals |
+| ------ | ------------- | --------------- |
+| CLI commands | `commander`/`yargs`/`click`/`cobra` definitions, `bin/` scripts | User-facing actions |
+| API routes | Express/FastAPI/Flask route files, `openapi.yaml` | HTTP surface |
+| Exported modules | `index.ts`/`__init__.py`/`lib.rs` public exports | Core capabilities |
+| Config schema | `.env.example`, config types/interfaces, JSON schemas | Configurable surfaces |
+| Event/webhook handlers | Files named `*handler*`, `*webhook*`, `*event*` | Integration points |
+| Background jobs | Cron, queue consumers, worker files | Async capabilities |
+| Plugin/extension system | Plugin registries, middleware stacks, hook systems | Extensibility |
+
+For each feature found, write one line: `- **Feature name** — what it does (one sentence).`
+
+Group features by bundle if natural clusters emerge (e.g. "CLI", "API", "Integrations", "Orchestration"). Don't force grouping — a flat list is fine for small repos.
+
 **2b.4 — Compose the body**
 
 Write the body file (`/tmp/researcher-<target-slug>-body.md`) with these sections:
@@ -113,6 +133,10 @@ Write the body file (`/tmp/researcher-<target-slug>-body.md`) with these section
 ## Architecture
 
 <file tree summary, entry points, monorepo vs single-package, key directories>
+
+## Features
+
+<5–15 bullet-point features extracted from source, grouped by bundle if natural>
 
 ## Dependencies
 
@@ -131,7 +155,7 @@ Write the body file (`/tmp/researcher-<target-slug>-body.md`) with these section
 <one paragraph: what capability does this target demonstrate? What can Risoluto learn from it?>
 ```
 
-The agent reads the actual source files to fill Architecture, Dependencies, and Key Patterns — not just the README. This is the deep part.
+The agent reads the actual source files to fill Architecture, Features, Dependencies, and Key Patterns — not just the README. This is the deep part.
 
 ### Step 3 — Tag ideas
 
