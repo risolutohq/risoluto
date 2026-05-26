@@ -196,7 +196,7 @@ Goal: capture targets, write the contract, scope the vault.
 
 **Rollback:** drop `skills/risoluto-vault/` and `skills/risoluto-researcher/`, delete `research/.schemas/`, remove the `validate:research` entry from `package.json`. The `.obsidian/` config in `research/` can stay (harmless if no one opens the vault) or be reverted with `git checkout HEAD~ -- research/.obsidian`.
 
-### Phase 2 — Synthesis
+### Phase 2 — Synthesis _(completed 2026-05-26, 5713df8)_
 
 Goal: turn captured targets into idea clusters.
 
@@ -209,7 +209,7 @@ Goal: turn captured targets into idea clusters.
   - Always full-corpus: every run reads every `targets/*/README.md` and rewrites every synthesizer-owned section in every `ideas/*/README.md`. No incremental mode, no dirty-bit. This is what makes "idempotent" meaningful and re-runnable on any target change.
   - **Orphan handling:** ideas whose evidence drops to zero are not deleted. Synthesizer sets `evidence_targets: []` in the idea README frontmatter and flips the matching backlog row to `dropped` (reason: `no evidence in corpus`). Operator-owned sections (`## Analyst notes`, `## Open questions`, `## Why us / why now`, `## Smallest shippable shape`) are preserved verbatim. Re-tagging any target revives the idea automatically on the next run.
   - **Smoke:** given two targets sharing tag `X`, produces `ideas/X/README.md` with `evidence_targets: [target1, target2]` and a matching `idea`-status backlog row.
-- [ ] **2.2** Update `docs/capability-backlog.md`:
+- [x] **2.2** Update `docs/capability-backlog.md`: _(3ec924d + 5713df8)_
   - Backlog is currently status-vocabulary + empty "Initial Entries" — design and document the row schema before the synthesizer writes the first entry
   - Schema: `slug` (join key to `research/ideas/<slug>/`), `name`, `category` (from the existing Categories list), `status`, `evidence_idea` (path to `research/ideas/<slug>/README.md`)
   - **Row authorship:** on first creation of an `idea`-status row, the synthesizer LLM-drafts `name` and `category` from the idea README. On subsequent runs, the synthesizer rewrites only `slug` and `evidence_idea` — operator edits to `name` and `category` are sticky. Status field follows the ownership table above.
