@@ -1,0 +1,17 @@
+{
+  "useMarkdownLinks": true,
+  "newLinkFormat": "relative",
+  "alwaysUpdateLinks": true,
+  "attachmentFolderPath": "attachments",
+  "showUnsupportedFiles": false,
+  "promptDelete": true,
+  "trashOption": "system",
+  "newFileLocation": "current",
+  "showLineNumber": true,
+  "strictLineBreaks": false,
+  "showFrontmatter": true,
+  "spellcheck": true,
+  "useTab": false,
+  "tabSize": 2,
+  "userIgnoreFilters": ["RISOLUTO_FEATURES.html", "RISOLUTO_FEATURES.json"]
+}

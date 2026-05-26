@@ -1,0 +1,64 @@
+/**
+ * OpenAPI 3.1 spec generator for Risoluto.
+ *
+ * Assembles the spec from path definitions in `./openapi-paths.js`.
+ * Uses Zod 4's built-in `z.toJSONSchema()` — no external OpenAPI library needed.
+ */
+
+import packageJson from "../../package.json" with { type: "json" };
+import {
+  buildAlertPaths,
+  buildAutomationPaths,
+  buildCodexPaths,
+  buildIngressPaths,
+  buildInfrastructurePaths,
+  buildIssuePaths,
+  buildNotificationPaths,
+  buildPrPaths,
+  buildStateAndMetricsPaths,
+  buildWorkflowRunPaths,
+} from "./openapi-paths.js";
+
+/** Lazily cached spec — built once on first access, then reused. */
+let cachedSpec: Record<string, unknown> | undefined;
+
+/** Returns the OpenAPI 3.1 spec as a plain JSON-serializable object. */
+export function getOpenApiSpec(): Record<string, unknown> {
+  cachedSpec ??= {
+    openapi: "3.1.0",
+    info: {
+      title: "Risoluto API",
+      version: packageJson.version,
+      description:
+        "REST API for Risoluto — supports Workflow Runs, tracker intake, workspaces, config, and agent lifecycle.",
+    },
+    servers: [{ url: "http://localhost:4000", description: "Local Risoluto instance" }],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "token",
+        },
+        readTokenQuery: {
+          type: "apiKey",
+          in: "query",
+          name: "read_token",
+        },
+      },
+    },
+    paths: {
+      ...buildStateAndMetricsPaths(),
+      ...buildIssuePaths(),
+      ...buildNotificationPaths(),
+      ...buildAutomationPaths(),
+      ...buildAlertPaths(),
+      ...buildIngressPaths(),
+      ...buildPrPaths(),
+      ...buildWorkflowRunPaths(),
+      ...buildInfrastructurePaths(),
+      ...buildCodexPaths(),
+    },
+  };
+  return cachedSpec;
+}

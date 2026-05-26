@@ -1,0 +1,101 @@
+{
+  "name": "risoluto",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/risolutohq/risoluto.git"
+  },
+  "homepage": "https://github.com/risolutohq/risoluto",
+  "bugs": {
+    "url": "https://github.com/risolutohq/risoluto/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.3.0+sha512.2c403d6594527287672b1f7056343a1f7c3634036a67ffabfcc2b3d7595d843768f8787148d1b57cf7956c90606bbd192857c363af19e96d2d0ec9ec5741d215",
+  "bin": {
+    "risoluto": "./bin/risoluto"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:sqlite": "vitest run --config vitest.integration.config.ts tests/integration/sqlite-*.integration.test.ts",
+    "test:integration:contracts": "vitest run --config vitest.integration.config.ts tests/http/*-contracts.integration.test.ts",
+    "test:integration:live": "vitest run --config vitest.live.config.ts",
+    "live:preflight": "tsx scripts/live-preflight.ts",
+    "validate:research": "tsx scripts/validate-research.ts",
+    "test:all": "pnpm test && pnpm run test:integration",
+    "test:docker": "vitest run tests/integration/docker-lifecycle.test.ts",
+    "test:load": "vitest run --config vitest.load.config.ts",
+    "mutate": "node scripts/mutate-changed.mjs",
+    "dev": "tsx watch src/cli/index.ts",
+    "lint": "eslint --no-warn-ignored src/ tests/ 'scripts/**/*.ts' '*.ts'",
+    "lint:fix": "eslint --fix --no-warn-ignored src/ tests/ 'scripts/**/*.ts' '*.ts'",
+    "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' '*.json' '*.ts' '.github/**/*.yml' '.github/**/*.md' 'docs/**/*.md' '*.md'",
+    "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' '*.json' '*.ts' '.github/**/*.yml' '.github/**/*.md' 'docs/**/*.md' '*.md'",
+    "knip": "knip",
+    "circular": "madge --circular --extensions ts src/",
+    "docs:generate": "typedoc",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.typecheck.json",
+    "typecheck:coverage": "type-coverage --at-least 95 --detail --strict --ignore-catch",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "chokidar": "^5.0.0",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "liquidjs": "^10.27.0",
+    "node-cron": "^4.2.1",
+    "pino": "^10.3.1",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1053.0",
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
+    "@commitlint/types": "^21.0.1",
+    "@eslint/js": "^10.0.1",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/typescript-checker": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@types/autocannon": "^7.12.7",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "ajv": "^8.20.0",
+    "autocannon": "^8.0.0",
+    "eslint": "^10.4.0",
+    "fast-check": "^4.8.0",
+    "husky": "^9.1.7",
+    "knip": "^6.14.2",
+    "lint-staged": "^17.0.5",
+    "madge": "^8.0.0",
+    "prettier": "^3.8.3",
+    "semantic-release": "^25.0.3",
+    "tsx": "^4.22.3",
+    "type-coverage": "^2.29.7",
+    "typedoc": "^0.28.19",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
+  },
+  "overrides": {
+    "flatted": ">=3.4.2",
+    "hono": ">=4.12.18",
+    "@hono/node-server": ">=1.19.13",
+    "path-to-regexp": ">=8.4.0",
+    "qs": ">=6.15.2"
+  }
+}

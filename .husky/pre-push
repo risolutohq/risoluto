@@ -1,0 +1,63 @@
+#!/bin/sh
+# ── Pre-push: fast 80/20 gate ────────────────────────────────────────
+# Catches the two things that actually waste CI minutes:
+#   1. Compilation errors (build)
+#   2. Broken tests (vitest)
+#   3. Type errors (typecheck)
+#
+# Everything else (lint, format, knip, typecheck:coverage) is handled by
+# pre-commit hooks, agent hooks,
+# or CI — where it runs in parallel on clean containers.
+#
+# Escape hatches:
+#   SKIP_HOOKS=1 git push        → skip everything (emergency)
+#   FULL_CHECK=1 git push        → run the full CI-mirror suite
+
+set -e
+
+# ── Emergency bypass ─────────────────────────────────────────────────
+if [ "${SKIP_HOOKS:-0}" = "1" ]; then
+  echo "⚠️  SKIP_HOOKS=1 — skipping all pre-push checks."
+  exit 0
+fi
+
+# ── Skip on branch deletes ───────────────────────────────────────────
+z40=0000000000000000000000000000000000000000
+all_deletes=true
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" != "$z40" ]; then
+    all_deletes=false
+    break
+  fi
+done
+if [ "$all_deletes" = true ]; then
+  echo "🗑️  Branch delete only — skipping pre-push checks."
+  exit 0
+fi
+
+# ── Full CI-mirror mode (opt-in) ─────────────────────────────────────
+if [ "${FULL_CHECK:-0}" = "1" ]; then
+  echo "🔒 FULL_CHECK=1 — running full CI-mirror suite..."
+  pnpm run build
+  pnpm run lint
+  pnpm run format:check
+  pnpm test
+  pnpm run typecheck
+  pnpm run knip
+  command -v gitleaks >/dev/null 2>&1 && gitleaks detect --config .gitleaks.toml --verbose || echo "⚠️  gitleaks not installed — skipping."
+  pnpm run typecheck:coverage
+  echo "✅ Full CI-mirror suite passed!"
+  exit 0
+fi
+
+# ── Fast 80/20 gate (default) ────────────────────────────────────────
+echo "🔨 Building..."
+pnpm run build
+
+echo "🧪 Running tests..."
+pnpm test
+
+echo "🔎 Type-checking..."
+pnpm run typecheck
+
+echo "✅ Pre-push checks passed! (use FULL_CHECK=1 for the full suite)"

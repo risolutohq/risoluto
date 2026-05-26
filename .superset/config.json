@@ -1,0 +1,9 @@
+{
+  "setup": [
+    "command -v corepack >/dev/null 2>&1 && corepack enable || true",
+    "if [ -f \"$SUPERSET_ROOT_PATH/.env.live.local\" ]; then cp -n \"$SUPERSET_ROOT_PATH/.env.live.local\" .env.live.local; fi",
+    "pnpm install --frozen-lockfile"
+  ],
+  "teardown": [],
+  "run": ["pnpm dev"]
+}

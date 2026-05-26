@@ -1,0 +1,35 @@
+{
+  "skill_name": "risoluto-vault",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "ok the research/ submodule is brand new, i just ran git submodule update --init research and now there's no .obsidian/ in there. can you set it up the way risoluto expects? templates, dataview views, the pinned plugin set, all of it",
+      "expected_output": "Runs `node skills/risoluto-vault/scripts/apply.mjs` (or dry-run first), all files land under research/.obsidian/, research/templates/, research/views/. Reports the 3 PLUGIN-MISSING warnings for web-clipper, dataview, templater since they need manual install.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "something edited my research/.obsidian/app.json — i think a plugin overwrote useMarkdownLinks back to false. can you check the vault config and fix any drift?",
+      "expected_output": "Runs the applier, identifies the drifted file as REPAIR, restores canonical bytes, leaves operator-owned files alone.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "i need to bump the source.md template to add a `paywall: bool` field. how should i do that so it stays in sync everywhere?",
+      "expected_output": "Edits skills/risoluto-vault/assets/templates/source.md, points out that the matching `source.schema.json` may also need a new field, then re-runs the applier to push the change into research/templates/source.md.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "the vault thinks my research/ is dirty when i try to apply. i edited templates/idea-readme.md by hand because i wanted a different placeholder. what's the right move?",
+      "expected_output": "Explains that research/templates/* is canonical (operator edits live in the skill's assets, not the deployed copy), tells the operator to move the change upstream into skills/risoluto-vault/assets/templates/idea-readme.md, then re-run the applier.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "can you scope my research folder as an obsidian vault?",
+      "expected_output": "Triggers risoluto-vault, runs the applier with a dry-run preview, then applies.",
+      "files": []
+    }
+  ]
+}

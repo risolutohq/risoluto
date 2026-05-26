@@ -1,0 +1,602 @@
+import { randomUUID } from "node:crypto";
+
+import { isBlockedByNonTerminal, sortIssuesForDispatch } from "./dispatch.js";
+import { issueView, nowIso } from "./views.js";
+import { prepareWorkspaceForLaunch as prepareWorkspace } from "./workspace-preparation.js";
+import { sanitizeIdentifier } from "../workspace/paths.js";
+import { isActiveState, isTodoState, normalizeStateKey } from "../state/policy.js";
+import type { NotificationEvent } from "../notification/channel.js";
+import type { ComponentObserver } from "../observability/hub.js";
+import type {
+  AttemptRecord,
+  CheckpointTrigger,
+  Issue,
+  ModelSelection,
+  RecentEvent,
+  RunOutcome,
+  ServiceConfig,
+  TokenUsageSnapshot,
+  Workspace,
+  WorkflowRunReference,
+} from "../core/types.js";
+import type { LaunchWorkerOptions, OrchestratorDeps, RunningEntry } from "./runtime-types.js";
+import { toErrorString } from "../utils/type-guards.js";
+
+export function buildIssueDispatchFingerprint(issue: Issue): string {
+  return JSON.stringify({
+    state: issue.state,
+    updatedAt: issue.updatedAt ?? null,
+    priority: issue.priority ?? null,
+    labels: issue.labels,
+    title: issue.title,
+  });
+}
+
+export function canDispatchIssue(
+  issue: Issue,
+  config: ServiceConfig,
+  claimedIssueIds: Set<string>,
+  operatorAbortSuppressions?: Map<string, string>,
+  // Called when canDispatchIssue prunes a stale suppression entry, so the
+  // caller can invalidate the snapshot cache. Optional because some test
+  // contexts pass an empty suppressions map and don't care about dirty
+  // tracking.
+  markDirty?: () => void,
+): boolean {
+  const suppressionFingerprint = operatorAbortSuppressions?.get(issue.id);
+  if (suppressionFingerprint !== undefined) {
+    if (suppressionFingerprint === buildIssueDispatchFingerprint(issue)) {
+      return false;
+    }
+    operatorAbortSuppressions?.delete(issue.id);
+    markDirty?.();
+  }
+  if (!isActiveState(issue.state, config)) {
+    return false;
+  }
+  if (claimedIssueIds.has(issue.id)) {
+    return false;
+  }
+  if (isTodoState(issue.state, config)) {
+    if (config.agent.autoClaim === false) {
+      return false;
+    }
+    return !isBlockedByNonTerminal(issue, config);
+  }
+  return true;
+}
+
+export function hasAvailableStateSlot(
+  issue: Issue,
+  config: ServiceConfig,
+  runningEntries: Map<string, RunningEntry>,
+  pendingStateCounts?: Map<string, number>,
+  runningStateCounts?: Map<string, number>,
+): boolean {
+  const stateKey = normalizeStateKey(issue.state);
+  const configuredLimit = config.agent.maxConcurrentAgentsByState[stateKey];
+  if (configuredLimit === undefined) {
+    return true;
+  }
+
+  const runningCount =
+    runningStateCounts?.get(stateKey) ??
+    [...runningEntries.values()].filter((entry) => normalizeStateKey(entry.issue.state) === stateKey).length;
+  const pendingCount = pendingStateCounts?.get(stateKey) ?? 0;
+  return runningCount + pendingCount < configuredLimit;
+}
+
+function buildRunningStateCounts(runningEntries: Map<string, RunningEntry>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of runningEntries.values()) {
+    const stateKey = normalizeStateKey(entry.issue.state);
+    counts.set(stateKey, (counts.get(stateKey) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function workflowRunReferenceFromIssue(issue: Issue): WorkflowRunReference {
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    description: issue.description,
+    url: issue.url,
+  };
+}
+
+export async function launchAvailableWorkers(
+  ctx: {
+    deps: Pick<OrchestratorDeps, "tracker">;
+    getConfig: () => ServiceConfig;
+    runningEntries: Map<string, RunningEntry>;
+    claimIssue: (issueId: string) => void;
+    canDispatchIssue: (issue: Issue) => boolean;
+    hasAvailableStateSlot: (
+      issue: Issue,
+      pendingStateCounts?: Map<string, number>,
+      runningStateCounts?: Map<string, number>,
+    ) => boolean;
+    launchWorker: (issue: Issue, attempt: number | null, options?: LaunchWorkerOptions) => Promise<void>;
+  },
+  candidateIssues?: Issue[],
+): Promise<void> {
+  const config = ctx.getConfig();
+  const availableSlots = config.agent.maxConcurrentAgents - ctx.runningEntries.size;
+  if (availableSlots <= 0) {
+    return;
+  }
+
+  const issues = candidateIssues ?? sortIssuesForDispatch(await ctx.deps.tracker.fetchCandidateIssues());
+  let launched = 0;
+  const runningStateCounts = buildRunningStateCounts(ctx.runningEntries);
+  const pendingStateCounts = new Map<string, number>();
+  for (const issue of issues) {
+    if (launched >= availableSlots) {
+      break;
+    }
+    if (!ctx.canDispatchIssue(issue)) {
+      continue;
+    }
+    if (!ctx.hasAvailableStateSlot(issue, pendingStateCounts, runningStateCounts)) {
+      continue;
+    }
+    ctx.claimIssue(issue.id);
+    launched += 1;
+    const stateKey = normalizeStateKey(issue.state);
+    pendingStateCounts.set(stateKey, (pendingStateCounts.get(stateKey) ?? 0) + 1);
+    await ctx.launchWorker(issue, 1, { claimHeld: true });
+  }
+}
+
+type LaunchContext = {
+  deps: Pick<
+    OrchestratorDeps,
+    | "agentRunner"
+    | "attemptStore"
+    | "configStore"
+    | "workspaceManager"
+    | "repoRouter"
+    | "gitManager"
+    | "logger"
+    | "resolveTemplate"
+    | "observability"
+  >;
+  runningEntries: Map<string, RunningEntry>;
+  completedViews: Map<string, ReturnType<typeof issueView>>;
+  detailViews: Map<string, ReturnType<typeof issueView>>;
+  getQueuedViews: () => ReturnType<typeof issueView>[];
+  setQueuedViews: (views: ReturnType<typeof issueView>[]) => void;
+  claimIssue: (issueId: string) => void;
+  releaseIssueClaim: (issueId: string) => void;
+  markDirty: () => void;
+  resolveModelSelection: (identifier: string) => ModelSelection;
+  notify: (event: NotificationEvent) => void;
+  pushEvent: (event: RecentEvent & { usage?: unknown; rateLimits?: unknown }) => void;
+  applyUsageEvent: (entry: RunningEntry, usage: TokenUsageSnapshot, usageMode: "absolute_total" | "delta") => void;
+  setRateLimits: (rateLimits: unknown) => void;
+  handleWorkerPromise: (
+    promise: Promise<RunOutcome>,
+    issue: Issue,
+    workspace: Workspace,
+    entry: RunningEntry,
+    attempt: number | null,
+  ) => Promise<void>;
+};
+
+function buildRunningEntry(
+  ctx: LaunchContext,
+  issue: Issue,
+  workspace: Workspace,
+  attempt: number | null,
+  modelSelection: ModelSelection,
+  recoveredAttempt?: AttemptRecord | null,
+): { entry: RunningEntry; resolveLifecycle: () => void } {
+  const recoveredStartedAt = recoveredAttempt ? Date.parse(recoveredAttempt.startedAt) : Number.NaN;
+  const runId = recoveredAttempt?.attemptId ?? randomUUID();
+  let persistenceQueue = Promise.resolve();
+  const queuePersistence = (task: () => Promise<void>) => {
+    persistenceQueue = persistenceQueue.then(task).catch((error) => {
+      ctx.deps.logger.warn(
+        {
+          issue_id: issue.id,
+          issue_identifier: issue.identifier,
+          attempt_id: runId,
+          error: toErrorString(error),
+        },
+        "attempt persistence write failed",
+      );
+    });
+  };
+  // Use a deferred so entry.promise is a stable pending promise from the
+  // moment the entry is added to runningEntries. Awaiting it (e.g. from
+  // stop() via Promise.allSettled) only resolves when the worker promise
+  // settles or when the launch fails before the worker promise is bound.
+  let resolveLifecycle: () => void = () => undefined;
+  const promise = new Promise<void>((resolve) => {
+    resolveLifecycle = resolve;
+  });
+  return {
+    entry: {
+      runId,
+      issue,
+      workspace,
+      startedAtMs: Number.isFinite(recoveredStartedAt) ? recoveredStartedAt : Date.now(),
+      lastEventAtMs: Date.now(),
+      attempt: recoveredAttempt?.attemptNumber ?? attempt,
+      abortController: new AbortController(),
+      promise,
+      cleanupOnExit: false,
+      status: "running",
+      sessionId: recoveredAttempt?.threadId ?? null,
+      tokenUsage: recoveredAttempt?.tokenUsage ?? null,
+      modelSelection,
+      lastAgentMessageContent: null,
+      lastStopSignal: null,
+      repoMatch: ctx.deps.repoRouter?.matchIssue(issue) ?? null,
+      queuePersistence,
+      flushPersistence: () => persistenceQueue,
+    },
+    resolveLifecycle,
+  };
+}
+
+/**
+ * Write a checkpoint for the given attempt entry.
+ * All errors are swallowed — checkpoint failures must never block orchestrator flow.
+ */
+async function writeCheckpoint(ctx: LaunchContext, entry: RunningEntry, trigger: CheckpointTrigger): Promise<void> {
+  try {
+    await ctx.deps.attemptStore.appendCheckpoint({
+      attemptId: entry.runId,
+      trigger,
+      eventCursor: null,
+      // RunningEntry.status includes "stopping" which is not a valid AttemptRecord
+      // status — map it to "running" since the attempt is still in-flight.
+      status: entry.status === "stopping" ? "running" : entry.status,
+      threadId: entry.sessionId,
+      turnId: null,
+      turnCount: 0,
+      tokenUsage: entry.tokenUsage,
+      metadata: null,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    ctx.deps.logger.warn(
+      {
+        attempt_id: entry.runId,
+        trigger,
+        error: toErrorString(error),
+      },
+      "checkpoint write failed (non-fatal)",
+    );
+  }
+}
+
+async function persistInitialAttempt(
+  ctx: LaunchContext,
+  entry: RunningEntry,
+  issue: Issue,
+  workspace: Workspace,
+  attempt: number | null,
+  modelSelection: ModelSelection,
+): Promise<void> {
+  await ctx.deps.attemptStore.createAttempt({
+    attemptId: entry.runId,
+    issueId: issue.id,
+    issueIdentifier: issue.identifier,
+    title: issue.title,
+    workspaceKey: workspace.workspaceKey,
+    workspacePath: workspace.path,
+    status: "running",
+    attemptNumber: attempt,
+    startedAt: new Date(entry.startedAtMs).toISOString(),
+    endedAt: null,
+    model: modelSelection.model,
+    reasoningEffort: modelSelection.reasoningEffort,
+    modelSource: modelSelection.source,
+    threadId: null,
+    turnId: null,
+    turnCount: 0,
+    errorCode: null,
+    errorMessage: null,
+    tokenUsage: null,
+  });
+  await writeCheckpoint(ctx, entry, "attempt_created");
+}
+
+async function persistRecoveredAttempt(
+  ctx: LaunchContext,
+  entry: RunningEntry,
+  issue: Issue,
+  workspace: Workspace,
+  recoveredAttempt: AttemptRecord,
+  modelSelection: ModelSelection,
+): Promise<void> {
+  await ctx.deps.attemptStore.updateAttempt(recoveredAttempt.attemptId, {
+    workspaceKey: workspace.workspaceKey,
+    workspacePath: workspace.path,
+    status: "running",
+    endedAt: null,
+    model: modelSelection.model,
+    reasoningEffort: modelSelection.reasoningEffort,
+    modelSource: modelSelection.source,
+    threadId: recoveredAttempt.threadId,
+    turnId: recoveredAttempt.turnId,
+    turnCount: recoveredAttempt.turnCount,
+    errorCode: null,
+    errorMessage: null,
+    tokenUsage: recoveredAttempt.tokenUsage,
+  });
+  await ctx.deps.attemptStore.appendEvent({
+    attemptId: recoveredAttempt.attemptId,
+    at: new Date().toISOString(),
+    issueId: issue.id,
+    issueIdentifier: issue.identifier,
+    sessionId: recoveredAttempt.threadId,
+    event: "attempt_recovered",
+    message: "Attempt recovered on orchestrator startup",
+    metadata: {
+      workspacePath: workspace.path,
+      attemptNumber: recoveredAttempt.attemptNumber,
+    },
+  });
+  await ctx.deps.attemptStore.appendCheckpoint({
+    attemptId: recoveredAttempt.attemptId,
+    trigger: "status_transition",
+    eventCursor: null,
+    status: "running",
+    threadId: recoveredAttempt.threadId,
+    turnId: recoveredAttempt.turnId,
+    turnCount: recoveredAttempt.turnCount,
+    tokenUsage: recoveredAttempt.tokenUsage,
+    metadata: {
+      recoveryAction: "resume",
+      workspacePath: workspace.path,
+    },
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function emitLaunchNotifications(
+  ctx: LaunchContext,
+  issue: Issue,
+  workspace: Workspace,
+  attempt: number | null,
+  modelSelection: ModelSelection,
+): void {
+  const workflowRun = workflowRunReferenceFromIssue(issue);
+  const issueRef = {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    state: issue.state,
+    url: issue.url,
+  };
+  ctx.notify({
+    type: "workflow_run_claimed",
+    severity: "info",
+    timestamp: nowIso(),
+    message: "Workflow Run claimed for execution",
+    issue: issueRef,
+    attempt,
+    metadata: { workspace: workspace.path, workflowRun },
+  });
+  ctx.notify({
+    type: "workflow_run_worker_launched",
+    severity: "info",
+    timestamp: nowIso(),
+    message: "Workflow Run worker launched",
+    issue: issueRef,
+    attempt,
+    metadata: {
+      workspace: workspace.path,
+      model: modelSelection.model,
+      reasoningEffort: modelSelection.reasoningEffort,
+      workflowRun,
+    },
+  });
+}
+
+function buildOnEventHandler(
+  ctx: LaunchContext,
+  entry: RunningEntry,
+): (
+  event: RecentEvent & {
+    usage?: TokenUsageSnapshot;
+    usageMode?: "absolute_total" | "delta";
+    rateLimits?: unknown;
+    content?: string | null;
+    stopSignal?: import("../core/signal-detection.js").StopSignal | null;
+  },
+) => void {
+  return (event) => {
+    entry.sessionId = event.sessionId;
+    entry.lastEventAtMs = Date.now();
+    if (event.event === "agent_message" && event.content) {
+      entry.lastAgentMessageContent = event.content;
+    }
+    if (event.stopSignal) {
+      entry.lastStopSignal = event.stopSignal;
+    }
+    ctx.pushEvent(event);
+    if (event.usage) {
+      ctx.applyUsageEvent(entry, event.usage, event.usageMode ?? "delta");
+    }
+    if (event.rateLimits !== undefined) {
+      ctx.setRateLimits(event.rateLimits);
+    }
+    entry.queuePersistence(async () => {
+      await ctx.deps.attemptStore.appendEvent({
+        attemptId: entry.runId,
+        at: event.at,
+        issueId: event.issueId,
+        issueIdentifier: event.issueIdentifier,
+        sessionId: event.sessionId,
+        event: event.event,
+        message: event.message,
+        content: event.content ?? null,
+        metadata: event.metadata ?? null,
+        usage: event.usage ?? null,
+        rateLimits: event.rateLimits,
+      });
+      if (event.usage) {
+        await ctx.deps.attemptStore.updateAttempt(entry.runId, { tokenUsage: entry.tokenUsage });
+        // Write a cursor_advanced checkpoint whenever a usage event signals turn progress.
+        await writeCheckpoint(ctx, entry, "cursor_advanced");
+      }
+    });
+  };
+}
+
+export async function launchWorker(
+  ctx: LaunchContext,
+  issue: Issue,
+  attempt: number | null,
+  options?: LaunchWorkerOptions,
+): Promise<void> {
+  const observer = ctx.deps.observability?.getComponent("orchestrator");
+  if (!options?.claimHeld) {
+    ctx.claimIssue(issue.id);
+  }
+
+  // Tracks whether handleWorkerPromise has taken ownership of cleanup.
+  // Until that hand-off, this function owns the claim and any partially-added
+  // running entry — both must be released on exception so the issue is
+  // re-dispatchable on the next tick instead of stranded in claimedIssueIds.
+  let promiseHandedOff = false;
+  // Hoisted so the outer catch can settle the deferred entry.promise on
+  // early failure, unblocking any observer (e.g. stop()) that captured the
+  // entry between runningEntries.set and the worker-promise hand-off.
+  let resolveLifecycle: (() => void) | undefined;
+  try {
+    await ctx.deps.workspaceManager.withLock(sanitizeIdentifier(issue.identifier), async () => {
+      const workspace = await prepareWorkspace(ctx, issue);
+      const modelSelection = options?.modelSelectionOverride ?? ctx.resolveModelSelection(issue.identifier);
+      const built = buildRunningEntry(ctx, issue, workspace, attempt, modelSelection, options?.recoveredAttempt);
+      const entry = built.entry;
+      resolveLifecycle = built.resolveLifecycle;
+
+      ctx.runningEntries.set(issue.id, entry);
+      ctx.completedViews.delete(issue.identifier);
+      ctx.markDirty();
+      ctx.setQueuedViews(ctx.getQueuedViews().filter((view) => view.issueId !== issue.id));
+
+      if (options?.recoveredAttempt) {
+        await persistRecoveredAttempt(ctx, entry, issue, workspace, options.recoveredAttempt, modelSelection);
+      } else {
+        await persistInitialAttempt(ctx, entry, issue, workspace, attempt, modelSelection);
+      }
+      ctx.detailViews.set(
+        issue.identifier,
+        issueView(issue, {
+          workspaceKey: workspace.workspaceKey,
+          status: "running",
+          attempt,
+          configuredModel: modelSelection.model,
+          configuredReasoningEffort: modelSelection.reasoningEffort,
+          configuredModelSource: modelSelection.source,
+          modelChangePending: false,
+          model: modelSelection.model,
+          reasoningEffort: modelSelection.reasoningEffort,
+          modelSource: modelSelection.source,
+        }),
+      );
+      ctx.markDirty();
+      emitLaunchNotifications(ctx, issue, workspace, attempt, modelSelection);
+
+      const promptTemplate = await ctx.deps.resolveTemplate(issue.identifier);
+      observer?.setSession(issue.id, {
+        status: "running",
+        correlationId: entry.runId,
+        metadata: {
+          issueId: issue.id,
+          issueIdentifier: issue.identifier,
+          attempt,
+        },
+      });
+      const runAttemptInput = {
+        issue,
+        workflowRun: workflowRunReferenceFromIssue(issue),
+        attempt,
+        modelSelection,
+        promptTemplate,
+        workspace,
+        signal: entry.abortController.signal,
+        onEvent: buildOnEventHandler(ctx, entry),
+        previousThreadId: options?.previousThreadId ?? options?.recoveredAttempt?.threadId ?? null,
+        onSteerReady: (steerFn: (message: string) => Promise<boolean>) => {
+          entry.steerTurn = steerFn;
+        },
+      };
+      let promise: Promise<RunOutcome>;
+      try {
+        promise = ctx.deps.agentRunner.runAttempt(runAttemptInput);
+        recordLaunchObserverState(observer, issue, entry.runId, attempt, "success");
+      } catch (error) {
+        recordLaunchObserverState(observer, issue, entry.runId, attempt, "failure", toErrorString(error));
+        throw error;
+      }
+      const workerPromise = ctx.handleWorkerPromise(promise, issue, workspace, entry, attempt);
+      promiseHandedOff = true;
+      // Resolve the deferred entry.promise once the worker promise settles
+      // and the terminal checkpoint write has been kicked off. Both errors
+      // are swallowed — checkpoint failure must not block cleanup, and the
+      // deferred is signal-only (no rejection path).
+      workerPromise.finally(() => {
+        writeCheckpoint(ctx, entry, "terminal_completion").catch(() => {
+          /* intentionally ignored */
+        });
+        built.resolveLifecycle();
+      });
+    });
+  } catch (error) {
+    if (!promiseHandedOff) {
+      ctx.runningEntries.delete(issue.id);
+      ctx.releaseIssueClaim(issue.id);
+      ctx.markDirty();
+      resolveLifecycle?.();
+    }
+    throw error;
+  }
+}
+
+function recordLaunchObserverState(
+  observer: ComponentObserver | undefined,
+  issue: Issue,
+  runId: string,
+  attempt: number | null,
+  outcome: "success" | "failure",
+  error?: string,
+): void {
+  observer?.recordOperation({
+    metric: "spawn",
+    operation: "worker_spawn",
+    outcome,
+    correlationId: runId,
+    reason: error ?? null,
+    data: {
+      issueId: issue.id,
+      issueIdentifier: issue.identifier,
+      attempt,
+    },
+  });
+  observer?.setHealth({
+    surface: "workers",
+    status: outcome === "success" ? "ok" : "warn",
+    reason: outcome === "success" ? "worker launched" : `worker launch failed for ${issue.identifier}`,
+    details: {
+      issueIdentifier: issue.identifier,
+    },
+  });
+  if (outcome === "failure") {
+    observer?.setSession(issue.id, {
+      status: "spawn_failed",
+      correlationId: runId,
+      metadata: {
+        issueIdentifier: issue.identifier,
+        error,
+      },
+    });
+  }
+}

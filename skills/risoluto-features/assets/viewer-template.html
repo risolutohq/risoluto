@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risoluto Feature Spine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', '"SF Mono"', 'ui-monospace', 'Menlo', 'Consolas', 'monospace'],
+            serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://rsms.me/">
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+  <style>
+    /* ---------- Palette: warm paper, restrained, OKLCH ---------- */
+    :root {
+      --paper:        oklch(0.985 0.004 80);   /* page background */
+      --paper-2:      oklch(0.975 0.005 78);   /* card */
+      --paper-3:      oklch(0.965 0.006 76);   /* rail / toolbar */
+      --ink:          oklch(0.22  0.015 270);  /* primary text */
+      --ink-2:        oklch(0.38  0.012 270);  /* secondary */
+      --ink-3:        oklch(0.55  0.010 270);  /* muted */
+      --rule:         oklch(0.91  0.006 80);   /* hairline */
+      --rule-2:       oklch(0.85  0.008 80);   /* divider */
+      --accent:       oklch(0.50  0.18  265);  /* indigo, used very sparingly */
+      --accent-tint:  oklch(0.96  0.04  265);  /* indigo wash for "current" */
+      --added:        oklch(0.55  0.13  155);  /* emerald */
+      --added-tint:   oklch(0.96  0.04  155);
+      --modified:     oklch(0.62  0.14  75);   /* amber */
+      --modified-tint:oklch(0.96  0.04  75);
+      --removed:      oklch(0.50  0.02  270);  /* slate, deliberately quiet */
+      --removed-tint: oklch(0.96  0.005 270);
+      --highlight:    oklch(0.93  0.10  100);  /* search match */
+    }
+    @media (prefers-color-scheme: dark) {
+      /* Dark is not the default. Provide a sensible auto-fallback for OS dark, but the design is light-first. */
+      :root.respect-os-dark {
+        --paper:        oklch(0.18  0.008 270);
+        --paper-2:      oklch(0.21  0.009 270);
+        --paper-3:      oklch(0.16  0.008 270);
+        --ink:          oklch(0.95  0.005 270);
+        --ink-2:        oklch(0.80  0.008 270);
+        --ink-3:        oklch(0.62  0.010 270);
+        --rule:         oklch(0.30  0.010 270);
+        --rule-2:       oklch(0.36  0.012 270);
+      }
+    }
+
+    html, body { background: var(--paper); color: var(--ink); }
+    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+    .font-serif-mark { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; }
+
+    /* ---------- Hairlines instead of borders ---------- */
+    .hr-rule { border-color: var(--rule); }
+    .hr-rule-2 { border-color: var(--rule-2); }
+
+    /* ---------- Citation chip — falsifiability is the aesthetic ---------- */
+    .citation {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      padding: 0.18rem 0.5rem;
+      background: var(--paper-3);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      color: var(--ink-2);
+      cursor: copy;
+      transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms;
+    }
+    .citation:hover { background: var(--accent-tint); color: var(--ink); }
+    .citation .sym  { color: var(--ink); font-weight: 500; }
+    .citation .lines { color: var(--ink-3); }
+    .citation .kind { color: var(--ink-3); font-style: italic; font-family: 'Source Serif 4', Georgia, serif; font-size: 0.72rem; margin-left: 0.2rem; }
+    .citation.copied { background: var(--added-tint); color: var(--ink); }
+
+    /* ---------- Filter pill ---------- */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.65rem;
+      border: 1px solid var(--rule-2);
+      border-radius: 999px;
+      font-size: 0.78rem;
+      color: var(--ink-2);
+      background: transparent;
+      cursor: pointer;
+      transition: background-color 120ms, border-color 120ms, color 120ms;
+    }
+    .pill:hover { border-color: var(--ink-3); color: var(--ink); }
+    .pill[aria-pressed="true"] {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--paper);
+    }
+    .pill .count {
+      font-variant-numeric: tabular-nums;
+      color: var(--ink-3);
+      font-size: 0.72rem;
+    }
+    .pill[aria-pressed="true"] .count { color: var(--paper-3); }
+
+    /* ---------- Change badges (for cards) ---------- */
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.1rem 0.45rem; border-radius: 3px;
+      font-size: 0.7rem; font-weight: 500; letter-spacing: 0.01em;
+      text-transform: uppercase;
+    }
+    .badge-added    { background: var(--added-tint);    color: var(--added); }
+    .badge-modified { background: var(--modified-tint); color: var(--modified); }
+    .badge-removed  { background: var(--removed-tint);  color: var(--removed); }
+
+    /* ---------- Bundle rail dot ---------- */
+    .rail-link {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 0.3rem 0.6rem 0.3rem 0.85rem;
+      color: var(--ink-2);
+      border-left: 1px solid transparent;
+      transition: color 120ms, border-color 120ms;
+      font-size: 0.86rem;
+    }
+    .rail-link:hover { color: var(--ink); }
+    .rail-link.active {
+      color: var(--ink);
+      border-left-color: var(--ink);
+      font-weight: 500;
+    }
+    .rail-link .count {
+      font-variant-numeric: tabular-nums;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--ink-3);
+    }
+    .rail-link.has-change::after {
+      content: "";
+      width: 5px; height: 5px; border-radius: 999px;
+      background: var(--modified);
+      margin-left: 0.4rem;
+      display: inline-block;
+    }
+
+    /* ---------- Card ---------- */
+    .feature-card {
+      padding: 1.1rem 1.25rem;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      transition: border-color 120ms;
+    }
+    .feature-card:hover { border-color: var(--rule-2); }
+    .feature-card[data-tier="backend-surface"] {
+      background: var(--paper);
+    }
+    .feature-card.removed { opacity: 0.7; background: var(--removed-tint); }
+
+    .feature-card details > summary {
+      list-style: none;
+      cursor: pointer;
+      color: var(--ink-3);
+      font-size: 0.78rem;
+      padding: 0.35rem 0;
+      user-select: none;
+      transition: color 120ms;
+    }
+    .feature-card details > summary::-webkit-details-marker { display: none; }
+    .feature-card details > summary:hover { color: var(--ink); }
+    .feature-card details > summary::before {
+      content: "▸";
+      display: inline-block;
+      margin-right: 0.4rem;
+      transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .feature-card details[open] > summary::before { transform: rotate(90deg); }
+
+    /* ---------- Search highlight ---------- */
+    mark {
+      background: var(--highlight);
+      color: var(--ink);
+      padding: 0 1px;
+      border-radius: 2px;
+    }
+
+    /* ---------- Diff banner ---------- */
+    .diff-banner {
+      border-bottom: 1px solid var(--rule-2);
+      background: var(--paper-3);
+    }
+
+    /* ---------- Toolbar ---------- */
+    .toolbar {
+      background: var(--paper);
+      border-bottom: 1px solid var(--rule-2);
+      backdrop-filter: saturate(160%) blur(6px);
+      -webkit-backdrop-filter: saturate(160%) blur(6px);
+    }
+
+    /* ---------- Table ---------- */
+    .coverage-table th, .coverage-table td {
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--rule);
+      text-align: left;
+      vertical-align: top;
+    }
+    .coverage-table th {
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      cursor: pointer;
+      user-select: none;
+      background: var(--paper-2);
+    }
+    .coverage-table th:hover { color: var(--ink); }
+    .coverage-table th[aria-sort="ascending"]::after { content: " ▲"; color: var(--ink-2); font-size: 0.65rem; }
+    .coverage-table th[aria-sort="descending"]::after { content: " ▼"; color: var(--ink-2); font-size: 0.65rem; }
+    .coverage-table td { font-size: 0.84rem; color: var(--ink-2); }
+    .coverage-table td.mod { font-family: 'JetBrains Mono', monospace; color: var(--ink); font-size: 0.8rem; }
+    .coverage-table td.num { font-variant-numeric: tabular-nums; text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--ink); }
+    .coverage-bar {
+      display: inline-block;
+      height: 0.45rem;
+      background: var(--accent);
+      opacity: 0.7;
+      border-radius: 1px;
+      vertical-align: middle;
+      margin-left: 0.5rem;
+    }
+
+    /* ---------- Followup / Notes ---------- */
+    .followup-item {
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .followup-item:last-child { border-bottom: 0; }
+    .followup-item .question {
+      color: var(--ink);
+      font-weight: 500;
+      margin-top: 0.4rem;
+    }
+    .followup-item.resolved { opacity: 0.7; }
+
+    .empty {
+      padding: 3rem 1.5rem;
+      text-align: center;
+      color: var(--ink-3);
+      font-style: italic;
+    }
+
+    /* Skip-to-content & focus rings */
+    a:focus-visible, button:focus-visible, summary:focus-visible, .citation:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Anchored sections must clear the sticky toolbar when scrolled into view.
+       Toolbar is ~110-140px tall (title row + filter row + padding). Leave breathing room. */
+    [id^="bundle-"],
+    [id^="f-"],
+    #coverage,
+    #followup,
+    #notes {
+      scroll-margin-top: 150px;
+    }
+    html { scroll-padding-top: 150px; }  /* covers same-origin anchor link clicks */
+  </style>
+</head>
+<body class="font-sans antialiased">
+
+  <!-- =================== TOP : Diff Banner =================== -->
+  <div id="diff-banner" class="diff-banner hidden">
+    <div class="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4 text-sm flex-wrap">
+      <span class="font-serif-mark text-base" style="color: var(--ink-2)">Changed since</span>
+      <code id="diff-prev-sha" class="font-mono text-xs px-1.5 py-0.5" style="background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;"></code>
+      <span style="color: var(--ink-3)">→</span>
+      <code id="diff-new-sha" class="font-mono text-xs px-1.5 py-0.5" style="background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;"></code>
+      <div class="flex items-center gap-2 ml-auto flex-wrap" id="diff-chips"></div>
+    </div>
+  </div>
+
+  <!-- =================== TOP : Toolbar =================== -->
+  <header class="toolbar sticky top-0 z-30">
+    <div class="max-w-screen-2xl mx-auto px-6 py-3">
+      <div class="flex items-baseline gap-6 mb-3">
+        <h1 class="text-base font-medium tracking-tight" style="color: var(--ink)">
+          Risoluto Feature Spine
+        </h1>
+        <span class="font-serif-mark text-sm" style="color: var(--ink-3)">
+          <span id="head-describe">—</span> · <span id="head-date">—</span> · <span id="head-count">—</span> features
+        </span>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="relative flex-1 min-w-[220px] max-w-[480px]">
+          <input id="search"
+                 type="search"
+                 placeholder="Search descriptions, behaviors, symbols…"
+                 class="w-full text-sm px-3 py-1.5 border rounded font-mono"
+                 style="background: var(--paper-2); border-color: var(--rule-2); color: var(--ink);"
+                 autocomplete="off" spellcheck="false" />
+          <kbd class="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-1.5 py-0.5 font-mono"
+               style="color: var(--ink-3); background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;">/</kbd>
+        </div>
+        <div id="filter-pills" class="flex items-center gap-1.5 flex-wrap"></div>
+        <span id="result-count" class="text-xs ml-auto font-mono" style="color: var(--ink-3)"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- =================== MAIN : Rail + Content =================== -->
+  <div class="max-w-screen-2xl mx-auto px-6 py-8 grid gap-10" style="grid-template-columns: 220px minmax(0, 1fr);">
+
+    <!-- Left rail -->
+    <aside class="hidden lg:block">
+      <div class="sticky top-[120px]">
+        <div class="text-xs uppercase tracking-wider mb-3" style="color: var(--ink-3)">Bundles</div>
+        <nav id="bundle-rail" class="flex flex-col gap-0.5"></nav>
+        <div class="mt-8 text-xs uppercase tracking-wider mb-3" style="color: var(--ink-3)">Jump</div>
+        <nav class="flex flex-col gap-0.5">
+          <a href="#coverage"  class="rail-link">Coverage manifest</a>
+          <a href="#followup"  class="rail-link">Needs follow-up</a>
+          <a href="#notes"     class="rail-link">Analyst notes</a>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <main id="content" class="min-w-0">
+      <div id="bundles-host"></div>
+
+      <!-- ===== Coverage manifest ===== -->
+      <section id="coverage" class="mt-16">
+        <h2 class="text-xl font-medium mb-1">Coverage manifest</h2>
+        <p class="text-sm mb-5" style="color: var(--ink-3)">
+          One row per actual <code class="font-mono text-xs">src/&lt;module&gt;/</code> directory. Click a column to sort.
+        </p>
+        <div class="overflow-x-auto rounded border" style="border-color: var(--rule); background: var(--paper-2);">
+          <table class="coverage-table w-full">
+            <thead>
+              <tr>
+                <th data-key="module"        aria-sort="ascending">Module</th>
+                <th data-key="feature_count" aria-sort="none" style="text-align: right;">Features</th>
+                <th data-key="kind"          aria-sort="none">Kind</th>
+                <th data-key="note"          aria-sort="none">Note</th>
+              </tr>
+            </thead>
+            <tbody id="coverage-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Needs follow-up ===== -->
+      <section id="followup" class="mt-16">
+        <h2 class="text-xl font-medium mb-1">Needs follow-up</h2>
+        <p class="text-sm mb-5" style="color: var(--ink-3)">
+          Open questions that need a decision before the next roadmap cut.
+        </p>
+        <div id="followup-host"></div>
+      </section>
+
+      <!-- ===== Analyst notes ===== -->
+      <section id="notes" class="mt-16 mb-24">
+        <h2 class="text-xl font-medium mb-1">Analyst notes</h2>
+        <p class="text-sm mb-5" style="color: var(--ink-3)">
+          Observations that aren't feature entries but warrant attention.
+        </p>
+        <div id="notes-host"></div>
+      </section>
+
+      <footer class="text-xs pt-6 mt-12 border-t" style="border-color: var(--rule); color: var(--ink-3)">
+        Generated <span id="gen-at">—</span> ·
+        Commit <code class="font-mono" id="gen-sha">—</code> ·
+        Schema v<span id="schema-ver">—</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- =================== Data + Hydration =================== -->
+  <script id="payload" type="application/json">{{PAYLOAD_JSON}}</script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ---------- Parse payload ----------
+      const PAYLOAD = JSON.parse(document.getElementById('payload').textContent);
+      const IS_COLD_START = !PAYLOAD.previous_commit_sha;
+      const TOTAL_FEATURES = (PAYLOAD.features || []).length;
+
+      // ---------- Helpers ----------
+      const $  = (sel, root) => (root || document).querySelector(sel);
+      const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+      function el(tag, opts) {
+        const e = document.createElement(tag);
+        if (!opts) return e;
+        if (opts.class)   e.className = opts.class;
+        if (opts.text)    e.textContent = opts.text;
+        if (opts.html)    e.innerHTML = opts.html;
+        if (opts.attrs)   for (const k in opts.attrs) e.setAttribute(k, opts.attrs[k]);
+        if (opts.style)   for (const k in opts.style) e.style[k] = opts.style[k];
+        if (opts.children) for (const c of opts.children) if (c) e.appendChild(c);
+        return e;
+      }
+
+      function esc(s) {
+        if (s == null) return '';
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      // Render minimal markdown-in-strings: backticks → <code>
+      function md(s) {
+        if (!s) return '';
+        return esc(s).replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em]" style="background: var(--paper-3); padding: 0 0.25rem; border-radius: 2px;">$1</code>');
+      }
+
+      function shortSha(s) {
+        return s ? String(s).slice(0, 7) : '—';
+      }
+
+      function pluralize(n, one, many) {
+        return n === 1 ? one : (many || (one + 's'));
+      }
+
+      // ---------- Fill header ----------
+      $('#head-describe').textContent = PAYLOAD.git_describe || shortSha(PAYLOAD.commit_sha);
+      $('#head-date').textContent     = PAYLOAD.head_date || '—';
+      $('#head-count').textContent    = (PAYLOAD.summary && PAYLOAD.summary.total) || (PAYLOAD.features || []).length;
+      $('#gen-at').textContent        = PAYLOAD.generated_at || '—';
+      $('#gen-sha').textContent       = shortSha(PAYLOAD.commit_sha);
+      $('#schema-ver').textContent    = PAYLOAD.schema_version || '1.0';
+
+      // ---------- Bundle rail ----------
+      const bundleCounts = {};
+      const bundleHasChange = {};
+      (PAYLOAD.features || []).forEach(f => {
+        bundleCounts[f.bundle] = (bundleCounts[f.bundle] || 0) + 1;
+        if (f.changed_since_previous) bundleHasChange[f.bundle] = true;
+      });
+      (PAYLOAD.removed_features || []).forEach(f => {
+        bundleHasChange[f.bundle] = true;
+      });
+
+      const railHost = $('#bundle-rail');
+      (PAYLOAD.bundles || []).forEach(b => {
+        if (!bundleCounts[b] && !bundleHasChange[b]) return;
+        // Suppress change-dots on cold start: every bundle has changes, so the dot adds noise.
+        const showDot = bundleHasChange[b] && !IS_COLD_START;
+        const a = el('a', {
+          attrs: { href: '#bundle-' + slug(b) },
+          class: 'rail-link' + (showDot ? ' has-change' : ''),
+          children: [
+            el('span', { text: b }),
+            el('span', { class: 'count', text: String(bundleCounts[b] || 0) }),
+          ],
+        });
+        railHost.appendChild(a);
+      });
+
+      function slug(s) {
+        return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      }
+
+      // ---------- Diff banner ----------
+      const added    = (PAYLOAD.features || []).filter(f => f.changed_since_previous && f.changed_since_previous.kind === 'added');
+      const modified = (PAYLOAD.features || []).filter(f => f.changed_since_previous && f.changed_since_previous.kind === 'modified');
+      const removed  = PAYLOAD.removed_features || [];
+
+      if (IS_COLD_START && TOTAL_FEATURES > 0) {
+        // Initial cut: show a different banner because "X added" against nothing isn't a diff.
+        $('#diff-banner').classList.remove('hidden');
+        const inner = $('#diff-banner > div');
+        inner.innerHTML = '';
+        inner.appendChild(el('span', {
+          class: 'font-serif-mark text-base',
+          style: { color: 'var(--ink-2)' },
+          text: 'Initial spine cut at',
+        }));
+        inner.appendChild(el('code', {
+          class: 'font-mono text-xs px-1.5 py-0.5',
+          style: { background: 'var(--paper)', border: '1px solid var(--rule)', 'border-radius': '3px' },
+          text: shortSha(PAYLOAD.commit_sha),
+        }));
+        inner.appendChild(el('span', {
+          class: 'text-sm',
+          style: { color: 'var(--ink-3)' },
+          text: '— ' + TOTAL_FEATURES + ' ' + pluralize(TOTAL_FEATURES, 'feature') + ' recorded for the first time. Diff highlighting will activate on the next run.',
+        }));
+      } else if (added.length || modified.length || removed.length) {
+        $('#diff-banner').classList.remove('hidden');
+        $('#diff-prev-sha').textContent = shortSha(PAYLOAD.previous_commit_sha);
+        $('#diff-new-sha').textContent  = shortSha(PAYLOAD.commit_sha);
+
+        const chipsHost = $('#diff-chips');
+        function chip(label, n, kind) {
+          if (!n) return null;
+          const b = el('button', {
+            class: 'badge badge-' + kind + ' cursor-pointer',
+            attrs: { 'data-jump-kind': kind, type: 'button', title: 'Scroll to first ' + kind + ' entry' },
+            html: '<span style="font-variant-numeric: tabular-nums;">' + n + '</span>&nbsp;<span>' + label + '</span>',
+          });
+          return b;
+        }
+        const c1 = chip('Added',    added.length,    'added');
+        const c2 = chip('Modified', modified.length, 'modified');
+        const c3 = chip('Removed',  removed.length,  'removed');
+        if (c1) chipsHost.appendChild(c1);
+        if (c2) chipsHost.appendChild(c2);
+        if (c3) chipsHost.appendChild(c3);
+
+        chipsHost.addEventListener('click', e => {
+          const t = e.target.closest('[data-jump-kind]');
+          if (!t) return;
+          const kind = t.dataset.jumpKind;
+          let firstId = null;
+          if (kind === 'added')    firstId = added[0] && added[0].id;
+          if (kind === 'modified') firstId = modified[0] && modified[0].id;
+          if (kind === 'removed')  firstId = removed[0] && removed[0].id;
+          if (firstId) {
+            const target = document.getElementById('f-' + firstId);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      }
+
+      // ---------- Filter pills ----------
+      // The "Changed" filter only matters when there's actually a delta to filter on.
+      // The "Has follow-up" heuristic was weak (most followups are about the skill,
+      // not specific features) so we removed it for now.
+      const ALL_FILTERS = {
+        changed:         { label: 'Changed',         test: f => !!f.changed_since_previous,    showWhen: () => !IS_COLD_START && (added.length + modified.length) < TOTAL_FEATURES },
+        high:            { label: 'High confidence', test: f => f.confidence === 'high',       showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        medium:          { label: 'Medium confidence', test: f => f.confidence === 'medium',   showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        low:             { label: 'Low confidence',  test: f => f.confidence === 'low',        showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        user_observable: { label: 'User-observable', test: f => f.tier === 'user-observable',  showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        backend:         { label: 'Backend surface', test: f => f.tier === 'backend-surface',  showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+      };
+
+      // Compute counts and only render pills that would actually discriminate the view.
+      const FILTERS = {};
+      Object.keys(ALL_FILTERS).forEach(key => {
+        const def = ALL_FILTERS[key];
+        const count = (PAYLOAD.features || []).filter(def.test).length;
+        if (!def.showWhen(count)) return;
+        FILTERS[key] = { ...def, count };
+      });
+
+      const activeFilters = new Set();
+      const pillsHost = $('#filter-pills');
+      Object.keys(FILTERS).forEach(key => {
+        const f = FILTERS[key];
+        const pill = el('button', {
+          class: 'pill',
+          attrs: { type: 'button', 'aria-pressed': 'false', 'data-filter': key, title: 'Toggle: ' + f.label + ' (' + f.count + ' of ' + TOTAL_FEATURES + ')' },
+          html: '<span>' + esc(f.label) + '</span><span class="count">' + f.count + '</span>',
+        });
+        pill.addEventListener('click', () => {
+          if (activeFilters.has(key)) {
+            activeFilters.delete(key);
+            pill.setAttribute('aria-pressed', 'false');
+          } else {
+            activeFilters.add(key);
+            pill.setAttribute('aria-pressed', 'true');
+          }
+          renderFeatures();
+        });
+        pillsHost.appendChild(pill);
+      });
+
+      // If no discriminating filters survived, show a quiet hint instead of an empty pill row.
+      if (Object.keys(FILTERS).length === 0) {
+        pillsHost.appendChild(el('span', {
+          class: 'font-serif-mark text-xs',
+          style: { color: 'var(--ink-3)' },
+          text: IS_COLD_START
+            ? 'Filters activate on the next run.'
+            : 'All features share the same confidence / tier — no useful filters this run.',
+        }));
+      }
+
+      // Kept for the Needs follow-up section's data, but no longer used as a filter axis.
+      const followups = PAYLOAD.needs_followup || [];
+
+      // ---------- Search ----------
+      const searchInput = $('#search');
+      let searchTerm = '';
+      searchInput.addEventListener('input', e => {
+        searchTerm = e.target.value.trim().toLowerCase();
+        renderFeatures();
+      });
+      // Press "/" anywhere to focus search
+      document.addEventListener('keydown', e => {
+        if (e.key === '/' && document.activeElement !== searchInput && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+        }
+        if (e.key === 'Escape' && document.activeElement === searchInput) {
+          searchInput.value = '';
+          searchTerm = '';
+          renderFeatures();
+        }
+      });
+
+      // ---------- Feature rendering ----------
+      const bundlesHost = $('#bundles-host');
+
+      function matchesFilters(f) {
+        for (const key of activeFilters) {
+          if (!FILTERS[key].test(f)) return false;
+        }
+        return true;
+      }
+
+      function matchesSearch(f) {
+        if (!searchTerm) return true;
+        const haystack = [
+          f.name, f.description, f.how_it_works,
+          ...(f.observable_behaviors || []),
+          ...(f.citations || []).map(c => (c.path || '') + ' ' + (c.symbol || '')),
+        ].join(' ').toLowerCase();
+        return haystack.includes(searchTerm);
+      }
+
+      function highlight(text, term) {
+        if (!term) return md(text);
+        const escText = md(text); // already escaped
+        const reTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return escText.replace(new RegExp('(' + reTerm + ')', 'gi'), '<mark>$1</mark>');
+      }
+
+      function renderCitation(c) {
+        const lines = c.start_line === c.end_line ? ('L' + c.start_line) : ('L' + c.start_line + '-' + c.end_line);
+        const text = (c.path || '') + ':' + lines + ' — ' + (c.symbol || '');
+        const elx = el('span', {
+          class: 'citation',
+          attrs: { tabindex: '0', role: 'button', 'aria-label': 'Copy citation: ' + text, 'data-copy': text },
+          html:
+            '<span>' + esc(c.path || '') + '</span>' +
+            '<span class="lines">:' + lines + '</span>' +
+            '<span> — </span>' +
+            '<span class="sym">' + esc(c.symbol || '') + '</span>' +
+            (c.kind ? '<span class="kind">' + esc(c.kind) + '</span>' : ''),
+        });
+        elx.addEventListener('click', () => copyToClipboard(text, elx));
+        elx.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyToClipboard(text, elx); }
+        });
+        return elx;
+      }
+
+      function copyToClipboard(text, target) {
+        const done = () => {
+          target.classList.add('copied');
+          setTimeout(() => target.classList.remove('copied'), 700);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, done);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); } catch (_) {}
+          document.body.removeChild(ta);
+          done();
+        }
+      }
+
+      function renderFeatureCard(f) {
+        const change = f.changed_since_previous;
+        // On cold start every card would get a "New" badge — pure noise. Suppress.
+        const badge = (IS_COLD_START)
+          ? ''
+          : change && change.kind === 'added'
+          ? '<span class="badge badge-added">New</span>'
+          : change && change.kind === 'modified'
+          ? '<span class="badge badge-modified">Modified</span>'
+          : '';
+
+        const card = el('article', {
+          class: 'feature-card',
+          attrs: { id: 'f-' + f.id, 'data-tier': f.tier || 'user-observable' },
+        });
+
+        // Header row: name + badge + shipped chip
+        const header = el('div', { class: 'flex items-baseline gap-3 mb-1.5 flex-wrap' });
+        header.appendChild(el('h3', {
+          class: 'text-base font-medium leading-snug',
+          html: highlight(f.name, searchTerm),
+        }));
+        if (badge) header.appendChild(el('span', { html: badge }));
+        if (f.shipped && f.shipped.date) {
+          header.appendChild(el('span', {
+            class: 'ml-auto text-xs font-mono',
+            style: { color: 'var(--ink-3)' },
+            text: f.shipped.date,
+          }));
+        }
+        card.appendChild(header);
+
+        // Description
+        if (f.description) {
+          card.appendChild(el('p', {
+            class: 'text-sm leading-relaxed',
+            style: { color: 'var(--ink-2)' },
+            html: highlight(f.description, searchTerm),
+          }));
+        }
+
+        // How it works (subtle)
+        if (f.how_it_works) {
+          card.appendChild(el('p', {
+            class: 'text-sm leading-relaxed mt-2',
+            style: { color: 'var(--ink-2)' },
+            html: highlight(f.how_it_works, searchTerm),
+          }));
+        }
+
+        // Behaviors (collapsible)
+        if ((f.observable_behaviors || []).length) {
+          const det = el('details', { class: 'mt-3' });
+          det.appendChild(el('summary', { text: 'Observable behaviors (' + f.observable_behaviors.length + ')' }));
+          const ul = el('ul', { class: 'mt-1.5 space-y-1 pl-5 text-sm', style: { color: 'var(--ink-2)' } });
+          f.observable_behaviors.forEach(b => {
+            ul.appendChild(el('li', { class: 'list-disc', html: highlight(b, searchTerm) }));
+          });
+          det.appendChild(ul);
+          card.appendChild(det);
+        }
+
+        // Citations
+        if ((f.citations || []).length) {
+          const wrap = el('div', { class: 'mt-3 flex flex-wrap gap-1.5' });
+          f.citations.forEach(c => wrap.appendChild(renderCitation(c)));
+          card.appendChild(wrap);
+        }
+
+        // Meta row: shipped source + issues
+        const metaBits = [];
+        if (f.shipped && f.shipped.source) {
+          metaBits.push('<span style="color: var(--ink-3)">Shipped:</span> ' + esc(f.shipped.source));
+        }
+        if ((f.issues || []).length) {
+          const issueLinks = f.issues.map(n =>
+            '<a href="https://github.com/risolutohq/risoluto-research/issues/' + n + '" target="_blank" rel="noopener" class="hover:underline" style="color: var(--accent)">#' + n + '</a>'
+          ).join(', ');
+          metaBits.push('<span style="color: var(--ink-3)">Issues:</span> ' + issueLinks);
+        }
+        if (metaBits.length) {
+          card.appendChild(el('div', {
+            class: 'mt-3 pt-2 text-xs border-t',
+            style: { 'border-color': 'var(--rule)', color: 'var(--ink-3)' },
+            html: metaBits.join(' &nbsp;·&nbsp; '),
+          }));
+        }
+
+        return card;
+      }
+
+      function renderRemovedCard(rf) {
+        const card = el('article', {
+          class: 'feature-card removed',
+          attrs: { id: 'f-' + rf.id, 'data-tier': 'removed' },
+        });
+        const header = el('div', { class: 'flex items-baseline gap-3 mb-1.5 flex-wrap' });
+        header.appendChild(el('h3', { class: 'text-base font-medium leading-snug line-through', html: highlight(rf.name, searchTerm) }));
+        header.appendChild(el('span', { html: '<span class="badge badge-removed">Removed</span>' }));
+        if (rf.removed_at) {
+          header.appendChild(el('span', { class: 'ml-auto text-xs font-mono', style: { color: 'var(--ink-3)' }, text: rf.removed_at.slice(0, 10) }));
+        }
+        card.appendChild(header);
+        if (rf.reason) {
+          card.appendChild(el('p', { class: 'text-sm', style: { color: 'var(--ink-2)' }, html: md(rf.reason) }));
+        }
+        card.appendChild(el('div', {
+          class: 'mt-2 text-xs font-mono',
+          style: { color: 'var(--ink-3)' },
+          text: 'Removed in ' + shortSha(rf.removed_in_sha),
+        }));
+        return card;
+      }
+
+      function renderFeatures() {
+        bundlesHost.innerHTML = '';
+        let total = 0;
+
+        // If filters/search are active but every feature still passes, that's the "I clicked
+        // but nothing happened" trap. Surface it explicitly above the bundles.
+        const hasActiveFilters = activeFilters.size > 0 || !!searchTerm;
+        const matchedAll = (PAYLOAD.features || []).every(f => matchesFilters(f) && matchesSearch(f));
+        if (hasActiveFilters && matchedAll && TOTAL_FEATURES > 0) {
+          bundlesHost.appendChild(el('div', {
+            class: 'mb-6 px-4 py-3 text-sm',
+            style: {
+              background: 'var(--paper-3)',
+              border: '1px solid var(--rule)',
+              'border-radius': '4px',
+              color: 'var(--ink-2)',
+            },
+            html: '<span class="font-serif-mark" style="color: var(--ink-3)">Heads up:</span> ' +
+                  'every feature matches the active filter' + (activeFilters.size > 1 ? 's' : '') +
+                  '. The view is identical to no-filter. Toggle off or pick a more specific filter.',
+          }));
+        }
+
+        (PAYLOAD.bundles || []).forEach(b => {
+          const slugged = slug(b);
+          const itemsInBundle = (PAYLOAD.features || [])
+            .filter(f => f.bundle === b)
+            .filter(matchesFilters)
+            .filter(matchesSearch);
+          const removedInBundle = (PAYLOAD.removed_features || [])
+            .filter(rf => rf.bundle === b)
+            .filter(rf => activeFilters.size === 0 || activeFilters.has('changed'))
+            .filter(rf => !searchTerm || (rf.name || '').toLowerCase().includes(searchTerm) || (rf.reason || '').toLowerCase().includes(searchTerm));
+
+          if (!itemsInBundle.length && !removedInBundle.length) return;
+
+          const section = el('section', { attrs: { id: 'bundle-' + slugged }, class: 'mb-12' });
+          const h2 = el('div', { class: 'flex items-baseline gap-3 mb-4 pb-2 border-b', style: { 'border-color': 'var(--rule-2)' } });
+          h2.appendChild(el('h2', { class: 'text-lg font-medium tracking-tight', text: b }));
+          h2.appendChild(el('span', {
+            class: 'font-mono text-xs',
+            style: { color: 'var(--ink-3)' },
+            text: itemsInBundle.length + ' ' + pluralize(itemsInBundle.length, 'feature'),
+          }));
+          section.appendChild(h2);
+
+          const list = el('div', { class: 'space-y-4' });
+          itemsInBundle.forEach(f => list.appendChild(renderFeatureCard(f)));
+          removedInBundle.forEach(rf => list.appendChild(renderRemovedCard(rf)));
+          section.appendChild(list);
+
+          bundlesHost.appendChild(section);
+          total += itemsInBundle.length + removedInBundle.length;
+        });
+
+        if (!total) {
+          bundlesHost.appendChild(el('div', { class: 'empty', text: 'No features match your search or filters.' }));
+        }
+        $('#result-count').textContent = total ? (total + ' of ' + TOTAL_FEATURES + ' shown') : '';
+      }
+
+      renderFeatures();
+
+      // ---------- Coverage table ----------
+      const coverageBody = $('#coverage-body');
+      const coverage = (PAYLOAD.coverage || []).slice();
+      const maxFC = coverage.reduce((m, r) => Math.max(m, r.feature_count || 0), 0) || 1;
+
+      function renderCoverage() {
+        coverageBody.innerHTML = '';
+        coverage.forEach(r => {
+          const tr = el('tr');
+          tr.appendChild(el('td', { class: 'mod', text: r.module }));
+          const barWidth = Math.round(((r.feature_count || 0) / maxFC) * 80);
+          tr.appendChild(el('td', {
+            class: 'num',
+            html: '<span>' + (r.feature_count || 0) + '</span>' +
+                  (r.feature_count ? '<span class="coverage-bar" style="width: ' + barWidth + 'px;"></span>' : ''),
+            style: { 'text-align': 'right' },
+          }));
+          tr.appendChild(el('td', { text: r.kind || '' }));
+          tr.appendChild(el('td', { html: md(r.note || '') }));
+          coverageBody.appendChild(tr);
+        });
+      }
+      renderCoverage();
+
+      // Column sort
+      let sortKey = 'module';
+      let sortDir = 1;
+      $$('.coverage-table th').forEach(th => {
+        th.addEventListener('click', () => {
+          const k = th.dataset.key;
+          if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = 1; }
+          $$('.coverage-table th').forEach(h => h.setAttribute('aria-sort', 'none'));
+          th.setAttribute('aria-sort', sortDir === 1 ? 'ascending' : 'descending');
+          coverage.sort((a, b) => {
+            const av = a[k] == null ? '' : a[k];
+            const bv = b[k] == null ? '' : b[k];
+            if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir;
+            return String(av).localeCompare(String(bv)) * sortDir;
+          });
+          renderCoverage();
+        });
+      });
+
+      // ---------- Needs follow-up ----------
+      const followupHost = $('#followup-host');
+      if (followups.length) {
+        followups.forEach(fu => {
+          const item = el('div', { class: 'followup-item' + (fu.status === 'resolved' ? ' resolved' : '') });
+          item.appendChild(el('div', {
+            class: 'text-sm font-medium leading-snug',
+            html: md(fu.title || ''),
+          }));
+          if (fu.body) {
+            item.appendChild(el('p', {
+              class: 'text-sm mt-1 leading-relaxed',
+              style: { color: 'var(--ink-2)' },
+              html: md(fu.body),
+            }));
+          }
+          if (fu.question) {
+            item.appendChild(el('div', {
+              class: 'question text-sm',
+              html: '<span class="font-serif-mark" style="color: var(--ink-3)">Question:</span> ' + md(fu.question),
+            }));
+          }
+          const meta = [];
+          if (fu.first_raised_sha) meta.push('First raised: <code class="font-mono">' + shortSha(fu.first_raised_sha) + '</code>');
+          if (fu.status === 'resolved' && fu.resolved_in_sha) meta.push('Resolved: <code class="font-mono">' + shortSha(fu.resolved_in_sha) + '</code>');
+          if (meta.length) {
+            item.appendChild(el('div', {
+              class: 'mt-2 text-xs font-mono',
+              style: { color: 'var(--ink-3)' },
+              html: meta.join(' &nbsp;·&nbsp; '),
+            }));
+          }
+          followupHost.appendChild(item);
+        });
+      } else {
+        followupHost.appendChild(el('div', { class: 'empty', text: 'No open follow-ups.' }));
+      }
+
+      // ---------- Analyst notes ----------
+      const notesHost = $('#notes-host');
+      const NOTES_SECTIONS = [
+        ['readme_vs_code_drift',    'README / spec vs. code drift'],
+        ['net_new_undocumented',    'Net-new features not surfaced in existing docs'],
+        ['wiring_gaps',             'Wiring gaps / bundle-fit ambiguities'],
+        ['bundle_fit_decisions',    'Bundle-fit decisions made in this spine'],
+        ['missing_worth_investigation', 'Missing items worth future investigation'],
+      ];
+      const notes = PAYLOAD.analyst_notes || {};
+      let anyNote = false;
+      NOTES_SECTIONS.forEach(([key, label]) => {
+        const arr = notes[key] || [];
+        if (!arr.length) return;
+        anyNote = true;
+        const sec = el('div', { class: 'mb-7' });
+        sec.appendChild(el('h3', { class: 'text-sm font-medium mb-2 uppercase tracking-wider', style: { color: 'var(--ink-3)' }, text: label }));
+        const ul = el('ul', { class: 'space-y-1.5 text-sm pl-5' });
+        arr.forEach(n => {
+          ul.appendChild(el('li', { class: 'list-disc leading-relaxed', style: { color: 'var(--ink-2)' }, html: md(n.bullet || '') }));
+        });
+        sec.appendChild(ul);
+        notesHost.appendChild(sec);
+      });
+      if (!anyNote) notesHost.appendChild(el('div', { class: 'empty', text: 'No analyst notes recorded.' }));
+
+      // ---------- Active-bundle in rail (IntersectionObserver) ----------
+      const railLinks = $$('#bundle-rail .rail-link');
+      const railMap = {};
+      railLinks.forEach(a => {
+        const id = a.getAttribute('href').slice(1);
+        railMap[id] = a;
+      });
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(en => {
+          const link = railMap[en.target.id];
+          if (!link) return;
+          if (en.isIntersecting) {
+            railLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+      $$('#bundles-host > section').forEach(s => io.observe(s));
+
+    })();
+  </script>
+</body>
+</html>

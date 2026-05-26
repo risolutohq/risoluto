@@ -1,0 +1,28 @@
+import type { WebhookInboxStats as PersistedWebhookInboxStats } from "../persistence/sqlite/webhook-inbox.js";
+
+/**
+ * Shared types for the webhook integration module.
+ *
+ * These are the contracts that other modules (orchestrator, HTTP server,
+ * operator surfaces) depend on. The health tracker implements the
+ * state machine that produces these values.
+ */
+
+export type WebhookHealthStatus = "connected" | "degraded" | "disconnected";
+
+export interface WebhookHealthStats {
+  deliveriesReceived: number;
+  lastDeliveryAt: string | null;
+  lastEventType: string | null;
+}
+
+export interface WebhookHealthState {
+  status: WebhookHealthStatus;
+  effectiveIntervalMs: number;
+  stats: WebhookHealthStats;
+  inboxStats?: PersistedWebhookInboxStats;
+  lastDeliveryAt: string | null;
+  lastEventType: string | null;
+}
+
+export type { WebhookInboxStats } from "../persistence/sqlite/webhook-inbox.js";

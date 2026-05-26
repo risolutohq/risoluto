@@ -1,0 +1,194 @@
+/**
+ * Event map for the Risoluto orchestrator event bus.
+ *
+ * Each key is a dot-delimited channel name; the value is the typed payload
+ * subscribers receive. Channels mirror the categories already flowing through
+ * the RecentEvent ring buffer so the bus is a superset of existing telemetry.
+ */
+
+export interface RisolutoEventMap {
+  /** A host-side Codex control-plane notification was received. */
+  "codex.event": {
+    method: string;
+    params: Record<string, unknown>;
+    receivedAt: string;
+  };
+
+  /** A host-side Codex server request is awaiting operator input. */
+  "codex.server_request": {
+    requestId: string;
+    method: string;
+    threadId: string | null;
+    turnId: string | null;
+    params: Record<string, unknown>;
+    createdAt: string;
+  };
+
+  /** A notification was persisted to the operator timeline. */
+  "notification.created": { notification: import("./notification-types.js").NotificationRecord };
+
+  /** A notification was updated after delivery or read-state changes. */
+  "notification.updated": { notification: import("./notification-types.js").NotificationRecord };
+
+  /** A Workflow Run was accepted as the durable execution primitive. */
+  "workflow_run.accepted": {
+    workflowRunId: string;
+    source: "cli" | "linear";
+    title: string;
+    workflowDefinitionId: string;
+  };
+
+  /** A Workflow Run worker started execution. */
+  "workflow_run.started": {
+    workflowRun: import("./types/workflow-run.js").WorkflowRunReference;
+    attempt: number | null;
+  };
+
+  /** A Workflow Run was queued for later execution. */
+  "workflow_run.queued": {
+    workflowRunId: string;
+    identifier: string;
+    state: string | null;
+    priority: number | null;
+  };
+
+  /** A Workflow Run was detected as stalled. */
+  "workflow_run.stalled": {
+    workflowRunId: string;
+    identifier: string;
+    reason: string;
+  };
+
+  /** A Workflow Run worker failed before reaching a terminal outcome. */
+  "workflow_run.worker_failed": {
+    workflowRunId: string;
+    identifier: string;
+    error: string;
+  };
+
+  /** A Workflow Run workspace lifecycle event occurred. */
+  "workflow_run.workspace_event": {
+    workflowRunId: string;
+    identifier: string;
+    status: string;
+  };
+
+  /** A raw Workflow Run agent event was forwarded from the worker stream. */
+  "workflow_run.agent_event": {
+    workflowRunId: string;
+    identifier: string;
+    type: string;
+    message: string;
+    sessionId: string | null;
+    timestamp: string;
+    content: string | null;
+  };
+
+  /** A Workflow Run reached an operator-visible terminal outcome. */
+  "workflow_run.completed": {
+    workflowRun: import("./types/workflow-run.js").WorkflowRunReference;
+    outcome: "completed" | "paused" | "failed" | "cancelled" | "timed_out" | "stalled";
+    attempt: number | null;
+  };
+
+  /** An agent worker was launched for an issue. */
+  "issue.started": { issueId: string; identifier: string; attempt: number | null };
+
+  /** An agent worker finished (any terminal outcome). */
+  "issue.completed": { issueId: string; identifier: string; outcome: string };
+
+  /** An agent worker was detected as stalled and killed. */
+  "issue.stalled": { issueId: string; identifier: string; reason: string };
+
+  /** An issue was queued for later processing. */
+  "issue.queued": { issueId: string; identifier: string };
+
+  /** A worker failure occurred (crash, timeout, etc.). */
+  "worker.failed": { issueId: string; identifier: string; error: string };
+
+  /** A model selection was updated at runtime. */
+  "model.updated": { identifier: string; model: string; source: string };
+
+  /**
+   * A per-subsystem health probe transitioned between status levels
+   * (ok ↔ slow ↔ degraded ↔ down). Subscribers can use this to alert
+   * operators or persist forensic transitions outside the snapshot.
+   */
+  "health.transition": {
+    probe: import("./types/health.js").HealthProbeId;
+    previousStatus: import("./types/health.js").HealthCheckStatus | "unknown";
+    currentStatus: import("./types/health.js").HealthCheckStatus;
+    failureKind: import("./types/health.js").HealthFailureKind;
+    detail: string;
+    checkedAt: string;
+  };
+
+  /** A workspace lifecycle event (preparing, ready, failed). */
+  "workspace.event": { issueId: string; identifier: string; status: string };
+
+  /** A raw agent event forwarded from the worker stream. */
+  "agent.event": {
+    issueId: string;
+    identifier: string;
+    type: string;
+    message: string;
+    sessionId: string | null;
+    timestamp: string;
+    content: string | null;
+  };
+
+  /** A polling cycle completed. */
+  "poll.complete": { timestamp: string; issueCount: number };
+
+  /** A system-level error not tied to a specific issue. */
+  "system.error": { message: string; context?: Record<string, unknown> };
+
+  /** A tracked pull request was merged on GitHub. */
+  "pr.merged": { issueId: string; url: string; mergedAt: string; mergeCommitSha: string | null };
+
+  /** A tracked pull request was closed without merging. */
+  "pr.closed": { issueId: string; url: string };
+
+  /** A config/secret/template mutation was logged. */
+  "audit.mutation": {
+    tableName: string;
+    key: string;
+    path: string | null;
+    operation: string;
+    actor: string;
+    timestamp: string;
+  };
+
+  /** A verified webhook delivery was received from Linear. */
+  "webhook.received": { eventType: string; timestamp: string };
+
+  /** The webhook health state machine transitioned between statuses. */
+  "webhook.health_changed": {
+    oldStatus: import("../webhook/types.js").WebhookHealthStatus;
+    newStatus: import("../webhook/types.js").WebhookHealthStatus;
+  };
+
+  /** An automation run started. */
+  "automation.run.started": {
+    runId: string;
+    automationName: string;
+    mode: import("./notification-types.js").AutomationMode;
+    trigger: "schedule" | "manual";
+  };
+
+  /** An automation run completed or was skipped. */
+  "automation.run.completed": {
+    runId: string;
+    automationName: string;
+    mode: import("./notification-types.js").AutomationMode;
+    status: "completed" | "skipped";
+  };
+
+  /** An automation run failed. */
+  "automation.run.failed": {
+    runId: string;
+    automationName: string;
+    mode: import("./notification-types.js").AutomationMode;
+    error: string;
+  };
+}

@@ -1,0 +1,13 @@
+FROM ubuntu:24.04
+
+# Node.js 22 from nodesource + bubblewrap ≥0.9.0 (required by Codex sandbox --argv0)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends \
+      nodejs bubblewrap git jq ripgrep && \
+    npm install -g @openai/codex@latest && \
+    rm -rf /var/lib/apt/lists/*
+
+# Risoluto will supply --user $(id -u):$(id -g) at run time
+WORKDIR /workspace
