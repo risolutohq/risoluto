@@ -232,7 +232,7 @@ Goal: take an idea from "interesting cluster" to "Linear Project + greppable PRD
   - On exit: writes `## Why us / why now` and `## Smallest shippable shape` into the idea README; offers to flip backlog status `idea → ready`
   - **Smoke:** given an `<idea-slug>`, runs the grill loop and writes `## Why us / why now` and `## Smallest shippable shape` into the idea README. Idempotent — re-running re-grills, operator keeps iterating.
 - [ ] **3.1.5** Operator runs `/grill-with-docs` (generic, unchanged) between `/risoluto-grill` and `/to-prd` whenever the idea touches existing docs/ADRs. Output: updated `docs/*.md` and/or a new ADR under `docs/adr/`. No new skill — this step exists only so the TL;DR loop maps to the build phases.
-- [ ] **3.2** Fork `~/.claude/skills/to-prd/` to `skills/risoluto-to-prd/` (keep the global skill generic):
+- [x] **3.2** Fork `~/.claude/skills/to-prd/` to `skills/risoluto-to-prd/` (keep the global skill generic): _(f9980f4 on `feat/risoluto-to-prd-3.2`)_
   - Switch to Linear MCP transport
   - Write `docs/prds/<slug>.md` with frontmatter (`linear_project`, `source_idea`, `synced_at`, `status`)
   - Create matching Linear Project; description = PRD body
