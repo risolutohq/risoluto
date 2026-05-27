@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { getStateMachine } from "../state/topology.js";
+import { canTransitionWorkflowState, listWorkflowStateStages } from "../state/topology.js";
 import type { ConfigStore } from "../config/store.js";
 import type { OrchestratorPort } from "../orchestrator/port.js";
 
@@ -16,12 +16,12 @@ export function handleGetTransitions(deps: TransitionsDeps, _req: Request, res: 
   }
 
   const config = deps.configStore.getConfig();
-  const machine = getStateMachine(config);
-
-  const stages = machine.getStages();
+  const stages = listWorkflowStateStages(config);
   const transitions: Record<string, string[]> = {};
   for (const from of stages) {
-    transitions[from.key] = stages.filter((to) => machine.canTransition(from.key, to.key)).map((to) => to.key);
+    transitions[from.key] = stages
+      .filter((to) => canTransitionWorkflowState(from.key, to.key, config))
+      .map((to) => to.key);
   }
 
   res.json({ transitions });

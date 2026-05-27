@@ -4,30 +4,23 @@ import type { Request } from "express";
 import { makeMockResponse } from "../helpers.js";
 import { handleGetTransitions } from "../../src/http/transitions-api.js";
 
-const machineMocks = vi.hoisted(() => ({
-  constructedWith: vi.fn(),
-  getStages: vi.fn(),
-  canTransition: vi.fn(),
+const topologyMocks = vi.hoisted(() => ({
+  listWorkflowStateStages: vi.fn(),
+  canTransitionWorkflowState: vi.fn(),
 }));
 
-vi.mock("../../src/state/machine.js", () => ({
-  StateMachine: class MockStateMachine {
-    constructor(config: unknown) {
-      machineMocks.constructedWith(config);
-    }
-
-    getStages(): TestStage[] {
-      return machineMocks.getStages();
-    }
-
-    canTransition(from: string, to: string): boolean {
-      return machineMocks.canTransition(from, to);
-    }
-  },
+vi.mock("../../src/state/topology.js", () => ({
+  canTransitionWorkflowState: topologyMocks.canTransitionWorkflowState,
+  listWorkflowStateStages: topologyMocks.listWorkflowStateStages,
 }));
 
 type TransitionsDeps = Parameters<typeof handleGetTransitions>[0];
-type TestStage = { key: string; terminal: boolean };
+type TestStage = {
+  key: string;
+  label: string;
+  kind: "backlog" | "active" | "gate" | "todo" | "terminal" | "other";
+  terminal: boolean;
+};
 
 function makeRequest(): Request {
   const req: Partial<Request> = { get: vi.fn() };
@@ -45,8 +38,8 @@ function makeDeps(configStore?: { getConfig: () => unknown }): TransitionsDeps {
 }
 
 function setMockMachine(stages: TestStage[], allowedTransitions: Record<string, string[]>): void {
-  machineMocks.getStages.mockReturnValue(stages);
-  machineMocks.canTransition.mockImplementation((from: string, to: string) => {
+  topologyMocks.listWorkflowStateStages.mockReturnValue(stages);
+  topologyMocks.canTransitionWorkflowState.mockImplementation((from: string, to: string) => {
     return allowedTransitions[from]?.includes(to) ?? false;
   });
 }
@@ -54,9 +47,8 @@ function setMockMachine(stages: TestStage[], allowedTransitions: Record<string, 
 describe("handleGetTransitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    machineMocks.constructedWith.mockReset();
-    machineMocks.getStages.mockReset();
-    machineMocks.canTransition.mockReset();
+    topologyMocks.listWorkflowStateStages.mockReset();
+    topologyMocks.canTransitionWorkflowState.mockReset();
   });
 
   it("returns empty transitions when configStore is not configured", () => {
@@ -66,7 +58,7 @@ describe("handleGetTransitions", () => {
 
     expect(res._status).toBe(200);
     expect(res._body).toEqual({ transitions: {} });
-    expect(machineMocks.constructedWith).not.toHaveBeenCalled();
+    expect(topologyMocks.listWorkflowStateStages).not.toHaveBeenCalled();
   });
 
   it("builds transitions from tracker activeStates and terminalStates when stateMachine config is absent", () => {
@@ -84,9 +76,9 @@ describe("handleGetTransitions", () => {
 
     setMockMachine(
       [
-        { key: "todo", terminal: false },
-        { key: "in progress", terminal: false },
-        { key: "done", terminal: true },
+        { key: "todo", label: "Todo", kind: "todo", terminal: false },
+        { key: "in progress", label: "In Progress", kind: "active", terminal: false },
+        { key: "done", label: "Done", kind: "terminal", terminal: true },
       ],
       {
         todo: ["todo", "in progress"],
@@ -98,10 +90,8 @@ describe("handleGetTransitions", () => {
     handleGetTransitions(makeDeps(configStore), makeRequest(), res);
 
     expect(configStore.getConfig).toHaveBeenCalledTimes(1);
-    expect(machineMocks.constructedWith).toHaveBeenCalledWith({
-      activeStates: ["Todo", "In Progress"],
-      terminalStates: ["Done", "Canceled"],
-    });
+    expect(topologyMocks.listWorkflowStateStages).toHaveBeenCalledWith(config);
+    expect(topologyMocks.canTransitionWorkflowState).toHaveBeenCalledWith("todo", "todo", config);
     expect(res._body).toEqual({
       transitions: {
         todo: ["todo", "in progress"],
@@ -137,9 +127,9 @@ describe("handleGetTransitions", () => {
 
     setMockMachine(
       [
-        { key: "backlog", terminal: false },
-        { key: "working", terminal: false },
-        { key: "done", terminal: true },
+        { key: "backlog", label: "Backlog", kind: "backlog", terminal: false },
+        { key: "working", label: "Working", kind: "active", terminal: false },
+        { key: "done", label: "Done", kind: "terminal", terminal: true },
       ],
       {
         backlog: ["backlog", "working"],
@@ -150,20 +140,8 @@ describe("handleGetTransitions", () => {
 
     handleGetTransitions(makeDeps(configStore), makeRequest(), res);
 
-    expect(machineMocks.constructedWith).toHaveBeenCalledWith({
-      stages: [
-        { key: "Backlog", terminal: false },
-        { key: "Working", terminal: false },
-        { key: "Done", terminal: true },
-      ],
-      transitions: {
-        Backlog: ["Backlog", "Working"],
-        Working: ["Working", "Done"],
-        Done: ["Done"],
-      },
-      activeStates: ["Backlog", "Working"],
-      terminalStates: ["Done"],
-    });
+    expect(topologyMocks.listWorkflowStateStages).toHaveBeenCalledWith(config);
+    expect(topologyMocks.canTransitionWorkflowState).toHaveBeenCalledWith("working", "done", config);
     expect(res._body).toEqual({
       transitions: {
         backlog: ["backlog", "working"],

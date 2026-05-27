@@ -1,33 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 
-const stateMachineMock = vi.hoisted(() => {
-  let nextResult: { ok: boolean; reason?: string } = { ok: true };
-  const instances: Array<{ config: unknown; assertTransition: ReturnType<typeof vi.fn> }> = [];
-
-  class MockStateMachine {
-    readonly assertTransition = vi.fn((_from: string, _to: string) => nextResult);
-
-    constructor(config: unknown) {
-      instances.push({ config, assertTransition: this.assertTransition });
-    }
-  }
-
-  return {
-    StateMachine: MockStateMachine,
-    instances,
-    reset() {
-      nextResult = { ok: true };
-      instances.length = 0;
-    },
-    setNextResult(result: { ok: boolean; reason?: string }) {
-      nextResult = result;
-    },
-  };
+const topologyMock = vi.hoisted(() => {
+  const assertWorkflowStateTransition = vi.fn();
+  return { assertWorkflowStateTransition };
 });
 
-vi.mock("../../src/state/machine.js", () => ({
-  StateMachine: stateMachineMock.StateMachine,
+vi.mock("../../src/state/topology.js", () => ({
+  assertWorkflowStateTransition: topologyMock.assertWorkflowStateTransition,
 }));
 
 import { handleTransition } from "../../src/http/transition-handler.js";
@@ -78,7 +58,8 @@ function makeConfigStore(overrides: Record<string, unknown> = {}) {
 
 describe("handleTransition", () => {
   beforeEach(() => {
-    stateMachineMock.reset();
+    topologyMock.assertWorkflowStateTransition.mockReset();
+    topologyMock.assertWorkflowStateTransition.mockReturnValue({ ok: true });
   });
 
   it("returns the full not-found error payload when issue is missing", async () => {
@@ -103,7 +84,7 @@ describe("handleTransition", () => {
     const res = makeResponse();
     const orchestrator = makeOrchestrator({ issueId: "issue-uuid", state: "Done" });
     const configStore = makeConfigStore();
-    stateMachineMock.setNextResult({ ok: false, reason: "transition not allowed" });
+    topologyMock.assertWorkflowStateTransition.mockReturnValue({ ok: false, reason: "transition not allowed" });
 
     await handleTransition(
       { orchestrator: orchestrator as never, configStore: configStore as never },
@@ -113,10 +94,10 @@ describe("handleTransition", () => {
 
     expect(res._status).toBe(422);
     expect(res._body).toEqual({ ok: false, reason: "transition not allowed" });
-    expect(stateMachineMock.instances[0]?.assertTransition).toHaveBeenCalledWith("Done", "todo");
+    expect(topologyMock.assertWorkflowStateTransition).toHaveBeenCalledWith("Done", "todo", configStore.getConfig());
   });
 
-  it("constructs a custom state machine with mapped terminal flags when config declares one", async () => {
+  it("delegates custom state machine config to topology transition validation", async () => {
     const res = makeResponse();
     const orchestrator = makeOrchestrator({ issueId: "issue-uuid", state: "Todo" });
     const tracker = makeTracker();
@@ -136,18 +117,10 @@ describe("handleTransition", () => {
       res,
     );
 
-    expect(stateMachineMock.instances[0]?.config).toEqual({
-      stages: [
-        { key: "Todo", terminal: false },
-        { key: "Done", terminal: true },
-      ],
-      transitions: [{ from: "Todo", to: "Done" }],
-      activeStates: ["Todo", "In Progress"],
-      terminalStates: ["Done"],
-    });
+    expect(topologyMock.assertWorkflowStateTransition).toHaveBeenCalledWith("Todo", "Done", configStore.getConfig());
   });
 
-  it("constructs the fallback state machine config when no custom state machine exists", async () => {
+  it("delegates tracker-only config to topology transition validation", async () => {
     const res = makeResponse();
     const orchestrator = makeOrchestrator({ issueId: "issue-uuid", state: "Todo" });
     const tracker = makeTracker();
@@ -159,10 +132,11 @@ describe("handleTransition", () => {
       res,
     );
 
-    expect(stateMachineMock.instances[0]?.config).toEqual({
-      activeStates: ["Todo", "In Progress"],
-      terminalStates: ["Done"],
-    });
+    expect(topologyMock.assertWorkflowStateTransition).toHaveBeenCalledWith(
+      "Todo",
+      "in progress",
+      configStore.getConfig(),
+    );
   });
 
   it("returns 200 on successful transition", async () => {

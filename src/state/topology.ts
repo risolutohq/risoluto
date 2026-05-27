@@ -109,7 +109,6 @@ export function listWorkflowStateStages(config: ServiceConfig): WorkflowStageDef
 }
 
 export {
-  getWorkflowStateMachine as getStateMachine,
   isActiveWorkflowState as isActiveState,
   isGateWorkflowState as isGateState,
   isTerminalWorkflowState as isTerminalState,
