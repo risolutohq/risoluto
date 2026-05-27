@@ -1,6 +1,6 @@
 import type { LivePreflightConfig } from "../config/live-preflight-config.js";
 import { asRecord, asStringOrNull } from "../utils/type-guards.js";
-import type { LivePreflightCheck, LivePreflightDeps } from "./preflight.js";
+import type { LivePreflightCheck, LivePreflightDeps } from "./contracts.js";
 import {
   createGitHubJwt,
   createInstallationToken,
