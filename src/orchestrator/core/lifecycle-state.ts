@@ -9,7 +9,7 @@ import type {
   TokenUsageSnapshot,
 } from "../../core/types.js";
 import { sortIssuesForDispatch } from "./dispatch.js";
-import { isActiveState, isTerminalState } from "../../state/policy.js";
+import { isActiveState, isTerminalState } from "../../state/topology.js";
 import { issueView } from "../views.js";
 import type { RetryRuntimeEntry, RunningEntry } from "../runtime-types.js";
 import type { StallEvent } from "../stall-detector.js";

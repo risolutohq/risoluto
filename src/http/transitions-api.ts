@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { getStateMachine } from "../state/policy.js";
+import { getStateMachine } from "../state/topology.js";
 import type { ConfigStore } from "../config/store.js";
 import type { OrchestratorPort } from "../orchestrator/port.js";
 

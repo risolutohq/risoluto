@@ -1,7 +1,7 @@
 import type { RuntimeEventSink } from "../core/lifecycle-events.js";
 import { toErrorString } from "../utils/type-guards.js";
 import { issueView } from "./views.js";
-import { isActiveState, isTerminalState } from "../state/policy.js";
+import { isActiveState, isTerminalState } from "../state/topology.js";
 import type { AttemptRecord, Issue, ServiceConfig } from "../core/types.js";
 import type { RetryRuntimeEntry, RunningEntry } from "./runtime-types.js";
 import type { RetryCoordinator } from "./outcome-context.js";

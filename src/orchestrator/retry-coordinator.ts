@@ -12,7 +12,7 @@ import { writeFailureWriteback } from "./worker-outcome/completion-writeback.js"
 import { issueRef, workflowRunRef } from "./worker-outcome/types.js";
 import { finalizeCancelledOrHardFailure } from "./worker-outcome/finalize.js";
 import { issueView, nowIso } from "./views.js";
-import { isActiveState, isTerminalState } from "../state/policy.js";
+import { isActiveState, isTerminalState } from "../state/topology.js";
 import { toErrorString } from "../utils/type-guards.js";
 import { classifyRetryStrategy } from "./retry-policy.js";
 

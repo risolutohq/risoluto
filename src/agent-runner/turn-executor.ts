@@ -11,7 +11,7 @@ import { extractCodexErrorInfo } from "./error-classifier.js";
 import { classifyExitState } from "./exit-classifier.js";
 import { composeSessionId, waitForTurnCompletion } from "./turn-state.js";
 import { detectStopSignal } from "../core/signal-detection.js";
-import { isActiveState } from "../state/policy.js";
+import { isActiveState } from "../state/topology.js";
 import { sanitizeContent } from "../core/content-sanitizer.js";
 import type {
   AgentRunnerTurnExecutionInput,

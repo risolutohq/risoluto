@@ -1,4 +1,4 @@
-import { isTerminalState } from "../../state/policy.js";
+import { isTerminalState } from "../../state/topology.js";
 import type { Issue, ServiceConfig } from "../../core/types.js";
 
 function sortableCreatedAt(createdAt: string | null): number {

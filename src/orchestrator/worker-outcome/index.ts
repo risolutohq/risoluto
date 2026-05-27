@@ -1,7 +1,7 @@
 import type { Issue, RunOutcome, Workspace } from "../../core/types.js";
 import type { RunningEntry } from "../runtime-types.js";
 import type { OutcomeContext } from "../context.js";
-import { isActiveState, isTerminalState } from "../../state/policy.js";
+import { isActiveState, isTerminalState } from "../../state/topology.js";
 import { isHardFailure } from "../views.js";
 import { detectStopSignal } from "../../core/signal-detection.js";
 import { prepareWorkerOutcome } from "./prepare.js";

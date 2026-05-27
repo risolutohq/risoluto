@@ -4,7 +4,7 @@ import { isBlockedByNonTerminal, sortIssuesForDispatch } from "./dispatch.js";
 import { issueView, nowIso } from "./views.js";
 import { prepareWorkspaceForLaunch as prepareWorkspace } from "./workspace-preparation.js";
 import { sanitizeIdentifier } from "../workspace/paths.js";
-import { isActiveState, isTodoState, normalizeStateKey } from "../state/policy.js";
+import { isActiveState, isTodoState, normalizeStateKey } from "../state/topology.js";
 import type { NotificationEvent } from "../notification/channel.js";
 import type { ComponentObserver } from "../observability/hub.js";
 import type {

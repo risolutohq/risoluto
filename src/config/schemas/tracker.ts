@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod";
-import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../../state/policy.js";
+import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../../state/topology.js";
 
 export const trackerConfigSchema = z.object({
   kind: z.string().default("linear"),

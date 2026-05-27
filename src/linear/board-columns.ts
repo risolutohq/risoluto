@@ -1,4 +1,4 @@
-import { listWorkflowStages, normalizeStateKey } from "../state/policy.js";
+import { listWorkflowStages, normalizeStateKey } from "../state/topology.js";
 import type { RuntimeIssueView, ServiceConfig, WorkflowColumnView } from "../core/types.js";
 
 function dedupeIssueViews(items: RuntimeIssueView[]): RuntimeIssueView[] {

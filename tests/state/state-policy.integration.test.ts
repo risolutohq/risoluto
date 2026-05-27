@@ -1,5 +1,5 @@
 /**
- * Integration tests for src/state/policy.ts — pure-function policy helpers.
+ * Integration tests for src/state/topology.ts — pure-function topology helpers.
  *
  * No server or I/O needed. Tests validate state classification, stage listing,
  * normalization, and WeakMap cache correctness across tracker-based and
@@ -17,7 +17,7 @@ import {
   listWorkflowStages,
   normalizeStateKey,
   normalizeStateList,
-} from "../../src/state/policy.js";
+} from "../../src/state/topology.js";
 
 // ---------------------------------------------------------------------------
 // Config factories
@@ -194,6 +194,12 @@ describe("isTodoState (no config arg)", () => {
   it("returns false for non-todo states", () => {
     expect(isTodoState("in progress")).toBe(false);
     expect(isTodoState("done")).toBe(false);
+  });
+
+  it("keeps the default todo check for tracker configs without a stateMachine", () => {
+    const config = makeTrackerConfig({ activeStates: ["Backlog", "Ready"] });
+    expect(isTodoState("Todo", config)).toBe(true);
+    expect(isTodoState("Ready", config)).toBe(false);
   });
 });
 

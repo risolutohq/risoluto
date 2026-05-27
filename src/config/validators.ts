@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { normalizeStateList } from "../state/policy.js";
+import { normalizeStateList } from "../state/topology.js";
 import type { ServiceConfig, ValidationError } from "../core/types.js";
 import { codexAuthModeValues } from "./schemas/index.js";
 

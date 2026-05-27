@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 
-import { isActiveState, isTerminalState } from "../state/policy.js";
+import { isActiveState, isTerminalState } from "../state/topology.js";
 import { listContainersByWorkspace, removeContainer } from "../docker/lifecycle.js";
 import { toErrorString } from "../utils/type-guards.js";
 import type {

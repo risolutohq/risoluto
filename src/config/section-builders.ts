@@ -8,7 +8,7 @@
 import path from "node:path";
 
 import type { ServiceConfig } from "../core/types.js";
-import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../state/policy.js";
+import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../state/topology.js";
 import { asBoolean, asNumber, asNumberMap, asRecord, asString, asLooseStringArray, asStringArray } from "./coercion.js";
 import {
   asCodexAuthMode,

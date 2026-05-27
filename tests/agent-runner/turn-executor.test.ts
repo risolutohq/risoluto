@@ -37,7 +37,7 @@ vi.mock("../../src/agent-runner/exit-classifier.js", () => ({
   }),
 }));
 
-vi.mock("../../src/state/policy.js", () => ({
+vi.mock("../../src/state/topology.js", () => ({
   isActiveState: vi.fn().mockReturnValue(true),
 }));
 
@@ -51,7 +51,7 @@ vi.mock("../../src/agent-runner/thread-compact.js", () => ({
 
 import { executeTurns } from "../../src/agent-runner/turn-executor.js";
 import { waitForTurnCompletion } from "../../src/agent-runner/turn-state.js";
-import { isActiveState } from "../../src/state/policy.js";
+import { isActiveState } from "../../src/state/topology.js";
 import { classifyRunError, failureOutcome, outcomeForAbort } from "../../src/agent-runner/abort-outcomes.js";
 import { classifyExitState } from "../../src/agent-runner/exit-classifier.js";
 import { compactThread } from "../../src/agent-runner/thread-compact.js";
