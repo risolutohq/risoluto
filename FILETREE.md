@@ -54,13 +54,6 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build → lint → format → test → typecheck) in order. <!--hash:c895ff9c-->
 
-## .codex/goals/v1-drift-deps-cleanup/
-
-- `ATTEMPTS.md` — Codex goal attempt log for v1-drift-deps-cleanup; records each execution step, outcome, and next adjustment. <!--hash:6afd867d-->
-- `CONTROL.md` — Codex goal control knobs for v1-drift-deps-cleanup; sets scope limits, approval gates, and resource policies. <!--hash:79522ab9-->
-- `NOTES.md` — Durable chronological notes for the v1-drift-deps-cleanup Codex goal; records key findings and decisions made during execution. <!--hash:5169e05e-->
-- `PLAN.md` — Codex goal plan for v1-drift-deps-cleanup; tracks phase completion and final PR/CI state. <!--hash:5ef95f89-->
-
 ## .github/
 
 - `CODEOWNERS` — GitHub CODEOWNERS file; assigns OmerFarukOruc as required reviewer for all paths including src/, docs/, and .github/. <!--hash:7452d510-->
@@ -103,7 +96,6 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:908555d5-->
 - `test-capability-matrix.md` — Migration ledger tracking replacement of legacy tests with v1 behavior-first public-interface coverage per capability. <!--hash:7390e477-->
 - `testing-strategy.md` — Defines unit, integration, and live test tiers; model profiles; and what v1 requires for 1.0.0. <!--hash:c7e04ff4-->
-- `v1-transition-goal.md` — Foundation status artifact: confirmed decisions, step status, done/not-done list, and active blockers toward 1.0.0. <!--hash:6b28b41c-->
 
 ## docs/adr/
 

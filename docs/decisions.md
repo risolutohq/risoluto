@@ -54,6 +54,6 @@
 4. Summary is one line; details go in the linked file or PR.
 5. If the decision is hard-to-reverse, also add a full ADR under [`adr/`](./adr/) and link from the row.
 
-## Transition Status
+## Execution Status
 
-The active transition status lives in [v1-transition-goal.md](./v1-transition-goal.md). This register records accepted decisions only; temporary execution notes should not be added here.
+Linear is the active planning and execution status source. This register records accepted decisions only; temporary execution notes should not be added here.

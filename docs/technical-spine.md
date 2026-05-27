@@ -6,7 +6,7 @@
 
 ## Scope
 
-These are the v1 spine surfaces. Kept source should map to one of them, or be removed/deferred with the reason captured in [v1-transition-goal.md](./v1-transition-goal.md).
+These are the v1 spine surfaces. Kept source should map to one of them, or be removed/deferred through the capability backlog, decision register, or Linear.
 
 1. **Core workflow engine** — Workflow Run lifecycle, transitions, gate evaluation.
 2. **Workflow Run model** — durable, retryable, replayable execution record.

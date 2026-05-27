@@ -43,7 +43,6 @@ pnpm run circular
 - [Research workflow](docs/research-workflow.md)
 - [Testing strategy](docs/testing-strategy.md)
 - [Release rules](docs/release-rules.md)
-- [Transition goal](docs/v1-transition-goal.md)
 
 ## What Is Not Here
 

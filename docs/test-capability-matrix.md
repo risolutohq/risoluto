@@ -13,12 +13,11 @@ Status meanings:
 
 ## Current Inventory
 
-| Fact                | Evidence                                                                                               | Status                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Tracked test files  | `git ls-files tests \| wc -l` returned `305` on 2026-05-25.                                            | frozen as temporary legacy coverage             |
-| Goal working memory | `.codex/goals/v1-test-migration/{GOAL,PLAN,ATTEMPTS,NOTES,CONTROL}.md`                                 | created                                         |
-| Product spine       | `docs/product-spine.md`, `docs/technical-spine.md`, ADRs 0001-0006                                     | confirmed source of desired behavior vocabulary |
-| Live env            | `.env.live.local` has required keys; `GITHUB_APP_PRIVATE_KEY_FILE` is readable; real preflight passed. | available; use dotenv-style loader              |
+| Fact               | Evidence                                                                                               | Status                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| Tracked test files | `git ls-files tests \| wc -l` returned `305` on 2026-05-25.                                            | frozen as temporary legacy coverage             |
+| Product spine      | `docs/product-spine.md`, `docs/technical-spine.md`, ADRs 0001-0006                                     | confirmed source of desired behavior vocabulary |
+| Live env           | `.env.live.local` has required keys; `GITHUB_APP_PRIVATE_KEY_FILE` is readable; real preflight passed. | available; use dotenv-style loader              |
 
 ## Required Capability Migration Ledger
 
