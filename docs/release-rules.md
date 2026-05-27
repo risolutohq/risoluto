@@ -22,7 +22,7 @@
 
 All of the following must be true before tagging `v1.0.0`:
 
-- [ ] Curated snapshot import complete; all kept source mapped to the current spine or listed in the transition goal.
+- [ ] Curated snapshot import complete; all kept source mapped to the current spine, capability backlog, decision register, or Linear.
 - [ ] [Product Spine](./product-spine.md) written and current.
 - [ ] [Technical Spine](./technical-spine.md) written and current.
 - [ ] [Decisions Register](./decisions.md) created and current.

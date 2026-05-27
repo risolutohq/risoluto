@@ -8,6 +8,8 @@ describe("live preflight CI contract", () => {
     const livePreflightJob = workflow.slice(workflow.indexOf("  live-preflight:"));
 
     expect(livePreflightJob).toContain("RISOLUTO_LIVE_MODEL_API_KEY");
+    expect(livePreflightJob).toContain("outputs/live-preflight");
+    expect(livePreflightJob).not.toContain(".codex/goals");
     expect(livePreflightJob).not.toContain("RISOLUTO_LIVE_MODEL_BASE_URL:");
     expect(livePreflightJob).not.toContain("RISOLUTO_LIVE_MODEL_ID:");
     expect(livePreflightJob).not.toContain("RISOLUTO_LIVE_MODEL_REASONING_EFFORT:");

@@ -15,7 +15,7 @@ export async function runLivePreflightCli(argv: string[], deps: LivePreflightCli
     allowPositionals: false,
     options: {
       "env-file": { type: "string", default: ".env.live.local" },
-      "output-dir": { type: "string", default: ".codex/goals/v1-test-migration/live-results" },
+      "output-dir": { type: "string", default: "outputs/live-preflight" },
       json: { type: "boolean", default: false },
     },
   });
