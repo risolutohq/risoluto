@@ -228,7 +228,18 @@ function resolveArchiveRoot(location: WorkflowRunArchiveLocation): string {
   throw new TypeError("dataDir or archiveDir is required for the Workflow Run archive");
 }
 
+// Archive ids become path segments, so reject anything that could escape the
+// archive root (separators, "." / "..") before joining.
+const SAFE_ARCHIVE_ID = /^[A-Za-z0-9._-]+$/;
+
+function assertSafeArchiveId(id: string, kind: string): void {
+  if (id === "." || id === ".." || !SAFE_ARCHIVE_ID.test(id)) {
+    throw new TypeError(`unsafe ${kind} for the Workflow Run archive: ${JSON.stringify(id)}`);
+  }
+}
+
 function workflowRunDir(archiveRoot: string, workflowRunId: string): string {
+  assertSafeArchiveId(workflowRunId, "workflowRunId");
   return path.join(archiveRoot, "workflow-runs", workflowRunId);
 }
 
@@ -237,6 +248,7 @@ function runLogPath(archiveRoot: string, workflowRunId: string): string {
 }
 
 function artifactPath(archiveRoot: string, workflowRunId: string, artifactId: string): string {
+  assertSafeArchiveId(artifactId, "artifactId");
   return path.join(workflowRunDir(archiveRoot, workflowRunId), "artifacts", `${artifactId}.json`);
 }
 

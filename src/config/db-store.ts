@@ -51,7 +51,12 @@ function readActiveTemplate(db: RisolutoDatabase): string {
   // 1. Check system.selectedTemplateId
   const systemRow = db.select().from(config).where(eq(config.key, "system")).get();
   if (systemRow) {
-    const system = JSON.parse(systemRow.value) as Record<string, unknown>;
+    let system: Record<string, unknown>;
+    try {
+      system = JSON.parse(systemRow.value) as Record<string, unknown>;
+    } catch {
+      system = {};
+    }
     const selectedId = system.selectedTemplateId;
     if (typeof selectedId === "string") {
       const template = db.select().from(promptTemplates).where(eq(promptTemplates.id, selectedId)).get();

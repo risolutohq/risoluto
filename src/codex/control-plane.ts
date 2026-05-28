@@ -183,6 +183,11 @@ export class CodexControlPlane {
   }
 
   async shutdown(): Promise<void> {
+    // Let any in-flight connect settle first, otherwise it can spawn the child
+    // process and codexHome temp dir after we have already torn them down.
+    if (this.connectPromise) {
+      await this.connectPromise.catch(() => undefined);
+    }
     for (const pending of this.pendingServerRequests.values()) {
       pending.resolve({ writeResponse: false });
     }

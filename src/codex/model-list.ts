@@ -19,6 +19,7 @@ interface ModelListRpcResult {
 
 let cached: CodexModelEntry[] | null = null;
 let cacheExpiry = 0;
+let inflight: Promise<CodexModelEntry[]> | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const QUERY_TIMEOUT_MS = 15_000;
 
@@ -33,15 +34,23 @@ export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry
   if (cached && Date.now() < cacheExpiry) {
     return cached;
   }
-
-  try {
-    const result = await queryModelList(apiKey);
-    cached = result;
-    cacheExpiry = Date.now() + CACHE_TTL_MS;
-    return result;
-  } catch {
-    return getAvailableModelIds().map((id) => ({ id, displayName: id, isDefault: false }));
+  if (inflight) {
+    return inflight;
   }
+
+  inflight = (async () => {
+    try {
+      const result = await queryModelList(apiKey);
+      cached = result;
+      cacheExpiry = Date.now() + CACHE_TTL_MS;
+      return result;
+    } catch {
+      return getAvailableModelIds().map((id) => ({ id, displayName: id, isDefault: false }));
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }
 
 function queryModelList(apiKey?: string): Promise<CodexModelEntry[]> {
@@ -123,7 +132,11 @@ function queryModelList(apiKey?: string): Promise<CodexModelEntry[]> {
       ) {
         settled = true;
         cleanup();
-        const result = (parsed as { result: ModelListRpcResult }).result;
+        const result = (parsed as { result?: ModelListRpcResult }).result;
+        if (!result || !Array.isArray(result.data)) {
+          reject(new Error("codex model/list response missing data array"));
+          return;
+        }
         resolve(
           result.data
             .filter((m) => !m.hidden)

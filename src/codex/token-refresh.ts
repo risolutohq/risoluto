@@ -177,7 +177,15 @@ export async function refreshAccessToken(authJsonPath: string): Promise<string> 
     );
   }
 
-  const tokenData = JSON.parse(responseText) as TokenRefreshResponse;
+  let tokenData: TokenRefreshResponse;
+  try {
+    tokenData = JSON.parse(responseText) as TokenRefreshResponse;
+  } catch {
+    throw new TokenRefreshError(
+      "auth_token_expired",
+      "Token refresh returned invalid JSON. Please re-authenticate via the setup wizard.",
+    );
+  }
   const updatedAuth = buildRefreshedAuthRecord({ ...auth }, tokens, tokenData);
 
   const updatedJson = JSON.stringify(updatedAuth, null, 2);

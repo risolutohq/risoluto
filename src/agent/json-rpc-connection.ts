@@ -123,13 +123,7 @@ export class JsonRpcConnection {
   }
 
   private onChunk(chunk: Buffer): void {
-    const chunkStr = chunk.toString("utf8");
-    this.buffer += chunkStr;
-    if (Buffer.byteLength(this.buffer, "utf8") > MAX_LINE_BYTES) {
-      this.logger.error({ maxLineBytes: MAX_LINE_BYTES }, "codex line exceeded maximum size");
-      this.close();
-      return;
-    }
+    this.buffer += chunk.toString("utf8");
 
     let newlineIndex = this.buffer.indexOf("\n");
     while (newlineIndex >= 0) {
@@ -139,6 +133,14 @@ export class JsonRpcConnection {
         this.onLine(line);
       }
       newlineIndex = this.buffer.indexOf("\n");
+    }
+
+    // Guard only the unterminated remainder. Complete lines are already drained
+    // above, so a burst of several valid messages in one chunk no longer trips
+    // the limit — only a single line that grows without a newline does.
+    if (Buffer.byteLength(this.buffer, "utf8") > MAX_LINE_BYTES) {
+      this.logger.error({ maxLineBytes: MAX_LINE_BYTES }, "codex line exceeded maximum size");
+      this.close();
     }
   }
 

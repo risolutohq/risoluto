@@ -305,6 +305,9 @@ class SetupServiceImpl implements SetupPort {
     return { ok: true };
   }
 
+  // Dedups concurrent status polls so the one-shot PKCE code is exchanged once.
+  private activePkceExchange: Promise<{ status: string; error?: string }> | null = null;
+
   async startPkceAuth(): Promise<{ authUrl: string }> {
     try {
       const reachError = await checkAuthEndpointReachable();
@@ -320,14 +323,14 @@ class SetupServiceImpl implements SetupPort {
       await startCallbackServer(this.activePkceSession);
       return { authUrl: this.activePkceSession.authUrl };
     } catch (error) {
+      // Clear the half-started session so getPkceAuthStatus() reports idle
+      // rather than wedging on a session that never bound.
+      const detail = this.activePkceSession?.error ?? (error instanceof Error ? error.message : String(error));
+      this.activePkceSession = null;
       if (error instanceof SetupServiceError) {
         throw error;
       }
-      throw new SetupServiceError(
-        500,
-        "pkce_start_error",
-        this.activePkceSession?.error ?? (error instanceof Error ? error.message : String(error)),
-      );
+      throw new SetupServiceError(500, "pkce_start_error", detail);
     }
   }
 
@@ -358,7 +361,12 @@ class SetupServiceImpl implements SetupPort {
       return { status: "complete" };
     }
     if (this.activePkceSession.authCode) {
-      return this.exchangeAndSaveFromSession(this.activePkceSession);
+      // Concurrent polls must share one exchange — the authorization code is
+      // single-use and a double exchange corrupts the session.
+      this.activePkceExchange ??= this.exchangeAndSaveFromSession(this.activePkceSession).finally(() => {
+        this.activePkceExchange = null;
+      });
+      return this.activePkceExchange;
     }
     if (Date.now() - this.activePkceSession.createdAt > 3 * 60 * 1000) {
       this.activePkceSession.error = "Authentication timed out. Please try again.";

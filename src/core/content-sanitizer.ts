@@ -158,27 +158,37 @@ function redactAwsAccessKeys(text: string): string {
   return redacted;
 }
 
+// GitHub token prefixes: classic PAT (ghp_), app/server (ghs_), OAuth (gho_),
+// user-to-server (ghu_), refresh (ghr_), and fine-grained PAT (github_pat_).
+// Each is followed by word chars (incl. underscores in fine-grained tokens);
+// 20 is the minimum body length that distinguishes a real token from a prefix
+// appearing in prose.
+const GITHUB_TOKEN_PREFIXES = ["github_pat_", "ghp_", "ghs_", "gho_", "ghu_", "ghr_"] as const;
+// Classic GitHub tokens carry a 36-char body; fine-grained PATs carry far more.
+// Requiring >=36 avoids redacting a bare prefix that appears in prose.
+const GITHUB_TOKEN_MIN_BODY = 36;
+
 function redactGitHubTokens(text: string): string {
   let index = 0;
   let redacted = "";
 
   while (index < text.length) {
-    if (!text.startsWith("ghp_", index)) {
+    // Every GitHub token prefix starts with "g"; skip the multi-prefix scan
+    // for the overwhelmingly common non-matching character.
+    const prefix =
+      text[index] === "g" ? GITHUB_TOKEN_PREFIXES.find((candidate) => text.startsWith(candidate, index)) : undefined;
+    if (prefix === undefined) {
       redacted += text[index];
       index += 1;
       continue;
     }
 
-    let tokenEnd = index + "ghp_".length;
-    let hasFullToken = true;
-    for (let offset = 0; offset < 36; offset += 1) {
-      if (!isWordChar(text[tokenEnd])) {
-        hasFullToken = false;
-        break;
-      }
+    const bodyStart = index + prefix.length;
+    let tokenEnd = bodyStart;
+    while (isWordChar(text[tokenEnd])) {
       tokenEnd += 1;
     }
-    if (!hasFullToken) {
+    if (tokenEnd - bodyStart < GITHUB_TOKEN_MIN_BODY) {
       redacted += text[index];
       index += 1;
       continue;
@@ -327,7 +337,7 @@ function redactGenericSecretAssignments(text: string): string {
     }
 
     let valueStart = separatorIndex + 1;
-    if (isAssignmentWhitespace(text[valueStart])) {
+    while (isAssignmentWhitespace(text[valueStart])) {
       valueStart += 1;
     }
     if (text[valueStart] === '"' || text[valueStart] === "'") {

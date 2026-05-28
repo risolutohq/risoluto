@@ -209,6 +209,20 @@ async function tryCompactAndRetry(
   const compacted =
     state.threadId && input.logger ? await compactThread(input.connection, state.threadId, input.logger) : false;
   if (compacted) {
+    // Compaction does not consume the turn budget, so it must carry its own cap
+    // or a model that keeps overflowing after every compaction loops forever.
+    const compactionCount = (state.compactionCount ?? 0) + 1;
+    state.compactionCount = compactionCount;
+    if (compactionCount > input.config.agent.maxTurns) {
+      return {
+        kind: "failed",
+        errorCode: "context_window_exceeded",
+        errorMessage: `context window exceeded: compaction budget (${input.config.agent.maxTurns}) exhausted`,
+        threadId: state.threadId,
+        turnId: state.turnId,
+        turnCount: state.turnCount,
+      };
+    }
     state.turnCount -= 1; // Retriable failure — should not consume the turn budget
     return undefined;
   }

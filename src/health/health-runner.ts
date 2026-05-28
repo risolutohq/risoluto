@@ -144,7 +144,9 @@ export class HealthRunner {
     const previous = state.lastResult;
     state.lastResultBeforeUpdate = previous;
     const checkedAt = new Date(this.nowMs()).toISOString();
-    pushWindow(state, aggregated.status === "ok" ? "ok" : "fail");
+    // `unknown` means the probe is unconfigured/inconclusive, not failing — record
+    // it as ok so it cannot accumulate window "fail"s and falsely promote to degraded.
+    pushWindow(state, aggregated.status === "ok" || aggregated.status === "unknown" ? "ok" : "fail");
     const windowOk = state.window.filter((s) => s === "ok").length;
     const result: HealthProbeResult = {
       status: applyHysteresis(aggregated.status, state.window),

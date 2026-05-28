@@ -113,7 +113,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     logger,
   });
   logger.info({ dataDir, port, archiveDir }, "service started");
-  watchConfigChanges(configStore, services.notificationManager, config.server.port, logger);
+  watchConfigChanges(configStore, services.notificationManager, port, logger);
 
   await awaitShutdown(logger, shutdown);
   return 0;

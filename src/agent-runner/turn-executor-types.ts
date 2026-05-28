@@ -50,6 +50,8 @@ export interface AgentRunnerTurnExecutionState {
   threadId: string | null;
   turnId: string | null;
   turnCount: number;
+  /** Context-window compactions performed this attempt. Bounds the compaction retry loop. */
+  compactionCount?: number;
   containerName: string | null;
   exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   getFatalFailure: () => { code: string; message: string } | null;

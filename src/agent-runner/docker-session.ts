@@ -118,16 +118,22 @@ export async function createDockerSession(
     gid,
   });
   const initProcess = spawn(initCmd.program, initCmd.args, { stdio: "pipe" });
-  await new Promise<void>((resolve, reject) => {
-    initProcess.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Cache volume init failed with exit code ${code}`));
-      }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      initProcess.on("exit", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`Cache volume init failed with exit code ${code}`));
+        }
+      });
+      initProcess.on("error", reject);
     });
-    initProcess.on("error", reject);
-  });
+  } catch (error) {
+    // Init failed after the volume was created — remove it so we don't leak.
+    await removeVolume(docker.cacheVolumeName).catch(() => undefined);
+    throw error;
+  }
 
   const child: ChildProcessWithoutNullStreams = spawnProcess(docker.program, docker.args, {
     env: process.env,
@@ -179,7 +185,7 @@ function buildDockerSessionObject(
           }
         }
         session.connection.close();
-        void stopContainer(containerName, 5);
+        await stopContainer(containerName, 5).catch(() => undefined);
       })();
     },
     statsInterval: null,
@@ -203,12 +209,16 @@ function buildDockerSessionObject(
         await new Promise((resolve) => setTimeout(resolve, cfg.codex.drainTimeoutMs));
       }
       session.connection.close();
-      await stopContainer(containerName, 5);
-      await Promise.race([session.exitPromise, new Promise((resolve) => setTimeout(resolve, 5000))]).catch(
-        () => undefined,
-      );
-      await removeContainer(containerName);
-      await removeVolume(cacheVolumeName);
+      try {
+        await stopContainer(containerName, 5);
+        await Promise.race([session.exitPromise, new Promise((resolve) => setTimeout(resolve, 5000))]).catch(
+          () => undefined,
+        );
+        await removeContainer(containerName);
+      } finally {
+        // Always reclaim the cache volume even if stop/remove throws, or it leaks.
+        await removeVolume(cacheVolumeName);
+      }
     },
   };
 

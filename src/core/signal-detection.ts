@@ -20,6 +20,18 @@ function normalizeForDetection(content: string): string {
   return content.toLowerCase().replaceAll(/\s+/g, " ");
 }
 
+/**
+ * Compiles markers into boundary-aware patterns: a marker matches only when it
+ * is not immediately followed by another word character, so `...: done` is not
+ * found inside `...: done_uploading`. Matched against normalized text.
+ */
+function compileMarkerPatterns(markers: readonly string[]): RegExp[] {
+  return markers.map((marker) => new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9_])`));
+}
+
+const DONE_PATTERNS = compileMarkerPatterns(DONE_MARKERS);
+const BLOCKED_PATTERNS = compileMarkerPatterns(BLOCKED_MARKERS);
+
 function detectStructuredStatus(content: string): StopSignal | null {
   try {
     const parsed: unknown = JSON.parse(content);
@@ -46,10 +58,10 @@ export function detectStopSignal(content: string | null): StopSignal | null {
   }
 
   const normalized = normalizeForDetection(content);
-  if (DONE_MARKERS.some((marker) => normalized.includes(marker))) {
+  if (DONE_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return "done";
   }
-  if (BLOCKED_MARKERS.some((marker) => normalized.includes(marker))) {
+  if (BLOCKED_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return "blocked";
   }
   return null;

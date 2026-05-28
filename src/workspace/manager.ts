@@ -12,6 +12,7 @@ export { buildSafePath } from "./paths.js";
 export type { WorkspacePort, WorkspaceRemovalResult } from "./port.js";
 
 const TRANSIENT_DIRECTORIES = ["tmp", ".elixir_ls"];
+const HOOK_STDERR_LIMIT_BYTES = 64 * 1024;
 
 async function pathIsDirectory(pathname: string): Promise<boolean> {
   try {
@@ -333,12 +334,18 @@ export class WorkspaceManager implements WorkspacePort {
 
       const timer = setTimeout(() => {
         child.kill("SIGTERM");
+        // Escalate to SIGKILL if the hook ignores SIGTERM, so it can't orphan.
+        const killTimer = setTimeout(() => child.kill("SIGKILL"), 2000);
+        killTimer.unref();
+        child.once("exit", () => clearTimeout(killTimer));
         reject(new Error(`hook timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       let stderr = "";
       child.stderr.on("data", (chunk) => {
-        stderr += chunk.toString();
+        if (stderr.length < HOOK_STDERR_LIMIT_BYTES) {
+          stderr += chunk.toString().slice(0, HOOK_STDERR_LIMIT_BYTES - stderr.length);
+        }
       });
 
       child.on("error", (error) => {

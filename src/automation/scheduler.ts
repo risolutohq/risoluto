@@ -151,7 +151,14 @@ export class AutomationScheduler {
     const task = this.cronApi.schedule(
       config.schedule,
       async () => {
-        await this.options.runner.run(config, "schedule");
+        try {
+          await this.options.runner.run(config, "schedule");
+        } catch (error: unknown) {
+          this.options.logger.error(
+            { automationName: config.name, error: toErrorString(error) },
+            "scheduled automation run threw unexpectedly",
+          );
+        }
       },
       {
         name: config.name,

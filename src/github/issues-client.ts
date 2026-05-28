@@ -166,7 +166,32 @@ export class GitHubIssuesClient {
   async fetchOpenIssues(labels?: string[]): Promise<RawGitHubIssue[]> {
     const { owner, repo } = this.getOwnerRepo();
     const labelParam = labels && labels.length > 0 ? `&labels=${encodeURIComponent(labels.join(","))}` : "";
-    return this.request<RawGitHubIssue[]>(`/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`);
+    return this.paginate<RawGitHubIssue>(`/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`);
+  }
+
+  /** Follows GitHub `Link` rel="next" pagination, accumulating every page. */
+  private async paginate<T>(basePath: string): Promise<T[]> {
+    const all: T[] = [];
+    let page: number | null = 1;
+    while (page !== null) {
+      const response = await this.send(`${basePath}&page=${page}`);
+      if (!response.ok) {
+        this.logger.error({ status: response.status, statusText: response.statusText }, "github api request failed");
+        throw new GitHubIssuesClientError(
+          "github_http_error",
+          `github api request failed with status ${response.status}`,
+        );
+      }
+      try {
+        all.push(...((await response.json()) as T[]));
+      } catch (error) {
+        throw new GitHubIssuesClientError("github_unknown_payload", "github api response body is not valid json", {
+          cause: error,
+        });
+      }
+      page = parseNextPage(response.headers.get("link"));
+    }
+    return all;
   }
 
   async fetchIssuesByNumbers(numbers: number[]): Promise<RawGitHubIssue[]> {
@@ -257,4 +282,14 @@ function labelResult(payload: RawGitHubLabel, alreadyExists: boolean): GitHubLab
     name: payload.name ?? "",
     alreadyExists,
   };
+}
+
+// Extracts the next page number from a GitHub `Link` header, or null when the
+// current page is the last one. Used to paginate past the 100-issue page cap.
+function parseNextPage(linkHeader: string | null): number | null {
+  if (!linkHeader) {
+    return null;
+  }
+  const match = /<[^>]*[?&]page=(\d+)[^>]*>;\s*rel="next"/.exec(linkHeader);
+  return match ? Number(match[1]) : null;
 }

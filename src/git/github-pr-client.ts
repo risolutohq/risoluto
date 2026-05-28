@@ -136,7 +136,7 @@ export class GitHubPrClient implements GithubApiToolClient {
     } catch (error) {
       if (!isDuplicatePrError(error)) throw error;
       const existing = await this.githubRequest(
-        `/repos/${owner}/${repo}/pulls?head=${owner}:${branchName}&state=open`,
+        `/repos/${owner}/${repo}/pulls?head=${owner}:${encodeURIComponent(branchName)}&state=open`,
         { method: "GET" },
         tokenEnvName,
       );

@@ -29,6 +29,14 @@ export function handlePostLinearProject(deps: SetupApiDeps | SetupService) {
       return;
     }
 
-    res.json(await service.selectLinearProject(slugId));
+    try {
+      res.json(await service.selectLinearProject(slugId));
+    } catch (error) {
+      if (error instanceof SetupServiceError) {
+        res.status(error.status).json({ error: { code: error.code, message: error.message } });
+        return;
+      }
+      res.status(500).json({ error: { code: "linear_project_select_failed", message: toErrorString(error) } });
+    }
   };
 }

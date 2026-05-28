@@ -226,6 +226,11 @@ class RetryCoordinatorImpl implements RetryCoordinator {
 
     this.runtime.retryEntries.delete(issueId);
     this.runtime.markDirty();
+    // The tracker fetch above is awaited, so the orchestrator may have stopped
+    // in the meantime — re-check before spawning a worker that nothing aborts.
+    if (!this.runtime.isRunning()) {
+      return;
+    }
     await this.runtime.launchWorker(latestIssue, attempt, {
       claimHeld: true,
       previousThreadId: retryEntry.threadId,

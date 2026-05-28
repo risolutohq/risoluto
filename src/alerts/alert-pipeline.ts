@@ -44,12 +44,26 @@ export class AlertPipeline {
       return;
     }
     this.recentDeliveries.set(cooldownKey, now);
+    this.evictExpiredCooldowns(rule, now);
 
     const notificationEvent = buildNotificationEvent(rule, eventType, payload);
     const deliverySummary = await this.options.notificationManager.notify(notificationEvent, {
       channelNames: rule.channels.length > 0 ? rule.channels : undefined,
     });
     await this.recordHistory(rule, eventType, summarizeStatus(deliverySummary), payload, deliverySummary);
+  }
+
+  /**
+   * Drop this rule's cooldown entries once their window has elapsed so the map
+   * cannot grow without bound as new issue identifiers stream in over time.
+   */
+  private evictExpiredCooldowns(rule: AlertRuleConfig, now: number): void {
+    const prefix = `${rule.name}|`;
+    for (const [key, deliveredAt] of this.recentDeliveries) {
+      if (key.startsWith(prefix) && now - deliveredAt >= rule.cooldownMs) {
+        this.recentDeliveries.delete(key);
+      }
+    }
   }
 
   private async recordHistory(

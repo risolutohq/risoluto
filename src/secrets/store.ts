@@ -237,7 +237,18 @@ export class SecretsStore implements SecretsPort {
     }
   }
 
-  private async persist(): Promise<void> {
+  // Serializes all disk writes so concurrent set()/delete() calls cannot take
+  // overlapping snapshots and clobber each other's envelope on disk.
+  private pendingPersist: Promise<void> = Promise.resolve();
+
+  private persist(): Promise<void> {
+    // Chain after the previous write regardless of whether it succeeded, so the
+    // disk always reflects the latest cache and writes never overlap.
+    this.pendingPersist = this.pendingPersist.catch(() => undefined).then(() => this.writeCacheToDisk());
+    return this.pendingPersist;
+  }
+
+  private async writeCacheToDisk(): Promise<void> {
     const serializedSecrets = JSON.stringify(Object.fromEntries(this.cache), null, 2);
     const envelope = encrypt(serializedSecrets, this.requiredKey());
 

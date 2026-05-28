@@ -56,9 +56,6 @@ export class ConfigStore {
       for (const warning of collectDispatchWarnings(config)) {
         this.logger.warn({ code: warning.code, reason }, warning.message);
       }
-      for (const listener of this.listeners) {
-        listener();
-      }
     } catch (error) {
       if (this.config === null) {
         throw error;
@@ -70,6 +67,16 @@ export class ConfigStore {
         },
         "config reload rejected; keeping last known good config",
       );
+      return;
+    }
+    // Notify listeners only after a successful reload, and isolate each one so a
+    // throwing listener neither aborts the rest nor masquerades as a reload failure.
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (error) {
+        this.logger.error({ error: toErrorString(error) }, "config listener threw during reload notification");
+      }
     }
   }
 

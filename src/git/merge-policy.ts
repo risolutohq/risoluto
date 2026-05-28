@@ -70,7 +70,9 @@ export function evaluateMergePolicy(
   }
 
   if (policy.allowedPaths.length > 0) {
-    const blockedFiles = changedFiles.filter((file) => !policy.allowedPaths.some((prefix) => file.startsWith(prefix)));
+    const blockedFiles = changedFiles.filter(
+      (file) => !policy.allowedPaths.some((prefix) => isWithinAllowedPath(file, prefix)),
+    );
     if (blockedFiles.length > 0) {
       return {
         allowed: false,
@@ -81,4 +83,17 @@ export function evaluateMergePolicy(
   }
 
   return { allowed: true };
+}
+
+/**
+ * A file is within an allowed path when it matches the prefix exactly (a single
+ * allowed file) or sits under it as a directory. The trailing-separator check
+ * stops `"src"` from also admitting sibling directories like `src-secrets/`.
+ */
+function isWithinAllowedPath(file: string, prefix: string): boolean {
+  if (file === prefix) {
+    return true;
+  }
+  const normalized = prefix.endsWith("/") ? prefix : `${prefix}/`;
+  return file.startsWith(normalized);
 }
