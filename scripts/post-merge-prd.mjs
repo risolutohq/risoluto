@@ -178,10 +178,7 @@ async function main() {
   log(`  PR: #${args.prNumber} (${args.prUrl})`);
   log(`  merge commit: ${args.mergeCommit}`);
 
-  // Step 1: Flip PRD status to shipped
-  const { prdPath, previousStatus, changed } = flipPrdStatus(args.slug);
-
-  // Step 2: Find Linear issues and post comments
+  // Step 1: Find Linear issues and post comments (hits LINEAR_API_KEY guard before any disk write)
   const issues = await findIssuesWithLabel(args.slug);
   const commentBody = `Merged in PR #${args.prNumber}: ${args.prUrl} (commit: ${args.mergeCommit})`;
 
@@ -199,18 +196,21 @@ async function main() {
     }
   }
 
+  // Abort before touching the file if any comment failed
+  if (commentErrors > 0) {
+    log(`  Linear comment errors: ${commentErrors}`);
+    log("PRD file NOT modified due to comment errors");
+    process.exit(1);
+  }
+
+  // Step 2: Flip PRD status to shipped — last side effect, only reached on clean run
+  const { previousStatus, changed } = flipPrdStatus(args.slug);
+
   // Summary
   log("---");
   log("summary:");
   log(`  PRD status: ${previousStatus} → shipped (${changed ? "changed" : "already shipped"})`);
   log(`  Linear issues commented: ${commented}/${issues.length}`);
-  if (commentErrors > 0) {
-    log(`  Linear comment errors: ${commentErrors}`);
-  }
-
-  if (commentErrors > 0) {
-    process.exit(1);
-  }
 }
 
 main().catch((error) => {
