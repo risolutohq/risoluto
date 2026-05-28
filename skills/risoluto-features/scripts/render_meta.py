@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""Compute the Summary table and Coverage manifest markdown from the JSON sidecar.
+"""Derive the Summary table and Coverage manifest from the JSON sidecar.
 
 Usage:
+    # Print markdown for the .md body:
     python3 render_meta.py --json <path> --section summary
-    python3 render_meta.py --json <path> --section coverage --repo <path-to-repo>
+    python3 render_meta.py --json <path> --section coverage --repo <path-to-source-repo>
 
-Both sections are derived mechanically from features[] and coverage[]. The
-Coverage manifest needs --repo to enumerate src/ modules and check whether each
-has any citing features.
+    # Persist derived summary + coverage back INTO the JSON sidecar (in place) so the
+    # HTML viewer and any JSON consumer can render them. Without this, the coverage
+    # table renders empty even though the .md shows the manifest:
+    python3 render_meta.py --json <path> --write --repo <path-to-source-repo>
+
+Both sections are derived mechanically from features[] and coverage[]. The Coverage
+manifest needs --repo to enumerate src/ modules so plumbing-only modules (no citing
+features) are surfaced too. When --repo is absent, previously-recorded coverage modules
+are preserved so those rows are not silently dropped.
 """
 
 from __future__ import annotations
@@ -19,54 +26,46 @@ from collections import Counter
 from pathlib import Path
 
 
-def render_summary(payload: dict) -> str:
+def _module_feature_counts(payload: dict) -> dict[str, set[str]]:
+    """Group feature ids by module (first two path segments: src/<module>/...)."""
+    module_features: dict[str, set[str]] = {}
+    for f in payload.get("features") or []:
+        fid = f.get("id", "")
+        for c in f.get("citations") or []:
+            parts = c.get("path", "").split("/")
+            if len(parts) >= 2 and parts[0] in ("src", "frontend"):
+                module = parts[0] + "/" + parts[1] + "/"
+                module_features.setdefault(module, set()).add(fid)
+    return module_features
+
+
+def compute_summary(payload: dict) -> dict:
+    """Return the summary object: per-bundle counts, total, confidence split."""
     features = payload.get("features") or []
     bundles = payload.get("bundles") or []
     by_bundle: Counter[str] = Counter(f.get("bundle", "?") for f in features)
     by_confidence: Counter[str] = Counter(f.get("confidence", "high") for f in features)
-
-    rows = ["| Bundle | Feature count |", "| --- | ---: |"]
-    for b in bundles:
-        rows.append(f"| {b} | {by_bundle.get(b, 0)} |")
-    rows.append(f"| **Total** | **{len(features)}** |")
-
-    lines = ["## Summary", ""]
-    lines.extend(rows)
-    lines += [
-        "",
-        "**Confidence split:**",
-        "",
-        f"- **High confidence:** {by_confidence.get('high', 0)} entries.",
-        f"- **Medium confidence:** {by_confidence.get('medium', 0)} entries.",
-        f"- **Low confidence:** {by_confidence.get('low', 0)} entries.",
-        "",
-    ]
-    return "\n".join(lines)
+    return {
+        "by_bundle": {b: by_bundle.get(b, 0) for b in bundles},
+        "total": len(features),
+        "confidence": {
+            "high": by_confidence.get("high", 0),
+            "medium": by_confidence.get("medium", 0),
+            "low": by_confidence.get("low", 0),
+        },
+    }
 
 
-def render_coverage(payload: dict, repo_root: Path | None) -> str:
-    """Derive per-module coverage from features[].citations[].path.
+def compute_coverage(payload: dict, repo_root: Path | None) -> list[dict]:
+    """Return the coverage manifest as a list of {module, feature_count, kind, note}.
 
-    If repo_root is provided, enumerate src/ subdirectories so plumbing-only
-    modules are surfaced too. Otherwise only modules that have at least one
-    feature citation appear.
+    Module list = citation-derived modules, plus (when --repo is given) every actual
+    src/<module>/ directory so plumbing-only modules show as 0. Hand-written `kind` and
+    `note` values from the existing payload are preserved.
     """
-    features = payload.get("features") or []
+    module_features = _module_feature_counts(payload)
+    existing = {row.get("module"): row for row in payload.get("coverage") or []}
 
-    # Group citations by module (first two path segments: src/<module>/...)
-    module_features: dict[str, set[str]] = {}
-    for f in features:
-        fid = f.get("id", "")
-        for c in f.get("citations") or []:
-            path = c.get("path", "")
-            parts = path.split("/")
-            if len(parts) >= 2 and parts[0] in ("src", "frontend"):
-                module = parts[0] + "/" + parts[1] + "/"
-            else:
-                continue
-            module_features.setdefault(module, set()).add(fid)
-
-    # Enumerate from repo if provided so plumbing-only modules show as 0
     all_modules: set[str] = set(module_features.keys())
     if repo_root and repo_root.exists():
         src_root = repo_root / "src"
@@ -76,17 +75,47 @@ def render_coverage(payload: dict, repo_root: Path | None) -> str:
                     all_modules.add(f"src/{sub.name}/")
         if (repo_root / "frontend" / "src").exists():
             all_modules.add("frontend/src/")
+    else:
+        # No source repo to enumerate: keep previously-recorded modules (incl.
+        # plumbing-only rows that have no citations) so they are not lost.
+        all_modules |= set(existing.keys())
 
-    # Preserve hand-written notes from existing payload if available
-    existing = {row.get("module"): row for row in payload.get("coverage") or []}
-
-    rows = ["| Module | Feature count cited | Export accounting | Notes |", "| --- | ---: | --- | --- |"]
+    rows: list[dict] = []
     for mod in sorted(all_modules):
         count = len(module_features.get(mod, set()))
         existing_row = existing.get(mod, {})
         kind = existing_row.get("kind") or ("feature + plumbing" if count > 0 else "plumbing only")
         note = existing_row.get("note") or ""
-        rows.append(f"| `{mod}` | {count} | {kind} | {note} |")
+        rows.append({"module": mod, "feature_count": count, "kind": kind, "note": note})
+    return rows
+
+
+def render_summary(payload: dict) -> str:
+    s = compute_summary(payload)
+    rows = ["| Bundle | Feature count |", "| --- | ---: |"]
+    for b in payload.get("bundles") or []:
+        rows.append(f"| {b} | {s['by_bundle'].get(b, 0)} |")
+    rows.append(f"| **Total** | **{s['total']}** |")
+
+    lines = ["## Summary", ""]
+    lines.extend(rows)
+    lines += [
+        "",
+        "**Confidence split:**",
+        "",
+        f"- **High confidence:** {s['confidence']['high']} entries.",
+        f"- **Medium confidence:** {s['confidence']['medium']} entries.",
+        f"- **Low confidence:** {s['confidence']['low']} entries.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def render_coverage(payload: dict, repo_root: Path | None) -> str:
+    rows = compute_coverage(payload, repo_root)
+    table = ["| Module | Feature count cited | Export accounting | Notes |", "| --- | ---: | --- | --- |"]
+    for r in rows:
+        table.append(f"| `{r['module']}` | {r['feature_count']} | {r['kind']} | {r['note']} |")
 
     lines = ["## Coverage manifest", ""]
     lines.append(
@@ -94,16 +123,30 @@ def render_coverage(payload: dict, repo_root: Path | None) -> str:
         "Rows with `0` cited features are plumbing-only modules in this spine."
     )
     lines.append("")
-    lines.extend(rows)
+    lines.extend(table)
     lines.append("")
     return "\n".join(lines)
+
+
+def write_meta_into_json(json_path: Path, payload: dict, repo_root: Path | None) -> int:
+    """Persist derived summary + coverage into the JSON sidecar, in place."""
+    payload["summary"] = compute_summary(payload)
+    payload["coverage"] = compute_coverage(payload, repo_root)
+    json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"wrote summary + {len(payload['coverage'])} coverage rows into {json_path}")
+    return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", required=True, type=Path)
-    ap.add_argument("--section", required=True, choices=["summary", "coverage"])
+    ap.add_argument("--section", choices=["summary", "coverage"], default=None)
     ap.add_argument("--repo", type=Path, default=None)
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="Persist derived summary + coverage into the JSON sidecar in place (instead of printing).",
+    )
     args = ap.parse_args()
 
     if not args.json.exists():
@@ -111,6 +154,12 @@ def main() -> int:
         return 1
     payload = json.loads(args.json.read_text(encoding="utf-8"))
 
+    if args.write:
+        return write_meta_into_json(args.json, payload, args.repo)
+
+    if not args.section:
+        print("error: one of --section {summary,coverage} or --write is required", file=sys.stderr)
+        return 1
     if args.section == "summary":
         print(render_summary(payload))
     else:

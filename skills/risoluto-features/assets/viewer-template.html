@@ -21,266 +21,383 @@
   <link rel="preconnect" href="https://rsms.me/">
   <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
   <style>
-    /* ---------- Palette: warm paper, restrained, OKLCH ---------- */
+    /* ============================================================
+       Risoluto Feature Spine — viewer
+       Identity: a warm-paper engineering ledger. Light-first,
+       restrained, OKLCH throughout. Dark is opt-in (a real toggle for
+       night reading), never the silent default.
+       ============================================================ */
     :root {
-      --paper:        oklch(0.985 0.004 80);   /* page background */
-      --paper-2:      oklch(0.975 0.005 78);   /* card */
-      --paper-3:      oklch(0.965 0.006 76);   /* rail / toolbar */
-      --ink:          oklch(0.22  0.015 270);  /* primary text */
-      --ink-2:        oklch(0.38  0.012 270);  /* secondary */
-      --ink-3:        oklch(0.55  0.010 270);  /* muted */
-      --rule:         oklch(0.91  0.006 80);   /* hairline */
-      --rule-2:       oklch(0.85  0.008 80);   /* divider */
-      --accent:       oklch(0.50  0.18  265);  /* indigo, used very sparingly */
-      --accent-tint:  oklch(0.96  0.04  265);  /* indigo wash for "current" */
-      --added:        oklch(0.55  0.13  155);  /* emerald */
-      --added-tint:   oklch(0.96  0.04  155);
-      --modified:     oklch(0.62  0.14  75);   /* amber */
-      --modified-tint:oklch(0.96  0.04  75);
-      --removed:      oklch(0.50  0.02  270);  /* slate, deliberately quiet */
-      --removed-tint: oklch(0.96  0.005 270);
-      --highlight:    oklch(0.93  0.10  100);  /* search match */
+      /* Surfaces — warm paper, tinted toward amber */
+      --paper:   oklch(0.985 0.004 80);
+      --paper-2: oklch(0.975 0.005 78);
+      --paper-3: oklch(0.965 0.006 76);
+      --paper-4: oklch(0.945 0.008 76);   /* deeper well / rail base */
+      /* Ink — tinted cool so it reads crisp against warm paper */
+      --ink:   oklch(0.22 0.015 270);
+      --ink-2: oklch(0.38 0.012 270);
+      --ink-3: oklch(0.55 0.010 270);
+      --ink-4: oklch(0.68 0.008 270);
+      /* Hairlines */
+      --rule:   oklch(0.91 0.006 80);
+      --rule-2: oklch(0.85 0.008 80);
+      /* Accent — indigo, used very sparingly */
+      --accent:      oklch(0.50 0.18 265);
+      --accent-2:    oklch(0.58 0.16 265);
+      --accent-tint: oklch(0.96 0.04 265);
+      /* Change semantics */
+      --added:        oklch(0.55 0.13 155);  --added-tint:    oklch(0.96 0.04 155);
+      --modified:     oklch(0.62 0.14 75);   --modified-tint: oklch(0.96 0.04 75);
+      --removed:      oklch(0.50 0.02 270);  --removed-tint:  oklch(0.96 0.005 270);
+      /* Tier markers — user-observable vs backend surface */
+      --tier-user:         oklch(0.54 0.10 195);   --tier-user-tint:    oklch(0.95 0.035 195);
+      --tier-backend:      oklch(0.56 0.020 285);  --tier-backend-tint: oklch(0.955 0.006 285);
+      /* Misc */
+      --highlight: oklch(0.92 0.11 100);
+      --shadow-1: 0 1px 2px oklch(0.30 0.02 270 / 0.05), 0 1px 1px oklch(0.30 0.02 270 / 0.04);
+      --shadow-2: 0 6px 24px oklch(0.30 0.02 270 / 0.08), 0 2px 6px oklch(0.30 0.02 270 / 0.05);
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      color-scheme: light;
     }
-    @media (prefers-color-scheme: dark) {
-      /* Dark is not the default. Provide a sensible auto-fallback for OS dark, but the design is light-first. */
-      :root.respect-os-dark {
-        --paper:        oklch(0.18  0.008 270);
-        --paper-2:      oklch(0.21  0.009 270);
-        --paper-3:      oklch(0.16  0.008 270);
-        --ink:          oklch(0.95  0.005 270);
-        --ink-2:        oklch(0.80  0.008 270);
-        --ink-3:        oklch(0.62  0.010 270);
-        --rule:         oklch(0.30  0.010 270);
-        --rule-2:       oklch(0.36  0.012 270);
-      }
+    :root[data-theme="dark"] {
+      --paper:   oklch(0.165 0.008 270);
+      --paper-2: oklch(0.205 0.009 270);
+      --paper-3: oklch(0.145 0.008 270);
+      --paper-4: oklch(0.125 0.008 270);
+      --ink:   oklch(0.95 0.006 270);
+      --ink-2: oklch(0.80 0.010 270);
+      --ink-3: oklch(0.62 0.012 270);
+      --ink-4: oklch(0.48 0.012 270);
+      --rule:   oklch(0.30 0.010 270);
+      --rule-2: oklch(0.38 0.012 270);
+      --accent:      oklch(0.74 0.15 265);
+      --accent-2:    oklch(0.80 0.13 265);
+      --accent-tint: oklch(0.30 0.07 265);
+      --added:    oklch(0.74 0.14 155);  --added-tint:    oklch(0.30 0.06 155);
+      --modified: oklch(0.80 0.13 75);   --modified-tint: oklch(0.33 0.06 75);
+      --removed:  oklch(0.62 0.02 270);  --removed-tint:  oklch(0.25 0.01 270);
+      --tier-user:    oklch(0.74 0.10 195);  --tier-user-tint:    oklch(0.30 0.05 195);
+      --tier-backend: oklch(0.66 0.02 285);  --tier-backend-tint: oklch(0.26 0.008 285);
+      --highlight: oklch(0.54 0.13 100);
+      --shadow-1: 0 1px 2px oklch(0 0 0 / 0.35);
+      --shadow-2: 0 8px 28px oklch(0 0 0 / 0.45);
+      color-scheme: dark;
     }
 
     html, body { background: var(--paper); color: var(--ink); }
-    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-feature-settings: "cv11", "ss01", "ss03";
+      transition: background-color 280ms var(--ease), color 280ms var(--ease);
+    }
     .font-serif-mark { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; }
+    .mono { font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace; }
 
-    /* ---------- Hairlines instead of borders ---------- */
     .hr-rule { border-color: var(--rule); }
     .hr-rule-2 { border-color: var(--rule-2); }
 
+    /* ---------- Skip link ---------- */
+    .skip-link {
+      position: fixed; left: 0.75rem; top: 0.75rem; z-index: 60;
+      transform: translateY(-160%);
+      padding: 0.4rem 0.75rem; border-radius: 4px;
+      background: var(--ink); color: var(--paper);
+      font-size: 0.8rem; box-shadow: var(--shadow-2);
+      transition: transform 160ms var(--ease);
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    /* ---------- Masthead ---------- */
+    .masthead { border-bottom: 1px solid var(--rule-2); background: var(--paper); }
+    .masthead-inner { padding-top: 2.4rem; padding-bottom: 1.6rem; }
+    .mast-title {
+      font-size: clamp(1.7rem, 1.1rem + 2.4vw, 2.6rem);
+      font-weight: 600; letter-spacing: -0.022em; line-height: 1.02;
+      color: var(--ink);
+    }
+    .mast-sub {
+      margin-top: 0.55rem; font-size: clamp(0.98rem, 0.9rem + 0.4vw, 1.15rem);
+      color: var(--ink-3); max-width: 62ch; line-height: 1.45;
+    }
+
+    /* ---------- Overview band ---------- */
+    .overview { margin-top: 1.7rem; display: grid; gap: 1.4rem; }
+    .overview-lead {
+      font-size: 1.02rem; line-height: 1.55; color: var(--ink-2); max-width: 70ch;
+    }
+    .overview-lead strong {
+      color: var(--ink); font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    /* Distribution bar — tier split, two segments, no rainbow */
+    .dist { max-width: 720px; }
+    .dist-bar {
+      display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden;
+      background: var(--paper-4); box-shadow: inset 0 0 0 1px var(--rule);
+    }
+    .dist-bar .seg { display: block; height: 100%; transition: filter 160ms var(--ease); }
+    .dist-bar .seg-backend { background: var(--tier-backend); }
+    .dist-bar .seg-user    { background: var(--tier-user); }
+    .dist-bar:hover .seg { filter: saturate(1.15); }
+    .dist-legend {
+      margin-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 1.1rem;
+      font-size: 0.82rem; color: var(--ink-3);
+    }
+    .dist-legend .num { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 500; }
+    .dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 999px; vertical-align: middle; margin-right: 0.4rem; }
+    .dot-user { background: var(--tier-user); }
+    .dot-backend { background: var(--tier-backend); }
+    /* Provenance — editorial definition list, not metric cards */
+    .prov {
+      display: flex; flex-wrap: wrap; gap: 1.5rem 2.4rem;
+      padding-top: 1.2rem; border-top: 1px solid var(--rule);
+    }
+    .prov > div { display: flex; flex-direction: column; gap: 0.15rem; }
+    .prov dt {
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--ink-4);
+    }
+    .prov dd { font-size: 0.9rem; color: var(--ink); line-height: 1.3; }
+    .prov dd.mono { font-family: 'JetBrains Mono', monospace; font-size: 0.84rem; }
+    .prov dd a { color: var(--accent); }
+    .prov dd a:hover { text-decoration: underline; }
+    .prov dd .faint { color: var(--ink-3); }
+
+    /* ---------- Toolbar (sticky utility bar) ---------- */
+    .toolbar {
+      background: color-mix(in oklch, var(--paper) 82%, transparent);
+      border-bottom: 1px solid var(--rule-2);
+      backdrop-filter: saturate(160%) blur(8px);
+      -webkit-backdrop-filter: saturate(160%) blur(8px);
+    }
+    .wordmark {
+      font-size: 0.82rem; font-weight: 600; letter-spacing: -0.01em;
+      color: var(--ink-2); white-space: nowrap;
+    }
+    .wordmark:hover { color: var(--ink); }
+    .search-input {
+      background: var(--paper-2); border: 1px solid var(--rule-2); color: var(--ink);
+      transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
+    }
+    .search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+    .search-input::placeholder { color: var(--ink-4); }
+    .kbd-hint {
+      color: var(--ink-3); background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;
+    }
+
+    /* ---------- Icon button (theme toggle) ---------- */
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 2rem; height: 2rem; border-radius: 6px;
+      border: 1px solid var(--rule-2); color: var(--ink-2); background: var(--paper-2);
+      cursor: pointer; transition: color 140ms, border-color 140ms, background-color 140ms;
+    }
+    .icon-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+    .icon-btn svg { width: 1rem; height: 1rem; }
+    .icon-btn .i-moon { display: none; }
+    :root[data-theme="dark"] .icon-btn .i-sun  { display: none; }
+    :root[data-theme="dark"] .icon-btn .i-moon { display: inline; }
+
     /* ---------- Citation chip — falsifiability is the aesthetic ---------- */
     .citation {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 0.4rem;
+      display: inline-flex; align-items: baseline; gap: 0.4rem;
       padding: 0.18rem 0.5rem;
-      background: var(--paper-3);
-      border: 1px solid var(--rule);
-      border-radius: 3px;
+      background: var(--paper-3); border: 1px solid var(--rule); border-radius: 3px;
       font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
-      font-size: 0.78rem;
-      line-height: 1.4;
-      color: var(--ink-2);
+      font-size: 0.78rem; line-height: 1.4; color: var(--ink-2);
       cursor: copy;
-      transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1), color 120ms;
+      transition: background-color 120ms var(--ease), color 120ms, border-color 120ms;
     }
-    .citation:hover { background: var(--accent-tint); color: var(--ink); }
+    .citation:hover { background: var(--accent-tint); color: var(--ink); border-color: var(--accent); }
     .citation .sym  { color: var(--ink); font-weight: 500; }
     .citation .lines { color: var(--ink-3); }
     .citation .kind { color: var(--ink-3); font-style: italic; font-family: 'Source Serif 4', Georgia, serif; font-size: 0.72rem; margin-left: 0.2rem; }
-    .citation.copied { background: var(--added-tint); color: var(--ink); }
+    .citation.copied { background: var(--added-tint); color: var(--ink); border-color: var(--added); }
 
     /* ---------- Filter pill ---------- */
     .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.25rem 0.65rem;
-      border: 1px solid var(--rule-2);
-      border-radius: 999px;
-      font-size: 0.78rem;
-      color: var(--ink-2);
-      background: transparent;
-      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 0.22rem 0.6rem; border: 1px solid var(--rule-2); border-radius: 999px;
+      font-size: 0.76rem; color: var(--ink-2); background: transparent; cursor: pointer;
       transition: background-color 120ms, border-color 120ms, color 120ms;
     }
     .pill:hover { border-color: var(--ink-3); color: var(--ink); }
-    .pill[aria-pressed="true"] {
-      background: var(--ink);
-      border-color: var(--ink);
-      color: var(--paper);
-    }
-    .pill .count {
-      font-variant-numeric: tabular-nums;
-      color: var(--ink-3);
-      font-size: 0.72rem;
-    }
+    .pill[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+    .pill .count { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 0.7rem; }
     .pill[aria-pressed="true"] .count { color: var(--paper-3); }
 
-    /* ---------- Change badges (for cards) ---------- */
+    /* ---------- Change badges ---------- */
     .badge {
       display: inline-flex; align-items: center; gap: 0.3rem;
       padding: 0.1rem 0.45rem; border-radius: 3px;
-      font-size: 0.7rem; font-weight: 500; letter-spacing: 0.01em;
-      text-transform: uppercase;
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
     }
     .badge-added    { background: var(--added-tint);    color: var(--added); }
     .badge-modified { background: var(--modified-tint); color: var(--modified); }
     .badge-removed  { background: var(--removed-tint);  color: var(--removed); }
 
-    /* ---------- Bundle rail dot ---------- */
+    /* ---------- Tier + confidence tags ---------- */
+    .tier-tag {
+      display: inline-flex; align-items: center; gap: 0.32rem;
+      font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--ink-3); font-weight: 500;
+    }
+    .tier-tag .dot { width: 0.45rem; height: 0.45rem; margin-right: 0; }
+    .tier-user-tag .dot { background: var(--tier-user); }
+    .tier-backend-tag .dot { background: var(--tier-backend); }
+    .conf-tag {
+      font-size: 0.64rem; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600;
+      padding: 0.06rem 0.4rem; border-radius: 3px;
+    }
+    .conf-medium { background: var(--modified-tint); color: var(--modified); }
+    .conf-low    { background: var(--removed-tint);  color: var(--removed); }
+
+    /* ---------- Bundle rail ---------- */
     .rail-link {
       display: flex; align-items: baseline; justify-content: space-between;
       padding: 0.3rem 0.6rem 0.3rem 0.85rem;
-      color: var(--ink-2);
-      border-left: 1px solid transparent;
-      transition: color 120ms, border-color 120ms;
-      font-size: 0.86rem;
+      color: var(--ink-2); border-left: 1px solid transparent;
+      transition: color 120ms, border-color 120ms; font-size: 0.86rem; border-radius: 0 4px 4px 0;
     }
-    .rail-link:hover { color: var(--ink); }
-    .rail-link.active {
-      color: var(--ink);
-      border-left-color: var(--ink);
-      font-weight: 500;
-    }
-    .rail-link .count {
-      font-variant-numeric: tabular-nums;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--ink-3);
-    }
+    .rail-link:hover { color: var(--ink); background: var(--paper-3); }
+    .rail-link.active { color: var(--ink); border-left-color: var(--accent); font-weight: 500; }
+    .rail-link .count { font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--ink-3); }
     .rail-link.has-change::after {
-      content: "";
-      width: 5px; height: 5px; border-radius: 999px;
-      background: var(--modified);
-      margin-left: 0.4rem;
-      display: inline-block;
+      content: ""; width: 5px; height: 5px; border-radius: 999px;
+      background: var(--modified); margin-left: 0.4rem; display: inline-block;
     }
 
     /* ---------- Card ---------- */
     .feature-card {
-      padding: 1.1rem 1.25rem;
-      background: var(--paper-2);
-      border: 1px solid var(--rule);
-      border-radius: 4px;
-      transition: border-color 120ms;
+      padding: 1.1rem 1.25rem; background: var(--paper-2);
+      border: 1px solid var(--rule); border-radius: 5px;
+      transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease), transform 140ms var(--ease);
     }
-    .feature-card:hover { border-color: var(--rule-2); }
-    .feature-card[data-tier="backend-surface"] {
-      background: var(--paper);
-    }
+    .feature-card:hover { border-color: var(--rule-2); box-shadow: var(--shadow-1); }
+    .feature-card[data-tier="backend-surface"] { background: var(--paper); }
     .feature-card.removed { opacity: 0.7; background: var(--removed-tint); }
+    .feature-card:target { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
 
     .feature-card details > summary {
-      list-style: none;
-      cursor: pointer;
-      color: var(--ink-3);
-      font-size: 0.78rem;
-      padding: 0.35rem 0;
-      user-select: none;
-      transition: color 120ms;
+      list-style: none; cursor: pointer; color: var(--ink-3); font-size: 0.78rem;
+      padding: 0.35rem 0; user-select: none; transition: color 120ms;
     }
     .feature-card details > summary::-webkit-details-marker { display: none; }
     .feature-card details > summary:hover { color: var(--ink); }
     .feature-card details > summary::before {
-      content: "▸";
-      display: inline-block;
-      margin-right: 0.4rem;
-      transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+      content: "▸"; display: inline-block; margin-right: 0.4rem;
+      transition: transform 160ms var(--ease);
     }
     .feature-card details[open] > summary::before { transform: rotate(90deg); }
 
     /* ---------- Search highlight ---------- */
-    mark {
-      background: var(--highlight);
-      color: var(--ink);
-      padding: 0 1px;
-      border-radius: 2px;
-    }
+    mark { background: var(--highlight); color: var(--ink); padding: 0 1px; border-radius: 2px; }
 
     /* ---------- Diff banner ---------- */
-    .diff-banner {
-      border-bottom: 1px solid var(--rule-2);
-      background: var(--paper-3);
-    }
+    .diff-banner { border-bottom: 1px solid var(--rule-2); background: var(--paper-3); }
 
-    /* ---------- Toolbar ---------- */
-    .toolbar {
-      background: var(--paper);
-      border-bottom: 1px solid var(--rule-2);
-      backdrop-filter: saturate(160%) blur(6px);
-      -webkit-backdrop-filter: saturate(160%) blur(6px);
-    }
+    /* ---------- Section heading ---------- */
+    .bundle-head { border-color: var(--rule-2); }
 
-    /* ---------- Table ---------- */
+    /* ---------- Coverage table ---------- */
     .coverage-table th, .coverage-table td {
-      padding: 0.55rem 0.75rem;
-      border-bottom: 1px solid var(--rule);
-      text-align: left;
-      vertical-align: top;
+      padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top;
     }
     .coverage-table th {
-      font-size: 0.72rem;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--ink-3);
-      cursor: pointer;
-      user-select: none;
-      background: var(--paper-2);
+      font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--ink-3); cursor: pointer; user-select: none; background: var(--paper-2);
+      position: sticky; top: 0;
     }
     .coverage-table th:hover { color: var(--ink); }
-    .coverage-table th[aria-sort="ascending"]::after { content: " ▲"; color: var(--ink-2); font-size: 0.65rem; }
+    .coverage-table th[aria-sort="ascending"]::after  { content: " ▲"; color: var(--ink-2); font-size: 0.65rem; }
     .coverage-table th[aria-sort="descending"]::after { content: " ▼"; color: var(--ink-2); font-size: 0.65rem; }
+    .coverage-table tbody tr:hover { background: var(--paper-3); }
     .coverage-table td { font-size: 0.84rem; color: var(--ink-2); }
     .coverage-table td.mod { font-family: 'JetBrains Mono', monospace; color: var(--ink); font-size: 0.8rem; }
     .coverage-table td.num { font-variant-numeric: tabular-nums; text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--ink); }
-    .coverage-bar {
-      display: inline-block;
-      height: 0.45rem;
-      background: var(--accent);
-      opacity: 0.7;
-      border-radius: 1px;
-      vertical-align: middle;
-      margin-left: 0.5rem;
-    }
+    .coverage-table tr.is-plumbing td.mod { color: var(--ink-3); }
+    .coverage-bar { display: inline-block; height: 0.45rem; background: var(--accent); opacity: 0.65; border-radius: 1px; vertical-align: middle; margin-left: 0.5rem; }
 
-    /* ---------- Followup / Notes ---------- */
-    .followup-item {
-      padding: 0.85rem 0;
-      border-bottom: 1px solid var(--rule);
-    }
+    /* ---------- Follow-up / Notes ---------- */
+    .followup-item { padding: 0.85rem 0; border-bottom: 1px solid var(--rule); }
     .followup-item:last-child { border-bottom: 0; }
-    .followup-item .question {
-      color: var(--ink);
-      font-weight: 500;
-      margin-top: 0.4rem;
-    }
+    .followup-item .question { color: var(--ink); font-weight: 500; margin-top: 0.4rem; }
     .followup-item.resolved { opacity: 0.7; }
 
-    .empty {
-      padding: 3rem 1.5rem;
-      text-align: center;
-      color: var(--ink-3);
-      font-style: italic;
+    .empty { padding: 3rem 1.5rem; text-align: center; color: var(--ink-3); font-style: italic; }
+
+    /* ---------- Focus rings ---------- */
+    a:focus-visible, button:focus-visible, summary:focus-visible, .citation:focus-visible, input:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
     }
 
-    /* Skip-to-content & focus rings */
-    a:focus-visible, button:focus-visible, summary:focus-visible, .citation:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
+    /* ---------- Motion ---------- */
+    @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .reveal { animation: fade-up 480ms var(--ease) both; }
+    .reveal-2 { animation: fade-up 480ms var(--ease) 80ms both; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .reveal, .reveal-2 { animation: none; }
+      .feature-card, .dist-bar .seg { transition: none; }
     }
 
-    /* Anchored sections must clear the sticky toolbar when scrolled into view.
-       Toolbar is ~110-140px tall (title row + filter row + padding). Leave breathing room. */
-    [id^="bundle-"],
-    [id^="f-"],
-    #coverage,
-    #followup,
-    #notes {
-      scroll-margin-top: 150px;
+    /* Anchored sections clear the sticky toolbar. */
+    [id^="bundle-"], [id^="f-"], #coverage, #followup, #notes { scroll-margin-top: 84px; }
+    html { scroll-padding-top: 84px; }
+
+    /* ---------- Print ---------- */
+    @media print {
+      :root { --paper: #fff; --paper-2: #fff; --paper-3: #fff; --paper-4: #fff; --ink: #000; --ink-2: #1a1a1a; --ink-3: #444; --rule: #ccc; --rule-2: #bbb; }
+      .toolbar, .skip-link, #theme-toggle, aside, .diff-banner, #filter-pills, .search-wrap { display: none !important; }
+      .masthead { border: 0; }
+      .feature-card { break-inside: avoid; border: 1px solid #ddd; box-shadow: none; }
+      .feature-card details[open] > summary { display: none; }
+      .feature-card details > ul { display: block !important; }
+      main { grid-column: 1 / -1; }
+      .max-w-screen-2xl { max-width: none; }
+      a { color: #000; text-decoration: none; }
+      .citation { background: #f5f5f5; }
     }
-    html { scroll-padding-top: 150px; }  /* covers same-origin anchor link clicks */
   </style>
 </head>
 <body class="font-sans antialiased">
 
-  <!-- =================== TOP : Diff Banner =================== -->
+  <a href="#content" class="skip-link">Skip to features</a>
+
+  <!-- =================== Masthead =================== -->
+  <header id="top" class="masthead">
+    <div class="masthead-inner max-w-screen-2xl mx-auto px-6">
+      <h1 class="mast-title">Risoluto Feature Spine</h1>
+      <p class="mast-sub font-serif-mark">
+        A behavior-level, code-backed inventory of everything Risoluto ships today, the spine future
+        reference repos are measured against.
+      </p>
+      <div id="overview" class="overview reveal"></div>
+    </div>
+  </header>
+
+  <!-- =================== Toolbar (sticky) =================== -->
+  <header class="toolbar sticky top-0 z-30">
+    <div class="max-w-screen-2xl mx-auto px-6 py-2.5 flex items-center gap-3 flex-wrap">
+      <a href="#top" class="wordmark">Feature&nbsp;Spine</a>
+      <div class="search-wrap relative flex-1 min-w-[200px] max-w-[440px]">
+        <input id="search"
+               type="search"
+               placeholder="Search descriptions, behaviors, symbols…"
+               class="search-input w-full text-sm pl-3 pr-8 py-1.5 rounded font-mono"
+               autocomplete="off" spellcheck="false" />
+        <kbd class="kbd-hint absolute right-2 top-1/2 -translate-y-1/2 text-xs px-1.5 py-0.5 font-mono">/</kbd>
+      </div>
+      <div id="filter-pills" class="flex items-center gap-1.5 flex-wrap"></div>
+      <button id="theme-toggle" type="button" class="icon-btn ml-auto" aria-label="Toggle dark mode" title="Toggle dark mode (D)">
+        <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <span id="result-count" class="text-xs font-mono" style="color: var(--ink-3)"></span>
+    </div>
+  </header>
+
+  <!-- =================== Diff banner =================== -->
   <div id="diff-banner" class="diff-banner hidden">
     <div class="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4 text-sm flex-wrap">
       <span class="font-serif-mark text-base" style="color: var(--ink-2)">Changed since</span>
@@ -291,40 +408,12 @@
     </div>
   </div>
 
-  <!-- =================== TOP : Toolbar =================== -->
-  <header class="toolbar sticky top-0 z-30">
-    <div class="max-w-screen-2xl mx-auto px-6 py-3">
-      <div class="flex items-baseline gap-6 mb-3">
-        <h1 class="text-base font-medium tracking-tight" style="color: var(--ink)">
-          Risoluto Feature Spine
-        </h1>
-        <span class="font-serif-mark text-sm" style="color: var(--ink-3)">
-          <span id="head-describe">—</span> · <span id="head-date">—</span> · <span id="head-count">—</span> features
-        </span>
-      </div>
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="relative flex-1 min-w-[220px] max-w-[480px]">
-          <input id="search"
-                 type="search"
-                 placeholder="Search descriptions, behaviors, symbols…"
-                 class="w-full text-sm px-3 py-1.5 border rounded font-mono"
-                 style="background: var(--paper-2); border-color: var(--rule-2); color: var(--ink);"
-                 autocomplete="off" spellcheck="false" />
-          <kbd class="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-1.5 py-0.5 font-mono"
-               style="color: var(--ink-3); background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;">/</kbd>
-        </div>
-        <div id="filter-pills" class="flex items-center gap-1.5 flex-wrap"></div>
-        <span id="result-count" class="text-xs ml-auto font-mono" style="color: var(--ink-3)"></span>
-      </div>
-    </div>
-  </header>
-
   <!-- =================== MAIN : Rail + Content =================== -->
   <div class="max-w-screen-2xl mx-auto px-6 py-8 grid gap-10" style="grid-template-columns: 220px minmax(0, 1fr);">
 
     <!-- Left rail -->
     <aside class="hidden lg:block">
-      <div class="sticky top-[120px]">
+      <div class="sticky top-[84px]">
         <div class="text-xs uppercase tracking-wider mb-3" style="color: var(--ink-3)">Bundles</div>
         <nav id="bundle-rail" class="flex flex-col gap-0.5"></nav>
         <div class="mt-8 text-xs uppercase tracking-wider mb-3" style="color: var(--ink-3)">Jump</div>
@@ -342,7 +431,7 @@
 
       <!-- ===== Coverage manifest ===== -->
       <section id="coverage" class="mt-16">
-        <h2 class="text-xl font-medium mb-1">Coverage manifest</h2>
+        <h2 class="text-xl font-medium mb-1 tracking-tight">Coverage manifest</h2>
         <p class="text-sm mb-5" style="color: var(--ink-3)">
           One row per actual <code class="font-mono text-xs">src/&lt;module&gt;/</code> directory. Click a column to sort.
         </p>
@@ -363,7 +452,7 @@
 
       <!-- ===== Needs follow-up ===== -->
       <section id="followup" class="mt-16">
-        <h2 class="text-xl font-medium mb-1">Needs follow-up</h2>
+        <h2 class="text-xl font-medium mb-1 tracking-tight">Needs follow-up</h2>
         <p class="text-sm mb-5" style="color: var(--ink-3)">
           Open questions that need a decision before the next roadmap cut.
         </p>
@@ -372,7 +461,7 @@
 
       <!-- ===== Analyst notes ===== -->
       <section id="notes" class="mt-16 mb-24">
-        <h2 class="text-xl font-medium mb-1">Analyst notes</h2>
+        <h2 class="text-xl font-medium mb-1 tracking-tight">Analyst notes</h2>
         <p class="text-sm mb-5" style="color: var(--ink-3)">
           Observations that aren't feature entries but warrant attention.
         </p>
@@ -397,7 +486,12 @@
       // ---------- Parse payload ----------
       const PAYLOAD = JSON.parse(document.getElementById('payload').textContent);
       const IS_COLD_START = !PAYLOAD.previous_commit_sha;
+      // A "self diff" is a re-run against the same commit (a metadata / quality pass).
+      // Nothing can be genuinely *added* against the same SHA, so cold-start "added"
+      // flags are stale holdovers — only field-level modifications are real.
+      const SELF_DIFF = !!PAYLOAD.previous_commit_sha && PAYLOAD.previous_commit_sha === PAYLOAD.commit_sha;
       const TOTAL_FEATURES = (PAYLOAD.features || []).length;
+      const FEATURES = PAYLOAD.features || [];
 
       // ---------- Helpers ----------
       const $  = (sel, root) => (root || document).querySelector(sel);
@@ -417,10 +511,7 @@
 
       function esc(s) {
         if (s == null) return '';
-        return String(s)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
 
       // Render minimal markdown-in-strings: backticks → <code>
@@ -429,37 +520,96 @@
         return esc(s).replace(/`([^`]+)`/g, '<code class="font-mono text-[0.85em]" style="background: var(--paper-3); padding: 0 0.25rem; border-radius: 2px;">$1</code>');
       }
 
-      function shortSha(s) {
-        return s ? String(s).slice(0, 7) : '—';
-      }
+      const shortSha = (s) => (s ? String(s).slice(0, 7) : '—');
+      const pluralize = (n, one, many) => (n === 1 ? one : (many || (one + 's')));
+      const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-      function pluralize(n, one, many) {
-        return n === 1 ? one : (many || (one + 's'));
+      // The effective change kind for a feature, after correcting for self-diff / cold start.
+      // Returns 'added' | 'modified' | null.
+      function effectiveChange(f) {
+        const c = f.changed_since_previous;
+        if (!c) return null;
+        if (c.kind === 'modified') return 'modified';
+        if (c.kind === 'added') return (SELF_DIFF || IS_COLD_START) ? null : 'added';
+        return null;
       }
+      const isChanged = (f) => effectiveChange(f) !== null;
 
-      // ---------- Fill header ----------
-      $('#head-describe').textContent = PAYLOAD.git_describe || shortSha(PAYLOAD.commit_sha);
-      $('#head-date').textContent     = PAYLOAD.head_date || '—';
-      $('#head-count').textContent    = (PAYLOAD.summary && PAYLOAD.summary.total) || (PAYLOAD.features || []).length;
-      $('#gen-at').textContent        = PAYLOAD.generated_at || '—';
-      $('#gen-sha').textContent       = shortSha(PAYLOAD.commit_sha);
-      $('#schema-ver').textContent    = PAYLOAD.schema_version || '1.0';
+      // ---------- Footer provenance ----------
+      $('#gen-at').textContent     = PAYLOAD.generated_at || '—';
+      $('#gen-sha').textContent    = shortSha(PAYLOAD.commit_sha);
+      $('#schema-ver').textContent = PAYLOAD.schema_version || '1.0';
+
+      // ---------- Overview band ----------
+      (function renderOverview() {
+        const host = $('#overview');
+        const byTier = {};
+        FEATURES.forEach(f => { const t = f.tier || 'user-observable'; byTier[t] = (byTier[t] || 0) + 1; });
+        const user = byTier['user-observable'] || 0;
+        const backend = byTier['backend-surface'] || 0;
+        const bundleCount = (PAYLOAD.bundles || []).length;
+        const conf = (PAYLOAD.summary && PAYLOAD.summary.confidence) || {};
+        const confParts = ['high', 'medium', 'low']
+          .filter(k => conf[k]).map(k => conf[k] + ' ' + k);
+        const userPct = TOTAL_FEATURES ? Math.round((user / TOTAL_FEATURES) * 100) : 0;
+        const backendPct = 100 - userPct;
+
+        // Lead sentence — editorial, numbers carry weight.
+        const lead = el('p', {
+          class: 'overview-lead',
+          html: '<strong>' + TOTAL_FEATURES + '</strong> features mapped across <strong>' + bundleCount +
+                '</strong> bundles — <strong>' + backend + '</strong> backend surfaces and <strong>' + user +
+                '</strong> user-observable' +
+                (confParts.length === 1 && conf.high === TOTAL_FEATURES ? ', all high-confidence.' :
+                 (confParts.length ? ' (' + confParts.join(', ') + ' confidence).' : '.')),
+        });
+
+        // Tier distribution bar (two segments, deliberately not a rainbow).
+        const dist = el('div', { class: 'dist' });
+        dist.appendChild(el('div', {
+          class: 'dist-bar',
+          attrs: { role: 'img', 'aria-label': backend + ' backend surfaces, ' + user + ' user-observable features' },
+          html: '<span class="seg seg-backend" style="width:' + backendPct + '%"></span>' +
+                '<span class="seg seg-user" style="width:' + userPct + '%"></span>',
+        }));
+        dist.appendChild(el('div', {
+          class: 'dist-legend',
+          html: '<span><i class="dot dot-backend"></i><span class="num">' + backend + '</span> backend surface</span>' +
+                '<span><i class="dot dot-user"></i><span class="num">' + user + '</span> user-observable</span>',
+        }));
+
+        // Provenance definition list.
+        const ship = PAYLOAD.latest_shipped_bundles || {};
+        const road = PAYLOAD.open_roadmap || {};
+        const shipDates = (ship.dates || []);
+        const shipRange = shipDates.length === 2 ? (shipDates[0] + ' → ' + shipDates[1]) : (shipDates[0] || '—');
+        const repoUrl = PAYLOAD.source_repo_url ? PAYLOAD.source_repo_url.replace(/\.git$/, '') : null;
+
+        const prov = el('dl', { class: 'prov' });
+        prov.appendChild(el('div', { children: [ el('dt', { text: 'Revision' }), el('dd', { class: 'mono', text: PAYLOAD.git_describe || shortSha(PAYLOAD.commit_sha) }) ] }));
+        prov.appendChild(el('div', { children: [ el('dt', { text: 'HEAD date' }), el('dd', { text: PAYLOAD.head_date || '—' }) ] }));
+        prov.appendChild(el('div', { children: [ el('dt', { text: 'Commit' }), el('dd', { class: 'mono', text: shortSha(PAYLOAD.commit_sha) }) ] }));
+        if (ship.count) prov.appendChild(el('div', { children: [ el('dt', { text: 'Latest shipped' }), el('dd', { html: '<span>' + ship.count + ' ' + pluralize(ship.count, 'bundle') + '</span> <span class="faint">· ' + esc(shipRange) + '</span>' }) ] }));
+        prov.appendChild(el('div', { children: [ el('dt', { text: 'Open roadmap' }), el('dd', { html: (road.count ? road.count + ' ' + pluralize(road.count, 'feature') : '<span class="faint">none open</span>') + (road.as_of ? ' <span class="faint">· as of ' + esc(road.as_of) + '</span>' : '') }) ] }));
+        if (repoUrl) prov.appendChild(el('div', { children: [ el('dt', { text: 'Source' }), el('dd', { html: '<a href="' + esc(repoUrl) + '" target="_blank" rel="noopener">' + esc(PAYLOAD.source_repo || repoUrl) + '</a>' }) ] }));
+
+        host.appendChild(lead);
+        host.appendChild(dist);
+        host.appendChild(prov);
+      })();
 
       // ---------- Bundle rail ----------
       const bundleCounts = {};
       const bundleHasChange = {};
-      (PAYLOAD.features || []).forEach(f => {
+      FEATURES.forEach(f => {
         bundleCounts[f.bundle] = (bundleCounts[f.bundle] || 0) + 1;
-        if (f.changed_since_previous) bundleHasChange[f.bundle] = true;
+        if (isChanged(f)) bundleHasChange[f.bundle] = true;
       });
-      (PAYLOAD.removed_features || []).forEach(f => {
-        bundleHasChange[f.bundle] = true;
-      });
+      (PAYLOAD.removed_features || []).forEach(f => { bundleHasChange[f.bundle] = true; });
 
       const railHost = $('#bundle-rail');
       (PAYLOAD.bundles || []).forEach(b => {
         if (!bundleCounts[b] && !bundleHasChange[b]) return;
-        // Suppress change-dots on cold start: every bundle has changes, so the dot adds noise.
         const showDot = bundleHasChange[b] && !IS_COLD_START;
         const a = el('a', {
           attrs: { href: '#bundle-' + slug(b) },
@@ -472,56 +622,56 @@
         railHost.appendChild(a);
       });
 
-      function slug(s) {
-        return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      }
-
       // ---------- Diff banner ----------
-      const added    = (PAYLOAD.features || []).filter(f => f.changed_since_previous && f.changed_since_previous.kind === 'added');
-      const modified = (PAYLOAD.features || []).filter(f => f.changed_since_previous && f.changed_since_previous.kind === 'modified');
+      const added    = FEATURES.filter(f => effectiveChange(f) === 'added');
+      const modified = FEATURES.filter(f => effectiveChange(f) === 'modified');
       const removed  = PAYLOAD.removed_features || [];
 
       if (IS_COLD_START && TOTAL_FEATURES > 0) {
-        // Initial cut: show a different banner because "X added" against nothing isn't a diff.
         $('#diff-banner').classList.remove('hidden');
         const inner = $('#diff-banner > div');
         inner.innerHTML = '';
-        inner.appendChild(el('span', {
-          class: 'font-serif-mark text-base',
-          style: { color: 'var(--ink-2)' },
-          text: 'Initial spine cut at',
-        }));
+        inner.appendChild(el('span', { class: 'font-serif-mark text-base', style: { color: 'var(--ink-2)' }, text: 'Initial spine cut at' }));
         inner.appendChild(el('code', {
           class: 'font-mono text-xs px-1.5 py-0.5',
           style: { background: 'var(--paper)', border: '1px solid var(--rule)', 'border-radius': '3px' },
           text: shortSha(PAYLOAD.commit_sha),
         }));
         inner.appendChild(el('span', {
-          class: 'text-sm',
-          style: { color: 'var(--ink-3)' },
+          class: 'text-sm', style: { color: 'var(--ink-3)' },
           text: '— ' + TOTAL_FEATURES + ' ' + pluralize(TOTAL_FEATURES, 'feature') + ' recorded for the first time. Diff highlighting will activate on the next run.',
         }));
       } else if (added.length || modified.length || removed.length) {
         $('#diff-banner').classList.remove('hidden');
-        $('#diff-prev-sha').textContent = shortSha(PAYLOAD.previous_commit_sha);
-        $('#diff-new-sha').textContent  = shortSha(PAYLOAD.commit_sha);
+        const inner = $('#diff-banner > div');
+        if (SELF_DIFF) {
+          // Same commit on both sides: frame it honestly as a quality pass, not a delta.
+          inner.innerHTML = '';
+          inner.appendChild(el('span', { class: 'font-serif-mark text-base', style: { color: 'var(--ink-2)' }, text: 'Targeted quality pass at' }));
+          inner.appendChild(el('code', {
+            class: 'font-mono text-xs px-1.5 py-0.5',
+            style: { background: 'var(--paper)', border: '1px solid var(--rule)', 'border-radius': '3px' },
+            text: shortSha(PAYLOAD.commit_sha),
+          }));
+          inner.appendChild(el('span', { class: 'text-sm', style: { color: 'var(--ink-3)' }, text: '— source unchanged; metadata refinements only.' }));
+          const chipsHost = el('div', { class: 'flex items-center gap-2 ml-auto flex-wrap', attrs: { id: 'diff-chips' } });
+          inner.appendChild(chipsHost);
+        } else {
+          $('#diff-prev-sha').textContent = shortSha(PAYLOAD.previous_commit_sha);
+          $('#diff-new-sha').textContent  = shortSha(PAYLOAD.commit_sha);
+        }
 
         const chipsHost = $('#diff-chips');
         function chip(label, n, kind) {
           if (!n) return null;
-          const b = el('button', {
+          return el('button', {
             class: 'badge badge-' + kind + ' cursor-pointer',
             attrs: { 'data-jump-kind': kind, type: 'button', title: 'Scroll to first ' + kind + ' entry' },
             html: '<span style="font-variant-numeric: tabular-nums;">' + n + '</span>&nbsp;<span>' + label + '</span>',
           });
-          return b;
         }
-        const c1 = chip('Added',    added.length,    'added');
-        const c2 = chip('Modified', modified.length, 'modified');
-        const c3 = chip('Removed',  removed.length,  'removed');
-        if (c1) chipsHost.appendChild(c1);
-        if (c2) chipsHost.appendChild(c2);
-        if (c3) chipsHost.appendChild(c3);
+        [chip('Added', added.length, 'added'), chip('Modified', modified.length, 'modified'), chip('Removed', removed.length, 'removed')]
+          .forEach(c => { if (c) chipsHost.appendChild(c); });
 
         chipsHost.addEventListener('click', e => {
           const t = e.target.closest('[data-jump-kind]');
@@ -539,25 +689,21 @@
       }
 
       // ---------- Filter pills ----------
-      // The "Changed" filter only matters when there's actually a delta to filter on.
-      // The "Has follow-up" heuristic was weak (most followups are about the skill,
-      // not specific features) so we removed it for now.
       const ALL_FILTERS = {
-        changed:         { label: 'Changed',         test: f => !!f.changed_since_previous,    showWhen: () => !IS_COLD_START && (added.length + modified.length) < TOTAL_FEATURES },
-        high:            { label: 'High confidence', test: f => f.confidence === 'high',       showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
-        medium:          { label: 'Medium confidence', test: f => f.confidence === 'medium',   showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
-        low:             { label: 'Low confidence',  test: f => f.confidence === 'low',        showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
-        user_observable: { label: 'User-observable', test: f => f.tier === 'user-observable',  showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
-        backend:         { label: 'Backend surface', test: f => f.tier === 'backend-surface',  showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        changed:         { label: 'Changed',          test: isChanged,                         showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        high:            { label: 'High confidence',  test: f => f.confidence === 'high',       showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        medium:          { label: 'Medium confidence', test: f => f.confidence === 'medium',    showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        low:             { label: 'Low confidence',   test: f => f.confidence === 'low',        showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        user_observable: { label: 'User-observable',  test: f => f.tier === 'user-observable',  showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
+        backend:         { label: 'Backend surface',  test: f => f.tier === 'backend-surface',  showWhen: (n) => n > 0 && n < TOTAL_FEATURES },
       };
 
-      // Compute counts and only render pills that would actually discriminate the view.
       const FILTERS = {};
       Object.keys(ALL_FILTERS).forEach(key => {
         const def = ALL_FILTERS[key];
-        const count = (PAYLOAD.features || []).filter(def.test).length;
+        const count = FEATURES.filter(def.test).length;
         if (!def.showWhen(count)) return;
-        FILTERS[key] = { ...def, count };
+        FILTERS[key] = Object.assign({}, def, { count });
       });
 
       const activeFilters = new Set();
@@ -570,63 +716,41 @@
           html: '<span>' + esc(f.label) + '</span><span class="count">' + f.count + '</span>',
         });
         pill.addEventListener('click', () => {
-          if (activeFilters.has(key)) {
-            activeFilters.delete(key);
-            pill.setAttribute('aria-pressed', 'false');
-          } else {
-            activeFilters.add(key);
-            pill.setAttribute('aria-pressed', 'true');
-          }
+          if (activeFilters.has(key)) { activeFilters.delete(key); pill.setAttribute('aria-pressed', 'false'); }
+          else { activeFilters.add(key); pill.setAttribute('aria-pressed', 'true'); }
           renderFeatures();
         });
         pillsHost.appendChild(pill);
       });
 
-      // If no discriminating filters survived, show a quiet hint instead of an empty pill row.
       if (Object.keys(FILTERS).length === 0) {
         pillsHost.appendChild(el('span', {
-          class: 'font-serif-mark text-xs',
-          style: { color: 'var(--ink-3)' },
-          text: IS_COLD_START
-            ? 'Filters activate on the next run.'
-            : 'All features share the same confidence / tier — no useful filters this run.',
+          class: 'font-serif-mark text-xs', style: { color: 'var(--ink-3)' },
+          text: IS_COLD_START ? 'Filters activate on the next run.' : 'All features share the same confidence / tier — no useful filters this run.',
         }));
       }
 
-      // Kept for the Needs follow-up section's data, but no longer used as a filter axis.
       const followups = PAYLOAD.needs_followup || [];
 
       // ---------- Search ----------
       const searchInput = $('#search');
       let searchTerm = '';
-      searchInput.addEventListener('input', e => {
-        searchTerm = e.target.value.trim().toLowerCase();
-        renderFeatures();
-      });
-      // Press "/" anywhere to focus search
+      searchInput.addEventListener('input', e => { searchTerm = e.target.value.trim().toLowerCase(); renderFeatures(); });
       document.addEventListener('keydown', e => {
-        if (e.key === '/' && document.activeElement !== searchInput && !e.metaKey && !e.ctrlKey) {
-          e.preventDefault();
-          searchInput.focus();
-          searchInput.select();
-        }
-        if (e.key === 'Escape' && document.activeElement === searchInput) {
-          searchInput.value = '';
-          searchTerm = '';
-          renderFeatures();
-        }
+        const typing = document.activeElement === searchInput;
+        if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) { e.preventDefault(); searchInput.focus(); searchInput.select(); }
+        if (e.key === 'Escape' && typing) { searchInput.value = ''; searchTerm = ''; renderFeatures(); }
+        // "d" toggles theme when not typing.
+        if ((e.key === 'd' || e.key === 'D') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { toggleTheme(); }
       });
 
       // ---------- Feature rendering ----------
       const bundlesHost = $('#bundles-host');
 
       function matchesFilters(f) {
-        for (const key of activeFilters) {
-          if (!FILTERS[key].test(f)) return false;
-        }
+        for (const key of activeFilters) { if (!FILTERS[key].test(f)) return false; }
         return true;
       }
-
       function matchesSearch(f) {
         if (!searchTerm) return true;
         const haystack = [
@@ -636,12 +760,20 @@
         ].join(' ').toLowerCase();
         return haystack.includes(searchTerm);
       }
-
       function highlight(text, term) {
         if (!term) return md(text);
-        const escText = md(text); // already escaped
+        const escText = md(text);
         const reTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         return escText.replace(new RegExp('(' + reTerm + ')', 'gi'), '<mark>$1</mark>');
+      }
+
+      function tierTag(tier) {
+        if (tier === 'backend-surface') return '<span class="tier-tag tier-backend-tag"><i class="dot"></i>Backend</span>';
+        return '<span class="tier-tag tier-user-tag"><i class="dot"></i>User-facing</span>';
+      }
+      function confTag(conf) {
+        if (!conf || conf === 'high') return '';
+        return '<span class="conf-tag conf-' + esc(conf) + '">' + esc(conf) + '</span>';
       }
 
       function renderCitation(c) {
@@ -658,17 +790,12 @@
             (c.kind ? '<span class="kind">' + esc(c.kind) + '</span>' : ''),
         });
         elx.addEventListener('click', () => copyToClipboard(text, elx));
-        elx.addEventListener('keydown', e => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyToClipboard(text, elx); }
-        });
+        elx.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyToClipboard(text, elx); } });
         return elx;
       }
 
       function copyToClipboard(text, target) {
-        const done = () => {
-          target.classList.add('copied');
-          setTimeout(() => target.classList.remove('copied'), 700);
-        };
+        const done = () => { target.classList.add('copied'); setTimeout(() => target.classList.remove('copied'), 700); };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(done, done);
         } else {
@@ -682,79 +809,47 @@
       }
 
       function renderFeatureCard(f) {
-        const change = f.changed_since_previous;
-        // On cold start every card would get a "New" badge — pure noise. Suppress.
-        const badge = (IS_COLD_START)
-          ? ''
-          : change && change.kind === 'added'
+        const ec = effectiveChange(f);
+        const badge = ec === 'added'
           ? '<span class="badge badge-added">New</span>'
-          : change && change.kind === 'modified'
+          : ec === 'modified'
           ? '<span class="badge badge-modified">Modified</span>'
           : '';
 
-        const card = el('article', {
-          class: 'feature-card',
-          attrs: { id: 'f-' + f.id, 'data-tier': f.tier || 'user-observable' },
-        });
+        const card = el('article', { class: 'feature-card', attrs: { id: 'f-' + f.id, 'data-tier': f.tier || 'user-observable' } });
 
-        // Header row: name + badge + shipped chip
-        const header = el('div', { class: 'flex items-baseline gap-3 mb-1.5 flex-wrap' });
-        header.appendChild(el('h3', {
-          class: 'text-base font-medium leading-snug',
-          html: highlight(f.name, searchTerm),
-        }));
+        const header = el('div', { class: 'flex items-baseline gap-2.5 mb-1.5 flex-wrap' });
+        header.appendChild(el('h3', { class: 'text-base font-medium leading-snug', html: highlight(f.name, searchTerm) }));
         if (badge) header.appendChild(el('span', { html: badge }));
-        if (f.shipped && f.shipped.date) {
-          header.appendChild(el('span', {
-            class: 'ml-auto text-xs font-mono',
-            style: { color: 'var(--ink-3)' },
-            text: f.shipped.date,
-          }));
-        }
+        const cTag = confTag(f.confidence);
+        if (cTag) header.appendChild(el('span', { html: cTag }));
+        header.appendChild(el('span', { class: 'ml-auto', html: tierTag(f.tier || 'user-observable') }));
         card.appendChild(header);
 
-        // Description
         if (f.description) {
-          card.appendChild(el('p', {
-            class: 'text-sm leading-relaxed',
-            style: { color: 'var(--ink-2)' },
-            html: highlight(f.description, searchTerm),
-          }));
+          card.appendChild(el('p', { class: 'text-sm leading-relaxed', style: { color: 'var(--ink-2)' }, html: highlight(f.description, searchTerm) }));
         }
-
-        // How it works (subtle)
         if (f.how_it_works) {
-          card.appendChild(el('p', {
-            class: 'text-sm leading-relaxed mt-2',
-            style: { color: 'var(--ink-2)' },
-            html: highlight(f.how_it_works, searchTerm),
-          }));
+          card.appendChild(el('p', { class: 'text-sm leading-relaxed mt-2', style: { color: 'var(--ink-2)' }, html: highlight(f.how_it_works, searchTerm) }));
         }
 
-        // Behaviors (collapsible)
         if ((f.observable_behaviors || []).length) {
           const det = el('details', { class: 'mt-3' });
           det.appendChild(el('summary', { text: 'Observable behaviors (' + f.observable_behaviors.length + ')' }));
           const ul = el('ul', { class: 'mt-1.5 space-y-1 pl-5 text-sm', style: { color: 'var(--ink-2)' } });
-          f.observable_behaviors.forEach(b => {
-            ul.appendChild(el('li', { class: 'list-disc', html: highlight(b, searchTerm) }));
-          });
+          f.observable_behaviors.forEach(b => { ul.appendChild(el('li', { class: 'list-disc', html: highlight(b, searchTerm) })); });
           det.appendChild(ul);
           card.appendChild(det);
         }
 
-        // Citations
         if ((f.citations || []).length) {
           const wrap = el('div', { class: 'mt-3 flex flex-wrap gap-1.5' });
           f.citations.forEach(c => wrap.appendChild(renderCitation(c)));
           card.appendChild(wrap);
         }
 
-        // Meta row: shipped source + issues
         const metaBits = [];
-        if (f.shipped && f.shipped.source) {
-          metaBits.push('<span style="color: var(--ink-3)">Shipped:</span> ' + esc(f.shipped.source));
-        }
+        if (f.shipped && f.shipped.source) metaBits.push('<span style="color: var(--ink-3)">Shipped:</span> ' + esc(f.shipped.source));
         if ((f.issues || []).length) {
           const issueLinks = f.issues.map(n =>
             '<a href="https://github.com/risolutohq/risoluto-research/issues/' + n + '" target="_blank" rel="noopener" class="hover:underline" style="color: var(--accent)">#' + n + '</a>'
@@ -762,36 +857,20 @@
           metaBits.push('<span style="color: var(--ink-3)">Issues:</span> ' + issueLinks);
         }
         if (metaBits.length) {
-          card.appendChild(el('div', {
-            class: 'mt-3 pt-2 text-xs border-t',
-            style: { 'border-color': 'var(--rule)', color: 'var(--ink-3)' },
-            html: metaBits.join(' &nbsp;·&nbsp; '),
-          }));
+          card.appendChild(el('div', { class: 'mt-3 pt-2 text-xs border-t', style: { 'border-color': 'var(--rule)', color: 'var(--ink-3)' }, html: metaBits.join(' &nbsp;·&nbsp; ') }));
         }
-
         return card;
       }
 
       function renderRemovedCard(rf) {
-        const card = el('article', {
-          class: 'feature-card removed',
-          attrs: { id: 'f-' + rf.id, 'data-tier': 'removed' },
-        });
+        const card = el('article', { class: 'feature-card removed', attrs: { id: 'f-' + rf.id, 'data-tier': 'removed' } });
         const header = el('div', { class: 'flex items-baseline gap-3 mb-1.5 flex-wrap' });
         header.appendChild(el('h3', { class: 'text-base font-medium leading-snug line-through', html: highlight(rf.name, searchTerm) }));
         header.appendChild(el('span', { html: '<span class="badge badge-removed">Removed</span>' }));
-        if (rf.removed_at) {
-          header.appendChild(el('span', { class: 'ml-auto text-xs font-mono', style: { color: 'var(--ink-3)' }, text: rf.removed_at.slice(0, 10) }));
-        }
+        if (rf.removed_at) header.appendChild(el('span', { class: 'ml-auto text-xs font-mono', style: { color: 'var(--ink-3)' }, text: rf.removed_at.slice(0, 10) }));
         card.appendChild(header);
-        if (rf.reason) {
-          card.appendChild(el('p', { class: 'text-sm', style: { color: 'var(--ink-2)' }, html: md(rf.reason) }));
-        }
-        card.appendChild(el('div', {
-          class: 'mt-2 text-xs font-mono',
-          style: { color: 'var(--ink-3)' },
-          text: 'Removed in ' + shortSha(rf.removed_in_sha),
-        }));
+        if (rf.reason) card.appendChild(el('p', { class: 'text-sm', style: { color: 'var(--ink-2)' }, html: md(rf.reason) }));
+        card.appendChild(el('div', { class: 'mt-2 text-xs font-mono', style: { color: 'var(--ink-3)' }, text: 'Removed in ' + shortSha(rf.removed_in_sha) }));
         return card;
       }
 
@@ -799,19 +878,12 @@
         bundlesHost.innerHTML = '';
         let total = 0;
 
-        // If filters/search are active but every feature still passes, that's the "I clicked
-        // but nothing happened" trap. Surface it explicitly above the bundles.
         const hasActiveFilters = activeFilters.size > 0 || !!searchTerm;
-        const matchedAll = (PAYLOAD.features || []).every(f => matchesFilters(f) && matchesSearch(f));
+        const matchedAll = FEATURES.every(f => matchesFilters(f) && matchesSearch(f));
         if (hasActiveFilters && matchedAll && TOTAL_FEATURES > 0) {
           bundlesHost.appendChild(el('div', {
             class: 'mb-6 px-4 py-3 text-sm',
-            style: {
-              background: 'var(--paper-3)',
-              border: '1px solid var(--rule)',
-              'border-radius': '4px',
-              color: 'var(--ink-2)',
-            },
+            style: { background: 'var(--paper-3)', border: '1px solid var(--rule)', 'border-radius': '4px', color: 'var(--ink-2)' },
             html: '<span class="font-serif-mark" style="color: var(--ink-3)">Heads up:</span> ' +
                   'every feature matches the active filter' + (activeFilters.size > 1 ? 's' : '') +
                   '. The view is identical to no-filter. Toggle off or pick a more specific filter.',
@@ -820,10 +892,7 @@
 
         (PAYLOAD.bundles || []).forEach(b => {
           const slugged = slug(b);
-          const itemsInBundle = (PAYLOAD.features || [])
-            .filter(f => f.bundle === b)
-            .filter(matchesFilters)
-            .filter(matchesSearch);
+          const itemsInBundle = FEATURES.filter(f => f.bundle === b).filter(matchesFilters).filter(matchesSearch);
           const removedInBundle = (PAYLOAD.removed_features || [])
             .filter(rf => rf.bundle === b)
             .filter(rf => activeFilters.size === 0 || activeFilters.has('changed'))
@@ -832,13 +901,9 @@
           if (!itemsInBundle.length && !removedInBundle.length) return;
 
           const section = el('section', { attrs: { id: 'bundle-' + slugged }, class: 'mb-12' });
-          const h2 = el('div', { class: 'flex items-baseline gap-3 mb-4 pb-2 border-b', style: { 'border-color': 'var(--rule-2)' } });
+          const h2 = el('div', { class: 'bundle-head flex items-baseline gap-3 mb-4 pb-2 border-b' });
           h2.appendChild(el('h2', { class: 'text-lg font-medium tracking-tight', text: b }));
-          h2.appendChild(el('span', {
-            class: 'font-mono text-xs',
-            style: { color: 'var(--ink-3)' },
-            text: itemsInBundle.length + ' ' + pluralize(itemsInBundle.length, 'feature'),
-          }));
+          h2.appendChild(el('span', { class: 'font-mono text-xs', style: { color: 'var(--ink-3)' }, text: itemsInBundle.length + ' ' + pluralize(itemsInBundle.length, 'feature') }));
           section.appendChild(h2);
 
           const list = el('div', { class: 'space-y-4' });
@@ -850,10 +915,31 @@
           total += itemsInBundle.length + removedInBundle.length;
         });
 
-        if (!total) {
-          bundlesHost.appendChild(el('div', { class: 'empty', text: 'No features match your search or filters.' }));
-        }
+        if (!total) bundlesHost.appendChild(el('div', { class: 'empty', text: 'No features match your search or filters.' }));
         $('#result-count').textContent = total ? (total + ' of ' + TOTAL_FEATURES + ' shown') : '';
+
+        observeBundles();
+      }
+
+      // ---------- Active-bundle in rail (IntersectionObserver) ----------
+      // Defined before the first renderFeatures() call: renderFeatures() invokes
+      // observeBundles() at its tail, so `io` must already be initialized.
+      const railLinks = $$('#bundle-rail .rail-link');
+      const railMap = {};
+      railLinks.forEach(a => { railMap[a.getAttribute('href').slice(1)] = a; });
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(en => {
+          const link = railMap[en.target.id];
+          if (!link) return;
+          if (en.isIntersecting) {
+            railLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -65% 0px', threshold: 0 });
+      function observeBundles() {
+        io.disconnect();
+        $$('#bundles-host > section').forEach(s => io.observe(s));
       }
 
       renderFeatures();
@@ -862,17 +948,22 @@
       const coverageBody = $('#coverage-body');
       const coverage = (PAYLOAD.coverage || []).slice();
       const maxFC = coverage.reduce((m, r) => Math.max(m, r.feature_count || 0), 0) || 1;
+      const coverageSection = $('#coverage');
 
       function renderCoverage() {
+        if (!coverage.length) {
+          coverageSection.querySelector('.overflow-x-auto').innerHTML =
+            '<div class="empty">Coverage manifest not recorded for this cut.</div>';
+          return;
+        }
         coverageBody.innerHTML = '';
         coverage.forEach(r => {
-          const tr = el('tr');
+          const tr = el('tr', { class: (r.feature_count ? '' : 'is-plumbing') });
           tr.appendChild(el('td', { class: 'mod', text: r.module }));
           const barWidth = Math.round(((r.feature_count || 0) / maxFC) * 80);
           tr.appendChild(el('td', {
             class: 'num',
-            html: '<span>' + (r.feature_count || 0) + '</span>' +
-                  (r.feature_count ? '<span class="coverage-bar" style="width: ' + barWidth + 'px;"></span>' : ''),
+            html: '<span>' + (r.feature_count || 0) + '</span>' + (r.feature_count ? '<span class="coverage-bar" style="width: ' + barWidth + 'px;"></span>' : ''),
             style: { 'text-align': 'right' },
           }));
           tr.appendChild(el('td', { text: r.kind || '' }));
@@ -906,33 +997,13 @@
       if (followups.length) {
         followups.forEach(fu => {
           const item = el('div', { class: 'followup-item' + (fu.status === 'resolved' ? ' resolved' : '') });
-          item.appendChild(el('div', {
-            class: 'text-sm font-medium leading-snug',
-            html: md(fu.title || ''),
-          }));
-          if (fu.body) {
-            item.appendChild(el('p', {
-              class: 'text-sm mt-1 leading-relaxed',
-              style: { color: 'var(--ink-2)' },
-              html: md(fu.body),
-            }));
-          }
-          if (fu.question) {
-            item.appendChild(el('div', {
-              class: 'question text-sm',
-              html: '<span class="font-serif-mark" style="color: var(--ink-3)">Question:</span> ' + md(fu.question),
-            }));
-          }
+          item.appendChild(el('div', { class: 'text-sm font-medium leading-snug', html: md(fu.title || '') }));
+          if (fu.body) item.appendChild(el('p', { class: 'text-sm mt-1 leading-relaxed', style: { color: 'var(--ink-2)' }, html: md(fu.body) }));
+          if (fu.question) item.appendChild(el('div', { class: 'question text-sm', html: '<span class="font-serif-mark" style="color: var(--ink-3)">Question:</span> ' + md(fu.question) }));
           const meta = [];
           if (fu.first_raised_sha) meta.push('First raised: <code class="font-mono">' + shortSha(fu.first_raised_sha) + '</code>');
           if (fu.status === 'resolved' && fu.resolved_in_sha) meta.push('Resolved: <code class="font-mono">' + shortSha(fu.resolved_in_sha) + '</code>');
-          if (meta.length) {
-            item.appendChild(el('div', {
-              class: 'mt-2 text-xs font-mono',
-              style: { color: 'var(--ink-3)' },
-              html: meta.join(' &nbsp;·&nbsp; '),
-            }));
-          }
+          if (meta.length) item.appendChild(el('div', { class: 'mt-2 text-xs font-mono', style: { color: 'var(--ink-3)' }, html: meta.join(' &nbsp;·&nbsp; ') }));
           followupHost.appendChild(item);
         });
       } else {
@@ -957,32 +1028,41 @@
         const sec = el('div', { class: 'mb-7' });
         sec.appendChild(el('h3', { class: 'text-sm font-medium mb-2 uppercase tracking-wider', style: { color: 'var(--ink-3)' }, text: label }));
         const ul = el('ul', { class: 'space-y-1.5 text-sm pl-5' });
-        arr.forEach(n => {
-          ul.appendChild(el('li', { class: 'list-disc leading-relaxed', style: { color: 'var(--ink-2)' }, html: md(n.bullet || '') }));
-        });
+        arr.forEach(n => { ul.appendChild(el('li', { class: 'list-disc leading-relaxed', style: { color: 'var(--ink-2)' }, html: md(n.bullet || '') })); });
         sec.appendChild(ul);
         notesHost.appendChild(sec);
       });
       if (!anyNote) notesHost.appendChild(el('div', { class: 'empty', text: 'No analyst notes recorded.' }));
 
-      // ---------- Active-bundle in rail (IntersectionObserver) ----------
-      const railLinks = $$('#bundle-rail .rail-link');
-      const railMap = {};
-      railLinks.forEach(a => {
-        const id = a.getAttribute('href').slice(1);
-        railMap[id] = a;
+      // ---------- Theme toggle ----------
+      function applyTheme(theme) {
+        if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        else document.documentElement.removeAttribute('data-theme');
+      }
+      function currentTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      }
+      function toggleTheme() {
+        const next = currentTheme() === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        try { localStorage.setItem('rsl-spine-theme', next); } catch (_) {}
+      }
+      try {
+        const saved = localStorage.getItem('rsl-spine-theme');
+        if (saved === 'dark') applyTheme('dark');
+      } catch (_) {}
+      $('#theme-toggle').addEventListener('click', toggleTheme);
+
+      // ---------- Print: expand all behavior details, then restore ----------
+      let printOpened = [];
+      window.addEventListener('beforeprint', () => {
+        printOpened = $$('#content details:not([open])');
+        printOpened.forEach(d => d.setAttribute('open', ''));
       });
-      const io = new IntersectionObserver((entries) => {
-        entries.forEach(en => {
-          const link = railMap[en.target.id];
-          if (!link) return;
-          if (en.isIntersecting) {
-            railLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
-      }, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
-      $$('#bundles-host > section').forEach(s => io.observe(s));
+      window.addEventListener('afterprint', () => {
+        printOpened.forEach(d => d.removeAttribute('open'));
+        printOpened = [];
+      });
 
     })();
   </script>

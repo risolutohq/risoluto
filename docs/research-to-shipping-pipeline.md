@@ -273,6 +273,33 @@ are used as-is (generic).
 - **Runtime auto-pickup.** Auto-consuming Linear tickets is a separate workstream parked behind the
   `auto:runtime` label seam; this pipeline stops at manual `/risoluto-tdd <ticket-ref>`.
 
+## Decided enhancements (pending implementation)
+
+Eight decisions from a `/grill-with-docs` pass (provenance: 2026-05-29). All are **decided** and
+specced here; none are built yet. They refine decision #29 / ADR §7 — they do not change the
+foundation, so no new ADR (H5 is the one row worth adding to `decisions.md`).
+
+**The finding that triggered them:** the live corpus is **3 single-source targets → 27 ideas**, of
+which only `provider-abstraction` clears ≥2 evidence targets. The synthesizer's clustering and the
+grill's "N peers do X" framing assume N>1 — false for 26/27 ideas today. The pipeline is being used
+for single-repo feature extraction, not cross-target pattern detection. Several decisions below close
+the gap between what the pipeline _claims_ and what a thin corpus _supports_.
+
+| #   | Decision                                                                                                                                                                        | Why                                                                                                  | Lands in                                                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| H1  | **Evidence floor ≥2.** Block (or hard-warn) `idea → ready` until an idea has ≥2 evidence targets. Treat today's 3-repo corpus as feature extraction; widen capture before re-synthesizing. | Makes Frequency / Variants observed / "N peers" true instead of decorative.                          | `risoluto-synthesizer` (warn), `risoluto-grill` (gate), §2–§3                                  |
+| H2  | **Full-body drift hash.** Stamp `synced_hash` (hash of the whole PRD body) into PRD frontmatter on every `to-prd` sync; `prd:drift-check` compares the hash. The 255-char Linear text stays the human mirror. | Drift is detected on the first 255 chars (~7%) only; the rest can diverge silently.                  | `scripts/prd-drift-check.ts`, `scripts/prd-linear.ts`, frontmatter contract, §3.3              |
+| H3  | **Scope the pre-push gate.** Run `prd:drift-check` in `.husky/pre-push` only when the push range touches `docs/prds/*`; otherwise no-op (no `LINEAR_API_KEY` needed).          | A public repo's contributors, CI, fresh clones, and runtime push-agents shouldn't need a Linear token to push non-PRD changes. | `.husky/pre-push`, §3.3, Invariants                                                            |
+| H4  | **Idempotent `to-issues`.** Key created issues by a stable per-slice id (`from:prd-<slug>` + slice slug); re-runs add new slices, skip existing, report removed.              | PRDs grow after issues exist; re-running must reconcile, not duplicate — matches the rest of the pipeline. | `risoluto-to-issues`, Invariants (add to-issues to the idempotent list)                        |
+| H5  | **Pipeline is the first Workflow Definition target.** Designate the implement-leg (`to-issues → tdd → post-merge`) as the first built-in TS Workflow Definition (ADR §5). Add a `pipeline-as-workflow-definition` backlog idea. | Closes §5's "zero definitions" gap and gives §1's run-vs-issue reconciliation a concrete consumer — running the pipeline and dogfooding the runtime become one effort. | `decisions.md` row, ADR §5/§7 follow-up, backlog idea, Mental model                            |
+| H6  | **Post-merge closes the backlog row.** Extend `scripts/post-merge-prd.mjs` to flip the matching `capability-backlog.md` row to `shipped` (it has the slug from the label), alongside the PRD flip + Linear back-comment. | The backlog is the canonical discovery surface; it must not read `in-flight` while the PRD says `shipped`. | `scripts/post-merge-prd.mjs`, §4.3 / §5                                                        |
+| H7  | **Teardown path for dropped ideas.** Dropping an idea that has `linear_project` set flips the PRD to `archived` and **prints** the Linear-project-archive + branch-delete commands (no auto-destruction). | `dropped` must mean something end-to-end, else Linear projects + `pipeline/<slug>-prd` branches orphan with no backreference. | `risoluto-synthesizer` / operator step, §3, Invariants                                         |
+| H8  | **Cross-file slug check.** Extend `validate:research` (and add the missing `prd.schema.json`) to assert `idea.slug == backlog slug == prd.slug == prd filename == Linear label suffix`; fail loudly on mismatch. | "One slug is the join key" is load-bearing but unenforced — one typo silently breaks post-merge label match, drift pairing, and issue linkage. | `scripts/validate-research.ts`, `research/.schemas/prd.schema.json`, frontmatter contract      |
+
+H8 also resolves the existing **Gap** noted under the frontmatter contract (no `prd.schema.json`,
+`validate:research` skips `docs/prds/*`). H4 adds `to-issues` to the idempotent invariant. H5 is the
+only item that warrants a `decisions.md` entry (a refinement row under #29).
+
 ## Reference
 
 **Scripts:** `scripts/validate-research.ts` (`pnpm validate:research`),
