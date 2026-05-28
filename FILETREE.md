@@ -12,7 +12,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `.prettierignore` — Prettier ignore list; excludes dist/, node_modules/, and coverage/ from formatting runs. <!--hash:2d0c0644-->
 - `.prettierrc.json` — Prettier formatting config; 120-col, double quotes, 2-space indent, trailing commas, LF line endings. <!--hash:eac2feef-->
 - `.releaserc.yml` — semantic-release config; drives automated changelog, package.json version bump, and GitHub release from Conventional Commits. <!--hash:35f90251-->
-- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:c5fb3d0d-->
+- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:c2ac8268-->
 - `CHANGELOG.md` — Project changelog; records v0.1.0 foundation release scope and what was included or excluded from the clean baseline. <!--hash:fbdd3c5c-->
 - `CLAUDE.md` — Claude Code entry point; single-line redirector that imports AGENTS.md as the canonical agent instruction source. <!--hash:ba336879-->
 - `Dockerfile` — Main service Dockerfile; multi-stage build producing a Node 24 production image that runs the CLI entrypoint on port 4000. <!--hash:b82eaebe-->
@@ -92,6 +92,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `planning-pipeline-roadmap.md` — Phased roadmap for the research-to-shipping pipeline: researcher → synthesizer → grill → PRD → issues → TDD. <!--hash:4150a7fa-->
 - `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:13a37144-->
 - `release-rules.md` — Versioning model, CI band requirements, and 1.0.0 Foundation Baseline qualification checklist. <!--hash:d42d0f12-->
+- `research-to-shipping-pipeline.md` — Operator how-to for running the research-to-shipping pipeline end to end (capture, synthesize, grill, PRD, issues, TDD, post-merge); usage counterpart to ADR-0007. <!--hash:55f8bbf2-->
 - `research-workflow.md` — Describes how research, decisions, and tracker work flow from operator sessions into Linear and GitHub Issues. <!--hash:c9d18eb9-->
 - `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:908555d5-->
 - `test-capability-matrix.md` — Migration ledger tracking replacement of legacy tests with v1 behavior-first public-interface coverage per capability. <!--hash:7390e477-->
