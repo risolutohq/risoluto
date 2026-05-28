@@ -90,7 +90,7 @@ The spine **defines** these; v1 implementation **does not ship them**:
 - Full Memory Manager retrieval / indexing across all tiers.
 - Full Board Projection implementation (contract only).
 - Jira / GitLab / GitHub-Issues tracker adapters (Linear only).
-- User-authored workflow DSL (built-in TypeScript Workflow Definitions only — see [ADR-0005](./adr/0005-built-in-typescript-workflow-definitions-before-dsl.md)).
+- User-authored workflow DSL (built-in TypeScript Workflow Definitions only — see [ADR §5](./adr/0001-foundation.md#5-built-in-typescript-workflow-definitions-before-a-user-authored-dsl)).
 - External plugin API.
 - Web dashboard / frontend.
 - Hosted SaaS control plane.

@@ -3,7 +3,7 @@
 > The single operator guide for Risoluto's planning pipeline: from capturing external research to
 > shipping merged code, with Linear as the planning/runtime seam.
 >
-> Canonical _decisions_ live in [`adr/0007-research-to-shipping-pipeline.md`](./adr/0007-research-to-shipping-pipeline.md)
+> Canonical _decisions_ live in [`adr/0001-foundation.md` §7](./adr/0001-foundation.md#7-research-to-shipping-planning-pipeline)
 > (decisions.md row #29). This file is the operational reference — how to run it, the file
 > contracts, and who owns what.
 
@@ -167,7 +167,7 @@ write is the last step, after the Linear calls succeed). Requires the `LINEAR_AP
 ### 5. Record the decision
 
 Add an ADR under `docs/adr/` and a row to `docs/decisions.md` when a capability ships and the
-decision is worth preserving. ADR-0007 is the record for this pipeline itself.
+decision is worth preserving. Section 7 of `docs/adr/0001-foundation.md` is the record for this pipeline itself.
 
 ## Frontmatter contract (the API of the pipeline)
 
@@ -281,7 +281,7 @@ are used as-is (generic).
 `scripts/post-merge-prd.mjs` (CI post-merge automation).
 
 **Key files:** `research/targets/`, `research/ideas/`, `research/INDEX.md`,
-`docs/capability-backlog.md`, `docs/prds/`, `docs/adr/0007-research-to-shipping-pipeline.md`.
+`docs/capability-backlog.md`, `docs/prds/`, `docs/adr/0001-foundation.md` (§7).
 
 ## Troubleshooting
 

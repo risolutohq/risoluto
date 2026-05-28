@@ -116,7 +116,7 @@ These are explicitly **not** v1 foundation blockers. They live in the living [ca
 - Web dashboard / frontend.
 - Docs-site rebuild.
 - Public skill marketplace.
-- User-authored workflow DSL (TypeScript built-ins first; see [ADR-0005](./adr/0005-built-in-typescript-workflow-definitions-before-dsl.md)).
+- User-authored workflow DSL (TypeScript built-ins first; see [ADR §5](./adr/0001-foundation.md#5-built-in-typescript-workflow-definitions-before-a-user-authored-dsl)).
 
 ## Related Docs
 

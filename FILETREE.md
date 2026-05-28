@@ -91,19 +91,14 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:281f732a-->
 - `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:13a37144-->
 - `release-rules.md` — Versioning model, CI band requirements, and 1.0.0 Foundation Baseline qualification checklist. <!--hash:d42d0f12-->
-- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in ADR-0007). <!--hash:e62f7c44-->
+- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:e62f7c44-->
 - `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:908555d5-->
 - `test-capability-matrix.md` — Migration ledger tracking replacement of legacy tests with v1 behavior-first public-interface coverage per capability. <!--hash:7390e477-->
 - `testing-strategy.md` — Defines unit, integration, and live test tiers; model profiles; and what v1 requires for 1.0.0. <!--hash:c7e04ff4-->
 
 ## docs/adr/
 
-- `0001-workflow-run-as-core-primitive.md` — ADR-0001; records the decision to use Workflow Run (not Issue) as the core primitive and explains tracker-as-adapter rationale. <!--hash:efd1e533-->
-- `0002-state-machine-with-graph-inside-states.md` — ADR: outer state machine + intra-state role DAG design; rejects pure state machine and pure DAG alternatives. <!--hash:b2e44567-->
-- `0003-typed-artifact-contracts.md` — ADR: typed, versioned artifact contracts between role executions; validated at production time, not consumption. <!--hash:2f075f82-->
-- `0004-event-sourced-run-log-with-policy.md` — ADR: append-only event-sourced run log as single source of truth for replay, audit, and export. <!--hash:2b3a759a-->
-- `0005-built-in-typescript-workflow-definitions-before-dsl.md` — ADR: ship built-in TypeScript workflow definitions first; defer user-authored DSL until 3+ definitions exist. <!--hash:721f3905-->
-- `0006-environment-portable-control-and-execution-plane.md` — ADR: separate control plane from execution plane with a network-shaped contract from v1 onward. <!--hash:e48ef8fa-->
+- `0001-foundation.md` — Consolidated v1 foundation ADR (merges former ADR-0001…0007). Seven decisions in intent voice, each with an as-built status table (Delivered / Partial / Not delivered / ⚠ Drifted) verified against source. Read the status table before trusting any claim. <!--hash:pending-filetree-update-->
 
 ## scripts/
 
