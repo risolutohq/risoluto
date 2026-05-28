@@ -4,7 +4,7 @@
  * `## Smallest shippable shape` into research/ideas/<slug>/README.md,
  * and optionally flip the matching backlog row to status: ready.
  *
- * Phase 3.1 of docs/planning-pipeline-roadmap.md. Idempotent: re-running
+ * Phase 3.1 of docs/research-to-shipping-pipeline.md. Idempotent: re-running
  * with the same inputs is a no-op; re-running with new inputs re-grills.
  *
  * Usage:

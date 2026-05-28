@@ -2,7 +2,7 @@
 /**
  * risoluto-researcher: capture a URL (+ optional paste) into `research/targets/<slug>/`.
  *
- * Phase 1.3 of docs/planning-pipeline-roadmap.md. Creates folder-shaped target
+ * Phase 1.3 of docs/research-to-shipping-pipeline.md. Creates folder-shaped target
  * READMEs, source files with pipeline-valid frontmatter, and regenerates
  * `research/INDEX.md` on every run. Idempotent per source — re-runs update
  * derived fields without clobbering operator-owned prose sections.

@@ -37,7 +37,24 @@ Key design decisions:
 - **Fork-not-upgrade rule.** Linear-specific behavior lives in `skills/risoluto-*`; global `~/.claude/skills/{to-prd,to-issues,tdd}` stay generic and reusable.
 - **Manual `/tdd <ticket-ref>` now.** Runtime auto-pickup of Linear tickets is deferred behind the `auto:runtime` label seam.
 
-The full design tree, resolved decisions table, and frontmatter contracts are recorded in [`docs/planning-pipeline-roadmap.md`](../planning-pipeline-roadmap.md) (now superseded by this ADR as the authoritative reference).
+### Resolved decisions
+
+These ten questions were resolved during design. They refine Decision #6 (Linear canonical for planning — now: prose lives in git, Linear holds tickets + status) and extend Decision #15 (Linear-triggered dogfood — now: manual `/risoluto-tdd` is the bootstrap):
+
+| #   | Decision                                                                              |
+| --- | ------------------------------------------------------------------------------------- |
+| P1  | Research organized **per-target** (`research/targets/<slug>/`)                        |
+| P2  | `research/` becomes a **scoped Obsidian vault**, configured by `risoluto-vault`       |
+| P3  | Always-folder shape: `targets/<slug>/README.md` + `targets/<slug>/sources/*.md`       |
+| P4  | **Two separate vaults** — `~/Documents/my-vault/` stays; `research/` is independent   |
+| P5  | Synthesizer writes both `research/ideas/<slug>/` **and** `capability-backlog.md`      |
+| P6  | New **`risoluto-grill`** skill; `grill-me` / `grill-with-docs` stay generic           |
+| P7  | Synthesizer runs **at any corpus size**; **tag-anchored + LLM-suggested** clusters    |
+| P8  | PRD lives canonically in **`docs/prds/<slug>.md`** (git) → mirrored to Linear Project |
+| P9  | Linear via **MCP**; **flat issues + blocked-by** relations; **no GitHub mirror** yet  |
+| P10 | **Manual `/risoluto-tdd <ticket-ref>`** now; runtime auto-pickup deferred             |
+
+The stage-by-stage how-to, frontmatter contracts, and ownership rules live in [`docs/research-to-shipping-pipeline.md`](../research-to-shipping-pipeline.md).
 
 ## Consequences
 

@@ -2,7 +2,7 @@
 /**
  * risoluto-to-prd: print the context bundle + mode (create | sync).
  *
- * Phase 3.2 of docs/planning-pipeline-roadmap.md. Read-only.
+ * Phase 3.2 of docs/research-to-shipping-pipeline.md. Read-only.
  * Decides mode from the idea README frontmatter:
  *   - linear_project == null  → mode: "create"  (PRD + Linear Project + PR)
  *   - linear_project set      → mode: "sync"    (overwrite Linear description)

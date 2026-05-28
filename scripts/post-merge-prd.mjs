@@ -2,7 +2,7 @@
 /**
  * Post-merge PRD automation: flip PRD status to shipped + back-comment Linear issues.
  *
- * Phase 4.3 of docs/planning-pipeline-roadmap.md.
+ * Phase 4.3 of docs/research-to-shipping-pipeline.md.
  *
  * Usage:
  *   node scripts/post-merge-prd.mjs <prd-slug> \

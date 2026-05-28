@@ -2,7 +2,7 @@
 /**
  * risoluto-synthesizer: roll captured targets into idea clusters.
  *
- * Phase 2.1 of docs/planning-pipeline-roadmap.md. Full-corpus, idempotent.
+ * Phase 2.1 of docs/research-to-shipping-pipeline.md. Full-corpus, idempotent.
  * Reads every research/targets/<slug>/{README.md,sources/*.md}, groups by
  * the `ideas:` frontmatter tag, and rewrites:
  *

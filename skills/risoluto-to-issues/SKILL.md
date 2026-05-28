@@ -1,6 +1,6 @@
 ---
 name: risoluto-to-issues
-description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill at ~/.claude/skills/to-issues/ and must not be conflated with this one). Fork of the global skill; this one is Linear MCP only. Phase 4.1 of docs/planning-pipeline-roadmap.md.'
+description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill at ~/.claude/skills/to-issues/ and must not be conflated with this one). Fork of the global skill; this one is Linear MCP only. Phase 4.1 of docs/research-to-shipping-pipeline.md.'
 ---
 
 # risoluto-to-issues
@@ -118,7 +118,7 @@ PRD: [docs/prds/<slug>.md](prd-linear-project-url)
 
 ## Companion files
 
-- `docs/planning-pipeline-roadmap.md` — Phase 4.1 spec
+- `docs/research-to-shipping-pipeline.md` — Phase 4.1 spec
 - `~/.claude/skills/to-issues/` — the generic upstream skill this forks from
 - `skills/risoluto-to-prd/` — Phase 3.2; produces the PRD this skill consumes
 - `skills/risoluto-tdd/` — Phase 4.2; picks up individual issues created by this skill

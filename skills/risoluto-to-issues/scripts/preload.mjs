@@ -2,7 +2,7 @@
 /**
  * risoluto-to-issues: print the context bundle for PRD → Linear Issues.
  *
- * Phase 4.1 of docs/planning-pipeline-roadmap.md. Read-only.
+ * Phase 4.1 of docs/research-to-shipping-pipeline.md. Read-only.
  * Gathers the PRD body, source idea, and backlog row so the agent
  * can extract slices and create Linear Issues.
  *

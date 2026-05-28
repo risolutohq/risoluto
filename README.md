@@ -40,7 +40,7 @@ pnpm run circular
 - [Technical spine](docs/technical-spine.md)
 - [Decision register](docs/decisions.md)
 - [Capability backlog](docs/capability-backlog.md)
-- [Research workflow](docs/research-workflow.md)
+- [Research workflow](docs/research-to-shipping-pipeline.md)
 - [Testing strategy](docs/testing-strategy.md)
 - [Release rules](docs/release-rules.md)
 

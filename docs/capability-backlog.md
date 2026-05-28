@@ -74,4 +74,4 @@ These are the buckets v1's foundation makes possible. Backlog entries fall under
 
 ## Relation to Linear / GitHub
 
-Linear is the **canonical** planning surface (see [research-workflow.md](./research-workflow.md)). This file is the **current-truth public summary** of what the foundation enables and what's queued — not a duplicate ticket database. When a backlog entry has live Linear work, link the Linear project / ticket from the entry. Public mirror to GitHub Issues is selective.
+Linear is the **canonical** planning surface (see [research-to-shipping-pipeline.md](./research-to-shipping-pipeline.md)). This file is the **current-truth public summary** of what the foundation enables and what's queued — not a duplicate ticket database. When a backlog entry has live Linear work, link the Linear project / ticket from the entry. Public mirror to GitHub Issues is selective.

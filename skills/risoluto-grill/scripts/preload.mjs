@@ -2,7 +2,7 @@
 /**
  * risoluto-grill: print the context bundle for grilling an idea.
  *
- * Phase 3.1 of docs/planning-pipeline-roadmap.md. Read-only.
+ * Phase 3.1 of docs/research-to-shipping-pipeline.md. Read-only.
  * Emits JSON listing every file the agent should load before opening the
  * grill loop: the idea README, every cited target README + source, the
  * matching backlog row, and any RISOLUTO_FEATURES.md entries that mention

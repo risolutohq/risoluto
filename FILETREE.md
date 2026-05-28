@@ -12,14 +12,14 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `.prettierignore` — Prettier ignore list; excludes dist/, node_modules/, and coverage/ from formatting runs. <!--hash:2d0c0644-->
 - `.prettierrc.json` — Prettier formatting config; 120-col, double quotes, 2-space indent, trailing commas, LF line endings. <!--hash:eac2feef-->
 - `.releaserc.yml` — semantic-release config; drives automated changelog, package.json version bump, and GitHub release from Conventional Commits. <!--hash:35f90251-->
-- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:c2ac8268-->
+- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:f55c39ac-->
 - `CHANGELOG.md` — Project changelog; records v0.1.0 foundation release scope and what was included or excluded from the clean baseline. <!--hash:fbdd3c5c-->
 - `CLAUDE.md` — Claude Code entry point; single-line redirector that imports AGENTS.md as the canonical agent instruction source. <!--hash:ba336879-->
 - `Dockerfile` — Main service Dockerfile; multi-stage build producing a Node 24 production image that runs the CLI entrypoint on port 4000. <!--hash:b82eaebe-->
 - `Dockerfile.data-plane` — Data-plane Dockerfile; builds a Node 24 image for the dispatch entrypoint service running on port 9100. <!--hash:690ad75c-->
 - `Dockerfile.sandbox` — Codex sandbox Dockerfile; Ubuntu 24.04 image with Node 22, bubblewrap, and the Codex CLI for isolated agent execution. <!--hash:489346c5-->
 - `LICENSE` — MIT license for the Risoluto project, copyright Omer Faruk Oruc 2026. <!--hash:db1c2f96-->
-- `README.md` — Project README; describes Risoluto's purpose, current shape (CLI-first, Workflow Run primitive), and development setup commands. <!--hash:9a81af40-->
+- `README.md` — Project README; describes Risoluto's purpose, current shape (CLI-first, Workflow Run primitive), and development setup commands. <!--hash:c15117e2-->
 - `commitlint.config.ts` — commitlint config; extends conventional-commits and enforces a fixed allowlist of commit scopes for this repo. <!--hash:52f11662-->
 - `docker-compose.yml` — Docker Compose spec; defines risoluto service, optional Cloudflare tunnel, and optional data-plane service with shared volumes and env wiring. <!--hash:49819d2b-->
 - `eslint.config.js` — ESLint config enforcing naming, complexity, file/function length, dead-code, and tech-debt rules for src/ and tests/. <!--hash:4605591a-->
@@ -87,13 +87,11 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## docs/
 
-- `capability-backlog.md` — Living post-foundation work ledger; tracks capabilities by status from idea through shipped or dropped. <!--hash:5c57efa6-->
-- `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:a096dc31-->
-- `planning-pipeline-roadmap.md` — Phased roadmap for the research-to-shipping pipeline: researcher → synthesizer → grill → PRD → issues → TDD. <!--hash:4150a7fa-->
+- `capability-backlog.md` — Living post-foundation work ledger; tracks capabilities by status from idea through shipped or dropped. <!--hash:22b0a19d-->
+- `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:281f732a-->
 - `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:13a37144-->
 - `release-rules.md` — Versioning model, CI band requirements, and 1.0.0 Foundation Baseline qualification checklist. <!--hash:d42d0f12-->
-- `research-to-shipping-pipeline.md` — Operator how-to for running the research-to-shipping pipeline end to end (capture, synthesize, grill, PRD, issues, TDD, post-merge); usage counterpart to ADR-0007. <!--hash:55f8bbf2-->
-- `research-workflow.md` — Describes how research, decisions, and tracker work flow from operator sessions into Linear and GitHub Issues. <!--hash:c9d18eb9-->
+- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in ADR-0007). <!--hash:e62f7c44-->
 - `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:908555d5-->
 - `test-capability-matrix.md` — Migration ledger tracking replacement of legacy tests with v1 behavior-first public-interface coverage per capability. <!--hash:7390e477-->
 - `testing-strategy.md` — Defines unit, integration, and live test tiers; model profiles; and what v1 requires for 1.0.0. <!--hash:c7e04ff4-->
@@ -117,7 +115,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `nightly-history-r2.ts` — Downloads or uploads the nightly Linear issue history file from/to a Cloudflare R2 bucket. <!--hash:4240c094-->
 - `nightly-linear-intake.ts` — Creates or updates a Linear nightly failure issue from the nightly summary; supports dry-run and live modes. <!--hash:5186fe50-->
 - `nightly-validation-fail.ts` — Intentionally fails a named nightly CI job on workflow_dispatch for pipeline validation testing. <!--hash:5fcf1be6-->
-- `post-merge-prd.mjs` — Post-merge PRD automation; back-comments from:prd-<slug> Linear issues with the merged PR then flips the PRD frontmatter status to shipped (flip is last). <!--hash:4d5c2636-->
+- `post-merge-prd.mjs` — Post-merge PRD automation; back-comments from:prd-<slug> Linear issues with the merged PR then flips the PRD frontmatter status to shipped (flip is last). <!--hash:30e4d644-->
 - `prd-drift-check.ts` — Pre-push/CI gate; compares each docs/prds/<slug>.md body (first 255 chars) against its Linear project description and exits non-zero on drift. <!--hash:29cf44cc-->
 - `prd-linear.ts` — Linear GraphQL helpers for the PRD pipeline; API-key hard gate, project fetch, and extractSlugId URL parsing shared by drift-check and reconcile. <!--hash:27a4913e-->
 - `prd-reconcile.ts` — Adopts a Linear-side PRD edit back into git; writes the Linear description into docs/prds/<slug>.md on branch pipeline/<slug>-prd-reconcile. <!--hash:7f0b645f-->
@@ -173,32 +171,32 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-grill/
 
-- `SKILL.md` — Grill skill: stress-tests a research idea until 'Why us / why now' and 'Smallest shippable shape' crystallise in the idea README (Phase 3.1). <!--hash:4d997654-->
+- `SKILL.md` — Grill skill: stress-tests a research idea until 'Why us / why now' and 'Smallest shippable shape' crystallise in the idea README (Phase 3.1). <!--hash:338b97b7-->
 
 ## skills/risoluto-grill/scripts/
 
-- `grill-write.mjs` — Grill writer; rewrites the two operator-owned idea sections (and optional status flip), preserving frontmatter and the synthesizer-owned block. <!--hash:ac9eee91-->
-- `preload.mjs` — Grill preloader; bundles the idea README, cited target READMEs, backlog row, and feature mentions as JSON context. <!--hash:7293644d-->
+- `grill-write.mjs` — Grill writer; rewrites the two operator-owned idea sections (and optional status flip), preserving frontmatter and the synthesizer-owned block. <!--hash:05b215e4-->
+- `preload.mjs` — Grill preloader; bundles the idea README, cited target READMEs, backlog row, and feature mentions as JSON context. <!--hash:6da2a06a-->
 
 ## skills/risoluto-researcher/
 
-- `SKILL.md` — Researcher skill: captures an external URL (+paste) into research/targets/<slug>/ as target README + source file and regenerates INDEX.md (Phase 1.3). <!--hash:a96a30b6-->
+- `SKILL.md` — Researcher skill: captures an external URL (+paste) into research/targets/<slug>/ as target README + source file and regenerates INDEX.md (Phase 1.3). <!--hash:f0d0c33d-->
 
 ## skills/risoluto-researcher/scripts/
 
-- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:0ee7e5c4-->
+- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:07308f14-->
 
 ## skills/risoluto-synthesizer/
 
-- `SKILL.md` — Synthesizer skill: clusters research targets into idea READMEs by shared ideas: tag and rewrites the idea-status rows of capability-backlog.md (Phase 2.1). <!--hash:6e108ebc-->
+- `SKILL.md` — Synthesizer skill: clusters research targets into idea READMEs by shared ideas: tag and rewrites the idea-status rows of capability-backlog.md (Phase 2.1). <!--hash:1b64a423-->
 
 ## skills/risoluto-synthesizer/scripts/
 
-- `synthesize.mjs` — Synthesizer engine; merges target/source ideas: tags into research/ideas/<slug>/ clusters and the synthesizer-owned backlog row block (idempotent). <!--hash:e7ff4668-->
+- `synthesize.mjs` — Synthesizer engine; merges target/source ideas: tags into research/ideas/<slug>/ clusters and the synthesizer-owned backlog row block (idempotent). <!--hash:237c8340-->
 
 ## skills/risoluto-tdd/
 
-- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:2db6cc38-->
+- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:aa22bfa2-->
 - `deep-modules.md` — TDD reference: designing deep modules — simple interface over substantial implementation. <!--hash:0d9720cf-->
 - `interface-design.md` — TDD reference: interface-design principles applied during the red-green-refactor loop. <!--hash:a0a20ca4-->
 - `mocking.md` — TDD reference: when to mock versus use real collaborators in tests. <!--hash:71cbfee6-->
@@ -207,24 +205,24 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-to-issues/
 
-- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug> with LLM-inferred blocked-by (Linear MCP only, Phase 4.1). <!--hash:172c4a7f-->
+- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug> with LLM-inferred blocked-by (Linear MCP only, Phase 4.1). <!--hash:394f4d70-->
 
 ## skills/risoluto-to-issues/scripts/
 
-- `preload.mjs` — to-issues preloader; emits the PRD body, slug, linear_project, and backlog category as JSON for issue breakdown. <!--hash:a0254a18-->
+- `preload.mjs` — to-issues preloader; emits the PRD body, slug, linear_project, and backlog category as JSON for issue breakdown. <!--hash:5b87cf02-->
 
 ## skills/risoluto-to-prd/
 
-- `SKILL.md` — to-prd skill: promotes a grilled idea into docs/prds/<slug>.md + a mirrored Linear project + pipeline/<slug>-prd branch; idempotent create/sync (Phase 3.2). <!--hash:d2f89dde-->
+- `SKILL.md` — to-prd skill: promotes a grilled idea into docs/prds/<slug>.md + a mirrored Linear project + pipeline/<slug>-prd branch; idempotent create/sync (Phase 3.2). <!--hash:b7cd2b65-->
 
 ## skills/risoluto-to-prd/scripts/
 
-- `preload.mjs` — to-prd preloader; reports create-vs-sync mode, why-us/smallest-shape fill state, and PRD existence as JSON. <!--hash:de6004b5-->
-- `write.mjs` — to-prd write script; renders the PRD from the idea README and syncs the Linear project description (create or overwrite), updating idea frontmatter. <!--hash:fac5154e-->
+- `preload.mjs` — to-prd preloader; reports create-vs-sync mode, why-us/smallest-shape fill state, and PRD existence as JSON. <!--hash:8858f4a1-->
+- `write.mjs` — to-prd write script; renders the PRD from the idea README and syncs the Linear project description (create or overwrite), updating idea frontmatter. <!--hash:b1f94ad8-->
 
 ## skills/risoluto-vault/
 
-- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, templates, Dataview views); idempotent drift repair (Phase 1.2). <!--hash:99023abb-->
+- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, templates, Dataview views); idempotent drift repair (Phase 1.2). <!--hash:724f5090-->
 
 ## skills/risoluto-vault/assets/dataview/
 
@@ -247,7 +245,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-vault/scripts/
 
-- `apply.mjs` — Vault apply script; deploys/repairs .obsidian config, templates, and Dataview notes into research/ (WRITE/REPAIR/KEEP per file; --dry-run/--force). <!--hash:a88fab3e-->
+- `apply.mjs` — Vault apply script; deploys/repairs .obsidian config, templates, and Dataview notes into research/ (WRITE/REPAIR/KEEP per file; --dry-run/--force). <!--hash:94c1734a-->
 
 ## src/agent/
 

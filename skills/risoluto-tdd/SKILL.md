@@ -1,6 +1,6 @@
 ---
 name: risoluto-tdd
-description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or any variation that implies test-driven implementation of a specific Linear issue in the Risoluto planning pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref; that may belong to the global tdd skill. Accepts a `<ticket-ref>` (e.g. `RSL-123`), fetches the issue + linked PRD via Linear MCP, validates upstream blocked-by tickets are Done, then delegates the red-green-refactor loop substeps to the global `~/.claude/skills/tdd/` skill. On PR ready, back-comments the Linear ticket with the PR URL and applies the `from:prd-<slug>` label — but PRINTS the `gh pr create` command for Omer to run; never executes it. Fork of `~/.claude/skills/tdd/` — the generic skill stays tracker-agnostic; this one is Linear-aware. Phase 4.2 of `docs/planning-pipeline-roadmap.md`.
+description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or any variation that implies test-driven implementation of a specific Linear issue in the Risoluto planning pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref; that may belong to the global tdd skill. Accepts a `<ticket-ref>` (e.g. `RSL-123`), fetches the issue + linked PRD via Linear MCP, validates upstream blocked-by tickets are Done, then delegates the red-green-refactor loop substeps to the global `~/.claude/skills/tdd/` skill. On PR ready, back-comments the Linear ticket with the PR URL and applies the `from:prd-<slug>` label — but PRINTS the `gh pr create` command for Omer to run; never executes it. Fork of `~/.claude/skills/tdd/` — the generic skill stays tracker-agnostic; this one is Linear-aware. Phase 4.2 of `docs/research-to-shipping-pipeline.md`.
 ---
 
 # risoluto-tdd
@@ -94,7 +94,7 @@ When implementation is complete and all tests pass:
 
 ## Companion files
 
-- `docs/planning-pipeline-roadmap.md` — Phase 4.2 spec
+- `docs/research-to-shipping-pipeline.md` — Phase 4.2 spec
 - `~/.claude/skills/tdd/` — the generic upstream skill this forks from
 - `skills/risoluto-to-issues/` — Phase 4.1; creates the Linear issues this skill implements
 - `skills/risoluto-to-prd/` — Phase 3.2; produces the PRD this skill references

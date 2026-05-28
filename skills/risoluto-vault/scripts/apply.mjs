@@ -2,7 +2,7 @@
 /**
  * risoluto-vault: apply the canonical Obsidian config into `research/`.
  *
- * Phase 1.2 of docs/planning-pipeline-roadmap.md. Idempotent — repeated
+ * Phase 1.2 of docs/research-to-shipping-pipeline.md. Idempotent — repeated
  * runs detect drift and restore the canonical bytes from
  * `skills/risoluto-vault/assets/` without clobbering operator-owned files
  * (currently just `.obsidian/appearance.json`).
