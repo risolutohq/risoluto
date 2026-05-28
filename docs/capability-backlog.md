@@ -6,13 +6,13 @@
 
 ## Status Vocabulary
 
-| Status        | Meaning                                                                                |
-| ------------- | -------------------------------------------------------------------------------------- |
-| **idea**      | Named; needs more thinking before it's actionable.                                     |
-| **ready**     | Scoped enough to start work on; awaiting capacity / priority.                          |
-| **in-flight** | Active Linear work; usually has issues mirrored to GitHub.                             |
-| **shipped**   | Merged in canonical repo; reflected in [release-rules.md](./release-rules.md) cadence. |
-| **dropped**   | Explicitly killed; reason captured.                                                    |
+| Status        | Meaning                                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **idea**      | Named; needs more thinking before it's actionable.                                                               |
+| **ready**     | Scoped enough to start work on; awaiting capacity / priority.                                                    |
+| **in-flight** | Active Linear work; usually has issues mirrored to GitHub.                                                       |
+| **shipped**   | Merged in canonical repo; reflected in [release-rules.md](./release-rules.md) cadence.                           |
+| **dropped**   | Explicitly killed (operator records the rationale in the idea's Analyst notes; not auto-written to the backlog). |
 
 ## Categories
 
@@ -34,7 +34,7 @@ These are the buckets v1's foundation makes possible. Backlog entries fall under
 - **Add an entry** when a capability is named in operator session, ADR, or Linear ticket.
 - **Promote `idea` → `ready`** when scope and trigger are written down (don't promote without both).
 - **Promote `ready` → `in-flight`** when Linear planning work is created.
-- **Close** with a link to the merged PR (or the dropped-reason note).
+- **Close** with a link to the merged PR (or a note in the idea's Analyst notes explaining why it was dropped).
 
 ## Initial Entries
 

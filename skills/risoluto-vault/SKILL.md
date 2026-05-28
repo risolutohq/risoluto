@@ -28,7 +28,7 @@ research/
     └── targets-stale.md
 ```
 
-These files are the *contract* the rest of the pipeline relies on:
+These files are the _contract_ the rest of the pipeline relies on:
 
 - **Frontmatter templates** match `research/.schemas/{source,target,idea}.schema.json` exactly. If you change a schema, change the matching template in this skill's `assets/templates/` and re-apply.
 - **Dataview view notes** (`research/views/*`) are the operator's at-a-glance dashboards — they read frontmatter the schemas define, so they only work if the templates are honored.
@@ -36,10 +36,10 @@ These files are the *contract* the rest of the pipeline relies on:
 
 ## Two vaults, two homes
 
-| Vault                  | Lives at                | Configured by                 |
-|------------------------|-------------------------|-------------------------------|
-| Personal vault         | `~/Documents/my-vault/` | `save-to-obsidian` (separate) |
-| Risoluto research vault| `research/` (submodule) | **this skill**                |
+| Vault                   | Lives at                | Configured by                 |
+| ----------------------- | ----------------------- | ----------------------------- |
+| Personal vault          | `~/Documents/my-vault/` | `save-to-obsidian` (separate) |
+| Risoluto research vault | `research/` (submodule) | **this skill**                |
 
 These never share config. Don't symlink `.obsidian/` between them.
 
@@ -47,11 +47,11 @@ These never share config. Don't symlink `.obsidian/` between them.
 
 Stop and report if any fail. Don't try to recover.
 
-| Check                         | Command                                              | If it fails                                                                 |
-|-------------------------------|------------------------------------------------------|-----------------------------------------------------------------------------|
-| Run from repo root            | `test -f package.json && test -f .gitmodules`        | Tell Omer to `cd` into the `risoluto` checkout root.                        |
-| `research/` initialised       | `git submodule status research` starts with a space  | Tell Omer to `git submodule update --init research` or `/init-research`.    |
-| `research/` working tree clean| `git -C research status --porcelain` empty           | List what's dirty; refuse and ask to commit/stash before applying.          |
+| Check                          | Command                                             | If it fails                                                              |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------ |
+| Run from repo root             | `test -f package.json && test -f .gitmodules`       | Tell Omer to `cd` into the `risoluto` checkout root.                     |
+| `research/` initialised        | `git submodule status research` starts with a space | Tell Omer to `git submodule update --init research` or `/init-research`. |
+| `research/` working tree clean | `git -C research status --porcelain` empty          | List what's dirty; refuse and ask to commit/stash before applying.       |
 
 ## The pipeline
 
@@ -166,17 +166,17 @@ risoluto-vault: 0 file(s) written, 1 repaired, 9 kept.
 
 ## File ownership (what the applier does and doesn't touch)
 
-| File                                | Behaviour                                                                          |
-|-------------------------------------|------------------------------------------------------------------------------------|
-| `.obsidian/app.json`                | Canonical — repaired every run. Forces relative-markdown-links.                    |
-| `.obsidian/appearance.json`         | Seeded on first run, then operator-owned. Never overwritten.                       |
-| `.obsidian/core-plugins.json`       | Canonical — repaired every run.                                                    |
-| `.obsidian/community-plugins.json`  | Canonical — repaired every run. The pinned set is the contract.                    |
-| `.obsidian/plugins/*`               | Untouched. Plugin binaries are operator-installed via Obsidian's UI.               |
-| `.obsidian/workspace*.json`         | Untouched. Pane layout is operator preference.                                     |
-| `templates/*.md`                    | Canonical — repaired every run. Operator edits go in `assets/templates/` upstream. |
-| `views/*.md`                        | Canonical — repaired every run. Dataview queries are part of the contract.         |
-| Anything else under `research/`     | Untouched. Targets, sources, ideas, RISOLUTO_FEATURES — none of it is the vault's. |
+| File                               | Behaviour                                                                          |
+| ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `.obsidian/app.json`               | Canonical — repaired every run. Forces relative-markdown-links.                    |
+| `.obsidian/appearance.json`        | Seeded on first run, then operator-owned. Never overwritten.                       |
+| `.obsidian/core-plugins.json`      | Canonical — repaired every run.                                                    |
+| `.obsidian/community-plugins.json` | Canonical — repaired every run. The pinned set is the contract.                    |
+| `.obsidian/plugins/*`              | Untouched. Plugin binaries are operator-installed via Obsidian's UI.               |
+| `.obsidian/workspace*.json`        | Untouched. Pane layout is operator preference.                                     |
+| `templates/*.md`                   | Canonical — repaired every run. Operator edits go in `assets/templates/` upstream. |
+| `views/*.md`                       | Canonical — repaired every run. Dataview queries are part of the contract.         |
+| Anything else under `research/`    | Untouched. Targets, sources, ideas, RISOLUTO_FEATURES — none of it is the vault's. |
 
 ## Anatomy of the canonical assets
 
@@ -216,18 +216,3 @@ When you intentionally change the contract (new template field, new Dataview vie
 5. Commit in both repos (submodule first, then parent — see Step 4).
 
 Do not edit `research/templates/*` or `research/views/*` directly. The applier will restore canonical on the next run and your edit will be lost.
-
-## Eval scaffolding
-
-`evals/evals.json` holds trigger-test prompts for the description. Run skill-creator's `run_loop.py` to benchmark and tighten the description's triggering accuracy:
-
-```bash
-python -m scripts.run_loop \
-  --eval-set skills/risoluto-vault/evals/evals.json \
-  --skill-path skills/risoluto-vault \
-  --model <current-model-id> \
-  --max-iterations 5 \
-  --verbose
-```
-
-(Run from the skill-creator root, not the risoluto root.)

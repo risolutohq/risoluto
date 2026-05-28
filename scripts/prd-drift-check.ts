@@ -9,11 +9,11 @@
  *   2. CI / PR (--all): checks every PRD file in docs/prds/ against Linear.
  *
  * Exit codes:
- *   0 — no drift detected (or no PRDs changed, or LINEAR_API_KEY unset)
+ *   0 — no drift detected (or no PRDs changed)
  *   1 — drift detected between at least one PRD and its Linear Project
  *
  * Env vars:
- *   LINEAR_API_KEY      — required (exits 0 with warning if unset)
+ *   LINEAR_API_KEY      — required; exits 1 (hard gate) if unset
  *   LINEAR_API_ENDPOINT — optional, defaults to https://api.linear.app/graphql
  */
 

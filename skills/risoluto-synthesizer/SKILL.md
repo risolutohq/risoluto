@@ -27,12 +27,12 @@ Frontmatter on the idea README conforms to `research/.schemas/idea.schema.json` 
 
 Stop and report if any fail:
 
-| Check                                | Command                                            | If it fails                                                                          |
-| ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Run from repo root                   | `test -f package.json && test -f .gitmodules`      | Tell Omer to `cd` into the `risoluto` checkout root.                                 |
-| `research/` initialised              | `git submodule status research` starts with space  | Tell Omer to `git submodule update --init research` or `/init-research`.             |
-| `research/targets/` non-empty        | `ls research/targets`                              | Tell Omer to capture targets via `/risoluto-researcher` first.                       |
-| `docs/capability-backlog.md` exists  | `test -f docs/capability-backlog.md`               | This file is committed at v1 — if missing, the repo is in an unexpected state.       |
+| Check                               | Command                                           | If it fails                                                                    |
+| ----------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Run from repo root                  | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                           |
+| `research/` initialised             | `git submodule status research` starts with space | Tell Omer to `git submodule update --init research` or `/init-research`.       |
+| `research/targets/` non-empty       | `ls research/targets`                             | Tell Omer to capture targets via `/risoluto-researcher` first.                 |
+| `docs/capability-backlog.md` exists | `test -f docs/capability-backlog.md`              | This file is committed at v1 — if missing, the repo is in an unexpected state. |
 
 ## The pipeline
 
@@ -114,30 +114,30 @@ git commit -m "chore: bump research submodule + sync backlog rows from synthesiz
 
 ## Idea README ownership (what the script touches on re-runs)
 
-| Section / Field                             | Behaviour                                                                                  |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Frontmatter `slug`                          | Regenerated every run from the folder name.                                                 |
-| Frontmatter `evidence_targets`              | Regenerated every run from target `ideas:` frontmatter.                                     |
-| Frontmatter `evidence_sources`              | Regenerated every run from source `ideas:` frontmatter.                                     |
-| Frontmatter `linear_project`, `prd_file`    | Preserved verbatim — set by `/risoluto-to-prd` (Phase 3.2).                                 |
-| `## Evidence`                               | Synthesizer-owned — regenerated every run.                                                 |
-| `## Targets that ship this`                 | Synthesizer-owned — regenerated every run.                                                 |
-| `## Variants observed`                      | Synthesizer-owned — regenerated as a deterministic skeleton. LLM enrichment belongs in `## Analyst notes`. |
-| `## Frequency`                              | Synthesizer-owned — regenerated every run.                                                 |
-| `## Analyst notes`                          | Operator-owned — preserved verbatim.                                                       |
-| `## Open questions`                         | Operator-owned — preserved verbatim.                                                       |
-| `## Why us / why now`                       | Operator-owned — filled by `/risoluto-grill` (Phase 3.1).                                  |
-| `## Smallest shippable shape`               | Operator-owned — filled by `/risoluto-grill` (Phase 3.1).                                  |
+| Section / Field                          | Behaviour                                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Frontmatter `slug`                       | Regenerated every run from the folder name.                                                                |
+| Frontmatter `evidence_targets`           | Regenerated every run from target `ideas:` frontmatter.                                                    |
+| Frontmatter `evidence_sources`           | Regenerated every run from source `ideas:` frontmatter.                                                    |
+| Frontmatter `linear_project`, `prd_file` | Preserved verbatim — set by `/risoluto-to-prd` (Phase 3.2).                                                |
+| `## Evidence`                            | Synthesizer-owned — regenerated every run.                                                                 |
+| `## Targets that ship this`              | Synthesizer-owned — regenerated every run.                                                                 |
+| `## Variants observed`                   | Synthesizer-owned — regenerated as a deterministic skeleton. LLM enrichment belongs in `## Analyst notes`. |
+| `## Frequency`                           | Synthesizer-owned — regenerated every run.                                                                 |
+| `## Analyst notes`                       | Operator-owned — preserved verbatim.                                                                       |
+| `## Open questions`                      | Operator-owned — preserved verbatim.                                                                       |
+| `## Why us / why now`                    | Operator-owned — filled by `/risoluto-grill` (Phase 3.1).                                                  |
+| `## Smallest shippable shape`            | Operator-owned — filled by `/risoluto-grill` (Phase 3.1).                                                  |
 
 ## Backlog row ownership
 
-| Column          | Behaviour                                                                                          |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `slug`          | Synthesizer-owned — regenerated every run.                                                         |
-| `name`          | Synthesizer script drafts `TitleCase(slug)`; agent polishes acronyms on first creation (see Step 4.5); operator edits are sticky on re-run. |
+| Column          | Behaviour                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `slug`          | Synthesizer-owned — regenerated every run.                                                                                                       |
+| `name`          | Synthesizer script drafts `TitleCase(slug)`; agent polishes acronyms on first creation (see Step 4.5); operator edits are sticky on re-run.      |
 | `category`      | Synthesizer script drafts `TBD`; agent fills from the canonical category list on first creation (see Step 4.5); operator edits sticky on re-run. |
-| `status`        | Synthesizer writes `idea` (active) or `dropped` (orphan); preserved if operator has set `ready` / `in-flight` / `shipped`. |
-| `evidence_idea` | Synthesizer-owned — always `research/ideas/<slug>/README.md`.                                       |
+| `status`        | Synthesizer writes `idea` (active) or `dropped` (orphan); preserved if operator has set `ready` / `in-flight` / `shipped`.                       |
+| `evidence_idea` | Synthesizer-owned — always `research/ideas/<slug>/README.md`.                                                                                    |
 
 The script only ever touches the rows inside `<!-- BEGIN risoluto-synthesizer:idea-rows -->` / `<!-- END risoluto-synthesizer:idea-rows -->`. Hand-written rows outside the block are untouched.
 
@@ -161,18 +161,3 @@ Expected output:
 ## Why this skill is separate from `risoluto-researcher`
 
 The researcher (Phase 1.3) writes _per-target_ artifacts from individual URLs — it doesn't know what overlaps with what. The synthesizer (Phase 2.1) does the cross-target reduction. Keeping them separate makes both idempotent and lets the synthesizer be re-run any time a target's `ideas:` list changes without re-fetching anything.
-
-## Eval scaffolding
-
-`evals/evals.json` holds trigger-test prompts for the description. Run skill-creator's `run_loop.py` to benchmark and tighten the description's triggering accuracy:
-
-```bash
-python -m scripts.run_loop \
-  --eval-set skills/risoluto-synthesizer/evals/evals.json \
-  --skill-path skills/risoluto-synthesizer \
-  --model <current-model-id> \
-  --max-iterations 5 \
-  --verbose
-```
-
-(Run from the skill-creator root, not the risoluto root.)

@@ -1,6 +1,6 @@
 ---
 name: risoluto-grill
-description: Stress-test a Risoluto research idea against the corpus and the product spine until two operator-owned sections crystallise — `## Why us / why now` and `## Smallest shippable shape` — in `research/ideas/<slug>/README.md`. Pre-loads the idea README, every cited target README, the matching `capability-backlog.md` row, and any `research/RISOLUTO_FEATURES.md` bundles the idea touches, then runs a grill loop framed for the research→product seam ("you have N peers doing X, why us, why now, smallest cut") with one question at a time. On exit, writes the two sections via the deterministic write script (preserving frontmatter, the synthesizer-owned block, and `## Analyst notes` / `## Open questions` verbatim) and offers to flip the backlog row from `status: idea` to `status: ready`. Use this skill whenever Omer says `/risoluto-grill`, "grill <idea-slug>", "stress-test the <slug> idea", "fill in why us / why now for <slug>", "scope the smallest shippable shape of <slug>", "promote <slug> from idea to ready", or any variation that implies turning a clustered idea into a scoped, shippable bet. Also trigger when Omer asks "what's the thinnest slice of <slug>?", "why should Risoluto ship <slug> before competitors X and Y?", or wants to walk the seam between research clusters and product decisions. Idempotent — re-running re-grills, operator keeps iterating; the two sections are the only ones the write touches. Companion to Phase 3.1 of `docs/planning-pipeline-roadmap.md`.
+description: Stress-test a Risoluto research idea against the corpus and the product spine until two operator-owned sections crystallise — `## Why us / why now` and `## Smallest shippable shape` — in `research/ideas/<slug>/README.md`. Pre-loads the idea README, every cited target README, the matching `capability-backlog.md` row, and any `research/RISOLUTO_FEATURES.md` bundles the idea touches, then runs a grill loop framed for the research→product seam ("you have N peers doing X, why us, why now, smallest cut") with one question at a time. On exit, writes the two sections via the deterministic write script (preserving frontmatter, the synthesizer-owned block, and `## Analyst notes` / `## Open questions` verbatim) and offers to flip the backlog row from `status: idea` to `status: ready`. Use this skill whenever Omer says `/risoluto-grill`, "grill <idea-slug>", "stress-test the <slug> idea", "fill in why us / why now for <slug>", "scope the smallest shippable shape of <slug>", "promote <slug> from idea to ready", or any variation that implies turning a clustered idea into a scoped, shippable bet. Also trigger when Omer asks "what's the thinnest slice of <slug>?", "why should Risoluto ship <slug> before competitors X and Y?", or wants to walk the seam between a specific captured idea (named slug or vault cluster) and a product decision about it. Idempotent — re-running re-grills, operator keeps iterating; the two sections are the only ones the write touches. Companion to Phase 3.1 of `docs/planning-pipeline-roadmap.md`.
 ---
 
 # risoluto-grill
@@ -29,12 +29,12 @@ Optionally, after the grill, the skill offers to flip the matching row in `docs/
 
 Stop and report if any fail:
 
-| Check                                       | Command                                            | If it fails                                                                          |
-| ------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Run from repo root                          | `test -f package.json && test -f .gitmodules`      | Tell Omer to `cd` into the `risoluto` checkout root.                                 |
-| `research/` initialised                     | `git submodule status research` starts with space  | Tell Omer to `git submodule update --init research` or `/init-research`.             |
-| Idea exists                                 | `test -f research/ideas/<slug>/README.md`          | Tell Omer to run `/risoluto-synthesizer` first so the idea folder + sections exist.  |
-| `docs/capability-backlog.md` exists         | `test -f docs/capability-backlog.md`               | This file is committed at v1 — if missing, the repo is in an unexpected state.       |
+| Check                               | Command                                           | If it fails                                                                         |
+| ----------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Run from repo root                  | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                                |
+| `research/` initialised             | `git submodule status research` starts with space | Tell Omer to `git submodule update --init research` or `/init-research`.            |
+| Idea exists                         | `test -f research/ideas/<slug>/README.md`         | Tell Omer to run `/risoluto-synthesizer` first so the idea folder + sections exist. |
+| `docs/capability-backlog.md` exists | `test -f docs/capability-backlog.md`              | This file is committed at v1 — if missing, the repo is in an unexpected state.      |
 
 ## The pipeline
 
@@ -97,14 +97,23 @@ The script:
 
 Optional flags:
 
-| Flag                    | Description                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `--why-us-file <path>`  | File containing the new `## Why us / why now` body (markdown, no heading). Required.              |
-| `--smallest-shape-file <path>` | File containing the new `## Smallest shippable shape` body. Required.                       |
-| `--flip-to-ready`       | After the write, flips the matching backlog row from `status: idea` to `status: ready`.           |
-| `--dry-run`             | Print the proposed diff, write nothing.                                                           |
+| Flag                           | Description                                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------------- |
+| `--why-us-file <path>`         | File containing the new `## Why us / why now` body (markdown, no heading). Required.    |
+| `--smallest-shape-file <path>` | File containing the new `## Smallest shippable shape` body. Required.                   |
+| `--flip-to-ready`              | After the write, flips the matching backlog row from `status: idea` to `status: ready`. |
+| `--dry-run`                    | Print the proposed diff, write nothing.                                                 |
 
-After the write, ask Omer one question: **"Promote `<slug>` from `idea` to `ready` in the backlog?"** If yes, re-run with `--flip-to-ready` (it is idempotent — re-running on a `ready` row is a no-op).
+After the write, ask Omer one question: **"Promote `<slug>` from `idea` to `ready` in the backlog?"** If yes, re-run with all three required flags — `--why-us-file`, `--smallest-shape-file`, and `--flip-to-ready` — because the script reads both content files before performing the flip (there is no bypass):
+
+```bash
+node skills/risoluto-grill/scripts/grill-write.mjs <idea-slug> \
+  --why-us-file /tmp/grill-<slug>-why-us.md \
+  --smallest-shape-file /tmp/grill-<slug>-smallest-shape.md \
+  --flip-to-ready
+```
+
+`--flip-to-ready` is idempotent for the status field (re-running on a `ready` row is a no-op), but the two content files must still be present.
 
 ### Step 4 — Validate
 
@@ -132,26 +141,26 @@ If `--flip-to-ready` was not used, the second commit only bumps the submodule.
 
 ## Idea README ownership (what the grill touches on re-runs)
 
-| Section / Field                              | Behaviour                                                                                  |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Frontmatter (all fields)                     | **Never** touched.                                                                         |
-| Synthesizer-owned block (BEGIN/END markers)  | **Never** touched — that's `/risoluto-synthesizer`'s territory.                            |
-| `## Analyst notes`                           | **Never** touched — operator-owned, not regenerated.                                       |
-| `## Open questions`                          | **Never** touched — operator-owned, not regenerated.                                       |
-| `## Why us / why now`                        | Body fully rewritten on every grill. Re-running re-grills.                                 |
-| `## Smallest shippable shape`                | Body fully rewritten on every grill. Re-running re-grills.                                 |
+| Section / Field                             | Behaviour                                                       |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| Frontmatter (all fields)                    | **Never** touched.                                              |
+| Synthesizer-owned block (BEGIN/END markers) | **Never** touched — that's `/risoluto-synthesizer`'s territory. |
+| `## Analyst notes`                          | **Never** touched — operator-owned, not regenerated.            |
+| `## Open questions`                         | **Never** touched — operator-owned, not regenerated.            |
+| `## Why us / why now`                       | Body fully rewritten on every grill. Re-running re-grills.      |
+| `## Smallest shippable shape`               | Body fully rewritten on every grill. Re-running re-grills.      |
 
 The grill replaces only the body between each heading and the next `## ` heading (or EOF). No partial merges, no comment markers — the operator iterates by re-running, not by hand-editing fragments.
 
 ## Backlog row ownership
 
-| Column          | Behaviour                                                                                          |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `slug`          | Never touched.                                                                                     |
-| `name`          | Never touched.                                                                                     |
-| `category`      | Never touched.                                                                                     |
+| Column          | Behaviour                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `slug`          | Never touched.                                                                                                                                |
+| `name`          | Never touched.                                                                                                                                |
+| `category`      | Never touched.                                                                                                                                |
 | `status`        | Flipped from `idea` to `ready` only when `--flip-to-ready` is passed. Idempotent: re-running on `ready` / `in-flight` / `shipped` is a no-op. |
-| `evidence_idea` | Never touched.                                                                                     |
+| `evidence_idea` | Never touched.                                                                                                                                |
 
 The grill only ever flips one direction (`idea` → `ready`). Demotions (`ready` → `idea`) are not a real workflow — if the bet is killed, the operator sets `status: dropped` by hand, with the reason note required by [docs/capability-backlog.md](../../docs/capability-backlog.md)'s status vocabulary.
 
@@ -181,18 +190,3 @@ Expected output:
 The global `~/.claude/skills/grill-me/` is a generic plan-stress-test prompt — no domain, no writes. The global `grill-with-docs/` is the same loop with inline glossary/ADR updates. Both stay generic and unchanged.
 
 `risoluto-grill` is the **product-seam** variant: it pre-loads the research corpus (the cluster's evidence + the spine's existing surface), drives a loop framed specifically for "research has shown us N peers ship this — does Risoluto?", and writes two pre-named operator-owned sections back into a known file shape. Generalising it would dilute the seam — keeping it forked lets `grill-me` stay a 10-line prompt anyone can use anywhere.
-
-## Eval scaffolding
-
-`evals/evals.json` holds trigger-test prompts for the description. Run skill-creator's `run_loop.py` to benchmark and tighten the description's triggering accuracy:
-
-```bash
-python -m scripts.run_loop \
-  --eval-set skills/risoluto-grill/evals/evals.json \
-  --skill-path skills/risoluto-grill \
-  --model <current-model-id> \
-  --max-iterations 5 \
-  --verbose
-```
-
-(Run from the skill-creator root, not the risoluto root.)

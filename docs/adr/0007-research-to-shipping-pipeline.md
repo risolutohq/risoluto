@@ -1,6 +1,6 @@
 # ADR-0007: Research-to-Shipping Planning Pipeline
 
-- **Status:** Active
+- **Status:** Accepted
 - **Date:** 2026-05-27
 
 ## Context

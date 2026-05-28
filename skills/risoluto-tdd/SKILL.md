@@ -1,6 +1,6 @@
 ---
 name: risoluto-tdd
-description: Test-driven development for a specific Linear issue in the Risoluto planning pipeline. Accepts a `<ticket-ref>` (e.g. `RSL-123`), fetches the issue + linked PRD via Linear MCP, validates upstream blocked-by tickets are Done, then runs the red-green-refactor TDD loop from `~/.claude/skills/tdd/`. On PR open, back-comments the Linear ticket with the PR URL and applies the `from:prd-<slug>` label to the PR so the post-merge workflow (Phase 4.3) can find the linked PRD. Fork of `~/.claude/skills/tdd/` — the generic skill stays tracker-agnostic; this one is Linear-aware. Phase 4.2 of `docs/planning-pipeline-roadmap.md`. Use when Omer says `/risoluto-tdd`, `/tdd <ticket-ref>`, "implement ticket RSL-123", "TDD this issue", or any variation that implies test-driven implementation of a Linear issue.
+description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or any variation that implies test-driven implementation of a specific Linear issue in the Risoluto planning pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref; that may belong to the global tdd skill. Accepts a `<ticket-ref>` (e.g. `RSL-123`), fetches the issue + linked PRD via Linear MCP, validates upstream blocked-by tickets are Done, then delegates the red-green-refactor loop substeps to the global `~/.claude/skills/tdd/` skill. On PR ready, back-comments the Linear ticket with the PR URL and applies the `from:prd-<slug>` label — but PRINTS the `gh pr create` command for Omer to run; never executes it. Fork of `~/.claude/skills/tdd/` — the generic skill stays tracker-agnostic; this one is Linear-aware. Phase 4.2 of `docs/planning-pipeline-roadmap.md`.
 ---
 
 # risoluto-tdd
@@ -21,22 +21,23 @@ Given a `<ticket-ref>` (e.g. `RSL-123`):
 
 ## Hard preconditions
 
-| Check | Command / verification | If it fails |
-|-------|----------------------|-------------|
-| Run from repo root | `test -f package.json && test -f .gitmodules` | Tell Omer to `cd` into the `risoluto` checkout root. |
-| Linear MCP responding | Any `mcp__linear-server__list_teams` call succeeds | Surface the MCP error verbatim; do not retry auth. |
-| Ticket ref provided | argv has a ticket ref matching `[A-Z]+-\d+` | Ask Omer for the Linear ticket ref. |
-| Issue exists in Linear | `mcp__linear-server__get_issue` succeeds | Surface the error — issue may not exist or ref may be wrong. |
-| Issue has `from:prd-*` label | Issue labels include `from:prd-<slug>` | Tell Omer the issue wasn't created by `/risoluto-to-issues` — no linked PRD found. |
-| PRD exists on disk | `test -f docs/prds/<slug>.md` | Tell Omer the PRD file is missing — may need to run `/risoluto-to-prd`. |
-| All blocked-by tickets are Done | Each blocked-by relation has status "Done" | List the open blockers and tell Omer to complete them first. |
-| Working tree clean | `git status --porcelain` empty (at relevant paths) | Tell Omer to commit or stash before starting. |
+| Check                           | Command / verification                             | If it fails                                                                        |
+| ------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Run from repo root              | `test -f package.json && test -f .gitmodules`      | Tell Omer to `cd` into the `risoluto` checkout root.                               |
+| Linear MCP responding           | Any `mcp__linear-server__list_teams` call succeeds | Surface the MCP error verbatim; do not retry auth.                                 |
+| Ticket ref provided             | argv has a ticket ref matching `[A-Z]+-\d+`        | Ask Omer for the Linear ticket ref.                                                |
+| Issue exists in Linear          | `mcp__linear-server__get_issue` succeeds           | Surface the error — issue may not exist or ref may be wrong.                       |
+| Issue has `from:prd-*` label    | Issue labels include `from:prd-<slug>`             | Tell Omer the issue wasn't created by `/risoluto-to-issues` — no linked PRD found. |
+| PRD exists on disk              | `test -f docs/prds/<slug>.md`                      | Tell Omer the PRD file is missing — may need to run `/risoluto-to-prd`.            |
+| All blocked-by tickets are Done | Each blocked-by relation has status "Done"         | List the open blockers and tell Omer to complete them first.                       |
+| Working tree clean              | `git status --porcelain` empty (at relevant paths) | Tell Omer to commit or stash before starting.                                      |
 
 ## Pipeline
 
 ### Step 1 — Fetch the Linear issue
 
 Call `mcp__linear-server__get_issue` (or equivalent) with the ticket ref. Extract:
+
 - Title, description (the "What to build" + acceptance criteria)
 - Labels (find `from:prd-<slug>` to resolve the PRD)
 - Blocked-by relations (list of issue IDs)
@@ -44,12 +45,14 @@ Call `mcp__linear-server__get_issue` (or equivalent) with the ticket ref. Extrac
 ### Step 2 — Validate blocked-by tickets
 
 For each blocked-by relation, fetch the issue and check its status. If any are not "Done":
+
 - List each open blocker: `[RSL-456] Implement provider interface — status: In Progress`
 - Refuse to proceed: "Complete the blockers first, then re-run `/risoluto-tdd <ticket-ref>`."
 
 ### Step 3 — Read the linked PRD
 
 From the `from:prd-<slug>` label, read `docs/prds/<slug>.md`. The PRD's:
+
 - **Implementation Decisions** section guides architectural choices
 - **Testing Decisions** section guides what to test and how
 - **User Stories** inform acceptance criteria beyond what the issue itself lists
@@ -65,6 +68,7 @@ Follow the TDD workflow from `~/.claude/skills/tdd/SKILL.md` (the philosophy, an
 4. **Refactor** — after all tests pass, extract duplication, deepen modules
 
 Key constraints from the PRD:
+
 - Use the project's domain glossary so test names match Risoluto's vocabulary
 - Respect ADRs in the area being touched
 - Tests go in the project's existing test tiers (`vitest.config.ts` for unit, `vitest.integration.config.ts` for integration)
@@ -75,9 +79,9 @@ When implementation is complete and all tests pass:
 
 1. Create a feature branch: `feat/<ticket-ref-lowercase>-<short-description>`
 2. Commit with conventional commit message referencing the ticket
-3. Push and open a PR (or print the `gh pr create` command for Omer to run)
-4. Apply the `from:prd-<slug>` label to the PR via `gh pr edit --add-label from:prd-<slug>`
-5. Back-comment the Linear ticket with the PR URL via `mcp__linear-server__add_comment`
+3. Push the branch. **Print** the `gh pr create` command for Omer to run — **do NOT execute `gh pr create`.**
+4. Apply the `from:prd-<slug>` label to the PR via `gh pr edit --add-label from:prd-<slug>` (only after Omer has opened the PR)
+5. Back-comment the Linear ticket with the PR URL via `mcp__linear-server__add_comment` (only after the PR exists)
 
 ## Notes for the agent
 

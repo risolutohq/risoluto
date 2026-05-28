@@ -116,11 +116,16 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `nightly-history-r2.ts` — Downloads or uploads the nightly Linear issue history file from/to a Cloudflare R2 bucket. <!--hash:4240c094-->
 - `nightly-linear-intake.ts` — Creates or updates a Linear nightly failure issue from the nightly summary; supports dry-run and live modes. <!--hash:5186fe50-->
 - `nightly-validation-fail.ts` — Intentionally fails a named nightly CI job on workflow_dispatch for pipeline validation testing. <!--hash:5fcf1be6-->
+- `post-merge-prd.mjs` — Post-merge PRD automation; back-comments from:prd-<slug> Linear issues with the merged PR then flips the PRD frontmatter status to shipped (flip is last). <!--hash:4d5c2636-->
+- `prd-drift-check.ts` — Pre-push/CI gate; compares each docs/prds/<slug>.md body (first 255 chars) against its Linear project description and exits non-zero on drift. <!--hash:29cf44cc-->
+- `prd-linear.ts` — Linear GraphQL helpers for the PRD pipeline; API-key hard gate, project fetch, and extractSlugId URL parsing shared by drift-check and reconcile. <!--hash:27a4913e-->
+- `prd-reconcile.ts` — Adopts a Linear-side PRD edit back into git; writes the Linear description into docs/prds/<slug>.md on branch pipeline/<slug>-prd-reconcile. <!--hash:7f0b645f-->
 - `quarantine-heal.ts` — Reads Vitest JSON results and updates quarantine.json: increments pass counts, auto-heals at threshold, removes stale entries. <!--hash:308c9c5d-->
 - `quarantine-shared.ts` — Shared quarantine types, constants (MAX_QUARANTINED, HEAL_THRESHOLD), path, and loadEntries utility used by quarantine scripts. <!--hash:ab92fe6d-->
 - `quarantine.ts` — CLI for managing the flaky-test quarantine registry: add, remove, and list quarantined tests with cap enforcement. <!--hash:5315b5e5-->
 - `sync-labels.sh` — Idempotently creates or updates GitHub issue labels (priority, type, area, workflow) on risolutohq/risoluto. <!--hash:fde247a5-->
 - `upload-nightly-artifacts-r2.ts` — Uploads nightly CI artifacts (files or directories) to Cloudflare R2 and writes a manifest JSON with public URLs. <!--hash:1f990fa2-->
+- `validate-research.ts` — Validates research/ corpus frontmatter (targets, ideas) against research/.schemas/\*.json; the pnpm validate:research gate. <!--hash:d9f30228-->
 
 ## scripts/.pipeline/
 
@@ -164,6 +169,84 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `render_html.py` — Hydrates viewer-template.html with the JSON sidecar payload, writing a self-contained feature viewer HTML file. <!--hash:7e30da52-->
 - `render_meta.py` — Generates the Summary table and Coverage manifest markdown sections from the RISOLUTO_FEATURES.json payload. <!--hash:7521b7a7-->
 - `validate_json.py` — Validates RISOLUTO_FEATURES.json against schema rules: unique IDs, valid bundles, citation counts, and line ranges. <!--hash:a2f9c56c-->
+
+## skills/risoluto-grill/
+
+- `SKILL.md` — Grill skill: stress-tests a research idea until 'Why us / why now' and 'Smallest shippable shape' crystallise in the idea README (Phase 3.1). <!--hash:4d997654-->
+
+## skills/risoluto-grill/scripts/
+
+- `grill-write.mjs` — Grill writer; rewrites the two operator-owned idea sections (and optional status flip), preserving frontmatter and the synthesizer-owned block. <!--hash:ac9eee91-->
+- `preload.mjs` — Grill preloader; bundles the idea README, cited target READMEs, backlog row, and feature mentions as JSON context. <!--hash:7293644d-->
+
+## skills/risoluto-researcher/
+
+- `SKILL.md` — Researcher skill: captures an external URL (+paste) into research/targets/<slug>/ as target README + source file and regenerates INDEX.md (Phase 1.3). <!--hash:a96a30b6-->
+
+## skills/risoluto-researcher/scripts/
+
+- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:0ee7e5c4-->
+
+## skills/risoluto-synthesizer/
+
+- `SKILL.md` — Synthesizer skill: clusters research targets into idea READMEs by shared ideas: tag and rewrites the idea-status rows of capability-backlog.md (Phase 2.1). <!--hash:6e108ebc-->
+
+## skills/risoluto-synthesizer/scripts/
+
+- `synthesize.mjs` — Synthesizer engine; merges target/source ideas: tags into research/ideas/<slug>/ clusters and the synthesizer-owned backlog row block (idempotent). <!--hash:e7ff4668-->
+
+## skills/risoluto-tdd/
+
+- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:2db6cc38-->
+- `deep-modules.md` — TDD reference: designing deep modules — simple interface over substantial implementation. <!--hash:0d9720cf-->
+- `interface-design.md` — TDD reference: interface-design principles applied during the red-green-refactor loop. <!--hash:a0a20ca4-->
+- `mocking.md` — TDD reference: when to mock versus use real collaborators in tests. <!--hash:71cbfee6-->
+- `refactoring.md` — TDD reference: refactoring guidance for the refactor step of the loop. <!--hash:8a444392-->
+- `tests.md` — TDD reference: how to write behavior-focused, integration-first tests. <!--hash:ff22f809-->
+
+## skills/risoluto-to-issues/
+
+- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug> with LLM-inferred blocked-by (Linear MCP only, Phase 4.1). <!--hash:172c4a7f-->
+
+## skills/risoluto-to-issues/scripts/
+
+- `preload.mjs` — to-issues preloader; emits the PRD body, slug, linear_project, and backlog category as JSON for issue breakdown. <!--hash:a0254a18-->
+
+## skills/risoluto-to-prd/
+
+- `SKILL.md` — to-prd skill: promotes a grilled idea into docs/prds/<slug>.md + a mirrored Linear project + pipeline/<slug>-prd branch; idempotent create/sync (Phase 3.2). <!--hash:d2f89dde-->
+
+## skills/risoluto-to-prd/scripts/
+
+- `preload.mjs` — to-prd preloader; reports create-vs-sync mode, why-us/smallest-shape fill state, and PRD existence as JSON. <!--hash:de6004b5-->
+- `write.mjs` — to-prd write script; renders the PRD from the idea README and syncs the Linear project description (create or overwrite), updating idea frontmatter. <!--hash:fac5154e-->
+
+## skills/risoluto-vault/
+
+- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, templates, Dataview views); idempotent drift repair (Phase 1.2). <!--hash:99023abb-->
+
+## skills/risoluto-vault/assets/dataview/
+
+- `ideas-thin-evidence.md` — Vault asset: Dataview note listing ideas with fewer than two evidence targets. <!--hash:d4b82585-->
+- `targets-stale.md` — Vault asset: Dataview note listing targets not updated in 90+ days. <!--hash:10c47489-->
+- `untagged-sources.md` — Vault asset: Dataview note listing source files with no ideas: tag. <!--hash:28b28a05-->
+
+## skills/risoluto-vault/assets/obsidian-config/
+
+- `app.json` — Vault asset: canonical Obsidian app.json (relative markdown links) deployed by apply.mjs. <!--hash:fc013921-->
+- `appearance.json` — Vault asset: canonical Obsidian appearance.json deployed by apply.mjs. <!--hash:e6bfdd50-->
+- `community-plugins.json` — Vault asset: canonical Obsidian community-plugins list (Web Clipper, Dataview, Templater) deployed by apply.mjs. <!--hash:2b37da71-->
+- `core-plugins.json` — Vault asset: canonical Obsidian core-plugins config deployed by apply.mjs. <!--hash:7910e04c-->
+
+## skills/risoluto-vault/assets/templates/
+
+- `idea-readme.md` — Vault asset: pipeline template for an idea README. <!--hash:8829cc83-->
+- `source.md` — Vault asset: pipeline template for a research source file. <!--hash:598f088a-->
+- `target-readme.md` — Vault asset: pipeline template for a target README. <!--hash:112366d1-->
+
+## skills/risoluto-vault/scripts/
+
+- `apply.mjs` — Vault apply script; deploys/repairs .obsidian config, templates, and Dataview notes into research/ (WRITE/REPAIR/KEEP per file; --dry-run/--force). <!--hash:a88fab3e-->
 
 ## src/agent/
 

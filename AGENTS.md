@@ -38,10 +38,10 @@ The `skills/risoluto-features/` skill writes into this submodule and fails hard 
 The pre-commit / pre-PR gate is:
 
 ```bash
-pnpm run build && pnpm run lint && pnpm run format:check && pnpm test && pnpm run typecheck
+pnpm run build && pnpm run lint && pnpm run format:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
 ```
 
-Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `typecheck` (`type-coverage >= 95%`) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
+Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `typecheck` runs `tsc --noEmit`, and `typecheck:coverage` (type-coverage >= 95%) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
 
 When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
 
@@ -52,6 +52,8 @@ When changes touch integration boundaries, also run the relevant focused suite: 
 - `max-lines-per-function`: **50**
 
 Refactor before adding lines that would breach these — splitting is cheaper than disabling rules. Prettier config: 120-col, double quotes, 2-space indent, LF.
+
+ESLint ignores `*.mjs`, so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to these ceilings — the limits apply to `.ts` files only.
 
 ## Test tiers (4 vitest configs)
 
@@ -76,7 +78,7 @@ Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks`
 - `@docs/decisions.md`, `@docs/adr/` — decisions with rationale
 - `@docs/testing-strategy.md` — tier intent
 - `@docs/release-rules.md` — semantic-release flow
-- `@docs/planning-pipeline-roadmap.md` — designed-but-not-yet-built skill chain
+- `@docs/planning-pipeline-roadmap.md` — historical record of the planning-pipeline skill chain (now fully built; canonical decisions in `docs/adr/0007-research-to-shipping-pipeline.md`, decisions.md row #29)
 - `@skills/risoluto-features/SKILL.md` — two-repo spine updater (consumes `research/`)
 - `@FILETREE.md` — per-file purpose index; read before `ls` / `grep` to locate code
 

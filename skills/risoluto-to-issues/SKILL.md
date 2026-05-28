@@ -1,6 +1,6 @@
 ---
 name: risoluto-to-issues
-description: Break a Risoluto PRD at `docs/prds/<slug>.md` into flat Linear Issues with blocked-by relations inferred by an LLM pass over the PRD body. Fork of `~/.claude/skills/to-issues/` — the generic skill stays tracker-agnostic; this one is Linear MCP only. Phase 4.1 of `docs/planning-pipeline-roadmap.md`. Use when Omer says `/risoluto-to-issues`, `/to-issues`, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a PRD into Linear Issues.
+description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill at ~/.claude/skills/to-issues/ and must not be conflated with this one). Fork of the global skill; this one is Linear MCP only. Phase 4.1 of docs/planning-pipeline-roadmap.md.'
 ---
 
 # risoluto-to-issues
@@ -23,13 +23,13 @@ For one `<prd-slug>` per invocation:
 
 Stop and report if any of these fail. Do **not** retry MCP auth from inside this skill — if Linear MCP errors, surface it to the operator.
 
-| Check | Command / verification | If it fails |
-|-------|----------------------|-------------|
-| Run from repo root | `test -f package.json && test -f .gitmodules` | Tell Omer to `cd` into the `risoluto` checkout root. |
-| `research/` initialised | `git submodule status research` starts with a space | Tell Omer to `git submodule update --init research`. |
-| PRD exists | `test -f docs/prds/<slug>.md` | Tell Omer to run `/risoluto-to-prd <slug>` first. |
-| PRD has `linear_project` | frontmatter `linear_project` is non-null | Tell Omer to run `/risoluto-to-prd <slug>` first. |
-| Linear MCP responding | Any `mcp__linear-server__list_teams` call succeeds | Surface the MCP error verbatim; do not retry auth. |
+| Check                                | Command / verification                                            | If it fails                                                          |
+| ------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Run from repo root                   | `test -f package.json && test -f .gitmodules`                     | Tell Omer to `cd` into the `risoluto` checkout root.                 |
+| `research/` initialised              | `git submodule status research` starts with a space               | Tell Omer to `git submodule update --init research`.                 |
+| PRD exists                           | `test -f docs/prds/<slug>.md`                                     | Tell Omer to run `/risoluto-to-prd <slug>` first.                    |
+| PRD has `linear_project`             | frontmatter `linear_project` is non-null                          | Tell Omer to run `/risoluto-to-prd <slug>` first.                    |
+| Linear MCP responding                | Any `mcp__linear-server__list_teams` call succeeds                | Surface the MCP error verbatim; do not retry auth.                   |
 | No existing `from:prd-<slug>` issues | `mcp__linear-server__list_issues` with label filter returns empty | Tell Omer issues already exist for this PRD; re-run would duplicate. |
 
 ## Pipeline
@@ -90,7 +90,7 @@ For each approved slice, in dependency order (blockers first):
 ```markdown
 ## Parent
 
-PRD: [docs/prds/<slug>.md](<prd-linear-project-url>)
+PRD: [docs/prds/<slug>.md](prd-linear-project-url)
 
 ## What to build
 

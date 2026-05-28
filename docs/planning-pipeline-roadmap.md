@@ -43,7 +43,7 @@ Before starting work on any phase, verify the following. Each item is one comman
 - **Linear MCP configured** (Phase 3+) — Claude Code MCP config has a `linear` server with API key. Verify with a `mcp__linear__*` tool call.
 - **Husky present** — `.husky/pre-push` exists and is executable. Already true in this repo.
 - **`semantic-release` config untouched** — `.releaserc.yml` exists; Conventional Commits enforcement via `commitlint` is active.
-- **OpenCode CLI + GitHub Actions secret** (Phase 4.3) — `OPENCODE_*` secrets configured in the repo for the post-merge workflow.
+- **OpenCode CLI + GitHub Actions secret** (Phase 4.3) — `OPENCODE_*` secrets configured in the repo for the post-merge workflow. _(Shipped: replaced by `scripts/post-merge-prd.mjs` calling Linear GraphQL directly; `OPENCODE_\*` secrets are unused.)\_
 
 ---
 
@@ -278,7 +278,7 @@ Goal: PRD → Linear Issues → PR loop.
   - **Smoke:** given a Linear ticket ref with all blocked-by tickets at status Done, opens a PR linked to the ticket, applies the `from:prd-<slug>` label, and back-comments the PR URL.
 - [x] **4.3** Post-merge automation — first LLM-driven dogfood: _(c1cdcfb)_
   - Ship `.github/workflows/post-merge.yml` that fires on `pull_request.closed && merged == true` for any PR labeled `from:prd-<slug>`
-  - Workflow invokes an OpenCode agent with a scoped prompt: "find the linked PRD from the PR's `from:prd-*` label, flip frontmatter `status: shipped`, back-comment the Linear ticket with the merged PR URL, commit changes to `main`."
+  - Workflow invokes an OpenCode agent with a scoped prompt: "find the linked PRD from the PR's `from:prd-*` label, flip frontmatter `status: shipped`, back-comment the Linear ticket with the merged PR URL, commit changes to `main`." _(Shipped: replaced by `scripts/post-merge-prd.mjs` calling Linear GraphQL directly; `OPENCODE_\*` secrets are unused.)\_
   - This is the first place Risoluto-flavored runtime work runs in CI. Same workflow grows future post-merge behaviors (changelog updates, Linear archival, etc.) without rewriting the YAML — just extending the prompt.
   - **Cost / determinism tradeoff:** one OpenCode run per merged PR. Accepted vs deterministic YAML (`yq` + `gh` + `regex`) because the second post-merge behavior amortizes the investment, and the runtime dogfood is itself part of the product story.
   - **Smoke:** given a synthetic merged PR with a `from:prd-<slug>` label, the workflow flips the matching PRD's `status` to `shipped` and posts the merged URL back to the Linear ticket.

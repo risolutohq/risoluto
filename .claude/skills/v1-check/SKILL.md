@@ -1,6 +1,6 @@
 ---
 name: v1-check
-description: Run the canonical Risoluto v1 pre-commit / pre-PR gate (build → lint → format:check → test → typecheck). Use when the user says "/v1-check", asks to "run checks", "verify the branch", "run the gate", or before pushing / opening a PR. Stops at the first failing step and surfaces the failing command's output verbatim.
+description: Run the canonical Risoluto v1 pre-commit / pre-PR gate (build → lint → format:check → test → typecheck → typecheck:coverage). Use when the user says "/v1-check", asks to "run checks", "verify the branch", "run the gate", or before pushing / opening a PR. Stops at the first failing step and surfaces the failing command's output verbatim.
 ---
 
 # /v1-check
@@ -15,6 +15,7 @@ pnpm run lint
 pnpm run format:check
 pnpm test
 pnpm run typecheck
+pnpm run typecheck:coverage
 ```
 
 ## Behavior
@@ -22,7 +23,7 @@ pnpm run typecheck
 - **Run each command separately**, not chained with `&&`, so you can report per-step status (pass / fail / skipped) without losing which step failed.
 - **Stop at the first failure.** Do not run downstream steps — they produce noise that hides the real fault.
 - On failure, print the full stdout/stderr of the failing step verbatim. Do not summarize the error away.
-- On full pass, print a one-line confirmation of all 5 steps and any non-zero warnings worth surfacing (e.g., lint warnings that did not fail the run).
+- On full pass, print a one-line confirmation of all 6 steps and any non-zero warnings worth surfacing (e.g., lint warnings that did not fail the run).
 
 ## When to extend
 

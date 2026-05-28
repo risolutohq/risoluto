@@ -32,13 +32,13 @@ For GitHub repo URLs, the researcher also performs a shallow clone to `/tmp/rese
 
 Stop and report if any fail:
 
-| Check                           | Command                                            | If it fails                                                                     |
-| ------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Run from repo root              | `test -f package.json && test -f .gitmodules`      | Tell Omer to `cd` into the `risoluto` checkout root.                            |
-| `research/` initialised         | `git submodule status research` starts with space  | Tell Omer to `git submodule update --init research` or `/init-research`.        |
-| `research/templates/` present   | `test -d research/templates`                       | Tell Omer to run `/risoluto-vault` first to install templates and obsidian config. |
-| `research/.schemas/` present    | `test -d research/.schemas`                        | Tell Omer to check that Phase 1.1 schemas are committed and pushed.             |
-| `gh` CLI installed + authed     | `gh auth status` exits 0                           | Tell Omer to run `gh auth login`. Required for deep GitHub capture.             |
+| Check                         | Command                                           | If it fails                                                                        |
+| ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Run from repo root            | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                               |
+| `research/` initialised       | `git submodule status research` starts with space | Tell Omer to `git submodule update --init research` or `/init-research`.           |
+| `research/templates/` present | `test -d research/templates`                      | Tell Omer to run `/risoluto-vault` first to install templates and obsidian config. |
+| `research/.schemas/` present  | `test -d research/.schemas`                       | Tell Omer to check that Phase 1.1 schemas are committed and pushed.                |
+| `gh` CLI installed + authed   | `gh auth status` exits 0                          | Tell Omer to run `gh auth login`. Required for deep GitHub capture.                |
 
 ## The pipeline
 
@@ -80,15 +80,15 @@ If the clone already exists from a previous run, `git pull` instead. The clone i
 
 Run these `gh` commands against `<owner>/<repo>`:
 
-| Data | Command |
-| ---- | ------- |
-| Repo metadata | `gh api repos/<owner>/<repo> --jq '{name,description,language,stargazers_count,forks_count,open_issues_count,topics,license: .license.spdx_id,created_at,updated_at,pushed_at,default_branch,archived,homepage}'` |
-| Languages | `gh api repos/<owner>/<repo>/languages` |
-| Recent issues (top 10 open, by reactions) | `gh api 'repos/<owner>/<repo>/issues?state=open&sort=reactions&per_page=10' --jq '.[] \| {number,title,reactions: .reactions.total_count,labels: [.labels[].name],updated_at}'` |
-| Recent PRs (top 10 merged) | `gh api 'repos/<owner>/<repo>/pulls?state=closed&sort=updated&per_page=10' --jq '.[] \| select(.merged_at != null) \| {number,title,merged_at,labels: [.labels[].name]}'` |
-| Releases (last 5) | `gh api 'repos/<owner>/<repo>/releases?per_page=5' --jq '.[] \| {tag_name,name,published_at,body: (.body \| split("\n") \| .[0:3] \| join(" "))}'` |
-| Contributors (top 10) | `gh api 'repos/<owner>/<repo>/contributors?per_page=10' --jq '.[] \| {login,contributions}'` |
-| Recent commits (last 20) | `gh api 'repos/<owner>/<repo>/commits?per_page=20' --jq '.[] \| {sha: .sha[0:7], message: (.commit.message \| split("\n") \| .[0]), date: .commit.author.date}'` |
+| Data                                      | Command                                                                                                                                                                                                           |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repo metadata                             | `gh api repos/<owner>/<repo> --jq '{name,description,language,stargazers_count,forks_count,open_issues_count,topics,license: .license.spdx_id,created_at,updated_at,pushed_at,default_branch,archived,homepage}'` |
+| Languages                                 | `gh api repos/<owner>/<repo>/languages`                                                                                                                                                                           |
+| Recent issues (top 10 open, by reactions) | `gh api 'repos/<owner>/<repo>/issues?state=open&sort=reactions&per_page=10' --jq '.[] \| {number,title,reactions: .reactions.total_count,labels: [.labels[].name],updated_at}'`                                   |
+| Recent PRs (top 10 merged)                | `gh api 'repos/<owner>/<repo>/pulls?state=closed&sort=updated&per_page=10' --jq '.[] \| select(.merged_at != null) \| {number,title,merged_at,labels: [.labels[].name]}'`                                         |
+| Releases (last 5)                         | `gh api 'repos/<owner>/<repo>/releases?per_page=5' --jq '.[] \| {tag_name,name,published_at,body: (.body \| split("\n") \| .[0:3] \| join(" "))}'`                                                                |
+| Contributors (top 10)                     | `gh api 'repos/<owner>/<repo>/contributors?per_page=10' --jq '.[] \| {login,contributions}'`                                                                                                                      |
+| Recent commits (last 20)                  | `gh api 'repos/<owner>/<repo>/commits?per_page=20' --jq '.[] \| {sha: .sha[0:7], message: (.commit.message \| split("\n") \| .[0]), date: .commit.author.date}'`                                                  |
 
 **2b.3 — Source analysis from clone**
 
@@ -107,15 +107,15 @@ Extract a lightweight feature inventory from the clone. This is NOT the full cit
 
 Common signals to scan (not exhaustive — follow anything else that reveals capabilities):
 
-| Signal | Where to look | What it reveals |
-| ------ | ------------- | --------------- |
-| CLI commands | `commander`/`yargs`/`click`/`cobra` definitions, `bin/` scripts | User-facing actions |
-| API routes | Express/FastAPI/Flask route files, `openapi.yaml` | HTTP surface |
-| Exported modules | `index.ts`/`__init__.py`/`lib.rs` public exports | Core capabilities |
-| Config schema | `.env.example`, config types/interfaces, JSON schemas | Configurable surfaces |
-| Event/webhook handlers | Files named `*handler*`, `*webhook*`, `*event*` | Integration points |
-| Background jobs | Cron, queue consumers, worker files | Async capabilities |
-| Plugin/extension system | Plugin registries, middleware stacks, hook systems | Extensibility |
+| Signal                  | Where to look                                                   | What it reveals       |
+| ----------------------- | --------------------------------------------------------------- | --------------------- |
+| CLI commands            | `commander`/`yargs`/`click`/`cobra` definitions, `bin/` scripts | User-facing actions   |
+| API routes              | Express/FastAPI/Flask route files, `openapi.yaml`               | HTTP surface          |
+| Exported modules        | `index.ts`/`__init__.py`/`lib.rs` public exports                | Core capabilities     |
+| Config schema           | `.env.example`, config types/interfaces, JSON schemas           | Configurable surfaces |
+| Event/webhook handlers  | Files named `*handler*`, `*webhook*`, `*event*`                 | Integration points    |
+| Background jobs         | Cron, queue consumers, worker files                             | Async capabilities    |
+| Plugin/extension system | Plugin registries, middleware stacks, hook systems              | Extensibility         |
 
 For each feature found, write one line: `- **Feature name** — what it does (one sentence).`
 
@@ -184,18 +184,18 @@ node skills/risoluto-researcher/scripts/research.mjs \
 
 All flags:
 
-| Flag              | Required | Description                                             |
-| ----------------- | -------- | ------------------------------------------------------- |
-| `--url`           | yes      | Canonical URL for the source/target                     |
-| `--target-slug`   | yes      | Lowercase-hyphenated target identifier                  |
-| `--category`      | yes      | `peer`, `reference`, or `adjacent`                        |
-| `--source-type`   | yes      | `article`, `reddit`, `x`, `repo`, `video`, `paper`, or `talk` |
-| `--source-slug`   | yes      | Lowercase-hyphenated source identifier                  |
-| `--ideas`         | no       | Comma-separated idea slugs (default: empty)             |
-| `--title`         | no       | Source file H1 title (default: derived from URL)        |
-| `--description`   | no       | Target README description paragraph                     |
-| `--body-file`     | no       | Path to a file containing the source body markdown      |
-| `--dry-run`       | no       | Print what would be written, don't write anything       |
+| Flag            | Required | Description                                                   |
+| --------------- | -------- | ------------------------------------------------------------- |
+| `--url`         | yes      | Canonical URL for the source/target                           |
+| `--target-slug` | yes      | Lowercase-hyphenated target identifier                        |
+| `--category`    | yes      | `peer`, `reference`, or `adjacent`                            |
+| `--source-type` | yes      | `article`, `reddit`, `x`, `repo`, `video`, `paper`, or `talk` |
+| `--source-slug` | yes      | Lowercase-hyphenated source identifier                        |
+| `--ideas`       | no       | Comma-separated idea slugs (default: empty)                   |
+| `--title`       | no       | Source file H1 title (default: derived from URL)              |
+| `--description` | no       | Target README description paragraph                           |
+| `--body-file`   | no       | Path to a file containing the source body markdown            |
+| `--dry-run`     | no       | Print what would be written, don't write anything             |
 
 The script is idempotent per source: re-running with the same `--url` and `--source-slug` overwrites the source file, updates the target README derived fields (`last_researched_at`, `last_researched_sha`, `ideas` union, `source_count`), and regenerates INDEX.md. It never overwrites operator-owned target README prose sections.
 
@@ -225,16 +225,16 @@ git commit -m "chore: bump research submodule for <target-slug> capture"
 
 ## Target README ownership (what the script touches on re-runs)
 
-| Field / Section                           | Behaviour                                                       |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| Frontmatter `slug`, `canonical_url`, `category`  | Written on first creation; **never** overwritten on re-runs     |
-| Frontmatter `last_researched_at`, `last_researched_sha` | Updated every run                                              |
-| Frontmatter `ideas`                      | Union of all `sources/*.md` ideas — recomputed every run        |
-| Frontmatter `source_count`               | Glob of `sources/*.md` — recomputed every run                   |
-| `## What is this target?`                | Written on first creation only (operator-owned after that)      |
-| `## Capabilities observed`               | Written on first creation only (operator-owned after that)      |
-| `## Sources`                             | Regenerated every run (lists `sources/*.md` links)              |
-| `## Analyst notes`                       | **Never** touched — operator-owned                              |
+| Field / Section                                         | Behaviour                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| Frontmatter `slug`, `canonical_url`, `category`         | Written on first creation; **never** overwritten on re-runs |
+| Frontmatter `last_researched_at`, `last_researched_sha` | Updated every run                                           |
+| Frontmatter `ideas`                                     | Union of all `sources/*.md` ideas — recomputed every run    |
+| Frontmatter `source_count`                              | Glob of `sources/*.md` — recomputed every run               |
+| `## What is this target?`                               | Written on first creation only (operator-owned after that)  |
+| `## Capabilities observed`                              | Written on first creation only (operator-owned after that)  |
+| `## Sources`                                            | Regenerated every run (lists `sources/*.md` links)          |
+| `## Analyst notes`                                      | **Never** touched — operator-owned                          |
 
 ## INDEX.md regeneration
 
@@ -286,19 +286,4 @@ pnpm validate:research
 
 ## Why this skill is separate from `risoluto-vault`
 
-The vault (Phase 1.2) configures the container — `.obsidian/`, templates, Dataview views. The researcher (Phase 1.3) fills the container — targets, sources, INDEX.md. Separating them keeps the vault's idempotent-apply pattern clean (it never writes content files) and lets the researcher iterate on ingestion logic without coupling to the Obsidian config surface. The only shared surface is the templates under `research/templates/` — the researcher reads them at runtime and the vault owns them canonically.
-
-## Eval scaffolding
-
-`evals/evals.json` holds trigger-test prompts for the description. Run skill-creator's `run_loop.py` to benchmark and tighten the description's triggering accuracy:
-
-```bash
-python -m scripts.run_loop \
-  --eval-set skills/risoluto-researcher/evals/evals.json \
-  --skill-path skills/risoluto-researcher \
-  --model <current-model-id> \
-  --max-iterations 5 \
-  --verbose
-```
-
-(Run from the skill-creator root, not the risoluto root.)
+The vault (Phase 1.2) configures the container — `.obsidian/`, templates, Dataview views. The researcher (Phase 1.3) fills the container — targets, sources, INDEX.md. Separating them keeps the vault's idempotent-apply pattern clean (it never writes content files) and lets the researcher iterate on ingestion logic without coupling to the Obsidian config surface. The vault owns `research/templates/` canonically (apply.mjs deploys them); the researcher does NOT read them at runtime — buildTargetBody and buildSourceBody are self-contained string builders.

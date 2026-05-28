@@ -1,6 +1,6 @@
 ---
 name: risoluto-to-prd
-description: Promote a Risoluto research idea from `## Why us / why now` + `## Smallest shippable shape` (filled by `/risoluto-grill`) into a canonical PRD at `docs/prds/<slug>.md`, a matching Linear Project (via the `mcp__linear-server__*` MCP) whose description mirrors the PRD body, and a pushed feature branch (`pipeline/<slug>-prd`) — then update the idea README frontmatter (`linear_project`, `prd_file`) so the next invocation auto-detects sync mode. The skill stops short of `gh pr create`; it prints the suggested PR command so the operator opens the PR when they're ready. **Idempotent on re-run:** the first call on a slug CREATES the Linear Project + PRD + branch; subsequent calls SYNC by overwriting the Linear Project description from the current `docs/prds/<slug>.md` without spawning a second Project. Mode is decided from the idea README's `linear_project` frontmatter (null → create, set → sync). Use this skill whenever Omer says `/risoluto-to-prd`, `/to-prd`, "promote <slug> to a PRD", "write a PRD for <slug>", "push <slug> to Linear", "create a Linear Project from this idea", "resync <slug> to Linear", "overwrite the Linear PRD from git", "reject the Linear edit on <slug>", or any variation that implies turning a clustered, grilled idea into a Linear Project + git-canonical PRD. Also trigger when Omer mentions the planning-pipeline phase 3.2 work or wants to test the PRD drift hook from 3.3 — the sync path through this skill IS the git-is-canon push direction. Companion to Phase 3.2 of `docs/planning-pipeline-roadmap.md`. **Fork of the global `~/.claude/skills/to-prd/` skill** — the generic skill stays tracker-agnostic; this one is Linear MCP only.
+description: 'Risoluto-repo PRD skill — invoke as **/risoluto-to-prd** (NOT /to-prd, which is the tracker-agnostic global skill). Promotes a Risoluto research idea from `## Why us / why now` + `## Smallest shippable shape` (filled by `/risoluto-grill`) into a canonical PRD at `docs/prds/<slug>.md`, a matching Linear Project (via the `mcp__linear-server__*` MCP) whose description mirrors the PRD body, and a pushed feature branch (`pipeline/<slug>-prd`) — then update the idea README frontmatter (`linear_project`, `prd_file`) so the next invocation auto-detects sync mode. The skill stops short of `gh pr create`; it prints the suggested PR command so the operator opens the PR when they''re ready. **Idempotent on re-run:** the first call on a slug CREATES the Linear Project + PRD + branch; subsequent calls SYNC by overwriting the Linear Project description from the current `docs/prds/<slug>.md` without spawning a second Project. Mode is decided from the idea README''s `linear_project` frontmatter (null → create, set → sync). Use this skill whenever Omer says `/risoluto-to-prd`, "promote <slug> to a PRD", "write a PRD for <slug>", "push <slug> to Linear", "create a Linear Project from this idea", "resync <slug> to Linear", "overwrite the Linear PRD from git", "reject the Linear edit on <slug>", or any variation that implies turning a clustered, grilled idea into a Linear Project + git-canonical PRD. Also trigger when Omer mentions the planning-pipeline phase 3.2 work or wants to test the PRD drift hook from 3.3 — the sync path through this skill IS the git-is-canon push direction. Companion to Phase 3.2 of `docs/planning-pipeline-roadmap.md`. **Fork of the global `~/.claude/skills/to-prd/` skill** — the generic skill stays tracker-agnostic; this one is Linear MCP only and publishes to the Ninetech Linear team.'
 ---
 
 # risoluto-to-prd
@@ -76,6 +76,21 @@ Call `mcp__linear-server__save_project` with:
 - `state`: `"planned"` (Linear default — leave it; status field on the PRD's git frontmatter is the canonical status)
 
 Capture the returned project's `url` (full Linear URL like `https://linear.app/ninetech/project/<slug>-<random>/overview`). That URL becomes the PRD frontmatter's `linear_project` value.
+
+**After the project is created, instruct the operator to paste the Linear UI banner into the new Linear Project's description.** The banner template is defined in `docs/prds/README.md` under "Linear UI banner". Steps:
+
+1. Open the newly created Linear Project at the captured URL.
+2. In the project description, append (below the auto-synced PRD body) the banner block from `docs/prds/README.md`:
+   ```
+   ---
+   > **This description is generated from `docs/prds/<slug>.md` in git.**
+   > To edit, open a PR against the source file. Edits made here will be
+   > overwritten on the next sync and blocked by the pre-push drift hook.
+   ---
+   ```
+3. Save the description in the Linear UI.
+
+This is a **manual operator step** — the MCP `save_project` call above sets the PRD body, but the banner must be appended via the Linear UI because it is human-facing context, not part of the git-canonical body. Do not include the banner in `--body-file` or in `docs/prds/<slug>.md`.
 
 ### Step 3' — Push to Linear via MCP (SYNC mode)
 

@@ -64,11 +64,11 @@ The pipeline's API is the frontmatter in every research and PRD file. JSON Schem
 | `target.schema.json` | `research/targets/<slug>/README.md`                |
 | `idea.schema.json`   | `research/ideas/<slug>/README.md`                  |
 
-PRD frontmatter (`docs/prds/<slug>.md`) is defined in the roadmap; no separate schema file yet.
+PRD frontmatter (`docs/prds/<slug>.md`) is defined in the roadmap; no separate schema file yet. **TODO/gap:** `pnpm validate:research` does NOT validate `docs/prds/*.md` frontmatter — a `prd.schema.json` schema and coverage in the validator are missing and need to be added.
 
 **`additionalProperties: true` on every schema.** The `research/` vault is also an Obsidian vault — Web Clipper, Templater, and the operator inject fields (`tags:`, `aliases:`, plugin-specific keys). Schemas validate the pipeline-owned subset only; everything else passes through untouched.
 
-**Slug collisions:** slugs are namespaced by type — `targets/<slug>/` and `ideas/<slug>/` can share the same string. Within a namespace, the researcher/synthesizer refuses to create a duplicate and halts.
+**Slug collisions:** slugs are namespaced by type — `targets/<slug>/` and `ideas/<slug>/` can share the same string. Within a namespace, the researcher/synthesizer is **idempotent**: re-running against an existing slug updates derived fields (sources, summary, evidence links) without clobbering operator-owned prose sections. There is no halt — a second run is a repair run.
 
 **Validation:** `pnpm validate:research` walks the corpus and validates every file against its schema.
 
