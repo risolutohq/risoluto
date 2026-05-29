@@ -119,11 +119,16 @@ Run when studying a specific source: a repo, an X thread, a blog post, a paper.
    | `supersede` | A better/newer version of an existing row                         | Mark the old row `superseded`; add the new row. |
    | `new`       | No overlap                                                        | Proceeds to critic-grill.                       |
 
-3. **Critic-grill** (`/risoluto-grill`) — for each surviving `new` candidate, a grill loop challenges:
-   - **Fit vs spine**: does it compose with Risoluto's primitives, or need a new one?
-   - **Differentiation**: N peers ship X — why us, why now?
-   - **Thinnest shippable cut**: what is the smallest version that proves value?
-     The founder decides in/out per candidate.
+3. **Critic-grill** (`/risoluto-grill`) — each surviving `new` candidate runs an admission loop:
+   **two gates, a router, two ordering-only scores** (full logic in the skill):
+   - **Gate 1 — thesis alignment**: does it deepen one of the five AFK jobs (`product-spine.md` value
+     lens)? No named job → dropped (cite-or-drop, not scored low).
+   - **Router — classification** (`differentiator` | `table_stakes` | `nice_to_have`): selects which
+     justification standard applies.
+   - **Gate 2 — class-specific justification**: differentiator → a falsifiable bet; table-stakes →
+     category credibility (absence is a hole); nice-to-have → cited, dated demand, else dropped.
+   - **Scores (ordering only)**: cost/complexity + reversibility set rank and thinnest cut, never
+     admission. The founder decides in/out per candidate.
 
 4. **Kept candidates** become roadmap rows (`status: idea` or `next`) whose Research link points to
    `research/targets/<slug>/README.md`. The founder ranks.
@@ -136,9 +141,10 @@ Run to find white-space ideas across all accumulated research, or to keep the co
    and builds a **connected wiki** at `research/wiki/`: a home note plus concept notes that wikilink
    targets together — the big picture.
 
-2. **Gap-grounded idea generation** — an idea is only emitted if it **cites the dots it connects
-   and the gap it fills**. Required patterns: "A, B, C all do X but none do Y" or
-   "A's X + B's Y compose into Z". No citation → the idea is **dropped** (cite-or-drop).
+2. **Gap-grounded idea generation** — an idea is only emitted if it **cites the dots it connects,
+   the gap it fills, and the AFK job it serves** (`product-spine.md` value lens). Required patterns:
+   "A, B, C all do X but none do Y" or "A's X + B's Y compose into Z". No citation, or no AFK job →
+   the idea is **dropped** (cite-or-drop).
 
 3. **Generated white-space ideas** land as roadmap rows (`status: idea`) whose Research link cites
    the wiki note or targets they connect. They enter the same funnel → critic-grill → founder ranks.
@@ -228,14 +234,15 @@ The roadmap uses exactly **6 columns**:
 
 ### Status vocab
 
-| Status       | Meaning                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `idea`       | Named (founder- or skill-proposed); needs Why + Size before promotion.                            |
-| `next`       | Scoped (has Why + Size) and ranked to start soon; has or is about to get a PRD.                   |
-| `building`   | A PRD exists and Linear issues are in flight (`from:prd-<slug>`).                                 |
-| `shipped`    | Merged in the canonical repo.                                                                     |
-| `dropped`    | Killed; the reason is written in the Why now cell. Never silently removed.                        |
-| `superseded` | Replaced by a newer row/feature (set by dedup `supersede`); the superseding row/feature is named. |
+| Status       | Meaning                                                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `idea`       | Named (founder- or skill-proposed); needs Why + Size before promotion.                                                              |
+| `next`       | Scoped (has Why + Size) and ranked to start soon; has or is about to get a PRD.                                                     |
+| `building`   | A PRD exists and Linear issues are in flight (`from:prd-<slug>`).                                                                   |
+| `shipped`    | Merged in the canonical repo.                                                                                                       |
+| `dropped`    | Killed; the reason is written in the Why now cell. Never silently removed.                                                          |
+| `superseded` | Replaced by a newer row/feature (set by dedup `supersede`); the superseding row/feature is named.                                   |
+| `deprecated` | Shipped surface marked for removal — unused or not worth its complexity cost (the [exit gate](#exit-gate-pruning-shipped-surface)). |
 
 ## PRD contract (git is canon)
 
@@ -298,11 +305,30 @@ source_count: <int>
 - **The roadmap is the only plan.** No second backlog, no auto-generated idea ledger. If it isn't a roadmap row, it isn't planned.
 - **Slug is the join key.** Carried as `<!-- slug:<slug> -->` in the roadmap Item cell; identical across roadmap row / PRD file + frontmatter / Linear project / `from:prd-<slug>` label. A slug consistency check enforces this post-merge.
 - **Skills propose; the founder disposes.** Skills append `idea` rows — they never reorder, promote, or delete rows.
+- **Value lens + fit are both gates, not scores.** A candidate earns a row only if it deepens one of the five AFK jobs (`product-spine.md`) _and_ composes with the spine — alignment is a hard cite-or-drop gate. Classification (`differentiator` / `table_stakes` / `nice_to_have`) _routes_ which justification standard applies; cost + reversibility are ordering scores only, never admission.
+- **Acceptance is the red-test spec.** Each issue criterion is a falsifiable behavioural assertion `/risoluto-tdd` turns into a failing test — never a restatement of the global gate (build/lint/test/typecheck/coverage). A slice with no falsifiable behaviour is not ready to start.
+- **Intake is gated; so is exit.** Pruning shipped surface is a first-class move — see the exit gate below. `deprecated` retires live capability that stopped earning its keep; `superseded` only retires a row a newer row replaces.
 - **Git is canon for PRDs.** Resolve divergence with `prd:reconcile` (Linear → git) or `to-prd` sync (git → Linear). Never hand-edit Linear descriptions.
 - **No auto-PR.** Skills branch, commit, and push but never run `gh pr create` — they print it.
 - **255-char Linear cap.** Drift detection sees only the first 255 chars of the PRD body.
 - **Advisory review.** `/code-review` and `/simplify` after TDD are advisory aids the founder applies selectively — not a blocking gate.
 - **Idempotent:** researcher, ingest, vault, to-prd sync. **Not idempotent:** to-issues, tdd (re-runs can duplicate).
+
+## Exit gate: pruning shipped surface
+
+Every stage above gates what comes **in** (researcher → dedup → grill → cite-or-drop → thesis). For a
+tool whose dominant failure mode is complexity, an unguarded **exit** is the bigger risk — there must
+be a path to _remove_ shipped surface, not only add it. `superseded` only retires a row a newer row
+replaces; it does not retire live capability that simply stopped earning its keep.
+
+- **`deprecated` status** marks a shipped capability slated for removal. A removal is planned like any
+  other work: the `deprecated` row carries the reason (unused / cost > value) in its Why now cell and
+  flows through the same back-half (PRD → issues → TDD) to delete the surface _and its tests_.
+- **Usage signal on `RISOLUTO_FEATURES.md`.** The post-merge step already regenerates the feature
+  inventory; it is the natural place to hang a "last exercised in a real run" signal. A periodic
+  review flags features with no recent usage as `deprecated` candidates — pruning becomes a gate, not
+  an afterthought. (The usage-tracking mechanism is runtime telemetry, not yet built; this documents
+  the gate so the signal has a home once runs emit it.)
 
 ## Known gaps
 
@@ -316,15 +342,16 @@ Confirmed in code; not yet fixed:
 Pipeline skills live in `skills/risoluto-*/` and are symlinked into `.claude/skills/` and
 `.agents/skills/`:
 
-| Skill                 | Mode / role                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------------------- |
-| `risoluto-researcher` | Mode A step 1 — deep-analyzes a source; writes `research/targets/<slug>/README.md`.                 |
-| `risoluto-grill`      | Mode A step 3 — the critic; grill-loops surviving candidates; founder decides in/out per candidate. |
-| `risoluto-ingest`     | Mode B — the reborn synthesizer; builds `research/wiki/` + emits gap-grounded idea rows.            |
-| `risoluto-to-prd`     | Back-half — reads a `next` roadmap row + its linked research; writes PRD + Linear project.          |
-| `risoluto-to-issues`  | Back-half — slices a PRD into flat Linear issues with blocked-by edges.                             |
-| `risoluto-tdd`        | Back-half — red-green-refactor against a Linear ticket; prints `gh pr create`.                      |
-| `risoluto-vault`      | Obsidian vault helper; unaffected by pipeline changes.                                              |
+| Skill                  | Mode / role                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `risoluto-researcher`  | Mode A step 1 — deep-analyzes a source; writes `research/targets/<slug>/README.md`.                                |
+| `risoluto-grill`       | Mode A step 3 — the critic; grill-loops surviving candidates; founder decides in/out per candidate.                |
+| `risoluto-ingest`      | Mode B — the reborn synthesizer; builds `research/wiki/` + emits gap-grounded idea rows.                           |
+| `risoluto-to-prd`      | Back-half — reads a `next` roadmap row + its linked research; writes PRD + Linear project.                         |
+| `risoluto-to-issues`   | Back-half — slices a PRD into flat Linear issues with blocked-by edges.                                            |
+| `risoluto-tdd`         | Back-half — red-green-refactor against a Linear ticket; prints `gh pr create`.                                     |
+| `risoluto-next-bundle` | Back-half scheduler — filters Linear issues to the ready-set + emits conflict-free bundles for parallel worktrees. |
+| `risoluto-vault`       | Obsidian vault helper; unaffected by pipeline changes.                                                             |
 
 **Fork-not-upgrade.** `to-prd`, `to-issues`, and `tdd` are Linear-specific forks of the global
 `~/.claude/skills/{to-prd,to-issues,tdd}` — invoke the namespaced `/risoluto-*` variants here. The

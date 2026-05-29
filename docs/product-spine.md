@@ -28,6 +28,27 @@ A workflow-run engine for autonomous engineering work:
 The single-operator overnight-solo "personal autonomous coder" loop is **the first reference
 Workflow Definition Risoluto targets — not the identity.** Other definitions ride the same primitives.
 
+## The jobs Risoluto exists to serve (value lens)
+
+Risoluto's value to an operator running agents AFK reduces to **five jobs**. Every roadmap
+candidate is held against this lens: name which job it deepens. A candidate that maps to none of
+these is a shiny object, not a roadmap item — the mapping failure is itself the signal to drop it.
+
+| Job                            | What it means for an AFK operator                                |
+| ------------------------------ | ---------------------------------------------------------------- |
+| **Observability & trust**      | Knowing what the agents did while away, without having to watch. |
+| **Failure recovery**           | Detecting, isolating, and resuming after a run or role fails.    |
+| **Cost control**               | Bounding token, compute, and time spend on unattended runs.      |
+| **Coordination & parallelism** | Many agents / runs progressing without colliding.                |
+| **Review & handoff on return** | Surfacing exactly what needs the operator when they come back.   |
+
+This lens is the **value** axis; the architecture principles below are the **fit** axis. A
+candidate must satisfy both — serve a real job _and_ compose with the primitives — before it earns a
+roadmap row. The critic-grill (Mode A) and the ingest idea-engine (Mode B) both apply it; see
+[`research-to-shipping-pipeline.md`](./research-to-shipping-pipeline.md). This is the project's
+product thesis made operational: principle #9 says LLMs propose and the founder disposes — this lens
+is _what_ the founder disposes against.
+
 ## Canonical terms
 
 The shared glossary. Every doc, symbol, and ADR uses these names; divergent code is the thing to fix.

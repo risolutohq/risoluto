@@ -1,6 +1,6 @@
 ---
 name: risoluto-ingest
-description: Build or rebuild Risoluto's connected research wiki and generate gap-grounded roadmap ideas from the full research corpus — reads ALL `research/targets/**/README.md` and their sources, writes a wikilinked knowledge base at `research/wiki/` (a home note + per-concept notes that link targets together), then emits CITE-OR-DROP idea rows into `docs/roadmap.md` (status idea). An idea with no citation — no named dots connected, no gap filled — is silently dropped. Idempotent and non-interactive; run anytime the corpus grows. Use whenever Omer says `/risoluto-ingest`, "ingest the research", "build the research wiki", "rebuild the research wiki", "what gaps can we fill", "generate ideas from the corpus", "connect the dots across targets", "run the ingest", or any phrasing that implies turning the full target corpus into a connected big-picture or surfacing white-space opportunities. Do NOT trigger for single-target capture (use `/risoluto-researcher`) or for the critic-grill loop on a specific candidate (use `/risoluto-grill`).
+description: 'Build or rebuild Risoluto''s connected research wiki and generate gap-grounded roadmap ideas from the full research corpus. Use when Omer says /risoluto-ingest, "ingest the research", "build the research wiki", "rebuild the research wiki", "what gaps can we fill", "generate ideas from the corpus", "connect the dots across targets", "run the ingest", or similar. Reads all target READMEs and sources, writes `research/wiki/`, then appends cited idea rows to `docs/roadmap.md`. Do not use for single-target capture or a specific critic-grill loop.'
 ---
 
 # risoluto-ingest
@@ -107,7 +107,8 @@ After the wiki is written, the script generates idea candidates:
 2. The candidate must name:
    - The dots it connects: which targets, wiki notes, or primitives it draws from.
    - The gap it fills: the specific thing A, B, and C all do but none do well — or what A + B compose into that neither does alone.
-3. If the candidate cannot be expressed in terms of named dots and a named gap, it is **dropped** (cite-or-drop rule). No citation → no row.
+   - The AFK job it serves: one of the five in `docs/product-spine.md` ("The jobs Risoluto exists to serve"). An idea that deepens no operator job is a shiny object, however clever the connection.
+3. If the candidate cannot be expressed in terms of named dots, a named gap, **and** a named AFK job, it is **dropped** (cite-or-drop rule). No citation, or no job → no row.
 4. Surviving candidates are appended to `docs/roadmap.md` as `idea`-status rows using the locked row spec:
 
    ```

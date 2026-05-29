@@ -1,6 +1,6 @@
 ---
 name: risoluto-researcher
-description: Mode A of the Risoluto research-to-shipping pipeline. Capture a URL (+ optional paste) into `research/targets/<slug>/` — writes the folder-shaped target README at `research/targets/<slug>/README.md`, one source file at `research/targets/<slug>/sources/<source-slug>.md` with pipeline-valid frontmatter, regenerates `research/INDEX.md`, then runs the Mode A dedup workflow: extract candidate features into `## Candidate features`, deduplicate each against `docs/roadmap.md` rows and `research/RISOLUTO_FEATURES.md` (flagging new/merge/supersede/skip), and hand the target slug to `/risoluto-grill` for critic triage. For GitHub repo URLs, performs deep capture via `gh` CLI (metadata, issues, PRs, releases, file tree, contributors, commits). Use this skill whenever Omer says `/risoluto-researcher`, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", or any variation that implies ingesting external content into `research/targets/`. Also trigger when Omer pastes raw text alongside a URL and wants both stored as a source entry.
+description: 'Mode A of the Risoluto research-to-shipping pipeline. Use when Omer says /risoluto-researcher, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", or pastes text with a URL to store as a source. Captures content into `research/targets/<slug>/`, writes source files with valid frontmatter, regenerates `research/INDEX.md`, extracts candidate features, deduplicates them against roadmap rows and `RISOLUTO_FEATURES.md`, and hands survivors to /risoluto-grill. GitHub repo URLs get deeper capture via `gh` metadata and source scans.'
 ---
 
 # risoluto-researcher
@@ -207,10 +207,10 @@ After the script writes the target README, the agent fills `## Candidate feature
 
 **5.1 — Extract candidate features**
 
-Read the source body (the captured content from Step 2 / 2b). For each distinct user-observable or backend-surface feature the target ships, write one bullet in `## Candidate features`:
+Read the source body (the captured content from Step 2 / 2b). For each distinct user-observable or backend-surface feature the target ships, write one bullet in `## Candidate features`, tagging the AFK job it serves — the value lens, one of `observability-trust`, `failure-recovery`, `cost-control`, `coordination-parallelism`, `review-handoff` (see `docs/product-spine.md`). A feature that serves no AFK job is a shiny object — record it under `## Leech takeaways` instead of as a candidate:
 
 ```
-- <Feature name> — <one-line description> [flag: TBD]
+- <Feature name> — <one-line description> [job: <afk-job>] [flag: TBD]
 ```
 
 **5.2 — Deduplicate each candidate**
@@ -229,12 +229,14 @@ Assign the dedup flag:
 | `supersede` | Replaces a roadmap row that should be dropped or rewritten → name the row slug |
 | `skip`      | Already shipped by Risoluto, or fully covered by an existing spine entry       |
 
+**Dedup at the job layer too, not only the feature layer.** Feature-level matching misses _saturation_: two differently-worded features can serve a job Risoluto already covers. After assigning the per-feature flag, check the candidate's `[job:]` against shipped features and open rows serving that same job — if the job is already covered for this use-case, the candidate is `merge` (fold into the row that owns the job) or `skip`, not `new`, even when the feature wording is novel. Jobs are the real unit; features are how they surface.
+
 Update each bullet's `[flag: TBD]` with the correct flag (and the matched row slug for `merge`/`supersede`). Example:
 
 ```
-- Cost ceiling per run — cap spend before a workflow run starts [flag: new]
-- Live log streaming — stream stdout from running tasks [flag: merge slug:live-log-streaming]
-- Polling-based run status — long-poll HTTP endpoint for run status [flag: skip]
+- Cost ceiling per run — cap spend before a workflow run starts [job: cost-control] [flag: new]
+- Live log streaming — stream stdout from running tasks [job: observability-trust] [flag: merge slug:live-log-streaming]
+- Polling-based run status — long-poll HTTP endpoint for run status [job: observability-trust] [flag: skip]
 ```
 
 **5.3 — Fill Leech takeaways**

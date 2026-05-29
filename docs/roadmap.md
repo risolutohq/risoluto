@@ -10,17 +10,19 @@
 - **Nothing is `next` without a Why and a Size.** An item stays `idea` until it has a reason to do it now and a rough size. This is the gate that stops scatter from creeping back.
 - **The founder owns ranking, promotion, and kills.** Skills (the researcher-fed critic-grill in Mode A and the ingest idea-engine in Mode B) may APPEND proposed `idea` rows — the founder dispositions each one. No skill reorders, promotes, or deletes rows.
 - **It graduates, it doesn't sprawl.** When an item reaches `next`, it leaves the roadmap _as a row_ and enters the [research → shipping pipeline](./research-to-shipping-pipeline.md): PRD → Linear issues → TDD → merge. The row's status tracks that journey; the detail lives in the PRD and Linear.
+- **Pruning is a move too.** The roadmap gates what comes _in_ and what goes _out_. A `deprecated` row marks shipped surface slated for removal when it is unused or no longer worth its complexity cost — the [exit gate](./research-to-shipping-pipeline.md#exit-gate-pruning-shipped-surface). For a tool whose dominant failure mode is complexity, removing surface is as load-bearing as adding it.
 
 ## Status vocabulary
 
-| Status         | Meaning                                                                                                        |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| **idea**       | Named. Needs a Why + Size before it can be picked up.                                                          |
-| **next**       | Scoped (has Why + Size) and ranked to start soon. Has or is about to get a PRD.                                |
-| **building**   | A PRD exists and Linear issues are in flight (`from:prd-<slug>`). The Status cell may link the Linear project. |
-| **shipped**    | Merged in the canonical repo. Recorded in [decisions.md](./decisions.md) if notable.                           |
-| **dropped**    | Killed. The reason is written in the **Why now** cell — never silently removed.                                |
-| **superseded** | Replaced by a newer row or shipped feature. The superseding row/feature is named in the Why now cell.          |
+| Status         | Meaning                                                                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **idea**       | Named. Needs a Why + Size before it can be picked up.                                                                                                                                                       |
+| **next**       | Scoped (has Why + Size) and ranked to start soon. Has or is about to get a PRD.                                                                                                                             |
+| **building**   | A PRD exists and Linear issues are in flight (`from:prd-<slug>`). The Status cell may link the Linear project.                                                                                              |
+| **shipped**    | Merged in the canonical repo. Recorded in [decisions.md](./decisions.md) if notable.                                                                                                                        |
+| **dropped**    | Killed. The reason is written in the **Why now** cell — never silently removed.                                                                                                                             |
+| **superseded** | Replaced by a newer row or shipped feature. The superseding row/feature is named in the Why now cell.                                                                                                       |
+| **deprecated** | Shipped, now marked for removal — unused or no longer worth its complexity / maintenance cost. The exit gate; see the [pipeline doc](./research-to-shipping-pipeline.md#exit-gate-pruning-shipped-surface). |
 
 ## The plan
 

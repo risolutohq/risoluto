@@ -172,11 +172,14 @@ function buildTargetBody(args) {
     // Flag meanings: new = no roadmap overlap → send to /risoluto-grill; merge = fold into existing roadmap row;
     // supersede = replaces a row (old row should be dropped/updated); skip = already shipped or fully covered.
     "<!-- dedup flags: new=no overlap->grill | merge=fold into existing row | supersede=replaces a row | skip=already shipped/covered -->",
+    // AFK job = the value lens; a candidate that serves none is a shiny object (see docs/product-spine.md).
+    "<!-- afk jobs: observability-trust | failure-recovery | cost-control | coordination-parallelism | review-handoff -->",
     "",
-    "TODO — one bullet per candidate feature extracted from this target. The agent fills the dedup flag after",
-    "comparing each candidate against `docs/roadmap.md` rows and `research/RISOLUTO_FEATURES.md`.",
+    "TODO — one bullet per candidate feature extracted from this target. For each, name the AFK job it serves",
+    "(the value lens) and fill the dedup flag after comparing against `docs/roadmap.md` rows and",
+    "`research/RISOLUTO_FEATURES.md`. A candidate that serves no AFK job belongs under Leech takeaways, not here.",
     "",
-    "- <feature name> — <one-line description> [flag: new|merge|supersede|skip]",
+    "- <feature name> — <one-line description> [job: <afk-job>] [flag: new|merge|supersede|skip]",
     "",
     "## Leech takeaways",
     "",

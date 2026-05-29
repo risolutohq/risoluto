@@ -1,6 +1,6 @@
 ---
 name: risoluto-to-prd
-description: 'Risoluto-repo PRD skill — invoke as **/risoluto-to-prd** (NOT /to-prd, which is the tracker-agnostic global skill). Promotes a `next`-status roadmap row (docs/roadmap.md) into a canonical PRD at `docs/prds/<slug>.md`, a matching Linear Project (via `mcp__linear-server__*` MCP) whose description mirrors the PRD body, and a pushed feature branch (`pipeline/<slug>-prd`) — then flips the roadmap row to `building` stamped with the Linear project URL. The skill stops short of `gh pr create`; it prints the suggested command so the operator opens the PR when ready. **Idempotent on re-run:** the first call on a slug CREATES the PRD + branch + row flip; subsequent calls SYNC by overwriting the Linear Project description from the current `docs/prds/<slug>.md` body (no new branch, no row change). Mode is decided from whether `docs/prds/<slug>.md` exists on disk (absent → create, present → sync). Use this skill whenever Omer says `/risoluto-to-prd`, "promote <slug> to a PRD", "write a PRD for <slug>", "push <slug> to Linear", "create a Linear Project from this roadmap item", "resync <slug> to Linear", "overwrite the Linear PRD from git", "reject the Linear edit on <slug>", or any variation implying turning a `next` roadmap row into a Linear Project + git-canonical PRD. Also trigger when Omer mentions the planning-pipeline phase 3.2 work or wants to test the PRD drift hook — the sync path through this skill IS the git-is-canon push direction.'
+description: 'Risoluto-repo PRD skill; invoke as /risoluto-to-prd, not the generic /to-prd. Use when Omer says "promote <slug> to a PRD", "write a PRD for <slug>", "push <slug> to Linear", "create a Linear Project from this roadmap item", "resync <slug> to Linear", "overwrite the Linear PRD from git", or similar. Promotes a next-status roadmap row into `docs/prds/<slug>.md`, mirrors it to a Linear Project, pushes `pipeline/<slug>-prd`, flips the row to building, and prints but does not run `gh pr create`. Re-runs sync the Linear Project from the git PRD.'
 ---
 
 # risoluto-to-prd
@@ -140,7 +140,9 @@ A long, numbered list of user stories. Each in the format:
 1. As a <Risoluto operator / agent author / CI consumer>, I want <feature>, so that <benefit>.
 
 [Cover the golden path, edge cases, and how this interacts with neighbouring
-Risoluto features (cross-reference RISOLUTO_FEATURES.md if relevant).]
+Risoluto features (cross-reference RISOLUTO_FEATURES.md if relevant). Each story must imply a
+_verifiable behaviour_ — if you cannot name the check that would prove it done, the story is too
+vague to ship and `/risoluto-to-issues` cannot derive a red test from it.]
 
 ## Implementation Decisions
 
@@ -172,6 +174,7 @@ shape, not file path.]
 - **`pipeline/<slug>-prd` branch namespace** is reserved for this skill. If it already exists locally on a re-run of CREATE, the write script refuses — delete the stale branch first.
 - **The skill IS the sync path.** There is no `pnpm prd:reconcile` for the git→Linear direction — that's this skill in SYNC mode. Phase 3.3 adds `pnpm prd:reconcile` for the other direction (adopt the Linear edit into git).
 - **Idempotency:** re-running CREATE mode when `docs/prds/<slug>.md` already exists is an error. The write script refuses; tell Omer to use SYNC mode.
+- **Contract-first, behavioural acceptance.** Every User Story must imply a _verifiable behaviour_ — a falsifiable assertion a test could check ("a run that fails at step 3 replays from 3, not 0"), not an adjective ("improve reliability"). `/risoluto-to-issues` turns these into the red-test acceptance criteria per slice, so a story with no nameable behaviour produces an un-runnable ticket. Do not restate the global gate (build / lint / test / typecheck / coverage) — every merge enforces it. If the roadmap row's intent is too fuzzy to state a verifiable behaviour, sharpen it before writing the PRD.
 - **Skills propose; the founder disposes.** This skill only touches rows the founder has already promoted to `next`. It does not reorder, create, or delete roadmap rows.
 
 ## Companion files

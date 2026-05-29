@@ -1,26 +1,46 @@
 ---
 name: risoluto-next-bundle
 description: >
-  Scan open Linear issues across all PRDs (the from:prd-<slug> labels), predict
-  code-locality, and propose 1–3 bundles of related work plus a one-line goal
-  per bundle — so related issues ship together instead of in isolation. Use
-  whenever Omer says /risoluto-next-bundle, "bundle the next work", "group
-  issues by code locality", "what should we build together next", "which issues
-  cluster", "propose a sprint bundle", or any phrasing that implies grouping
-  open Linear issues across PRDs by how much source code they would touch
-  together.
+  Scan open Linear issues across all PRDs (the from:prd-<slug> labels), filter to
+  the ready-set (no open blocked-by), predict code-locality, and propose 1–3
+  mutually conflict-free bundles — each meant to run as one parallel git worktree
+  without colliding with the others — plus a one-line goal per bundle. Use whenever
+  Omer says /risoluto-next-bundle, "bundle the next work", "group issues by code
+  locality", "what should we build together next", "what can I run in parallel",
+  "which issues are safe to run in separate worktrees", "propose a sprint bundle",
+  or any phrasing that implies grouping open Linear issues into parallel-safe units
+  of work.
 ---
 
 # risoluto-next-bundle
 
-Build-sequencing helper. Reads open Linear issues from every known `from:prd-<slug>` label,
-groups them by predicted code-locality (shared file paths, shared modules, shared PRD surface),
-and proposes 1–3 bundles with a one-line goal each. The founder picks which bundle to tackle
-next; the skill only proposes — it creates nothing in Linear.
+Build-sequencing helper for **parallel worktrees**. Reads open Linear issues from every known
+`from:prd-<slug>` label, filters to the ready-set (issues whose `blocked-by` are all `Done`),
+groups them by predicted code-locality, and proposes 1–3 bundles that are **mutually conflict-free**
+— each meant to run as one git worktree without colliding with the others. The founder picks which
+bundles to launch; the skill only proposes — it creates nothing in Linear.
 
 This is an **initial minimal version** (heuristic grouping; the agent does the locality
 reasoning against its knowledge of the codebase). The grouping heuristic will sharpen as more
 PRDs and issues accumulate.
+
+## Two constraints, neither of which is the roadmap
+
+Running multiple worktrees in parallel faces two independent constraints — and the roadmap owns
+neither:
+
+1. **Ordering correctness** — an issue may not start before its blockers merge. This lives in
+   Linear's `blocked-by` graph, at issue granularity. This skill reads it as the **ready-set**
+   filter: an issue is eligible only when all its `blocked-by` are `Done`.
+2. **Concurrency safety** — two agents must never edit overlapping file regions, or they collide at
+   merge. This is what code-locality prediction is for. This skill treats predicted locality as a
+   **lock**: bundles it proposes must hold _disjoint_ regions, so two worktrees never contend.
+
+The roadmap (`docs/roadmap.md`) stays a coarse, founder-owned **intent** ledger — one flat ordered
+list, order = priority, no dependency edges. A dependency DAG on the roadmap would duplicate the
+`blocked-by` graph Linear already owns and add a second sync burden on top of git↔Linear. So this
+skill is the **scheduler seam**: it reads Linear's ordering graph and the locality lock and emits a
+parallel-safe work plan. The roadmap is never touched.
 
 Decision reference: decision #31 in `docs/decisions.md` (next-bundle build-sequencing capability).
 Pipeline reference: `docs/research-to-shipping-pipeline.md` — the back-half sequencing concern:

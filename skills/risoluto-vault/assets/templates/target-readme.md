@@ -24,7 +24,7 @@ TODO — bullet list of capabilities seen in `sources/`. The risoluto-researcher
 
 ## Candidate features
 
-<!-- Populated by /risoluto-researcher. Each entry is a candidate feature with a dedup verdict (skip | merge | supersede | new). Do not hand-edit — the researcher overwrites this section. -->
+<!-- Populated by /risoluto-researcher. Each entry carries the AFK job it serves (the value lens — see docs/product-spine.md) and a dedup verdict (skip | merge | supersede | new). A candidate that serves no AFK job belongs under Leech takeaways. Do not hand-edit — the researcher overwrites this section. -->
 
 ## Leech takeaways
 

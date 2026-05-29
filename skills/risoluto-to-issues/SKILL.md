@@ -99,6 +99,8 @@ PRD: [docs/prds/<slug>.md](prd-linear-project-url)
 
 ## Acceptance criteria
 
+<!-- Each criterion is a falsifiable BEHAVIOURAL assertion — the spec for a failing test /risoluto-tdd will write, e.g. "a Workflow Run failing at step 3 replays from 3, not 0". NOT the global gate (build/lint/test/typecheck/coverage); every merge enforces that already. -->
+
 - [ ] Criterion 1
 - [ ] Criterion 2
 
@@ -113,6 +115,7 @@ PRD: [docs/prds/<slug>.md](prd-linear-project-url)
 - **Linear MCP errors are operator concerns.** Surface verbatim, stop, do not retry.
 - **The `from:prd-<slug>` label is load-bearing.** Phase 4.2's TDD skill uses it to find the linked PRD, and Phase 4.3's post-merge workflow uses it to trigger automation. Always apply it.
 - **`bundle:<category>` is derived from the PRD/roadmap**, not from a deleted backlog file. The preload script checks for an explicit `**Category:**` line in the PRD body first; if absent it infers from the first word of the roadmap Item cell. If neither yields a value, omit the `bundle:` label and note it to Omer.
+- **Acceptance criteria are the red-test spec — gate on it.** Each criterion must be a falsifiable behavioural assertion the future `/risoluto-tdd` run can turn into a failing test (e.g. "a Workflow Run failing at step 3 replays from 3, not 0"). **Refuse to emit any issue that cannot name at least one such assertion** — a slice with no falsifiable behaviour is not ready to start; sharpen it with Omer first. Do **not** restate the global gate (build / lint / test / typecheck / coverage) as acceptance — every merge enforces it already, so it is noise. The failing test is the definition of done; there is no separate DoD field.
 - **Non-deterministic slice extraction is intentional.** The operator reviews and approves — the skill doesn't claim to produce the "correct" graph, just a reasonable starting point.
 - **Issues are flat, not nested.** No parent-child hierarchy. Dependencies are expressed via `blocked-by` relations only.
 - **Do NOT close or modify the Linear Project.** Issues are created under it; the Project stays open.
