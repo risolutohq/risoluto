@@ -76,8 +76,8 @@ Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks`
 
 - `@docs/product-spine.md`, `@docs/technical-spine.md` — what v1 actually is
 - `@docs/decisions.md`, `@docs/adr/` — decisions with rationale
-- `@docs/testing-strategy.md` — tier intent
-- `@docs/release-rules.md` — semantic-release flow
+- `@docs/testing-and-release.md` — test tiers, the `1.0.0` gate, and release flow
+- `@docs/roadmap.md` — the single ordered plan of what's next
 - `@docs/research-to-shipping-pipeline.md` — the planning pipeline: stage-by-stage how-to, file contracts, and ownership (decisions in `docs/adr/0001-foundation.md` §7, decisions.md row #29)
 - `@skills/risoluto-features/SKILL.md` — two-repo spine updater (consumes `research/`)
 - `@FILETREE.md` — per-file purpose index; read before `ls` / `grep` to locate code

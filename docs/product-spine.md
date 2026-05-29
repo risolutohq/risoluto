@@ -1,24 +1,36 @@
 # Risoluto — Product Spine
 
-> **Identity.** Risoluto is **workflow-run-centered background agent orchestration for engineering work.** Engineering intent — issues, PRDs, schedules, operator commands — becomes durable Workflow Runs executed by reusable Agent Roles across pluggable trackers, harnesses, and model providers.
->
-> The single-operator overnight-solo pipeline (the "personal autonomous coder" use case) is the first reference Workflow Definition Risoluto ships, not the identity. Other Workflow Definitions will follow on the same primitives.
+> **Identity.** Risoluto is **workflow-run-centered background agent orchestration for engineering
+> work.** Engineering intent — a tracker issue, a PRD slice, a schedule, a webhook, an operator
+> command — becomes a durable **Workflow Run** executed by reusable **Agent Roles** across pluggable
+> trackers, harnesses, and model providers.
 
----
+This is the authority document for what Risoluto **is** and the vocabulary every other doc, ADR, and
+code symbol must use. Where code names a concept differently, the code is wrong. Where this spine
+states intent the runtime has not yet reached, [`adr/0001-foundation.md`](./adr/0001-foundation.md)
+carries the honest as-built status tables — read them before trusting any "is" here as "ships today."
 
-## What Risoluto Is
+## What Risoluto is
 
-A workflow-run engine for autonomous engineering work, with:
+A workflow-run engine for autonomous engineering work:
 
-- A **Workflow Run** as the durable, retryable, replayable execution primitive.
-- **Workflow Definitions** that express how engineering work flows through named states (`classify`, `plan`, `implement`, `review`, `validate`, `publish`, `blocked`, `done`) with graph-shaped role execution inside each state.
-- **Background / AFK Agents** that perform roles in those workflows while the operator is away.
-- **Pluggable adapters** for trackers (Linear, GitHub Issues, GitLab, Jira), harnesses (Codex, Claude Code, Cursor, custom), and model providers — each behind a typed contract, never reached around.
-- **Environment-portable** deployment shape: the same core powers self-hosted, enterprise-owned, and (future) hosted-SaaS modes.
+- A **Workflow Run** — the durable, retryable, replayable unit of execution. The core primitive.
+- **Workflow Definitions** — reusable templates for how work flows through named states
+  (`classify → plan → implement → review → validate → publish → done`, plus `blocked`), with
+  graph-shaped role execution _inside_ each state.
+- **Background / AFK Agents** — perform roles in those workflows while the operator is away.
+- **Pluggable adapters** — trackers (Linear, GitHub Issues, GitLab, Jira), harnesses (Codex, Claude
+  Code, Cursor, custom), and model providers — each behind a typed contract that is never reached
+  around.
+- **Environment-portable** — one core powers self-hosted, enterprise-owned, and (future) hosted-SaaS
+  deployments.
 
-## Canonical Terms
+The single-operator overnight-solo "personal autonomous coder" loop is **the first reference
+Workflow Definition Risoluto targets — not the identity.** Other definitions ride the same primitives.
 
-These are the names every other doc, code symbol, and ADR uses. If a piece of code calls the same concept by a different name, the code is wrong.
+## Canonical terms
+
+The shared glossary. Every doc, symbol, and ADR uses these names; divergent code is the thing to fix.
 
 | Term                          | Meaning                                                                                                      |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -27,100 +39,87 @@ These are the names every other doc, code symbol, and ADR uses. If a piece of co
 | **Workflow Definition**       | Reusable state-machine / graph template for executing an intent.                                             |
 | **Workflow State**            | Named lifecycle point — `classify`, `plan`, `implement`, `review`, `validate`, `publish`, `blocked`, `done`. |
 | **Transition**                | Explicit rule moving a run between workflow states.                                                          |
-| **Background Agent**          | Category term for an autonomous engineering agent that runs outside the developer's active session.          |
+| **Run Attempt**               | One retry / resume / fanout pass of a Workflow Run; attempts accumulate under one run.                       |
+| **Background Agent**          | Category term for an autonomous engineering agent running outside the developer's active session.            |
 | **AFK Agent**                 | Risoluto product term for a Background Agent configured to perform a role while the operator is away.        |
 | **Agent Role**                | Reusable job definition — complexity analyst, planner, implementer, reviewer, tester, release operator.      |
 | **Role Execution**            | One invocation of an Agent Role inside a Workflow Run.                                                       |
-| **Worker Process**            | Actual harness / container / process executing the role.                                                     |
+| **Worker Process**            | The actual harness / container / process executing a role.                                                   |
 | **Artifact**                  | Durable output of a Role Execution or deterministic process.                                                 |
-| **Artifact Contract**         | Typed schema / meaning of an Artifact so another role can consume it.                                        |
-| **Validation Gate**           | Proof requirement before a transition can advance.                                                           |
-| **Hook**                      | Extension or side-effect point in the workflow.                                                              |
+| **Artifact Contract**         | Typed schema + meaning of an Artifact so another role can consume it.                                        |
+| **Validation Gate**           | Proof requirement that must pass before a transition can advance.                                            |
+| **Hook**                      | Extension / side-effect point in the workflow.                                                               |
 | **Tracker Adapter**           | Integration layer for Linear, GitHub Issues, GitLab, Jira, etc.                                              |
-| **Tracker Mirror**            | External tracker's representation of a Workflow Run.                                                         |
+| **Tracker Mirror**            | An external tracker's representation of a Workflow Run.                                                      |
 | **Board Projection Contract** | Tracker board semantics exposed by an adapter.                                                               |
-| **Kanban Projection**         | Tracker-faithful board view plus Risoluto overlays.                                                          |
-| **Operator**                  | Person running / controlling Risoluto.                                                                       |
+| **Operator**                  | The person running / controlling Risoluto.                                                                   |
 | **Enterprise Environment**    | Customer-owned engineering environment — its own tracker, repos, CI, secrets, policies, model gateways.      |
 
-## Architecture Principles
+## Architecture principles (non-negotiable)
 
-These are non-negotiable. A v1 PR that conflicts with one of these is wrong, even if it ships faster.
+A v1 change that violates one of these is wrong, even if it ships faster.
 
 1. **Workflow Run is the core primitive, not Issue.**
-2. Trackers are intake / mirror / projection adapters, **not core ownership.**
-3. AFK Agents are reusable Role definitions executed per Workflow Run — not permanent named worker identities.
-4. Workflows are state machines with graph-shaped Role Execution inside each state.
-5. Role executions communicate through **typed Artifact Contracts.**
-6. Artifacts are durable first-class records.
-7. Store both **structured artifacts and raw harness-native evidence** (e.g., Codex JSONL conversation logs preserved as-is when policy allows).
-8. Use an **event-sourced Run Log** with retention, redaction, and export policy.
+2. Trackers are intake / mirror / projection adapters — **not core ownership.**
+3. AFK Agents are reusable Role definitions executed per Workflow Run — not permanent named workers.
+4. Workflows are state machines with **graph-shaped Role Execution inside each state.**
+5. Role executions communicate through **typed Artifact Contracts**, never freeform text.
+6. Artifacts are durable, first-class records.
+7. Store both **structured artifacts and raw harness-native evidence** (e.g. Codex JSONL, preserved as-is when policy allows).
+8. Live state is a **projection of an event-sourced Run Log**, with retention / redaction / export policy — not a parallel mutable write.
 9. **LLMs propose; deterministic orchestration disposes.**
-10. **Hooks are first-class workflow primitives.**
-11. **Hooks, Gates, and Transitions stay separate concepts.**
-12. **Plugin boundaries are typed**, not one generic plugin interface.
-13. v1 defines plugin boundaries but **does not ship an external plugin API.**
-14. **Model and harness selection are explicit / name-based first** — automatic / learned selection is a later layer.
-15. **Test model choices use central test model profiles** — sites pick a profile, not a specific model.
-16. **Skill packs are versioned product artifacts** that live in the main repo first.
+10. **Hooks, Gates, and Transitions stay separate concepts** — a side-effect, a proof requirement, and a state change are not the same code path.
+11. **Plugin boundaries are typed**, not one generic plugin interface; v1 defines them but ships **no external plugin API.**
+12. **Model and harness selection are explicit / name-based first** — automatic / learned selection is a later layer.
+13. **Test sites pick a central model _profile_**, not a specific model.
+14. **Skill packs are versioned product artifacts** that live in the main repo first.
 
-## Deployment & Enterprise Principles
+## Deployment & environment
 
-- Risoluto targets **environment-portable** architecture.
-- The same core supports **self-hosted, enterprise-owned, and future hosted-SaaS** modes.
-- **v1 does not implement SaaS billing / tenancy.**
-- v1 must **avoid hard local-only assumptions in core.**
-- The technical spine **separates control plane and execution / data plane.**
-- **First implementation target after foundation is single-node self-hosted.**
-- Future enterprise-SaaS defaults to **customer-controlled execution plane.**
-- **Raw evidence locality is policy-controlled.**
-- **Secrets and model credentials resolve in the execution plane** by default.
-- **Tracker credential placement is policy-based**; enterprise default is local / customer-controlled.
+- Architecture is **environment-portable**; the same core supports self-hosted, enterprise-owned, and future hosted-SaaS modes.
+- **v1 does not implement SaaS billing or tenancy**, and core carries **no hard local-only assumptions.**
+- The architecture **separates control plane from execution / data plane.** Control plane owns run identity, scheduling, definitions, observability, and operator surfaces; the execution plane owns role execution, harness lifecycle, secrets, and raw evidence.
+- **First implementation target after foundation is single-node self-hosted.** Future enterprise-SaaS defaults to a **customer-controlled execution plane.**
+- **Secrets and model credentials resolve in the execution plane** by default; **raw evidence locality and tracker-credential placement are policy-controlled.**
 
-## Tracker & Board Principles
+## Trackers & board
 
-- **Linear-triggered dogfood** is the first serious workflow.
-- **CLI-submitted intent** is the secondary core-test path to prove Linear is only an adapter.
-- Tracker intake pattern is **webhook fast path + polling anti-entropy.**
-- Tracker intake **attaches or updates an existing Workflow Run** by mapping; it does not duplicate runs blindly.
-- A Workflow Run can have multiple **Run Attempts.**
-- **Attempt Memory** prevents repeating the same errors across attempts.
-- **Kanban means semantic tracker fidelity, not pixel cloning.** Tracker owns board truth; Risoluto projects it faithfully and writes changes back through the Tracker Adapter.
-- Risoluto **overlays** Workflow-Run and AFK-Agent state on top of tracker projections.
-- v1 documents **Board Projection** in the spine only; real implementation is backlog work.
+- **Linear-triggered dogfood** is the first serious workflow; **CLI-submitted intent** is the secondary path that proves a tracker is only an adapter.
+- Tracker intake is **webhook fast-path + polling anti-entropy**, and **attaches/updates an existing run by mapping** — it never blindly duplicates runs.
+- A Workflow Run can have multiple **Run Attempts**; **Attempt Memory** stops repeated errors across them.
+- **Kanban means semantic tracker fidelity, not pixel cloning.** The tracker owns board truth; Risoluto projects it faithfully, overlays run/agent state, and writes changes back through the adapter.
+- v1 documents **Board Projection** here only; implementation is [roadmap](./roadmap.md) work.
 
-## Memory Principles
+## Memory
 
-- **Memory Builder** creates or updates structured memory from raw evidence, artifacts, failures, and operator feedback.
-- **Memory Manager** decides what memory is retained, indexed, retrieved, redacted, attached, exported, or forgotten.
-- **Memory behavior belongs in settings**, not hard-coded paths.
-- **Memory tiers:**
+- **Memory Builder** creates/updates structured memory from evidence, artifacts, failures, and operator feedback; **Memory Manager** decides what is retained, indexed, retrieved, redacted, attached, exported, or forgotten.
+- **Memory behavior lives in settings**, not hard-coded paths; retrieval is **policy-gated**; injected memory becomes a typed `MemoryContextPack`.
+- **Three tiers**, all defined in v1, **Attempt Memory implemented first:**
   - **Attempt Memory** — same Workflow Run; always considered for retry / resume.
-  - **Run Memory** — summarized lesson from completed / failed Workflow Runs; retrievable for similar future work.
-  - **Project Memory** — repo-level lessons, conventions, recurring failure modes, successful patterns.
-- v1 defines all three tiers; **first implementation prioritizes Attempt Memory.**
-- **Memory retrieval is policy-gated.**
-- **Injected memory becomes a typed `MemoryContextPack`.**
-- Memory Manager must **avoid stale, secret-bearing, irrelevant, or unsafe** context injection.
+  - **Run Memory** — summarized lesson from completed / failed runs; retrievable for similar work.
+  - **Project Memory** — repo-level conventions, recurring failure modes, successful patterns.
+- Memory Manager must avoid stale, secret-bearing, irrelevant, or unsafe context injection.
 
-## What v1 Does Not Implement (And Why)
+## What v1 does not implement
 
-These are explicitly **not** v1 foundation blockers. They live in the living [capability backlog](./capability-backlog.md) after the foundation is coherent.
+This is the **single home** for v1's out-of-scope list — other docs point here rather than restate
+it. These are not foundation blockers; each enters [`roadmap.md`](./roadmap.md) when an
+operator-observed need is real.
 
 - Full external plugin API.
-- Full Board Projection implementation.
-- Jira / GitLab / GitHub-Issues tracker adapter completion.
-- SaaS billing / tenancy.
-- Hosted control plane.
-- Full Memory Manager retrieval / indexing.
-- Web dashboard / frontend.
-- Docs-site rebuild.
+- Full Board Projection implementation (contract only in v1).
+- Jira / GitLab / GitHub-Issues tracker adapter completion (Linear first).
+- SaaS billing / tenancy; hosted control plane.
+- Full Memory Manager retrieval / indexing across tiers.
+- Web dashboard / frontend; docs-site rebuild.
 - Public skill marketplace.
-- User-authored workflow DSL (TypeScript built-ins first; see [ADR §5](./adr/0001-foundation.md#5-built-in-typescript-workflow-definitions-before-a-user-authored-dsl)).
+- Multi-tenant surfaces (no tenancy in v1).
+- User-authored workflow DSL — built-in TypeScript definitions first ([ADR §5](./adr/0001-foundation.md#5-built-in-typescript-workflow-definitions-before-a-user-authored-dsl)).
 
-## Related Docs
+## Related docs
 
-- [Technical Spine](./technical-spine.md) — the v1 implementation surface.
-- [Decisions Register](./decisions.md) — what we've decided and why.
-- [ADRs](./adr/) — foundational, hard-to-reverse decisions.
-- [Capability Backlog](./capability-backlog.md) — living post-foundation work.
+- [Technical Spine](./technical-spine.md) — the implementation surface and boundary rules.
+- [Roadmap](./roadmap.md) — the single ordered plan of what's next.
+- [Research → Shipping Pipeline](./research-to-shipping-pipeline.md) — how a roadmap item becomes merged code.
+- [Decisions](./decisions.md) + [ADRs](./adr/) — what we decided and why.
+- [Testing & Release](./testing-and-release.md) — test tiers and the `1.0.0` gate.

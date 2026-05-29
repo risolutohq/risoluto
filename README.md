@@ -39,10 +39,9 @@ pnpm run circular
 - [Product spine](docs/product-spine.md)
 - [Technical spine](docs/technical-spine.md)
 - [Decision register](docs/decisions.md)
-- [Capability backlog](docs/capability-backlog.md)
-- [Research workflow](docs/research-to-shipping-pipeline.md)
-- [Testing strategy](docs/testing-strategy.md)
-- [Release rules](docs/release-rules.md)
+- [Roadmap](docs/roadmap.md)
+- [Research → shipping pipeline](docs/research-to-shipping-pipeline.md)
+- [Testing & release](docs/testing-and-release.md)
 
 ## What Is Not Here
 
