@@ -1,11 +1,11 @@
 ---
 view: untagged-sources
-description: Sources whose `ideas:` frontmatter is empty — they haven't been triaged yet. The synthesizer ignores them until at least one tag lands.
+description: Sources whose `ideas:` frontmatter is empty — they haven't been triaged yet. /risoluto-ingest ignores them until at least one tag lands.
 ---
 
 # Untagged sources
 
-Captured material that still needs at least one `ideas:` tag before the synthesizer will roll it into an idea cluster.
+Captured material that still needs at least one `ideas:` tag before /risoluto-ingest will roll it into the wiki cluster.
 
 ```dataview
 TABLE

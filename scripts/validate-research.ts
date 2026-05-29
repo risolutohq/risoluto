@@ -9,7 +9,7 @@
  * Scope:
  *   research/targets/<slug>/README.md           -> target.schema.json
  *   research/targets/<slug>/sources/<name>.md   -> source.schema.json
- *   research/ideas/<slug>/README.md             -> idea.schema.json
+ *   docs/prds/<slug>.md                         -> prd.schema.json (+ slug-consistency)
  *
  * Empty corpus exits 0 — Phase 1.1's "done" state.
  */
@@ -23,8 +23,9 @@ import { parse as parseYaml } from "yaml";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RESEARCH_ROOT = path.join(REPO_ROOT, "research");
 const SCHEMA_ROOT = path.join(RESEARCH_ROOT, ".schemas");
+const PRDS_DIR = path.join(REPO_ROOT, "docs", "prds");
 
-type SchemaKind = "target" | "source" | "idea";
+type SchemaKind = "target" | "source" | "prd";
 
 interface FileToValidate {
   absPath: string;
@@ -39,7 +40,7 @@ interface ValidationFailure {
 }
 
 async function loadValidators(ajv: Ajv): Promise<Record<SchemaKind, ValidateFunction>> {
-  const kinds: SchemaKind[] = ["target", "source", "idea"];
+  const kinds: SchemaKind[] = ["target", "source", "prd"];
   const entries = await Promise.all(
     kinds.map(async (kind) => {
       const schemaPath = path.join(SCHEMA_ROOT, `${kind}.schema.json`);
@@ -84,14 +85,29 @@ async function collectTargetFiles(): Promise<FileToValidate[]> {
   return files;
 }
 
-async function collectIdeaFiles(): Promise<FileToValidate[]> {
-  const ideasDir = path.join(RESEARCH_ROOT, "ideas");
-  const slugs = await safeReaddir(ideasDir);
-  return slugs.map((slug) => ({
-    absPath: path.join(ideasDir, slug, "README.md"),
-    relPath: path.join("ideas", slug, "README.md"),
-    kind: "idea" as const,
-  }));
+async function hasFrontmatter(absPath: string): Promise<boolean> {
+  try {
+    const raw = await readFile(absPath, "utf8");
+    return raw.startsWith("---");
+  } catch {
+    return false;
+  }
+}
+
+async function collectPrdFiles(): Promise<FileToValidate[]> {
+  const names = await safeReaddir(PRDS_DIR);
+  const files: FileToValidate[] = [];
+  for (const name of names) {
+    if (!name.endsWith(".md") || name === "README.md") continue;
+    const absPath = path.join(PRDS_DIR, name);
+    if (!(await hasFrontmatter(absPath))) continue;
+    files.push({
+      absPath,
+      relPath: path.join("docs", "prds", name),
+      kind: "prd",
+    });
+  }
+  return files;
 }
 
 function extractFrontmatter(raw: string): unknown {
@@ -106,16 +122,39 @@ function extractFrontmatter(raw: string): unknown {
   return parseYaml(block) ?? {};
 }
 
+function checkPrdSlugConsistency(relPath: string, absPath: string, frontmatter: unknown): ValidationFailure[] {
+  const failures: ValidationFailure[] = [];
+  const fm = frontmatter as Record<string, unknown>;
+  const slug = fm["slug"] as string | undefined;
+  const source = fm["source"] as string | undefined;
+  const basename = path.basename(absPath, ".md");
+
+  if (slug !== undefined && slug !== basename) {
+    failures.push({
+      relPath,
+      message: `slug mismatch: frontmatter slug "${slug}" does not match filename "${basename}.md"`,
+    });
+  }
+  const expectedSource = `docs/roadmap.md#${slug ?? basename}`;
+  if (source !== undefined && source !== expectedSource) {
+    failures.push({
+      relPath,
+      message: `source mismatch: frontmatter source "${source}" should be "${expectedSource}"`,
+    });
+  }
+  return failures;
+}
+
 async function validateFile(
   file: FileToValidate,
   validators: Record<SchemaKind, ValidateFunction>,
-): Promise<ValidationFailure | null> {
+): Promise<ValidationFailure[]> {
   let raw: string;
   try {
     raw = await readFile(file.absPath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { relPath: file.relPath, message: `expected file is missing` };
+      return [{ relPath: file.relPath, message: `expected file is missing` }];
     }
     throw error;
   }
@@ -123,19 +162,62 @@ async function validateFile(
   try {
     frontmatter = extractFrontmatter(raw);
   } catch (error) {
-    return { relPath: file.relPath, message: (error as Error).message };
+    return [{ relPath: file.relPath, message: (error as Error).message }];
   }
   const validate = validators[file.kind];
-  if (validate(frontmatter)) return null;
-  return {
-    relPath: file.relPath,
-    message: `frontmatter failed ${file.kind}.schema.json`,
-    errors: validate.errors ?? [],
-  };
+  const schemaFailures: ValidationFailure[] = [];
+  if (!validate(frontmatter)) {
+    schemaFailures.push({
+      relPath: file.relPath,
+      message: `frontmatter failed ${file.kind}.schema.json`,
+      errors: validate.errors ?? [],
+    });
+  }
+  if (file.kind === "prd") {
+    const slugFailures = checkPrdSlugConsistency(file.relPath, file.absPath, frontmatter);
+    return [...schemaFailures, ...slugFailures];
+  }
+  return schemaFailures;
+}
+
+async function warnMissingRoadmapSlugs(prdFiles: FileToValidate[]): Promise<void> {
+  if (prdFiles.length === 0) return;
+
+  let roadmapText: string;
+  try {
+    roadmapText = await readFile(path.join(REPO_ROOT, "docs", "roadmap.md"), "utf8");
+  } catch {
+    return;
+  }
+
+  for (const prd of prdFiles) {
+    let raw: string;
+    try {
+      raw = await readFile(prd.absPath, "utf8");
+    } catch {
+      continue;
+    }
+    let fm: Record<string, unknown>;
+    try {
+      fm = extractFrontmatter(raw) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const status = fm["status"] as string | undefined;
+    if (status !== "building" && status !== "shipped") continue;
+    const slug = fm["slug"] as string | undefined;
+    if (!slug) continue;
+    const marker = `<!-- slug:${slug} -->`;
+    if (!roadmapText.includes(marker)) {
+      console.warn(
+        `validate:research: WARNING: PRD "${prd.relPath}" has status "${status}" but no "${marker}" found in docs/roadmap.md`,
+      );
+    }
+  }
 }
 
 function printFailure(failure: ValidationFailure): void {
-  console.error(`  research/${failure.relPath}: ${failure.message}`);
+  console.error(`  ${failure.relPath}: ${failure.message}`);
   for (const err of failure.errors ?? []) {
     const loc = err.instancePath || "(root)";
     console.error(`    - ${loc} ${err.message ?? ""}`);
@@ -145,18 +227,21 @@ function printFailure(failure: ValidationFailure): void {
 async function main(): Promise<void> {
   const ajv = new Ajv({ allErrors: true, strict: false });
   const validators = await loadValidators(ajv);
-  const files = [...(await collectTargetFiles()), ...(await collectIdeaFiles())];
+  const targetFiles = await collectTargetFiles();
+  const prdFiles = await collectPrdFiles();
+  const files = [...targetFiles, ...prdFiles];
   if (files.length === 0) {
     console.log("validate:research: empty corpus, nothing to validate.");
     return;
   }
   const failures: ValidationFailure[] = [];
   for (const file of files) {
-    const failure = await validateFile(file, validators);
-    if (failure) failures.push(failure);
+    const fileFailures = await validateFile(file, validators);
+    failures.push(...fileFailures);
   }
+  await warnMissingRoadmapSlugs(prdFiles);
   if (failures.length > 0) {
-    console.error(`validate:research: ${failures.length} file(s) failed validation`);
+    console.error(`validate:research: ${failures.length} failure(s) found`);
     for (const failure of failures) printFailure(failure);
     process.exitCode = 1;
     return;

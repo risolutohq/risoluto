@@ -15,7 +15,7 @@ export interface PrdFrontmatter {
   linearProject: string;
   slugId: string;
   syncedAt: string;
-  sourceIdea: string;
+  source: string;
   status: string;
 }
 
@@ -107,7 +107,7 @@ export function parsePrdContent(content: string): { frontmatter: PrdFrontmatter;
       linearProject,
       slugId: extractSlugId(linearProject),
       syncedAt: raw.synced_at,
-      sourceIdea: raw.source_idea,
+      source: raw.source,
       status: raw.status,
     },
     body: match[2],

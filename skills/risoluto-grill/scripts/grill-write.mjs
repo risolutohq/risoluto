@@ -1,54 +1,61 @@
 #!/usr/bin/env node
 /**
- * risoluto-grill: write `## Why us / why now` and
- * `## Smallest shippable shape` into research/ideas/<slug>/README.md,
- * and optionally flip the matching backlog row to status: ready.
+ * risoluto-grill step 3: write grill results into docs/roadmap.md.
  *
- * Phase 3.1 of docs/research-to-shipping-pipeline.md. Idempotent: re-running
- * with the same inputs is a no-op; re-running with new inputs re-grills.
+ * Reads the results JSON produced after the grill conversation and makes
+ * surgical edits to the roadmap table via scripts/roadmap.mjs:
+ *   - new      -> appendRow
+ *   - merge    -> setCell on the existing row's "Why now"
+ *   - supersede -> setStatus(old, "superseded") + appendRow(new)
+ *   - out/skip -> no write
  *
  * Usage:
- *   node skills/risoluto-grill/scripts/grill-write.mjs <idea-slug> \
- *     --why-us-file <path> \
- *     --smallest-shape-file <path> \
- *     [--flip-to-ready] [--dry-run]
+ *   node skills/risoluto-grill/scripts/grill-write.mjs <target-slug> \
+ *     --results-file <path> [--dry-run]
+ *
+ * Results JSON shape:
+ *   {
+ *     in:  [{ slug, title, why_now, size, status, flag, merge_target_row? }],
+ *     out: [{ slug, title }]
+ *   }
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseRoadmap, appendRow, setCell, setStatus, renderRoadmap } from "../../../scripts/roadmap.mjs";
 
 const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = path.resolve(SKILL_DIR, "..", "..");
-const RESEARCH_DIR = path.join(REPO_ROOT, "research");
-const IDEAS_DIR = path.join(RESEARCH_DIR, "ideas");
-const BACKLOG_FILE = path.join(REPO_ROOT, "docs", "capability-backlog.md");
+const ROADMAP_FILE = path.join(REPO_ROOT, "docs", "roadmap.md");
 
-const WHY_US_HEADING = "## Why us / why now";
-const SMALLEST_SHAPE_HEADING = "## Smallest shippable shape";
-
-function fail(message) {
-  console.error(`risoluto-grill: ${message}`);
+function fail(msg) {
+  process.stderr.write(`risoluto-grill write: ${msg}\n`);
   process.exit(1);
 }
 
 function parseArgs(argv) {
-  const args = { slug: null, whyUs: null, smallest: null, flip: false, dryRun: false };
+  const args = { slug: null, resultsFile: null, dryRun: false };
   let i = 0;
   while (i < argv.length) {
     const a = argv[i];
-    if (a === "--why-us-file") {
-      args.whyUs = argv[i + 1];
+    if (a === "--results-file") {
+      args.resultsFile = argv[i + 1];
       i += 2;
-    } else if (a === "--smallest-shape-file") {
-      args.smallest = argv[i + 1];
-      i += 2;
-    } else if (a === "--flip-to-ready") {
-      args.flip = true;
-      i += 1;
     } else if (a === "--dry-run") {
       args.dryRun = true;
       i += 1;
+    } else if (a === "--help" || a === "-h") {
+      process.stdout.write(
+        "Usage: grill-write.mjs <target-slug> --results-file <path> [--dry-run]\n\n" +
+          "Results JSON shape:\n" +
+          '  { in: [{ slug, title, why_now, size, status, flag, merge_target_row? }], out: [{ slug, title }] }\n\n' +
+          "Flags:\n" +
+          "  new       -> appendRow (status from result, default idea)\n" +
+          "  merge     -> setCell on merge_target_row's Why now\n" +
+          "  supersede -> setStatus(merge_target_row, superseded) + appendRow(new row)\n",
+      );
+      process.exit(0);
     } else if (!a.startsWith("--") && args.slug == null) {
       args.slug = a;
       i += 1;
@@ -63,106 +70,120 @@ function checkPreconditions(slug) {
   if (!existsSync(path.join(REPO_ROOT, "package.json"))) {
     fail(`run from the repo root — expected package.json at ${REPO_ROOT}`);
   }
-  if (!existsSync(path.join(IDEAS_DIR, slug, "README.md"))) {
-    fail(`idea not found: research/ideas/${slug}/README.md`);
+  if (!existsSync(ROADMAP_FILE)) {
+    fail("docs/roadmap.md not found — the repo is in an unexpected state");
   }
-  if (!existsSync(BACKLOG_FILE)) fail(`expected docs/capability-backlog.md at ${BACKLOG_FILE}`);
-}
-
-function readSectionBody(filePath, label) {
-  if (!filePath) fail(`missing required flag: --${label}-file`);
-  if (!existsSync(filePath)) fail(`file not found: ${filePath}`);
-  return readFileSync(filePath, "utf8").replace(/\s+$/, "");
-}
-
-function replaceSection(raw, heading, newBody) {
-  const idx = raw.indexOf(heading);
-  if (idx === -1) fail(`section heading not found: ${heading}`);
-  const afterHeading = raw.indexOf("\n", idx + heading.length);
-  if (afterHeading === -1) fail(`malformed section heading: ${heading}`);
-  const nextHeadingIdx = findNextSectionHeading(raw, afterHeading + 1);
-  const head = raw.slice(0, afterHeading + 1);
-  const tail = nextHeadingIdx === -1 ? "" : raw.slice(nextHeadingIdx);
-  const body = newBody.trim().length === 0 ? "" : `\n${newBody.trim()}\n`;
-  const separator = tail.length === 0 ? "" : "\n";
-  return `${head}${body}${separator}${tail}`;
-}
-
-function findNextSectionHeading(raw, fromIdx) {
-  const lines = raw.slice(fromIdx).split("\n");
-  let offset = fromIdx;
-  for (const line of lines) {
-    if (line.startsWith("## ")) return offset;
-    offset += line.length + 1;
+  if (slug && !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+    fail(`invalid target slug: ${slug}`);
   }
-  return -1;
 }
 
-function writeIdea(slug, raw, dryRun) {
-  const target = path.join(IDEAS_DIR, slug, "README.md");
-  if (dryRun) {
-    console.error(`risoluto-grill: [dry-run] would write ${path.relative(REPO_ROOT, target)}`);
-    return;
+/**
+ * Build the Research link cell value pointing at the target's README.
+ * @param {string} targetSlug
+ * @returns {string}
+ */
+function researchLink(targetSlug) {
+  return `research/targets/${targetSlug}/README.md`;
+}
+
+/**
+ * Process one "in" candidate entry against the roadmap model.
+ * @param {object} model - mutable roadmap model from parseRoadmap
+ * @param {string} targetSlug
+ * @param {{ slug: string, title: string, why_now: string, size: string, status: string, flag: string, merge_target_row?: string }} entry
+ * @returns {{ action: string, slug: string, changed: boolean }}
+ */
+function processEntry(model, targetSlug, entry) {
+  const { slug, title, why_now, size, status, flag, merge_target_row } = entry;
+  const link = researchLink(targetSlug);
+
+  if (flag === "new") {
+    const { added } = appendRow(model, {
+      slug,
+      item: title,
+      whyNow: why_now ?? "",
+      size: size ?? "",
+      status: status ?? "idea",
+      researchLink: link,
+    });
+    return { action: "new", slug, changed: added };
   }
-  writeFileSync(target, raw);
-}
 
-function flipBacklog(slug, dryRun) {
-  const raw = readFileSync(BACKLOG_FILE, "utf8");
-  const lines = raw.split("\n");
-  let changed = false;
-  let noop = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (!line.trim().startsWith("|")) continue;
-    const cells = line.split("|").map((c) => c.trim());
-    if (cells.length < 7 || cells[1] !== slug) continue;
-    if (cells[4] !== "idea") {
-      noop = true;
-      console.error(`risoluto-grill: backlog row ${slug} is at status ${cells[4]} — leaving as-is`);
-      break;
+  if (flag === "merge") {
+    if (!merge_target_row) {
+      process.stderr.write(`risoluto-grill write: merge entry ${slug} missing merge_target_row — skipping\n`);
+      return { action: "merge", slug, changed: false };
     }
-    const updated = line.replace(/\|\s*idea\s*\|/, (m) => m.replace("idea", "ready"));
-    lines[i] = updated;
-    changed = true;
-    break;
+    const { changed } = setCell(model, merge_target_row, "Why now", why_now ?? "");
+    return { action: "merge", slug: merge_target_row, changed };
   }
-  if (!changed && !noop) fail(`backlog row not found for slug: ${slug}`);
-  if (!changed) return { changed: false };
-  if (dryRun) {
-    console.error(`risoluto-grill: [dry-run] would flip ${slug} idea → ready in capability-backlog.md`);
-    return { changed: true };
-  }
-  writeFileSync(BACKLOG_FILE, lines.join("\n"));
-  return { changed: true };
-}
 
-function diffLineCounts(before, after) {
-  if (before === after) return { added: 0, removed: 0 };
-  const beforeLines = before.split("\n");
-  const afterLines = after.split("\n");
-  return { added: Math.max(0, afterLines.length - beforeLines.length), removed: Math.max(0, beforeLines.length - afterLines.length) };
+  if (flag === "supersede") {
+    if (!merge_target_row) {
+      process.stderr.write(`risoluto-grill write: supersede entry ${slug} missing merge_target_row — skipping\n`);
+      return { action: "supersede", slug, changed: false };
+    }
+    setStatus(model, merge_target_row, "superseded", null);
+    const { added } = appendRow(model, {
+      slug,
+      item: title,
+      whyNow: why_now ?? "",
+      size: size ?? "",
+      status: status ?? "idea",
+      researchLink: link,
+    });
+    return { action: "supersede", slug, changed: added };
+  }
+
+  process.stderr.write(`risoluto-grill write: unknown flag "${flag}" for ${slug} — skipping\n`);
+  return { action: "unknown", slug, changed: false };
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.slug) fail("usage: grill-write.mjs <idea-slug> --why-us-file <p> --smallest-shape-file <p> [--flip-to-ready] [--dry-run]");
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(args.slug)) fail(`invalid idea slug: ${args.slug}`);
+
+  if (!args.slug) fail("usage: grill-write.mjs <target-slug> --results-file <path> [--dry-run]");
+  if (!args.resultsFile) fail("--results-file <path> is required");
+  if (!existsSync(args.resultsFile)) fail(`results file not found: ${args.resultsFile}`);
+
   checkPreconditions(args.slug);
-  const whyUs = readSectionBody(args.whyUs, "why-us");
-  const smallest = readSectionBody(args.smallest, "smallest-shape");
-  const target = path.join(IDEAS_DIR, args.slug, "README.md");
-  const before = readFileSync(target, "utf8");
-  const afterWhy = replaceSection(before, WHY_US_HEADING, whyUs);
-  const afterBoth = replaceSection(afterWhy, SMALLEST_SHAPE_HEADING, smallest);
-  if (afterBoth === before) {
-    console.error(`risoluto-grill: ${args.slug} unchanged — both sections already match input`);
-  } else {
-    const { added, removed } = diffLineCounts(before, afterBoth);
-    console.error(`risoluto-grill: ${args.dryRun ? "[dry-run] " : ""}rewrote 2 section(s) in research/ideas/${args.slug}/README.md (+${added}/-${removed} lines)`);
-    writeIdea(args.slug, afterBoth, args.dryRun);
+
+  const resultsRaw = readFileSync(args.resultsFile, "utf8");
+  let results;
+  try {
+    results = JSON.parse(resultsRaw);
+  } catch {
+    fail(`results file is not valid JSON: ${args.resultsFile}`);
   }
-  if (args.flip) flipBacklog(args.slug, args.dryRun);
+
+  if (!Array.isArray(results.in)) fail('results JSON must have an "in" array');
+  if (!Array.isArray(results.out)) fail('results JSON must have an "out" array');
+
+  const roadmapRaw = readFileSync(ROADMAP_FILE, "utf8");
+  const model = parseRoadmap(roadmapRaw);
+  if (!model.found) fail("roadmap plan table not found in docs/roadmap.md");
+
+  let added = 0;
+  let edited = 0;
+
+  for (const entry of results.in) {
+    const { action, slug, changed } = processEntry(model, args.slug, entry);
+    if (!changed) continue;
+    if (action === "new" || action === "supersede") added += 1;
+    if (action === "merge") edited += 1;
+  }
+
+  const rendered = renderRoadmap(model);
+
+  if (args.dryRun) {
+    process.stderr.write(`risoluto-grill write: [dry-run] would add ${added} rows, edit ${edited} rows, drop ${results.out.length} candidates\n`);
+    process.stdout.write(rendered);
+    return;
+  }
+
+  writeFileSync(ROADMAP_FILE, rendered, "utf8");
+  process.stderr.write(`risoluto-grill write: added ${added} rows, edited ${edited} rows, dropped ${results.out.length} candidates\n`);
 }
 
 main();

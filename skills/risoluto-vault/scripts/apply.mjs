@@ -57,10 +57,13 @@ function checkPreconditions() {
   }
 }
 
+/** Files that have been retired from the canonical set and must not be deployed. */
+const EXCLUDED_ASSETS = new Set(["idea-readme.md", "ideas-thin-evidence.md"]);
+
 async function listAssetFiles(subdir) {
   const dir = path.join(ASSETS_DIR, subdir);
   const entries = await readdir(dir);
-  return entries.map((name) => path.join(dir, name));
+  return entries.filter((name) => !EXCLUDED_ASSETS.has(name)).map((name) => path.join(dir, name));
 }
 
 async function buildPlan() {

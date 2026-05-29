@@ -275,7 +275,7 @@ JSON Schemas live under `research/.schemas/` and are checked by `pnpm validate:r
 slug: <slug>
 linear_project: https://linear.app/<org>/project/<name>-<slugId>
 synced_at: <ISO-8601>
-source: docs/roadmap.md#<slug>   # the roadmap row this PRD came from (NOT source_idea)
+source: docs/roadmap.md#<slug>   # the roadmap row this PRD came from
 status: draft | approved | shipped | archived
 
 # research/targets/<slug>/README.md   (capture only)

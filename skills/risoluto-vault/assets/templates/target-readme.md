@@ -20,7 +20,15 @@ TODO — one paragraph: who they are, what they ship, why we're tracking them.
 
 ## Capabilities observed
 
-TODO — bullet list of capabilities seen in `sources/`. The risoluto-researcher / risoluto-synthesizer skills derive frontmatter `ideas:` from the tags on each source file; this prose section is the human-readable summary.
+TODO — bullet list of capabilities seen in `sources/`. The risoluto-researcher derives frontmatter `ideas:` from the tags on each source file; risoluto-ingest clusters those tags into the research wiki. This prose section is the human-readable summary.
+
+## Candidate features
+
+<!-- Populated by /risoluto-researcher. Each entry is a candidate feature with a dedup verdict (skip | merge | supersede | new). Do not hand-edit — the researcher overwrites this section. -->
+
+## Leech takeaways
+
+<!-- Populated by /risoluto-researcher. Strategic patterns and positioning insights to borrow from this target. Do not hand-edit — the researcher overwrites this section. -->
 
 ## Sources
 

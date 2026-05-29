@@ -1,3 +1,7 @@
 dist/
 node_modules/
 coverage/
+
+# Obsidian Templater templates use EJS-style <%* ... %> tags that prettier mangles.
+research/templates/
+skills/risoluto-vault/assets/templates/

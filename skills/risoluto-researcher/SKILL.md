@@ -1,11 +1,11 @@
 ---
 name: risoluto-researcher
-description: Capture external research into the `research/` vault — accept a URL plus optional raw paste (provenance), write a folder-shaped target README at `research/targets/<slug>/README.md` and one source file at `research/targets/<slug>/sources/<source-slug>.md` with pipeline-valid frontmatter, then regenerate `research/INDEX.md` as the canonical flat target list. For GitHub repo URLs, performs deep capture via `gh` CLI (metadata, issues, PRs, releases, file tree, contributors, commits) — not just the README. Use this skill whenever Omer says `/risoluto-researcher`, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", or any variation that implies ingesting external content into `research/targets/`. Also trigger when Omer pastes raw text alongside a URL and wants both stored as a source entry — the skill accepts paste provenance, not just URLs. Companion to Phase 1.3 of `docs/research-to-shipping-pipeline.md`.
+description: Mode A of the Risoluto research-to-shipping pipeline. Capture a URL (+ optional paste) into `research/targets/<slug>/` — writes the folder-shaped target README at `research/targets/<slug>/README.md`, one source file at `research/targets/<slug>/sources/<source-slug>.md` with pipeline-valid frontmatter, regenerates `research/INDEX.md`, then runs the Mode A dedup workflow: extract candidate features into `## Candidate features`, deduplicate each against `docs/roadmap.md` rows and `research/RISOLUTO_FEATURES.md` (flagging new/merge/supersede/skip), and hand the target slug to `/risoluto-grill` for critic triage. For GitHub repo URLs, performs deep capture via `gh` CLI (metadata, issues, PRs, releases, file tree, contributors, commits). Use this skill whenever Omer says `/risoluto-researcher`, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", or any variation that implies ingesting external content into `research/targets/`. Also trigger when Omer pastes raw text alongside a URL and wants both stored as a source entry.
 ---
 
 # risoluto-researcher
 
-URL + paste capture for the Risoluto research vault. Phase 1.3 of the planning-pipeline roadmap.
+Mode A capture + dedup for the Risoluto research vault. Phase 1.3 / Mode A of the planning pipeline (`docs/research-to-shipping-pipeline.md`).
 
 ## What this skill produces
 
@@ -13,7 +13,7 @@ When invoked with a URL (and optional pasted text), the researcher creates:
 
 ```
 research/targets/<target-slug>/
-├── README.md                          # target intro + link to sources
+├── README.md                          # target intro, candidate features, leech takeaways, sources
 └── sources/
     └── <source-slug>.md              # raw captured material
 ```
@@ -25,6 +25,8 @@ research/INDEX.md                      # flat list of every captured target
 ```
 
 Every file emitted conforms to the frontmatter schemas in `research/.schemas/` (Phase 1.1) and the templates installed by `risoluto-vault` (Phase 1.2). The researcher never modifies operator-owned sections of target READMEs (see ownership table) — it only writes on first creation and updates derived fields on re-runs.
+
+The target README is the Mode A artifact that feeds the critic: `## Candidate features` surfaces deduped candidates for `/risoluto-grill` triage; `## Leech takeaways` records borrowable patterns independent of feature decisions.
 
 For GitHub repo URLs, the researcher also performs a shallow clone to `/tmp/researcher-<target-slug>/` for deep source analysis. The clone is ephemeral — never committed to the vault.
 
@@ -162,8 +164,8 @@ The agent reads the actual source files to fill Architecture, Features, Dependen
 Read the source content and tag the `ideas` frontmatter array. Ideas are lowercase, hyphenated capability slugs (e.g. `multi-agent-orchestration`, `cost-ceiling`). Derive them from:
 
 - Capabilities the source explicitly demonstrates or claims
-- Patterns worth tracking across multiple targets (think: what would the synthesizer cluster?)
-- Leave empty `[]` if nothing jumps out — the synthesizer will suggest tags later on thin targets
+- Patterns worth tracking across multiple targets (think: what would the ingest pass cluster?)
+- Leave empty `[]` if nothing jumps out — the ingest pass will suggest tags later on thin targets
 
 ### Step 4 — Run the researcher script
 
@@ -199,9 +201,59 @@ All flags:
 
 The script is idempotent per source: re-running with the same `--url` and `--source-slug` overwrites the source file, updates the target README derived fields (`last_researched_at`, `last_researched_sha`, `ideas` union, `source_count`), and regenerates INDEX.md. It never overwrites operator-owned target README prose sections.
 
-### Step 5 — Validate
+### Step 5 — Mode A dedup workflow
 
-After the script runs, verify the output:
+After the script writes the target README, the agent fills `## Candidate features` and `## Leech takeaways` directly in the README. This is an agent edit, not a script — no roadmap.mjs import needed.
+
+**5.1 — Extract candidate features**
+
+Read the source body (the captured content from Step 2 / 2b). For each distinct user-observable or backend-surface feature the target ships, write one bullet in `## Candidate features`:
+
+```
+- <Feature name> — <one-line description> [flag: TBD]
+```
+
+**5.2 — Deduplicate each candidate**
+
+For each candidate bullet, compare it against:
+
+1. `docs/roadmap.md` — the `## The plan` table. Read each row's `Item` cell (the slug is in the HTML comment `<!-- slug:<slug> -->`).
+2. `research/RISOLUTO_FEATURES.md` — the current feature spine for Risoluto itself.
+
+Assign the dedup flag:
+
+| Flag        | Meaning                                                                        |
+| ----------- | ------------------------------------------------------------------------------ |
+| `new`       | No overlap with any roadmap row or spine entry → surface to `/risoluto-grill`  |
+| `merge`     | Overlaps with an existing roadmap row → name the row slug                      |
+| `supersede` | Replaces a roadmap row that should be dropped or rewritten → name the row slug |
+| `skip`      | Already shipped by Risoluto, or fully covered by an existing spine entry       |
+
+Update each bullet's `[flag: TBD]` with the correct flag (and the matched row slug for `merge`/`supersede`). Example:
+
+```
+- Cost ceiling per run — cap spend before a workflow run starts [flag: new]
+- Live log streaming — stream stdout from running tasks [flag: merge slug:live-log-streaming]
+- Polling-based run status — long-poll HTTP endpoint for run status [flag: skip]
+```
+
+**5.3 — Fill Leech takeaways**
+
+In `## Leech takeaways`, record what to borrow from this target even if none of its features become roadmap rows — framing, patterns, UX decisions, naming conventions. One bullet per takeaway:
+
+```
+- <pattern or UX decision> — <why it's worth borrowing>
+```
+
+**5.4 — Hand off to /risoluto-grill**
+
+Collect all `[flag: new]` and `[flag: merge]` candidates. Pass the target slug to `/risoluto-grill` with a reference to the README path so the critic can triage survivors. Only `new` and `merge` candidates need critic review — `supersede` candidates need a separate founder decision before the row is touched; `skip` candidates are done.
+
+Skills propose; the founder disposes: never reorder, promote, or delete roadmap rows. Only append `idea` rows via the grill output.
+
+### Step 6 — Validate
+
+After the script runs and the dedup edits are in place, verify the output:
 
 ```bash
 pnpm validate:research
@@ -209,7 +261,7 @@ pnpm validate:research
 
 If validation fails, fix the frontmatter and re-run. Common failures: missing required fields, slug pattern mismatch, invalid source_type or category enum, malformed date format.
 
-### Step 6 — Commit
+### Step 7 — Commit
 
 The `research/` submodule has its own git history. Commit there first, then bump the parent:
 
@@ -233,6 +285,8 @@ git commit -m "chore: bump research submodule for <target-slug> capture"
 | Frontmatter `source_count`                              | Glob of `sources/*.md` — recomputed every run               |
 | `## What is this target?`                               | Written on first creation only (operator-owned after that)  |
 | `## Capabilities observed`                              | Written on first creation only (operator-owned after that)  |
+| `## Candidate features`                                 | Written on first creation only (operator-owned after that)  |
+| `## Leech takeaways`                                    | Written on first creation only (operator-owned after that)  |
 | `## Sources`                                            | Regenerated every run (lists `sources/*.md` links)          |
 | `## Analyst notes`                                      | **Never** touched — operator-owned                          |
 
@@ -286,4 +340,4 @@ pnpm validate:research
 
 ## Why this skill is separate from `risoluto-vault`
 
-The vault (Phase 1.2) configures the container — `.obsidian/`, templates, Dataview views. The researcher (Phase 1.3) fills the container — targets, sources, INDEX.md. Separating them keeps the vault's idempotent-apply pattern clean (it never writes content files) and lets the researcher iterate on ingestion logic without coupling to the Obsidian config surface. The vault owns `research/templates/` canonically (apply.mjs deploys them); the researcher does NOT read them at runtime — buildTargetBody and buildSourceBody are self-contained string builders.
+The vault (Phase 1.2) configures the container — `.obsidian/`, templates, Dataview views. The researcher (Phase 1.3) fills the container — targets, sources, INDEX.md — and runs the Mode A dedup workflow that surfaces candidates to `/risoluto-grill`. Separating them keeps the vault's idempotent-apply pattern clean (it never writes content files) and lets the researcher iterate on ingestion logic without coupling to the Obsidian config surface. The vault owns `research/templates/` canonically (apply.mjs deploys them); the researcher does NOT read them at runtime — buildTargetBody and buildSourceBody are self-contained string builders.

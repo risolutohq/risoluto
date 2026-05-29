@@ -15,7 +15,7 @@ For one `<prd-slug>` per invocation:
 2. Operator review of the proposed graph (accept, reject with feedback, or edit).
 3. Flat Linear Issues created on the same Project as the PRD (resolved from `docs/prds/<slug>.md` frontmatter `linear_project`), with:
    - Linear "blocked-by" relations matching the approved dependency graph
-   - Labels: `bundle:<category>` (from `capability-backlog.md` row), `tracer`, `slice:hitl` or `slice:afk`, `from:prd-<slug>`
+   - Labels: `bundle:<category>` (derived from the PRD body or roadmap row — see Notes), `tracer`, `slice:hitl` or `slice:afk`, `from:prd-<slug>`
    - Issue body following the template from the global `to-issues` skill (Parent, What to build, Acceptance criteria, Blocked by)
 4. Issues published in dependency order (blockers first) so real identifiers can be used in "Blocked by" fields.
 
@@ -29,6 +29,7 @@ Stop and report if any of these fail. Do **not** retry MCP auth from inside this
 | `research/` initialised              | `git submodule status research` starts with a space               | Tell Omer to `git submodule update --init research`.                 |
 | PRD exists                           | `test -f docs/prds/<slug>.md`                                     | Tell Omer to run `/risoluto-to-prd <slug>` first.                    |
 | PRD has `linear_project`             | frontmatter `linear_project` is non-null                          | Tell Omer to run `/risoluto-to-prd <slug>` first.                    |
+| PRD has `source`                     | frontmatter `source` is non-null                                  | Acceptable to proceed; `source` may be absent for older PRDs.        |
 | Linear MCP responding                | Any `mcp__linear-server__list_teams` call succeeds                | Surface the MCP error verbatim; do not retry auth.                   |
 | No existing `from:prd-<slug>` issues | `mcp__linear-server__list_issues` with label filter returns empty | Tell Omer issues already exist for this PRD; re-run would duplicate. |
 
@@ -42,7 +43,7 @@ Two steps: **preload**, **extract + create**. The extract step (inferring the sl
 node skills/risoluto-to-issues/scripts/preload.mjs <prd-slug>
 ```
 
-Stdout: JSON with slug, linear_project URL, PRD path, PRD body, source_idea path, category from capability-backlog.md, idea README path.
+Stdout: JSON with slug, linear_project URL, PRD path, PRD body, source (from PRD frontmatter), roadmap_row (item, why_now, size, status), and derived category.
 
 Stderr: one-line summary. Show Omer the summary.
 
@@ -111,7 +112,7 @@ PRD: [docs/prds/<slug>.md](prd-linear-project-url)
 - **Default to the `Ninetech` Linear team without asking.** Only one team exists.
 - **Linear MCP errors are operator concerns.** Surface verbatim, stop, do not retry.
 - **The `from:prd-<slug>` label is load-bearing.** Phase 4.2's TDD skill uses it to find the linked PRD, and Phase 4.3's post-merge workflow uses it to trigger automation. Always apply it.
-- **`bundle:<category>` comes from `capability-backlog.md`**, not from the PRD. The preload script extracts it.
+- **`bundle:<category>` is derived from the PRD/roadmap**, not from a deleted backlog file. The preload script checks for an explicit `**Category:**` line in the PRD body first; if absent it infers from the first word of the roadmap Item cell. If neither yields a value, omit the `bundle:` label and note it to Omer.
 - **Non-deterministic slice extraction is intentional.** The operator reviews and approves — the skill doesn't claim to produce the "correct" graph, just a reasonable starting point.
 - **Issues are flat, not nested.** No parent-child hierarchy. Dependencies are expressed via `blocked-by` relations only.
 - **Do NOT close or modify the Linear Project.** Issues are created under it; the Project stays open.

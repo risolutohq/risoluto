@@ -13,6 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parseRoadmap, setStatus, renderRoadmap } from "./roadmap.mjs";
 
 const SCRIPT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -171,6 +172,33 @@ function flipPrdStatus(slug) {
   return { prdPath, previousStatus, changed: true };
 }
 
+/** Best-effort: flip the roadmap row to shipped. Never throws — logs a warning and returns. */
+function flipRoadmapStatus(slug) {
+  const roadmapPath = path.join(REPO_ROOT, "docs", "roadmap.md");
+  if (!existsSync(roadmapPath)) {
+    log(`roadmap file not found at ${path.relative(REPO_ROOT, roadmapPath)} — skipping roadmap flip`);
+    return { changed: false };
+  }
+
+  const raw = readFileSync(roadmapPath, "utf8");
+  const model = parseRoadmap(raw);
+
+  if (!model.found) {
+    log("roadmap plan table not found — skipping roadmap flip");
+    return { changed: false };
+  }
+
+  const { changed } = setStatus(model, slug, "shipped");
+  if (!changed) {
+    log(`roadmap row "${slug}" not found or already shipped — skipping roadmap flip`);
+    return { changed: false };
+  }
+
+  writeFileSync(roadmapPath, renderRoadmap(model));
+  log(`flipped docs/roadmap.md row "${slug}" status → shipped`);
+  return { changed: true };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -203,14 +231,19 @@ async function main() {
     process.exit(1);
   }
 
-  // Step 2: Flip PRD status to shipped — last side effect, only reached on clean run
+  // Step 2: Flip PRD status to shipped
   const { previousStatus, changed } = flipPrdStatus(args.slug);
+
+  // Step 3: Flip roadmap row to shipped (best-effort — never fails the run)
+  const { changed: roadmapChanged } = flipRoadmapStatus(args.slug);
 
   // Summary
   log("---");
   log("summary:");
   log(`  PRD status: ${previousStatus} → shipped (${changed ? "changed" : "already shipped"})`);
+  log(`  roadmap row: ${roadmapChanged ? "flipped → shipped" : "unchanged (missing or already shipped)"}`);
   log(`  Linear issues commented: ${commented}/${issues.length}`);
+  log("  ACTION REQUIRED: run /risoluto-features to refresh research/RISOLUTO_FEATURES.md");
 }
 
 main().catch((error) => {

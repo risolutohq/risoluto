@@ -1,6 +1,6 @@
 ---
 name: risoluto-vault
-description: Configure the `research/` submodule as a scoped Obsidian vault for the Risoluto planning pipeline — writes `.obsidian/{app,appearance,core-plugins,community-plugins}.json`, installs `templates/{source,target-readme,idea-readme}.md` and pre-canned Dataview view notes (untagged sources, ideas with <2 evidence targets, targets stale 90d+), pins the Web Clipper / Dataview / Templater plugin set, and forces relative-markdown-links so the vault and the Risoluto skill pipeline see the same link shape. Use this skill whenever Omer says `/risoluto-vault`, "set up the research vault", "configure obsidian on research", "repair vault config", "reinstall vault templates", "vault is drifting", "pin vault plugins", "scope my research as an obsidian vault", or any variation that implies seeding or repairing the Obsidian config inside `research/`. Idempotent — re-runs detect drift, restore canonical files, and surface missing community plugins with install instructions without clobbering operator-owned preferences. Companion to Phase 1.2 of `docs/research-to-shipping-pipeline.md`.
+description: Configure the `research/` submodule as a scoped Obsidian vault for the Risoluto planning pipeline — writes `.obsidian/{app,appearance,core-plugins,community-plugins}.json`, installs `templates/{source,target-readme}.md` and pre-canned Dataview view notes (untagged sources, targets stale 90d+), pins the Web Clipper / Dataview / Templater plugin set, and forces relative-markdown-links so the vault and the Risoluto skill pipeline see the same link shape. Use this skill whenever Omer says `/risoluto-vault`, "set up the research vault", "configure obsidian on research", "repair vault config", "reinstall vault templates", "vault is drifting", "pin vault plugins", "scope my research as an obsidian vault", or any variation that implies seeding or repairing the Obsidian config inside `research/`. Idempotent — re-runs detect drift, restore canonical files, and surface missing community plugins with install instructions without clobbering operator-owned preferences. Companion to Phase 1.2 of `docs/research-to-shipping-pipeline.md`.
 ---
 
 # risoluto-vault
@@ -20,19 +20,19 @@ research/
 │   └── community-plugins.json   # pinned: web-clipper, dataview, templater
 ├── templates/
 │   ├── source.md
-│   ├── target-readme.md
-│   └── idea-readme.md
-└── views/
-    ├── untagged-sources.md
-    ├── ideas-thin-evidence.md
-    └── targets-stale.md
+│   └── target-readme.md
+├── views/
+│   ├── untagged-sources.md
+│   └── targets-stale.md
+└── wiki/                        # built by /risoluto-ingest — not managed by this skill
 ```
 
 These files are the _contract_ the rest of the pipeline relies on:
 
-- **Frontmatter templates** match `research/.schemas/{source,target,idea}.schema.json` exactly. If you change a schema, change the matching template in this skill's `assets/templates/` and re-apply.
+- **Frontmatter templates** match `research/.schemas/{source,target}.schema.json` exactly. If you change a schema, change the matching template in this skill's `assets/templates/` and re-apply.
 - **Dataview view notes** (`research/views/*`) are the operator's at-a-glance dashboards — they read frontmatter the schemas define, so they only work if the templates are honored.
-- **Relative markdown links** (`app.json`) are non-negotiable. The risoluto-researcher and risoluto-synthesizer skills both emit and parse relative paths; wikilinks would break path resolution outside Obsidian (CI, `git grep`, plain-text agents).
+- **Relative markdown links** (`app.json`) are non-negotiable. The risoluto-researcher and risoluto-ingest skills both emit and parse relative paths; wikilinks would break path resolution outside Obsidian (CI, `git grep`, plain-text agents).
+- **`research/wiki/`** is a connected wiki built by `/risoluto-ingest` from all targets. This skill does not write into it — it is listed here so operators know where to look.
 
 ## Two vaults, two homes
 
@@ -126,11 +126,9 @@ risoluto-vault: applying canonical config to research/
   WRITE  research/.obsidian/community-plugins.json
   WRITE  research/templates/source.md
   WRITE  research/templates/target-readme.md
-  WRITE  research/templates/idea-readme.md
   WRITE  research/views/untagged-sources.md
-  WRITE  research/views/ideas-thin-evidence.md
   WRITE  research/views/targets-stale.md
-risoluto-vault: 10 file(s) written, 0 repaired, 0 kept.
+risoluto-vault: 8 file(s) written, 0 repaired, 0 kept.
 risoluto-vault: 3 community plugin(s) not yet installed — open the vault in Obsidian and install:
   - obsidian-web-clipper
   - dataview
@@ -147,11 +145,9 @@ risoluto-vault: applying canonical config to research/
   KEEP   research/.obsidian/community-plugins.json
   KEEP   research/templates/source.md
   KEEP   research/templates/target-readme.md
-  KEEP   research/templates/idea-readme.md
   KEEP   research/views/untagged-sources.md
-  KEEP   research/views/ideas-thin-evidence.md
   KEEP   research/views/targets-stale.md
-risoluto-vault: 0 file(s) written, 0 repaired, 10 kept.
+risoluto-vault: 0 file(s) written, 0 repaired, 8 kept.
 ```
 
 Drift repair — touch `research/.obsidian/app.json` to break it, re-run:
@@ -159,7 +155,7 @@ Drift repair — touch `research/.obsidian/app.json` to break it, re-run:
 ```
   REPAIR research/.obsidian/app.json
   KEEP   ...
-risoluto-vault: 0 file(s) written, 1 repaired, 9 kept.
+risoluto-vault: 0 file(s) written, 1 repaired, 7 kept.
 ```
 
 `appearance.json` is operator-owned — once it exists, the applier never overwrites it. Edit it in Obsidian's settings UI and the change sticks.
@@ -176,7 +172,8 @@ risoluto-vault: 0 file(s) written, 1 repaired, 9 kept.
 | `.obsidian/workspace*.json`        | Untouched. Pane layout is operator preference.                                     |
 | `templates/*.md`                   | Canonical — repaired every run. Operator edits go in `assets/templates/` upstream. |
 | `views/*.md`                       | Canonical — repaired every run. Dataview queries are part of the contract.         |
-| Anything else under `research/`    | Untouched. Targets, sources, ideas, RISOLUTO_FEATURES — none of it is the vault's. |
+| `wiki/`                            | Untouched. Built and owned by `/risoluto-ingest`.                                  |
+| Anything else under `research/`    | Untouched. Targets, sources, RISOLUTO_FEATURES — none of it is the vault's.        |
 
 ## Anatomy of the canonical assets
 
@@ -191,11 +188,9 @@ skills/risoluto-vault/assets/
 │   └── community-plugins.json
 ├── templates/
 │   ├── source.md
-│   ├── target-readme.md
-│   └── idea-readme.md
+│   └── target-readme.md
 └── dataview/
     ├── untagged-sources.md
-    ├── ideas-thin-evidence.md
     └── targets-stale.md
 ```
 
