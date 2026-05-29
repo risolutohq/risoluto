@@ -5,3 +5,6 @@ coverage/
 # Obsidian Templater templates use EJS-style <%* ... %> tags that prettier mangles.
 research/templates/
 skills/risoluto-vault/assets/templates/
+
+# Generated manifest owned by the filetree tool; prettier rewrites its __snapshots__ headings.
+FILETREE.md

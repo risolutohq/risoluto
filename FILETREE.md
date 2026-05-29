@@ -9,23 +9,24 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `.gitleaks.toml` — Gitleaks config stub for Risoluto; referenced by pre-commit hook and CI secret scan step. <!--hash:8b7979ce-->
 - `.gitmodules` — Git submodule registration; maps the research/ directory to the private risolutohq/risoluto-research repo. <!--hash:5c68ed07-->
 - `.lintstagedrc.json` — lint-staged config; runs ESLint --fix and Prettier on staged TypeScript files, Prettier on JSON/YAML files. <!--hash:4e140f99-->
-- `.prettierignore` — Prettier ignore list; excludes dist/, node_modules/, and coverage/ from formatting runs. <!--hash:2d0c0644-->
+- `.mcp.json` — MCP server config; registers the Linear HTTP MCP server endpoint for Claude Code tools. <!--hash:264a6261-->
+- `.prettierignore` — Prettier ignore list; excludes dist/, node_modules/, and coverage/ from formatting runs. <!--hash:fde1bb00-->
 - `.prettierrc.json` — Prettier formatting config; 120-col, double quotes, 2-space indent, trailing commas, LF line endings. <!--hash:eac2feef-->
 - `.releaserc.yml` — semantic-release config; drives automated changelog, package.json version bump, and GitHub release from Conventional Commits. <!--hash:35f90251-->
-- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:f55c39ac-->
+- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:7275ed7a-->
 - `CHANGELOG.md` — Project changelog; records v0.1.0 foundation release scope and what was included or excluded from the clean baseline. <!--hash:fbdd3c5c-->
 - `CLAUDE.md` — Claude Code entry point; single-line redirector that imports AGENTS.md as the canonical agent instruction source. <!--hash:ba336879-->
 - `Dockerfile` — Main service Dockerfile; multi-stage build producing a Node 24 production image that runs the CLI entrypoint on port 4000. <!--hash:b82eaebe-->
 - `Dockerfile.data-plane` — Data-plane Dockerfile; builds a Node 24 image for the dispatch entrypoint service running on port 9100. <!--hash:690ad75c-->
 - `Dockerfile.sandbox` — Codex sandbox Dockerfile; Ubuntu 24.04 image with Node 22, bubblewrap, and the Codex CLI for isolated agent execution. <!--hash:489346c5-->
 - `LICENSE` — MIT license for the Risoluto project, copyright Omer Faruk Oruc 2026. <!--hash:db1c2f96-->
-- `README.md` — Project README; describes Risoluto's purpose, current shape (CLI-first, Workflow Run primitive), and development setup commands. <!--hash:c15117e2-->
+- `README.md` — Project README; describes Risoluto's purpose, current shape (CLI-first, Workflow Run primitive), and development setup commands. <!--hash:f8dfc05c-->
 - `commitlint.config.ts` — commitlint config; extends conventional-commits and enforces a fixed allowlist of commit scopes for this repo. <!--hash:52f11662-->
 - `docker-compose.yml` — Docker Compose spec; defines risoluto service, optional Cloudflare tunnel, and optional data-plane service with shared volumes and env wiring. <!--hash:49819d2b-->
 - `eslint.config.js` — ESLint config enforcing naming, complexity, file/function length, dead-code, and tech-debt rules for src/ and tests/. <!--hash:4605591a-->
 - `knip.config.ts` — Knip unused-export finder config; scopes analysis to src/ TypeScript files. <!--hash:305987d5-->
 - `knip.json` — Knip dead-code config: entry points, project globs, and barrel index files exempted from export analysis. <!--hash:c0e37760-->
-- `package.json` — Root package manifest: scripts (build/test/lint/typecheck), runtime and dev dependencies, and bin entry point. <!--hash:cc0bbe7d-->
+- `package.json` — Root package manifest: scripts (build/test/lint/typecheck), runtime and dev dependencies, and bin entry point. <!--hash:930f9499-->
 - `pnpm-workspace.yaml` — pnpm workspace config; singles out better-sqlite3 and esbuild as the only native-build dependencies. <!--hash:b5a8fc39-->
 - `quarantine.json` — Flaky-test quarantine registry; currently empty (no tests quarantined). <!--hash:fe51488c-->
 - `stryker.config.json` — Stryker mutation testing config: vitest runner, TypeScript checker, thresholds, and incremental mode. <!--hash:633c3bf2-->
@@ -37,6 +38,14 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `vitest.integration.config.ts` — Integration test suite config; targets \*.integration.test.ts files, excludes live tests, and retries flaky runs up to twice. <!--hash:ae6377cf-->
 - `vitest.live.config.ts` — Live integration test suite config; runs tests against real external APIs in tests/integration/live/ with a 30-second timeout. <!--hash:fb6be9c1-->
 - `vitest.load.config.ts` — Load/performance test suite config; targets the HTTP load test file with a 30-second timeout. <!--hash:c2959d3a-->
+
+## .agents/skills/init-research/
+
+- `SKILL.md` — Skill definition for /init-research; verifies and initializes the private research/ git submodule. <!--hash:70f7e43c-->
+
+## .agents/skills/v1-check/
+
+- `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build, lint, format, test, typecheck) in order. <!--hash:bf9cf752-->
 
 ## .claude/
 
@@ -52,7 +61,16 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## .claude/skills/v1-check/
 
-- `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build → lint → format → test → typecheck) in order. <!--hash:c895ff9c-->
+- `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build → lint → format → test → typecheck) in order. <!--hash:bf9cf752-->
+
+## .codex/
+
+- `config.toml` — Codex sandbox configuration; enables full filesystem access for Codex agents in this repo. <!--hash:a1b07dba-->
+- `hooks.json` — Codex hook definitions; auto-formats edited files with Prettier and runs a TypeScript/ESLint stop check on uncommitted changes. <!--hash:087bc7ad-->
+
+## .codex/hooks/
+
+- `stop-ts-check.sh` — Stop hook script; surfaces ESLint output and a typecheck reminder when uncommitted TypeScript files exist. <!--hash:57df8651-->
 
 ## .github/
 
@@ -67,14 +85,16 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## .github/workflows/
 
-- `ci.yml` — Main CI workflow; runs build, quality, unit tests (Node 22/24), integration, live smoke, Docker build, Gitleaks, and dependency review. <!--hash:75fa0d06-->
+- `ci.yml` — Main CI workflow; runs build, quality, unit tests (Node 22/24), integration, live smoke, Docker build, Gitleaks, and dependency review. <!--hash:5e9b6281-->
+- `post-merge.yml` — Post-merge CI workflow; on a merged labeled PR, flips the matching PRD to shipped and back-comments the linked Linear issue. <!--hash:bb454678-->
+- `prd-drift.yml` — CI workflow; checks for drift between docs/prds markdown and Linear on any PR touching docs/prds. <!--hash:500f87f6-->
 
 ## .husky/
 
 - `commit-msg` — Husky commit-msg hook; enforces Conventional Commit format via commitlint before every commit. <!--hash:d7e53283-->
 - `post-merge` — Husky post-merge hook; runs Prettier on TypeScript and script files to fix formatting drift introduced by GitHub merges. <!--hash:9d8ab9a0-->
 - `pre-commit` — Husky pre-commit hook; scans staged files for secrets with Gitleaks then runs lint-staged for ESLint and Prettier. <!--hash:afd3ec8c-->
-- `pre-push` — Husky pre-push hook; runs build, tests, and typecheck before pushing; supports SKIP_HOOKS and FULL_CHECK escape hatches. <!--hash:c110a2e2-->
+- `pre-push` — Husky pre-push hook; runs build, tests, and typecheck before pushing; supports SKIP_HOOKS and FULL_CHECK escape hatches. <!--hash:0307a83f-->
 
 ## .superset/
 
@@ -87,18 +107,21 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## docs/
 
-- `capability-backlog.md` — Living post-foundation work ledger; tracks capabilities by status from idea through shipped or dropped. <!--hash:22b0a19d-->
-- `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:281f732a-->
-- `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:13a37144-->
-- `release-rules.md` — Versioning model, CI band requirements, and 1.0.0 Foundation Baseline qualification checklist. <!--hash:d42d0f12-->
-- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:e62f7c44-->
-- `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:908555d5-->
-- `test-capability-matrix.md` — Migration ledger tracking replacement of legacy tests with v1 behavior-first public-interface coverage per capability. <!--hash:7390e477-->
-- `testing-strategy.md` — Defines unit, integration, and live test tiers; model profiles; and what v1 requires for 1.0.0. <!--hash:c7e04ff4-->
+- `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:15f78cea-->
+- `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:57e0884d-->
+- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:09a3cd45-->
+- `roadmap.md` — The single ordered plan; founder-owned roadmap table (#/Item/Why now/Size/Status/Research link) — the top non-shipped row is what's next. <!--hash:9f469475-->
+- `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:6f3f5fe4-->
+- `testing-and-release.md` — Testing tiers and release flow; the four vitest configs, the 1.0.0 Foundation Baseline gate, and the semantic-release process. <!--hash:f8aa9042-->
 
 ## docs/adr/
 
-- `0001-foundation.md` — Consolidated v1 foundation ADR (merges former ADR-0001…0007). Seven decisions in intent voice, each with an as-built status table (Delivered / Partial / Not delivered / ⚠ Drifted) verified against source. Read the status table before trusting any claim. <!--hash:pending-filetree-update-->
+- `0001-foundation.md` — Consolidated v1 foundation ADR (former ADR-0001..0007); seven decisions in intent voice, each with an as-built status table verified against source. <!--hash:9c8ba4b4-->
+
+## docs/prds/
+
+- `.gitkeep` — Placeholder keeping the empty docs/prds/ directory tracked in git. <!--hash:e69de29b-->
+- `README.md` — PRDs folder guide; PRDs are canonical in git, mirrored to Linear; documents the drift hook, frontmatter, and the roadmap slug join key. <!--hash:ea1f36a2-->
 
 ## scripts/
 
@@ -110,16 +133,17 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `nightly-history-r2.ts` — Downloads or uploads the nightly Linear issue history file from/to a Cloudflare R2 bucket. <!--hash:4240c094-->
 - `nightly-linear-intake.ts` — Creates or updates a Linear nightly failure issue from the nightly summary; supports dry-run and live modes. <!--hash:5186fe50-->
 - `nightly-validation-fail.ts` — Intentionally fails a named nightly CI job on workflow_dispatch for pipeline validation testing. <!--hash:5fcf1be6-->
-- `post-merge-prd.mjs` — Post-merge PRD automation; back-comments from:prd-<slug> Linear issues with the merged PR then flips the PRD frontmatter status to shipped (flip is last). <!--hash:30e4d644-->
+- `post-merge-prd.mjs` — Post-merge PRD automation; back-comments from:prd-<slug> Linear issues, flips the PRD + roadmap row to shipped, and reminds to refresh RISOLUTO_FEATURES. <!--hash:47f794b5-->
 - `prd-drift-check.ts` — Pre-push/CI gate; compares each docs/prds/<slug>.md body (first 255 chars) against its Linear project description and exits non-zero on drift. <!--hash:29cf44cc-->
-- `prd-linear.ts` — Linear GraphQL helpers for the PRD pipeline; API-key hard gate, project fetch, and extractSlugId URL parsing shared by drift-check and reconcile. <!--hash:27a4913e-->
+- `prd-linear.ts` — Linear GraphQL helpers for the PRD pipeline; API-key hard gate, project fetch, and extractSlugId URL parsing shared by drift-check and reconcile. <!--hash:c5294154-->
 - `prd-reconcile.ts` — Adopts a Linear-side PRD edit back into git; writes the Linear description into docs/prds/<slug>.md on branch pipeline/<slug>-prd-reconcile. <!--hash:7f0b645f-->
 - `quarantine-heal.ts` — Reads Vitest JSON results and updates quarantine.json: increments pass counts, auto-heals at threshold, removes stale entries. <!--hash:308c9c5d-->
 - `quarantine-shared.ts` — Shared quarantine types, constants (MAX_QUARANTINED, HEAL_THRESHOLD), path, and loadEntries utility used by quarantine scripts. <!--hash:ab92fe6d-->
 - `quarantine.ts` — CLI for managing the flaky-test quarantine registry: add, remove, and list quarantined tests with cap enforcement. <!--hash:5315b5e5-->
+- `roadmap.mjs` — Shared helper to parse and surgically edit the roadmap plan table in docs/roadmap.md (append rows, set status, render) — the pipeline join-key writer. <!--hash:2037a16d-->
 - `sync-labels.sh` — Idempotently creates or updates GitHub issue labels (priority, type, area, workflow) on risolutohq/risoluto. <!--hash:fde247a5-->
 - `upload-nightly-artifacts-r2.ts` — Uploads nightly CI artifacts (files or directories) to Cloudflare R2 and writes a manifest JSON with public URLs. <!--hash:1f990fa2-->
-- `validate-research.ts` — Validates research/ corpus frontmatter (targets, ideas) against research/.schemas/\*.json; the pnpm validate:research gate. <!--hash:d9f30228-->
+- `validate-research.ts` — Validates research/ targets + sources and docs/prds/* frontmatter against research/.schemas/*.json, plus PRD slug/source consistency; the validate:research gate. <!--hash:75e67a0b-->
 
 ## scripts/.pipeline/
 
@@ -139,11 +163,11 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-features/
 
-- `SKILL.md` — Skill definition for the risoluto-features spine updater: two-repo model, 12-step pipeline, map-reduce architecture. <!--hash:09663808-->
+- `SKILL.md` — Skill definition for the risoluto-features spine updater: two-repo model, 12-step pipeline, map-reduce architecture. <!--hash:36ed0e34-->
 
 ## skills/risoluto-features/assets/
 
-- `viewer-template.html` — Single-file Tailwind HTML viewer for RISOLUTO_FEATURES.json; hydrated client-side with search, filters, citations, and diff banner. <!--hash:ce7a0b69-->
+- `viewer-template.html` — Single-file Tailwind HTML viewer for RISOLUTO_FEATURES.json; hydrated client-side with search, filters, citations, and diff banner. <!--hash:5aa20842-->
 
 ## skills/risoluto-features/references/
 
@@ -161,33 +185,41 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `fact_check.py` — Verifies quoted constants in observable_behaviors exist in cited source line ranges; exits 1 on hard failures. <!--hash:c0980346-->
 - `lint_md.py` — Lints RISOLUTO_FEATURES.md for duplicate H3s, unsubstituted template tokens, and malformed Evidence blocks. <!--hash:d875b63f-->
 - `render_html.py` — Hydrates viewer-template.html with the JSON sidecar payload, writing a self-contained feature viewer HTML file. <!--hash:7e30da52-->
-- `render_meta.py` — Generates the Summary table and Coverage manifest markdown sections from the RISOLUTO_FEATURES.json payload. <!--hash:7521b7a7-->
+- `render_meta.py` — Generates the Summary table and Coverage manifest markdown sections from the RISOLUTO_FEATURES.json payload. <!--hash:0e7da6e8-->
 - `validate_json.py` — Validates RISOLUTO_FEATURES.json against schema rules: unique IDs, valid bundles, citation counts, and line ranges. <!--hash:a2f9c56c-->
 
 ## skills/risoluto-grill/
 
-- `SKILL.md` — Grill skill: stress-tests a research idea until 'Why us / why now' and 'Smallest shippable shape' crystallise in the idea README (Phase 3.1). <!--hash:338b97b7-->
+- `SKILL.md` — Critic-grill (Mode A): stress-tests a target's post-dedup candidate features and writes the kept ones as roadmap rows in docs/roadmap.md. <!--hash:e722c264-->
 
 ## skills/risoluto-grill/scripts/
 
-- `grill-write.mjs` — Grill writer; rewrites the two operator-owned idea sections (and optional status flip), preserving frontmatter and the synthesizer-owned block. <!--hash:05b215e4-->
-- `preload.mjs` — Grill preloader; bundles the idea README, cited target READMEs, backlog row, and feature mentions as JSON context. <!--hash:6da2a06a-->
+- `grill-write.mjs` — Grill writer; applies in/out grill decisions to docs/roadmap.md via scripts/roadmap.mjs — appends kept rows, edits merge/supersede rows. <!--hash:b3d2bc6e-->
+- `preload.mjs` — Grill preloader; parses a target README's Candidate features + dedup flags, the roadmap rows, and RISOLUTO_FEATURES mentions into a JSON bundle. <!--hash:e8ff15d0-->
+
+## skills/risoluto-ingest/
+
+- `SKILL.md` — Ingest skill (Mode B): reads all research targets, builds the research/wiki/ knowledge base, and emits cite-or-drop idea rows into the roadmap. <!--hash:164a27ad-->
+
+## skills/risoluto-ingest/scripts/
+
+- `ingest.mjs` — Ingest engine; clusters targets by ideas tag into research/wiki/ concept notes + home index and appends idempotent idea rows to docs/roadmap.md. <!--hash:191671ff-->
+
+## skills/risoluto-next-bundle/
+
+- `SKILL.md` — next-bundle skill: groups open from:prd-<slug> Linear issues across PRDs by predicted code-locality and proposes build bundles with goals. <!--hash:edd196f0-->
+
+## skills/risoluto-next-bundle/scripts/
+
+- `preload.mjs` — next-bundle preloader; lists docs/prds/* with slug, status, linear_project, and the from:prd-<slug> label as JSON for locality grouping. <!--hash:b731c5f3-->
 
 ## skills/risoluto-researcher/
 
-- `SKILL.md` — Researcher skill: captures an external URL (+paste) into research/targets/<slug>/ as target README + source file and regenerates INDEX.md (Phase 1.3). <!--hash:f0d0c33d-->
+- `SKILL.md` — Researcher skill (Mode A): captures a URL into research/targets/<slug>/, extracts Candidate features + Leech takeaways, dedups against roadmap + FEATURES. <!--hash:d458ee60-->
 
 ## skills/risoluto-researcher/scripts/
 
-- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:07308f14-->
-
-## skills/risoluto-synthesizer/
-
-- `SKILL.md` — Synthesizer skill: clusters research targets into idea READMEs by shared ideas: tag and rewrites the idea-status rows of capability-backlog.md (Phase 2.1). <!--hash:1b64a423-->
-
-## skills/risoluto-synthesizer/scripts/
-
-- `synthesize.mjs` — Synthesizer engine; merges target/source ideas: tags into research/ideas/<slug>/ clusters and the synthesizer-owned backlog row block (idempotent). <!--hash:237c8340-->
+- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:1787be54-->
 
 ## skills/risoluto-tdd/
 
@@ -200,30 +232,29 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-to-issues/
 
-- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug> with LLM-inferred blocked-by (Linear MCP only, Phase 4.1). <!--hash:394f4d70-->
+- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug>; category derived from the PRD/roadmap row. Linear MCP only. <!--hash:6e0b0710-->
 
 ## skills/risoluto-to-issues/scripts/
 
-- `preload.mjs` — to-issues preloader; emits the PRD body, slug, linear_project, and backlog category as JSON for issue breakdown. <!--hash:5b87cf02-->
+- `preload.mjs` — to-issues preloader; emits the PRD body, slug, linear_project, source, and roadmap-derived category as JSON for issue breakdown. <!--hash:c5931489-->
 
 ## skills/risoluto-to-prd/
 
-- `SKILL.md` — to-prd skill: promotes a grilled idea into docs/prds/<slug>.md + a mirrored Linear project + pipeline/<slug>-prd branch; idempotent create/sync (Phase 3.2). <!--hash:b7cd2b65-->
+- `SKILL.md` — to-prd skill: promotes a next roadmap row into docs/prds/<slug>.md + a mirrored Linear project + branch, flipping the row to building. Idempotent create/sync. <!--hash:3159b68c-->
 
 ## skills/risoluto-to-prd/scripts/
 
-- `preload.mjs` — to-prd preloader; reports create-vs-sync mode, why-us/smallest-shape fill state, and PRD existence as JSON. <!--hash:8858f4a1-->
-- `write.mjs` — to-prd write script; renders the PRD from the idea README and syncs the Linear project description (create or overwrite), updating idea frontmatter. <!--hash:b1f94ad8-->
+- `preload.mjs` — to-prd preloader; reads the roadmap row + its linked research, reports create-vs-sync mode and PRD existence as JSON. <!--hash:189dfc5f-->
+- `write.mjs` — to-prd write script; renders the PRD from a roadmap row, flips the row to building (stamping Linear), and commits/pushes the pipeline branch. <!--hash:9d542e09-->
 
 ## skills/risoluto-vault/
 
-- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, templates, Dataview views); idempotent drift repair (Phase 1.2). <!--hash:724f5090-->
+- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, source/target templates, Dataview views, research/wiki); idempotent drift repair. <!--hash:6c57392e-->
 
 ## skills/risoluto-vault/assets/dataview/
 
-- `ideas-thin-evidence.md` — Vault asset: Dataview note listing ideas with fewer than two evidence targets. <!--hash:d4b82585-->
 - `targets-stale.md` — Vault asset: Dataview note listing targets not updated in 90+ days. <!--hash:10c47489-->
-- `untagged-sources.md` — Vault asset: Dataview note listing source files with no ideas: tag. <!--hash:28b28a05-->
+- `untagged-sources.md` — Vault asset: Dataview note listing source files with no ideas: tag. <!--hash:11c194f5-->
 
 ## skills/risoluto-vault/assets/obsidian-config/
 
@@ -234,18 +265,17 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-vault/assets/templates/
 
-- `idea-readme.md` — Vault asset: pipeline template for an idea README. <!--hash:8829cc83-->
 - `source.md` — Vault asset: pipeline template for a research source file. <!--hash:598f088a-->
-- `target-readme.md` — Vault asset: pipeline template for a target README. <!--hash:112366d1-->
+- `target-readme.md` — Vault asset: pipeline template for a target README. <!--hash:7efdd86b-->
 
 ## skills/risoluto-vault/scripts/
 
-- `apply.mjs` — Vault apply script; deploys/repairs .obsidian config, templates, and Dataview notes into research/ (WRITE/REPAIR/KEEP per file; --dry-run/--force). <!--hash:94c1734a-->
+- `apply.mjs` — Vault apply script; deploys/repairs .obsidian config, templates, and Dataview notes into research/ (WRITE/REPAIR/KEEP per file; --dry-run/--force). <!--hash:ffb65b0e-->
 
 ## src/agent/
 
 - `codex-request-handler.ts` — Handles incoming JSON-RPC requests from Codex: approvals, tool calls, permissions, and fatal protocol errors. <!--hash:463eb1b6-->
-- `json-rpc-connection.ts` — Manages bidirectional JSON-RPC over a child process stdio: sends requests with timeouts, dispatches notifications. <!--hash:f45eaa54-->
+- `json-rpc-connection.ts` — Manages bidirectional JSON-RPC over a child process stdio: sends requests with timeouts, dispatches notifications. <!--hash:04cb1b61-->
 
 ## src/agent-runner/
 
@@ -253,7 +283,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `attempt-executor.ts` — Launches a single agent attempt: prepares workspace, starts session, runs turns, invokes self-review, and cleans up. <!--hash:c2c88914-->
 - `contracts.ts` — Defines the AgentRunnerEventHandler callback type used to stream run events with usage and stop-signal metadata. <!--hash:e6283242-->
 - `docker-runtime.ts` — AgentSessionPort implementation that creates Docker-backed Codex sessions and delegates turn execution to DockerSession. <!--hash:eb87cc4f-->
-- `docker-session.ts` — Spawns the Docker container, wires the JSON-RPC connection, polls container stats, and handles cleanup on shutdown. <!--hash:9b94eaa0-->
+- `docker-session.ts` — Spawns the Docker container, wires the JSON-RPC connection, polls container stats, and handles cleanup on shutdown. <!--hash:5519a6ed-->
 - `error-classifier.ts` — Extracts typed Codex error info (type, message, retryAfterMs) from JSON-RPC error response payloads. <!--hash:08cd6740-->
 - `exit-classifier.ts` — Classifies container exit state into RunOutcome, detecting OOM-kill via docker inspect on exit code 137. <!--hash:87110957-->
 - `helpers.ts` — Extracts and normalizes fields (threadId, turnId, token usage, sandbox policy, item content) from JSON-RPC payloads. <!--hash:287d4ed9-->
@@ -266,13 +296,13 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `session-init.ts` — Initializes a Codex session: waits for startup, authenticates, starts or resumes the thread, renders the prompt template. <!--hash:5842a576-->
 - `session-port.ts` — Port and input/output types for AgentSession lifecycle: start, initialize, execute, review, steer, and shutdown. <!--hash:41e5cf29-->
 - `thread-compact.ts` — Requests Codex thread/compact/start to reduce context when the context window is exceeded; returns success/failure. <!--hash:788de964-->
-- `turn-executor-types.ts` — Types for turn execution: TurnResult discriminated union and input/state interfaces used by turn-executor. <!--hash:8d26e6e9-->
-- `turn-executor.ts` — Drives the turn loop: sends prompts, waits for completion, detects stop signals, handles context compaction and abort. <!--hash:bf8224de-->
+- `turn-executor-types.ts` — Types for turn execution: TurnResult discriminated union and input/state interfaces used by turn-executor. <!--hash:ac762507-->
+- `turn-executor.ts` — Drives the turn loop: sends prompts, waits for completion, detects stop signals, handles context compaction and abort. <!--hash:67866002-->
 - `turn-state.ts` — Mutable per-session state: streaming buffers for deltas, turn-completion resolvers, reasoning accumulators, and review summaries. <!--hash:a7c9f676-->
 
 ## src/alerts/
 
-- `alert-pipeline.ts` — Matches events against alert rules, enforces per-rule cooldowns, and delivers notifications via NotificationManager. <!--hash:2f8bdf65-->
+- `alert-pipeline.ts` — Matches events against alert rules, enforces per-rule cooldowns, and delivers notifications via NotificationManager. <!--hash:670e74a0-->
 - `engine.ts` — Subscribes to the TypedEventBus and feeds every non-notification event into AlertPipeline for rule evaluation. <!--hash:f83e2b88-->
 - `history-store.ts` — Port interface and record types for persisting and querying alert delivery history. <!--hash:59d0b84a-->
 
@@ -286,39 +316,39 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `port.ts` — Port interface for the automation store; defines create/finish/list run operations and their input/output types. <!--hash:a47eebc2-->
 - `runner.ts` — Executes a single automation run in report, findings, or implement mode; persists the result and emits lifecycle events. <!--hash:77e23962-->
-- `scheduler.ts` — Manages cron-scheduled automations; syncs from config, starts/stops node-cron tasks, and exposes manual trigger. <!--hash:baf5abc1-->
+- `scheduler.ts` — Manages cron-scheduled automations; syncs from config, starts/stops node-cron tasks, and exposes manual trigger. <!--hash:ac3b617c-->
 - `types.ts` — Shared domain types for automation runs: trigger, status, and AutomationRunRecord. <!--hash:31cba93a-->
 
 ## src/cli/
 
-- `index.ts` — CLI entry point; bootstraps config stores, services, HTTP server, and manages startup/shutdown signal handling. <!--hash:a84b542c-->
+- `index.ts` — CLI entry point; bootstraps config stores, services, HTTP server, and manages startup/shutdown signal handling. <!--hash:b78865b7-->
 - `notifications.ts` — Wires notification channels from config into the NotificationManager; re-wires on config changes and warns on port drift. <!--hash:c788589f-->
 - `parse-args.ts` — Parses CLI flags (--port, --data-dir), resolves data/archive dirs, and initializes the logger and error tracker. <!--hash:17a984af-->
 - `runtime-providers.ts` — Factory functions that build runtime GitManager and RepoRouter providers wired to the live service config. <!--hash:f5acf6bb-->
 - `services.ts` — Assembles all Risoluto subsystems in dependency order across 7 phases and returns the fully wired service graph. <!--hash:247312f7-->
-- `workflow-run-attempt-command.ts` — CLI subcommands for workflow run attempts: start, complete, fail, cancel, and list attempts. <!--hash:a91f483d-->
-- `workflow-run-command.ts` — Top-level dispatcher for all workflow-run CLI subcommands; routes to the appropriate handler based on argv. <!--hash:e39a62e6-->
+- `workflow-run-attempt-command.ts` — CLI subcommands for workflow run attempts: start, complete, fail, cancel, and list attempts. <!--hash:3c5efbce-->
+- `workflow-run-command.ts` — Top-level dispatcher for all workflow-run CLI subcommands; routes to the appropriate handler based on argv. <!--hash:cc5aa341-->
 - `workflow-run-list-command.ts` — CLI subcommand to list workflow runs from the data directory, with optional JSON output. <!--hash:4f34e365-->
-- `workflow-run-worker-process-command.ts` — CLI subcommand to record a worker process event (role, harness, status, exit code) for a workflow run. <!--hash:078f747d-->
-- `workflow-run-workspace-command.ts` — CLI subcommands to record workspace lifecycle and cleanup events for a workflow run. <!--hash:940111e3-->
+- `workflow-run-worker-process-command.ts` — CLI subcommand to record a worker process event (role, harness, status, exit code) for a workflow run. <!--hash:05ce504b-->
+- `workflow-run-workspace-command.ts` — CLI subcommands to record workspace lifecycle and cleanup events for a workflow run. <!--hash:3295b77f-->
 
 ## src/codex/
 
 - `admin-service.ts` — Facade over the Codex control plane; exposes read and mutation methods for account, threads, MCP servers, and user input. <!--hash:4f817a85-->
 - `admin-snapshot.ts` — Reads a full Codex admin snapshot in parallel (account, models, threads, features, MCP) and returns a typed aggregate. <!--hash:7cca6e2d-->
 - `auth-file.ts` — Reads, normalizes, and builds Codex auth.json records; extracts PKCE tokens from various legacy shapes. <!--hash:6ca72bb7-->
-- `control-plane.ts` — Manages the Codex app-server process over JSON-RPC; handles connection lifecycle, capability probing, and user-input requests. <!--hash:d1c6cea6-->
+- `control-plane.ts` — Manages the Codex app-server process over JSON-RPC; handles connection lifecycle, capability probing, and user-input requests. <!--hash:bd5ca321-->
 - `methods.ts` — Typed constants for all Codex app-server JSON-RPC method names to prevent typos across call sites. <!--hash:f914c432-->
 - `model-catalog.ts` — Reads the Codex model list via the control plane; falls back to spawning codex directly or the static pricing table. <!--hash:d162dcd3-->
-- `model-list.ts` — Fetches available Codex models by spawning codex app-server and querying model/list via JSON-RPC; caches results for 5 minutes. <!--hash:a3116bc3-->
+- `model-list.ts` — Fetches available Codex models by spawning codex app-server and querying model/list via JSON-RPC; caches results for 5 minutes. <!--hash:7a28d72e-->
 - `protocol.ts` — JSON-RPC 2.0 message constructors, type guards, and an isolated per-session ID counter. <!--hash:91bc06a8-->
 - `runtime-config.ts` — Builds codex config.toml and base64 auth.json for worker dispatch; handles provider selection and token refresh. <!--hash:7de4c336-->
-- `token-refresh.ts` — Detects expired OpenAI PKCE tokens via JWT exp or the expired field, then refreshes via the OpenAI token endpoint. <!--hash:4159233e-->
+- `token-refresh.ts` — Detects expired OpenAI PKCE tokens via JWT exp or the expired field, then refreshes via the OpenAI token endpoint. <!--hash:76c7166b-->
 
 ## src/config/
 
 - `coercion.ts` — Primitive coercion helpers (asRecord, asString, asNumber, asBoolean, etc.) for safe config normalization from unknown input. <!--hash:86cf518d-->
-- `db-store.ts` — SQLite-backed config overlay store; implements ConfigOverlayPort with atomic section upserts and change notifications. <!--hash:48337daa-->
+- `db-store.ts` — SQLite-backed config overlay store; implements ConfigOverlayPort with atomic section upserts and change notifications. <!--hash:32ac70e0-->
 - `defaults.ts` — Canonical default values for each config section and the default prompt template, seeded on first boot. <!--hash:8ad11a20-->
 - `derivation-pipeline.ts` — Orchestrates the full config derivation pipeline: reads merged config sections and delegates to per-domain builders and normalizers. <!--hash:1c5f43b4-->
 - `index.ts` — Barrel re-export for the public config API: deriveServiceConfig, ConfigOverlayStore, ConfigOverlayPort, ConfigStore. <!--hash:44dfe0fd-->
@@ -328,11 +358,11 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `overlay-helpers.ts` — Low-level overlay map utilities: stable stringify, deep merge, path-based set/delete, and dangerous-key guards. <!--hash:60081760-->
 - `overlay.ts` — File-backed YAML config overlay store; watches the overlay file for changes and serializes mutations atomically. <!--hash:0a8c4a43-->
 - `resolvers.ts` — Resolves config string values through env var, $SECRET, home path, and $TMPDIR expansion chains. <!--hash:cb258222-->
-- `section-builders.ts` — Derives typed ServiceConfig subsections (tracker, workspace, agent, codex, webhook, polling, server) from raw config records. <!--hash:86b12098-->
-- `store.ts` — Holds the live ServiceConfig, reloads it on overlay or secrets changes, and notifies subscribers. <!--hash:8e153a4c-->
+- `section-builders.ts` — Derives typed ServiceConfig subsections (tracker, workspace, agent, codex, webhook, polling, server) from raw config records. <!--hash:2e5c5f58-->
+- `store.ts` — Holds the live ServiceConfig, reloads it on overlay or secrets changes, and notifies subscribers. <!--hash:ebc3f7ef-->
 - `test-model-profiles.ts` — Defines named model profiles (pr-live-smoke, release-live, regression-frozen) used by live and integration test tiers. <!--hash:e0a43fe9-->
 - `url-policy.ts` — Enforces HTTPS allowlist policy for tracker, GitHub API, Slack webhook, and notification webhook URLs. <!--hash:b2536bfd-->
-- `validators.ts` — Validates dispatch-critical config fields (tracker, Codex auth, provider, API key env) and collects self-routing repo warnings. <!--hash:bb9c5feb-->
+- `validators.ts` — Validates dispatch-critical config fields (tracker, Codex auth, provider, API key env) and collects self-routing repo warnings. <!--hash:6e978d10-->
 
 ## src/config/schemas/
 
@@ -341,7 +371,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `index.ts` — Barrel re-export for all Zod config schemas across tracker, webhook, workspace, agent, codex, and server subsections. <!--hash:8d9b95cd-->
 - `pr-policy.ts` — Zod schema for PR auto-merge policy; controls enabled flag, allowed paths, diff size limits, labels, and merge method. <!--hash:10bb5b85-->
 - `server.ts` — Zod schemas for server port, polling interval, notification channels, GitHub, repo, and state machine config subsections. <!--hash:3c246ecc-->
-- `tracker.ts` — Zod schema for the tracker config subsection (kind, API key, endpoint, active/terminal states). <!--hash:1c4079d6-->
+- `tracker.ts` — Zod schema for the tracker config subsection (kind, API key, endpoint, active/terminal states). <!--hash:6dc4135f-->
 - `webhook.ts` — Zod schema for the webhook config subsection; validates HTTPS URL and polling/health-check intervals. <!--hash:1143efa9-->
 - `workspace.ts` — Zod schema for the workspace config subsection: root path, lifecycle hooks, strategy, and branch prefix. <!--hash:f7aa9aa3-->
 
@@ -349,7 +379,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `attempt-analytics.ts` — Utility functions to sort attempts newest-first and sum elapsed duration across completed attempt records. <!--hash:75d11684-->
 - `attempt-store-port.ts` — Port interfaces for attempt storage: full CRUD, PR upsert/query, aggregate analytics, and checkpoint persistence. <!--hash:c98b876a-->
-- `content-sanitizer.ts` — Redacts secrets (bearer tokens, API keys, credentials) from strings and objects before logging or storage. <!--hash:ba28e93c-->
+- `content-sanitizer.ts` — Redacts secrets (bearer tokens, API keys, credentials) from strings and objects before logging or storage. <!--hash:4610478b-->
 - `cost-sample-port.ts` — Port interface for appending and querying time-series cost/token samples with 7-day retention. <!--hash:0a4a18e6-->
 - `error-tracking.ts` — Initializes a logger-backed error tracker (or no-op) driven by SENTRY_DSN; exposes captureException and breadcrumb APIs. <!--hash:2e681770-->
 - `event-bus.ts` — Generic typed publish-subscribe event bus with per-channel and wildcard subscriptions. <!--hash:fb4005e7-->
@@ -359,7 +389,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `model-pricing.ts` — Static USD-per-1M-token price table and cost computation helpers for OpenAI and Anthropic models. <!--hash:2e81a94a-->
 - `notification-types.ts` — Type definitions for notification channels, delivery summaries, trigger config, automation config, and alert rules. <!--hash:8965ff91-->
 - `risoluto-events.ts` — Typed event map for the orchestrator event bus; defines payload shapes for every domain channel. <!--hash:40dcd32e-->
-- `signal-detection.ts` — Detects done/blocked stop signals in agent output via text markers or structured JSON status fields. <!--hash:83889a27-->
+- `signal-detection.ts` — Detects done/blocked stop signals in agent output via text markers or structured JSON status fields. <!--hash:506a5837-->
 - `types.ts` — Top-level type barrel; re-exports all domain types from sub-modules plus WorkflowDefinition and ValidationError. <!--hash:a5d5f33c-->
 
 ## src/core/types/
@@ -378,7 +408,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## src/dispatch/
 
-- `auth.ts` — Express middleware that validates Bearer token on incoming data-plane requests. <!--hash:ba46e411-->
+- `auth.ts` — Express middleware that validates Bearer token on incoming data-plane requests. <!--hash:d25d73e7-->
 - `client.ts` — Control-plane HTTP client that dispatches runAttempt to a remote data plane over SSE, forwarding abort signals. <!--hash:25d99053-->
 - `entrypoint.ts` — Data plane process entry point; starts the Express server on DISPATCH_PORT with DISPATCH_SHARED_SECRET. <!--hash:78e88417-->
 - `factory.ts` — Creates a RunAttemptDispatcher as either a local AgentRunner or a remote DispatchClient based on DISPATCH_MODE. <!--hash:1e20802f-->
@@ -397,10 +427,10 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `git-types.ts` — Shared git primitive types: GitRunner, GitRunResult, PrCreateResult, PrStatusResponse, and GithubApiToolClient interface. <!--hash:7b5a06ae-->
 - `github-api-tool.ts` — Agent tool call handler for GitHub API actions (add_pr_comment, get_pr_status); parses untyped tool input and delegates to GithubApiToolClient. <!--hash:0b9900ae-->
-- `github-pr-client.ts` — GitHub PR client: creates PRs, adds comments, fetches status/reviews, requests auto-merge, and closes PRs via the GitHub REST and GraphQL APIs. <!--hash:1346201d-->
+- `github-pr-client.ts` — GitHub PR client: creates PRs, adds comments, fetches status/reviews, requests auto-merge, and closes PRs via the GitHub REST and GraphQL APIs. <!--hash:a345bc75-->
 - `index.ts` — Public barrel for the git module; re-exports GitManager, GitHubPrClient, RepoRouter, port types, and tool-call handler. <!--hash:cd099287-->
 - `manager.ts` — GitManager: orchestrates clone, worktree setup, commit, push, PR creation, and diff operations; implements GitIntegrationPort. <!--hash:a5c5f47d-->
-- `merge-policy.ts` — Pure function evaluating auto-merge policy rules (labels, file count, diff size, path allowlist) against a PR's current state. <!--hash:a6106a2f-->
+- `merge-policy.ts` — Pure function evaluating auto-merge policy rules (labels, file count, diff size, path allowlist) against a PR's current state. <!--hash:37e7cfe0-->
 - `port.ts` — Git domain port interfaces: GitWorktreePort, GitPostRunPort, GitDiffPort, and the composite GitIntegrationPort used by the orchestrator. <!--hash:14b1a1a8-->
 - `pr-monitor.ts` — Background polling service that tracks open PRs, detects merged/closed transitions, emits SSE events, writes checkpoints, and triggers orchestrator reconciliation. <!--hash:1fdc8e29-->
 - `pr-review-ingester.ts` — Fetches PR review bodies, PR comments, and inline line-level comments via `gh` CLI; formats them as a Markdown section for agent prompt injection. <!--hash:6e97d4f5-->
@@ -410,13 +440,13 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## src/github/
 
-- `issues-client.ts` — GitHub Issues REST client: fetches, creates, labels, closes, reopens issues and manages labels on a configured owner/repo. <!--hash:634ce13f-->
+- `issues-client.ts` — GitHub Issues REST client: fetches, creates, labels, closes, reopens issues and manages labels on a configured owner/repo. <!--hash:a408df57-->
 - `transport.ts` — Low-level GitHub HTTP transport: sends REST and GraphQL requests, resolves auth tokens from env, and raises GitHubApiError on non-2xx responses. <!--hash:262c4fe8-->
 
 ## src/health/
 
 - `health-notification-bridge.ts` — Subscribes to health.transition events and dispatches critical or recovery notifications via NotificationManager when a probe transitions to/from down. <!--hash:6f172ea0-->
-- `health-runner.ts` — Adaptive sliding-window health runner: ticks registered probes with cadence gating, 3-of-5 hysteresis, persistence, and transition event emission. <!--hash:b2e108e1-->
+- `health-runner.ts` — Adaptive sliding-window health runner: ticks registered probes with cadence gating, 3-of-5 hysteresis, persistence, and transition event emission. <!--hash:5c4cc553-->
 - `probe-port.ts` — HealthProbe interface and HealthProbeContext type; defines the contract all concrete probe implementations must satisfy. <!--hash:0ae85b6b-->
 - `timed-probe.ts` — Shared latency-banding wrapper for health sub-probes; promotes ok status to slow or down when elapsed time exceeds per-probe thresholds. <!--hash:b9b38a5f-->
 
@@ -457,9 +487,9 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `sse.ts` — Server-Sent Events handler; streams internal EventBus emissions to HTTP clients with keep-alive pings. <!--hash:fe17efcd-->
 - `swagger-html.ts` — Generates a cached Swagger UI HTML page that loads the OpenAPI spec from /api/v1/openapi.json. <!--hash:aab4d5c7-->
 - `template-override-handler.ts` — Handles POST/DELETE /:issue_identifier/template to set or clear a per-issue prompt template override. <!--hash:63dac96d-->
-- `token-compare.ts` — Timing-safe token comparison helpers for auth middleware; prevents timing-attack token enumeration. <!--hash:f6e8cd15-->
-- `transition-handler.ts` — Handles POST /:issue_identifier/transition; validates the state machine rule, resolves tracker state ID, and applies the transition. <!--hash:cf1e4535-->
-- `transitions-api.ts` — Handles GET /api/v1/transitions; returns the allowed state-to-state transition map from the configured state machine. <!--hash:d929b6dd-->
+- `token-compare.ts` — Timing-safe token comparison helpers for auth middleware; prevents timing-attack token enumeration. <!--hash:dbecf172-->
+- `transition-handler.ts` — Handles POST /:issue_identifier/transition; validates the state machine rule, resolves tracker state ID, and applies the transition. <!--hash:984d5b14-->
+- `transitions-api.ts` — Handles GET /api/v1/transitions; returns the allowed state-to-state transition map from the configured state machine. <!--hash:3571948d-->
 - `trigger-handler.ts` — Handles POST /api/v1/webhooks/trigger; authenticates, deduplicates, and dispatches create_issue, re_poll, and refresh_issue actions. <!--hash:a743a605-->
 - `validation.ts` — Reusable Express middleware factories for Zod-based validation of request body, query, and params. <!--hash:76eb230a-->
 - `webhook-types.ts` — Type definitions and payload validator for Linear webhook deliveries; extends Express Request with rawBody. <!--hash:c6919c35-->
@@ -481,12 +511,12 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `setup.ts` — HTTP routes for the first-run setup wizard: status, auth, keys, project/label creation, and repo routing. <!--hash:c443d188-->
 - `system.ts` — Core system HTTP routes: state, observability, runtime info, recovery, metrics, refresh, SSE events, models, transitions, and OpenAPI docs. <!--hash:62256962-->
 - `webhooks.ts` — HTTP routes for the trigger API and incoming Linear/GitHub webhook endpoints, with rate limiting. <!--hash:7dca335d-->
-- `workflow-runs.ts` — HTTP routes for listing and reading Workflow Run artifacts, events, and run attempts from the archive directory. <!--hash:71374443-->
+- `workflow-runs.ts` — HTTP routes for listing and reading Workflow Run artifacts, events, and run attempts from the archive directory. <!--hash:86779707-->
 - `workspaces.ts` — HTTP routes for listing all workspaces (GET) and removing an orphaned workspace by key (DELETE). <!--hash:f1bcefc3-->
 
 ## src/linear/
 
-- `board-columns.ts` — Builds the ordered workflow-column projection from runtime issue groups and the configured state machine stages. <!--hash:aff5da57-->
+- `board-columns.ts` — Builds the ordered workflow-column projection from runtime issue groups and the configured state machine stages. <!--hash:9f8c2165-->
 - `client.ts` — Linear GraphQL API client; handles issue fetching, state transitions, webhooks, attachments, and project/label management. <!--hash:7fc9d02d-->
 - `errors.ts` — Typed error class for all Linear client failures, carrying a structured error code for caller discrimination. <!--hash:e2902a78-->
 - `graphql-tool.ts` — Agent tool call handler for ad-hoc Linear GraphQL queries; validates exactly one operation and proxies to LinearClient. <!--hash:abe74414-->
@@ -500,10 +530,11 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## src/live/
 
+- `contracts.ts` — Type contracts for the live preflight system; defines check names, statuses, report shape, and injectable dependencies. <!--hash:3baed001-->
 - `github-app-auth.ts` — Generates GitHub App JWTs and exchanges them for installation access tokens for API authentication. <!--hash:29e6c9c1-->
-- `github-app-sandbox-lifecycle.ts` — Live preflight check that exercises the full GitHub App sandbox PR lifecycle: branch, commit, PR, comment, close, cleanup. <!--hash:f74238d2-->
-- `preflight-cli.ts` — CLI entry point for running live preflight checks; parses args, resolves env, writes JSON report to output directory. <!--hash:79422770-->
-- `preflight.ts` — Orchestrates live preflight checks against Linear, GitHub App, sandbox lifecycle, and model proxy; returns a pass/fail report. <!--hash:75a33e86-->
+- `github-app-sandbox-lifecycle.ts` — Live preflight check that exercises the full GitHub App sandbox PR lifecycle: branch, commit, PR, comment, close, cleanup. <!--hash:2c4134cb-->
+- `preflight-cli.ts` — CLI entry point for running live preflight checks; parses args, resolves env, writes JSON report to output directory. <!--hash:bc9bb202-->
+- `preflight.ts` — Orchestrates live preflight checks against Linear, GitHub App, sandbox lifecycle, and model proxy; returns a pass/fail report. <!--hash:e24b301f-->
 
 ## src/notification/
 
@@ -531,14 +562,14 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `git-post-run.ts` — Commits, pushes, creates a PR, generates a PR summary, and optionally requests auto-merge after a worker run completes. <!--hash:44e337f1-->
 - `index.ts` — Public barrel export for the orchestrator module: Orchestrator class and OrchestratorPort interface. <!--hash:c83de849-->
 - `issue-locator.ts` — Resolves an issue identifier to its authoritative runtime location (running, retry, completed, or detail view). <!--hash:7097df5d-->
-- `lifecycle.ts` — Orchestrator lifecycle helpers: reconciling running/retrying entries, refreshing queue views, cleaning terminal workspaces, and seeding completed claims. <!--hash:490e42c6-->
+- `lifecycle.ts` — Orchestrator lifecycle helpers: reconciling running/retrying entries, refreshing queue views, cleaning terminal workspaces, and seeding completed claims. <!--hash:3d39b0b1-->
 - `model-selection.ts` — Resolves the active model selection for an issue (default vs. override) and handles live updates to per-issue model overrides. <!--hash:dd8d4d87-->
 - `orchestrator.ts` — Main Orchestrator class: tick-driven poll loop that dispatches workers, reconciles state, and handles commands and snapshots. <!--hash:2b09daf9-->
 - `outcome-context.ts` — Type definitions for OutcomeContext (shared post-run handler API) and RetryCoordinator (retry/hard-fail dispatch port). <!--hash:ec452def-->
 - `port.ts` — OrchestratorPort interface and command/result types for all operations the orchestrator exposes to callers. <!--hash:7698d481-->
 - `recovery-types.ts` — Types for startup recovery: RecoveryAssessment, RecoveryResult, and RecoveryReport with per-attempt action outcomes. <!--hash:1cd97856-->
-- `recovery.ts` — Startup recovery: scans persisted running attempts, assesses each (resume/cleanup/escalate), and executes the chosen action. <!--hash:6a919f42-->
-- `retry-coordinator.ts` — RetryCoordinator implementation: queues retries with backoff, revalidates issue state before launch, and handles launch failures. <!--hash:18f378df-->
+- `recovery.ts` — Startup recovery: scans persisted running attempts, assesses each (resume/cleanup/escalate), and executes the chosen action. <!--hash:0c3f619f-->
+- `retry-coordinator.ts` — RetryCoordinator implementation: queues retries with backoff, revalidates issue state before launch, and handles launch failures. <!--hash:965536ba-->
 - `retry-policy.ts` — Re-exports retry strategy classifier and type from the core module. <!--hash:e3538ceb-->
 - `run-lifecycle-coordinator.ts` — Facade that wires orchestrator state, worker launch, lifecycle events, and snapshot reads into a single coordinator object. <!--hash:fea1ff3e-->
 - `runtime-types.ts` — Shared TypeScript interfaces for running entries, launch options, and orchestrator dependency injection. <!--hash:3689580f-->
@@ -547,13 +578,13 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `views.ts` — Utility functions for building RuntimeIssueView objects, detecting hard failures, and computing token usage deltas. <!--hash:7ddf8156-->
 - `watchdog.ts` — Periodic background health monitor; classifies orchestrator as healthy, degraded, or critical based on stalls and queue state. <!--hash:17314ece-->
 - `worker-failure.ts` — Handles unhandled worker promise rejections; flushes persistence, records failure status, and releases the issue claim. <!--hash:f1a02b5d-->
-- `worker-launcher.ts` — Prepares workspace, creates the running entry, persists the attempt record, and hands the agent promise to the lifecycle handler. <!--hash:159e3e6d-->
+- `worker-launcher.ts` — Prepares workspace, creates the running entry, persists the attempt record, and hands the agent promise to the lifecycle handler. <!--hash:7946c43f-->
 - `workspace-preparation.ts` — Ensures a workspace exists for an issue, optionally clones the git repo, and emits lifecycle events during preparation. <!--hash:e7c271f8-->
 
 ## src/orchestrator/core/
 
-- `dispatch.ts` — Pure functions for sorting issues by dispatch priority and checking whether an issue is blocked by non-terminal blockers. <!--hash:57d9f4b5-->
-- `lifecycle-state.ts` — Manages orchestrator lifecycle state: queue/detail view projection, running entry reconciliation, usage tracking, and completed-claims seeding. <!--hash:887dfea5-->
+- `dispatch.ts` — Pure functions for sorting issues by dispatch priority and checking whether an issue is blocked by non-terminal blockers. <!--hash:8f238f1d-->
+- `lifecycle-state.ts` — Manages orchestrator lifecycle state: queue/detail view projection, running entry reconciliation, usage tracking, and completed-claims seeding. <!--hash:1d3427e1-->
 - `retry-policy.ts` — Classifies a Codex error into a retry strategy: hard_fail, retry with delay, compact_and_retry, or default backoff. <!--hash:b4bab77e-->
 - `snapshot-projection.ts` — Projects running, retry, and outcome entries into RuntimeIssueView snapshots for the orchestrator API. <!--hash:7e8abded-->
 
@@ -561,7 +592,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `completion-writeback.ts` — Posts success or failure comments to the tracker and optionally transitions the issue to a configured success state after agent completion. <!--hash:1ba685cd-->
 - `finalize.ts` — Terminal outcome handlers: routes each resolved outcome (stop signal, cancellation, operator abort, etc.) to the correct cleanup path. <!--hash:2854df3b-->
-- `index.ts` — Entry point for worker outcome handling; prepares state then dispatches to the correct finalize function based on issue and outcome kind. <!--hash:da4d947a-->
+- `index.ts` — Entry point for worker outcome handling; prepares state then dispatches to the correct finalize function based on issue and outcome kind. <!--hash:7505db10-->
 - `prepare.ts` — Flushes persistence, removes the running entry, refreshes issue state from tracker, and updates the attempt record before finalization. <!--hash:6c1eec68-->
 - `types.ts` — Shared types and helper functions for worker outcome inputs, prepared outcomes, and outcome-to-status mapping. <!--hash:f984014c-->
 
@@ -597,7 +628,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `db-store.ts` — DB-backed secrets store; encrypts each value with per-row AES-256-GCM, stores ciphertext in SQLite, decrypts on read. <!--hash:0c378fa8-->
 - `port.ts` — SecretsPort interface for encrypted secret storage; allows test doubles to be injected without the file-system implementation. <!--hash:e014264d-->
-- `store.ts` — File-backed secrets store; encrypts all secrets as a single AES-256-GCM envelope on disk with an atomic write and audit log. <!--hash:0fc7ab9f-->
+- `store.ts` — File-backed secrets store; encrypts all secrets as a single AES-256-GCM envelope on disk with an atomic write and audit log. <!--hash:5830154c-->
 
 ## src/setup/
 
@@ -605,7 +636,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `device-auth.ts` — PKCE OAuth flow for Codex/OpenAI login: creates sessions, runs local callback server on port 1455, exchanges codes for tokens, and persists auth.json. <!--hash:fea7df8e-->
 - `port.ts` — Type definitions and SetupServiceError for the setup domain: port interface, deps, and data shapes. <!--hash:ec3577a7-->
 - `repo-route-handlers.ts` — Express handlers to list, save, and delete repo-to-identifier-prefix routing entries. <!--hash:4e46ad44-->
-- `setup-service.ts` — Core setup service implementation: master key, tracker selection, API key storage, PKCE flow, repo routes, and reset logic. <!--hash:508a8362-->
+- `setup-service.ts` — Core setup service implementation: master key, tracker selection, API key storage, PKCE flow, repo routes, and reset logic. <!--hash:5a3aacfe-->
 - `setup-status.ts` — Helpers that read setup completion signals from the config overlay and filesystem (Codex auth file, repo routes, tracker kind). <!--hash:7ff47865-->
 
 ## src/setup/handlers/
@@ -614,7 +645,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `github-token.ts` — Express handler that validates and saves a GitHub personal access token via the setup service. <!--hash:56ab403c-->
 - `index.ts` — Barrel re-export for all setup HTTP route handlers. <!--hash:f9dcf710-->
 - `label.ts` — Express handler that creates the Risoluto label in the configured Linear project. <!--hash:9f7651af-->
-- `linear-project.ts` — Express handlers to list available Linear projects and select one by slugId during setup. <!--hash:7e27a346-->
+- `linear-project.ts` — Express handlers to list available Linear projects and select one by slugId during setup. <!--hash:73563965-->
 - `master-key.ts` — Express handler that generates or accepts a master encryption key and initialises the secrets store. <!--hash:91826fad-->
 - `openai-key.ts` — Express handler that validates an OpenAI API key and optional custom provider config, then persists them. <!--hash:3ea9e12e-->
 - `pkce-auth.ts` — Express handlers for starting, polling status of, and cancelling a PKCE OAuth flow. <!--hash:7832a75a-->
@@ -627,7 +658,8 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `defaults.ts` — Default active and terminal state name lists used when no custom state machine is configured. <!--hash:a8083e3f-->
 - `machine.ts` — Generic StateMachine that models workflow stages and validates issue state transitions with configurable explicit or permissive rules. <!--hash:281061ef-->
-- `policy.ts` — Policy helpers that classify issue states (active, terminal, gate, todo) and list workflow stages from ServiceConfig, with WeakMap-backed caching. <!--hash:0f766a72-->
+- `policy.ts` — Policy helpers that classify issue states (active, terminal, gate, todo) and list workflow stages from ServiceConfig, with WeakMap-backed caching. <!--hash:638c7c16-->
+- `topology.ts` — Workflow state topology; resolves active/gate/todo/terminal state sets from config and exposes transition/classification helpers. <!--hash:fa588c4d-->
 
 ## src/tracker/
 
@@ -655,24 +687,23 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `registrar.ts` — WebhookRegistrar: resolves a webhook signing secret via manual config, stored secret reuse, or auto-creation in Linear. <!--hash:bba84dfd-->
 - `runtime.ts` — Re-export shim aliasing WebhookService as WebhookRuntime and createWebhookService as createWebhookRuntime. <!--hash:7d9500be-->
 - `service.ts` — Creates the webhook service: wires health tracker, inbox, registrar, and handler deps together from config and dependencies. <!--hash:2474eae0-->
-- `signature.ts` — HMAC-SHA256 signature verification for Linear and GitHub webhooks using timing-safe comparison. <!--hash:c2612a99-->
+- `signature.ts` — HMAC-SHA256 signature verification for Linear and GitHub webhooks using timing-safe comparison. <!--hash:ef1ec0b4-->
 - `types.ts` — Shared type contracts for the webhook integration module: health status, health state, and inbox stats. <!--hash:7e6c4d9c-->
 
 ## src/workflow-run/
 
-- `artifacts.ts` — Core workflow run domain model: types, record creation, event append/read, and transition recording to disk. <!--hash:9fab4d11-->
+- `archive.ts` — Workflow Run filesystem archive; creates, stores, lists, and reads run metadata, JSONL event logs, and role artifacts on disk. <!--hash:41ac580b-->
+- `artifacts.ts` — Core workflow run domain model: types, record creation, event append/read, and transition recording to disk. <!--hash:fa04d525-->
+- `contracts.ts` — Canonical type contracts for Workflow Runs; defines domain records, event shapes, reference types, and output envelopes. <!--hash:0f333cfd-->
 - `linear-intake.ts` — Accepts a Linear-triggered workflow run: creates and persists the run record from a Linear issue event. <!--hash:b1d466a5-->
-- `list-artifacts.ts` — Lists all workflow runs from the archive directory, sorted newest-first. <!--hash:2a1a1ab0-->
-- `role-execution-artifacts.ts` — Records a completed role execution: writes the artifact JSON file and appends the completion event. <!--hash:94b2a5f4-->
+- `list-artifacts.ts` — Lists all workflow runs from the archive directory, sorted newest-first. <!--hash:1ed85611-->
 - `run-attempt-projection.ts` — Projects run attempt summaries by replaying workflow run events from the event log. <!--hash:c23a4765-->
-- `run-attempts.ts` — Manages run attempt lifecycle transitions: start, complete, fail, and cancel, each appending an event. <!--hash:a5c4e40d-->
-- `worker-process.ts` — Records a worker process outcome (succeeded or failed) as a workflow run event. <!--hash:4263adeb-->
-- `workspace-lifecycle.ts` — Records workspace preparation and cleanup events into the workflow run event log. <!--hash:3301ba1c-->
+- `run-handle.ts` — WorkflowRun handle; binds to a stored run and exposes methods to append events, record lifecycle milestones, and manage run attempts. <!--hash:7582ac65-->
 
 ## src/workspace/
 
 - `index.ts` — Public barrel for the workspace module: re-exports WorkspaceManager, PathRegistry, and port types. <!--hash:85dfd38d-->
-- `manager.ts` — WorkspaceManager: creates, prepares, hooks, and removes workspaces with per-key mutex and auto-commit safety. <!--hash:9d7c2f2e-->
+- `manager.ts` — WorkspaceManager: creates, prepares, hooks, and removes workspaces with per-key mutex and auto-commit safety. <!--hash:44d244c1-->
 - `path-registry.ts` — PathRegistry: translates container-side paths to host paths using a longest-prefix mapping. <!--hash:af011704-->
 - `paths.ts` — Workspace path utilities: safe PATH builder, root containment check, identifier sanitizer, and path resolver. <!--hash:20e53dbe-->
 - `port.ts` — WorkspacePort interface and WorkspaceRemovalResult type: the seam for workspace lifecycle operations. <!--hash:081fa23b-->
@@ -704,7 +735,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `session-init.test.ts` — Tests for initializeSession: full protocol handshake, thread resume/rollback, template errors, and auth failures. <!--hash:d4725fd0-->
 - `signal-detection.test.ts` — Tests for detectStopSignal: RISOLUTO_STATUS text patterns and structured JSON status output. <!--hash:4f70c76c-->
 - `thread-compact.test.ts` — Tests for compactThread: success logging and failure warning paths. <!--hash:a0916a81-->
-- `turn-executor.test.ts` — Extensive tests for executeTurns: turn lifecycle, context compaction, abort, errors, and event emission. <!--hash:fd561749-->
+- `turn-executor.test.ts` — Extensive tests for executeTurns: turn lifecycle, context compaction, abort, errors, and event emission. <!--hash:d1944dec-->
 - `turn-state.test.ts` — Tests for TurnState primitives: completion buffering, reasoning buffers, abort/timeout, and review summaries. <!--hash:34a6d8bb-->
 
 ## tests/alerts/
@@ -734,7 +765,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `runtime-providers.test.ts` — Unit tests for runtime provider factories: repo router rebuilds routes on each match and GitHub tool provider re-creates GitManager with latest config. <!--hash:22d623d8-->
 - `services.integration.test.ts` — Integration tests for createServices using real SQLite: service graph assembly, webhook infrastructure wiring, and persistence runtime injection. <!--hash:86ee03fe-->
 - `services.test.ts` — Unit tests for createServices with mocked dependencies: validates returned service shape, wiring of Orchestrator/HttpServer, template resolution, and codex control-plane scoping. <!--hash:f4652329-->
-- `workflow-run-start.integration.test.ts` — Integration tests for workflow-run CLI commands: start, list, event append/list, role-execution, run-attempt lifecycle, gate/transition/hook recording, and workspace events. <!--hash:87548868-->
+- `workflow-run-start.integration.test.ts` — Integration tests for workflow-run CLI commands: start, list, event append/list, role-execution, run-attempt lifecycle, gate/transition/hook recording, and workspace events. <!--hash:c69381f2-->
 
 ## tests/codex/
 
@@ -864,7 +895,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `model-handler.integration.test.ts` — Integration tests for POST /api/v1/:id/model through the full HTTP stack: 202 success, 404 not found, 400 validation, and 405 method guard. <!--hash:0c1e574f-->
 - `model-handler.test.ts` — Unit tests for handleModelUpdate: 404 on null orchestrator result, 202 success shape, camelCase effort alias, null effort passthrough. <!--hash:bf54c2ec-->
 - `notifications-handler.test.ts` — Unit tests for handleTestSlackNotification: 503 without config, 400 missing channel, dispatch to enabled Slack channel, and error code mapping. <!--hash:e907d2e2-->
-- `openapi-contracts.integration.test.ts` — AJV integration tests validating every spec-covered API response against compiled OpenAPI 3.1 schemas through a real HttpServer. <!--hash:a17468bb-->
+- `openapi-contracts.integration.test.ts` — AJV integration tests validating every spec-covered API response against compiled OpenAPI 3.1 schemas through a real HttpServer. <!--hash:b8484b58-->
 - `openapi-paths.test.ts` — Unit tests for OpenAPI path builder functions: verifies route existence, operationIds, parameters, response codes, and no cross-builder duplicates. <!--hash:4a454e2d-->
 - `openapi.test.ts` — Unit tests for getOpenApiSpec and getSwaggerHtml: validates OpenAPI 3.1 document structure, security schemes, route coverage, and HTML output. <!--hash:a45e4848-->
 - `pr-handler.test.ts` — Integration tests for GET /api/v1/prs against a real SQLite store: lists all PRs, filters by status, and rejects invalid status values. <!--hash:2c8e04b1-->
@@ -893,14 +924,14 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `template-api.test.ts` — Tests for the prompt template HTTP API: rejects unsupported Liquid filters on POST and PUT. <!--hash:1a183341-->
 - `template-override-handler.test.ts` — Unit tests for handleTemplateOverride and handleTemplateClear: 202/200 success, 404 for unknown template or issue, orchestrator delegation. <!--hash:95207d47-->
 - `templates-api.integration.test.ts` — Integration tests for the full prompt template CRUD + preview API using a real SQLite store wired into the test harness. <!--hash:eb846c4c-->
-- `transition-handler.test.ts` — Unit tests for handleTransition: not-found, invalid transition, custom and fallback state machine config, success, and tracker error paths. <!--hash:72c93fa7-->
-- `transitions-api.test.ts` — Unit tests for handleGetTransitions: returns transition map from tracker states or stateMachine config; empty result when configStore absent. <!--hash:49366694-->
+- `transition-handler.test.ts` — Unit tests for handleTransition: not-found, invalid transition, custom and fallback state machine config, success, and tracker error paths. <!--hash:b2d9cbaa-->
+- `transitions-api.test.ts` — Unit tests for handleGetTransitions: returns transition map from tracker states or stateMachine config; empty result when configStore absent. <!--hash:93995641-->
 - `trigger-handler.test.ts` — Unit tests for handleTriggerDispatch: API key auth, re_poll/refresh_issue/create_issue actions, idempotency key dedup, and allowlist enforcement. <!--hash:bc29bd29-->
 - `validation.test.ts` — Unit tests for validateBody, validateQuery, and validateParams middleware: valid inputs pass, invalid inputs return structured 400 errors. <!--hash:b826d8d3-->
 - `webhook-404.test.ts` — Tests that unregistered /webhooks/\* paths return JSON 404 with correct content-type for both GET and POST methods. <!--hash:56561fb0-->
 - `webhook-handler.test.ts` — Tests for verifyLinearSignature and handleWebhookLinear: HMAC validation, replay rejection, secret rotation, rate limiting, and event dispatch. <!--hash:1c1b9f6c-->
 - `webhook-routes.test.ts` — Tests for registerWebhookRoutes: conditional route registration, POST-only enforcement, and trigger dispatch route availability. <!--hash:f2a85287-->
-- `workflow-run-routes.test.ts` — Tests for Workflow Run HTTP support routes: list, detail, events, run-attempts endpoints using real artifacts; verifies no issue vocabulary leaks. <!--hash:960cc914-->
+- `workflow-run-routes.test.ts` — Tests for Workflow Run HTTP support routes: list, detail, events, run-attempts endpoints using real artifacts; verifies no issue vocabulary leaks. <!--hash:729ab503-->
 - `workspace-inventory.test.ts` — Tests for GET /api/v1/workspaces and DELETE /api/v1/workspaces/:key: classification, disk usage, sort order, lock semantics, and guard edge cases. <!--hash:621bd3ee-->
 - `write-audit.test.ts` — Tests for WriteAuditLog: NDJSON append, lazy directory creation, multi-record append, field preservation, and newline compliance. <!--hash:2b0ee584-->
 - `write-guard.test.ts` — Tests for createWriteGuard middleware: loopback/token auth rules, safe method passthrough, webhook path exemption, and audit log recording. <!--hash:8e5d62ca-->
@@ -936,14 +967,14 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `transition-query.test.ts` — Tests buildIssueCommentMutation and buildIssueTransitionMutation for correct GraphQL structure and field declarations. <!--hash:544b9cbe-->
 - `webhook-graphql.test.ts` — Tests LinearClient webhook CRUD operations (list, create, update, delete) including retry, error, and null-field edge cases. <!--hash:0bd5697b-->
 
-## tests/linear/**snapshots**/
+## tests/linear/__snapshots__/
 
-- `queries.test.ts.snap` — Vitest snapshot for buildCandidateIssuesByStateIdsQuery: captures expected GraphQL query string with project filter. <!--hash:bb58e1dc-->
-- `transition-query.test.ts.snap` — Vitest snapshots for buildIssueCommentMutation and buildIssueTransitionMutation: expected Linear GraphQL mutation strings. <!--hash:32c7a7a1-->
+- `queries.test.ts.snap` — Vitest snapshot locking expected GraphQL query/mutation strings for the Linear adapter. <!--hash:bb58e1dc-->
+- `transition-query.test.ts.snap` — Vitest snapshot locking expected GraphQL strings for Linear comment and state-transition mutations. <!--hash:32c7a7a1-->
 
 ## tests/live/
 
-- `preflight-ci-contract.test.ts` — Contract test verifying the CI workflow's live-preflight job does not hardcode model config env vars, delegating to profile defaults. <!--hash:639a9b44-->
+- `preflight-ci-contract.test.ts` — Contract test verifying the CI workflow's live-preflight job does not hardcode model config env vars, delegating to profile defaults. <!--hash:23f480d4-->
 - `preflight-cli.test.ts` — Tests runLivePreflightCli: env file loading, output artifact writing, secret redaction, separator handling, and failure exit codes. <!--hash:84ebcfd1-->
 - `preflight.test.ts` — Tests runLivePreflight: validates Linear, GitHub App, and model proxy checks, secret redaction, sandbox lifecycle, and failure reporting. <!--hash:43cac78a-->
 
@@ -1073,7 +1104,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `machine.property.test.ts` — Property-based tests for StateMachine invariants: self-transition, normalization, terminal lock-out, stage uniqueness. <!--hash:2e577a0d-->
 - `machine.test.ts` — Unit tests for StateMachine: default stages, explicit transitions, terminal blocks, assertion errors, degenerate configs. <!--hash:02e7bcdf-->
 - `policy.test.ts` — Tests state policy helpers: isActiveState, isTerminalState, isGateState, isTodoState, listWorkflowStages, getStateMachine caching. <!--hash:74d436aa-->
-- `state-policy.integration.test.ts` — Integration tests for state/policy.ts: tracker-based and stateMachine-based configs, normalization, WeakMap caching correctness. <!--hash:85feca19-->
+- `state-policy.integration.test.ts` — Integration tests for state/policy.ts: tracker-based and stateMachine-based configs, normalization, WeakMap caching correctness. <!--hash:b94cc4d7-->
 
 ## tests/tracker/
 
@@ -1099,7 +1130,9 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## tests/workflow-run/
 
-- `linear-intake.test.ts` — Tests acceptLinearTriggeredWorkflowRun: persists WorkflowRun artifact (metadata.json + events.jsonl) from a Linear issue trigger. <!--hash:c7d2403d-->
+- `archive.test.ts` — Unit tests for WorkflowRunArchive; covers metadata round-trip, event sequencing, and artifact read/write. <!--hash:e286f55a-->
+- `linear-intake.test.ts` — Tests acceptLinearTriggeredWorkflowRun: persists WorkflowRun artifact (metadata.json + events.jsonl) from a Linear issue trigger. <!--hash:242d7437-->
+- `run-handle.test.ts` — Integration tests for the WorkflowRun handle; exercises record methods and verifies event types, ordering, and output shapes. <!--hash:e253e328-->
 
 ## tests/workspace/
 
