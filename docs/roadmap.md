@@ -8,41 +8,57 @@
 
 - **Order is priority.** Rows are kept sorted; the highest row that isn't `shipped` is the next thing to pick up.
 - **Nothing is `next` without a Why and a Size.** An item stays `idea` until it has a reason to do it now and a rough size. This is the gate that stops scatter from creeping back.
-- **One owner: the operator.** No tool regenerates this file. Items are added, ranked, and retired by hand (optionally informed by research — see below).
+- **The founder owns ranking, promotion, and kills.** Skills (the researcher-fed critic-grill in Mode A and the ingest idea-engine in Mode B) may APPEND proposed `idea` rows — the founder dispositions each one. No skill reorders, promotes, or deletes rows.
 - **It graduates, it doesn't sprawl.** When an item reaches `next`, it leaves the roadmap _as a row_ and enters the [research → shipping pipeline](./research-to-shipping-pipeline.md): PRD → Linear issues → TDD → merge. The row's status tracks that journey; the detail lives in the PRD and Linear.
 
 ## Status vocabulary
 
-| Status       | Meaning                                                                              |
-| ------------ | ------------------------------------------------------------------------------------ |
-| **idea**     | Named. Needs a Why + Size before it can be picked up.                                |
-| **next**     | Scoped (has Why + Size) and ranked to start soon. Has or is about to get a PRD.      |
-| **building** | A PRD exists and Linear issues are in flight (`from:prd-<slug>`).                    |
-| **shipped**  | Merged in the canonical repo. Recorded in [decisions.md](./decisions.md) if notable. |
-| **dropped**  | Killed. The reason is written in the Notes cell — never silently removed.            |
+| Status         | Meaning                                                                                                        |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| **idea**       | Named. Needs a Why + Size before it can be picked up.                                                          |
+| **next**       | Scoped (has Why + Size) and ranked to start soon. Has or is about to get a PRD.                                |
+| **building**   | A PRD exists and Linear issues are in flight (`from:prd-<slug>`). The Status cell may link the Linear project. |
+| **shipped**    | Merged in the canonical repo. Recorded in [decisions.md](./decisions.md) if notable.                           |
+| **dropped**    | Killed. The reason is written in the **Why now** cell — never silently removed.                                |
+| **superseded** | Replaced by a newer row or shipped feature. The superseding row/feature is named in the Why now cell.          |
 
 ## The plan
 
 > Newest decisions sit where their priority puts them, not at the bottom. Keep it short — a roadmap
 > with 40 rows is a backlog wearing a costume.
 
-| #   | Item | Why now | Size | Status | Link |
-| --- | ---- | ------- | ---- | ------ | ---- |
-|     |      |         |      |        |      |
+| #   | Item | Why now | Size | Status | Research link |
+| --- | ---- | ------- | ---- | ------ | ------------- |
+|     |      |         |      |        |               |
 
-<!-- Add rows above. Size = S / M / L (rough effort). Link = PRD path or Linear project once it exists. -->
+<!--
+  Add rows above. Size = S / M / L (rough effort).
+  Research link = path to research/targets/<slug>/README.md or research/wiki/<note>.md that motivated the row (em-dash for pure-judgment rows).
+  A row that has entered the pipeline carries its slug as a trailing HTML comment in the Item cell: Title <!-- slug:<slug> -\->
+  The slug is the join key: roadmap row ↔ PRD filename ↔ prd.slug frontmatter ↔ Linear from:prd-<slug> label.
+-->
 
 ## How an item moves
 
 ```
-idea ──(write Why + Size, rank it)──▶ next ──/risoluto-to-prd──▶ building ──merge + post-merge──▶ shipped
+[Mode A] /risoluto-researcher ──▶ dedup ──▶ /risoluto-grill (critic) ──┐
+                                                                        │  founder dispositions (in/out/rank)
+[Mode B] /risoluto-ingest (wiki + gap-grounded ideas) ─────────────────┘
+                                                                        │
+                                                          append idea row to roadmap
+                                                                        │
+                                                                        ▼
+idea ──(founder writes Why + Size, ranks it)──▶ next ──/risoluto-to-prd──▶ building ──merge + post-merge──▶ shipped
    │
-   └────────────────────────────(operator kills it, with a reason)──────────────────────────▶ dropped
+   └────────────────────(founder kills it; reason goes in Why now cell)──────────────────────────────────▶ dropped
 ```
 
-Research is an **optional input**, not a parallel plan: when you want to study peers or a problem
-space, capture it with `/risoluto-researcher`, then fold whatever matters into a roadmap row
-yourself. The roadmap — not the research vault — is the source of "what's next."
+Research feeds the roadmap through **two structured modes**, not hand-folding alone:
+
+- **Mode A (targeted adoption):** `/risoluto-researcher` deep-analyzes one source, deduplicates candidates against shipped features and existing rows (skip / merge / supersede / new), and passes survivors to `/risoluto-grill` (the critic). The founder decides in/out per candidate; kept ones become `idea` rows whose Research link points to `research/targets/<slug>/README.md`.
+- **Mode B (sense-making / innovation):** `/risoluto-ingest` reads all `research/targets/` and builds a connected wiki at `research/wiki/`. It then emits gap-grounded ideas — each citing the dots it connects — as `idea` rows whose Research link points to the relevant wiki note or target README.
+
+In both modes, **skills propose; the founder disposes.** The roadmap — not the research vault — is the source of "what's next." Dedup semantics: a `superseded` row is marked when a researcher candidate obsoletes it; `merge` folds a takeaway into an existing row without adding a new one; `skip` drops a candidate already shipped or already covered by an open row.
 
 ## Relation to Linear
 

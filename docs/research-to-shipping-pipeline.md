@@ -1,54 +1,86 @@
 # Research → Shipping Pipeline
 
-> How a single **roadmap item becomes merged code**. The one ordered plan is
-> [`roadmap.md`](./roadmap.md); this doc is how a `next` row travels from plan to shipped, with Linear
-> as the planning↔runtime seam. **Research is an optional upstream input, not a parallel plan.**
+> How a **roadmap item becomes merged code** — and how raw research becomes a roadmap item.
+> The one ordered plan is [`roadmap.md`](./roadmap.md); this doc covers the full funnel from
+> two structured research modes down to shipped code, with Linear as the planning↔runtime seam.
 >
 > Decisions: [`adr/0001-foundation.md` §7](./adr/0001-foundation.md#7-research-to-shipping-planning-pipeline)
 >
-> - decisions [#29](./decisions.md) (the pipeline) and [#30](./decisions.md) (the roadmap-centric reset).
+> - decisions [#29](./decisions.md) (the pipeline) and [#30](./decisions.md) (the roadmap-centric model).
 
 ## Mental model
 
 ```
- (optional input)            THE PLAN                  THE ENGINE — proven back-half
-┌──────────┐              ┌─────────────┐   ┌───────┐   ┌──────────┐   ┌────────┐   ┌─────┐
-│ RESEARCH │── fold by ──▶│ roadmap.md  │──▶│ GRILL │──▶│  TO-PRD  │──▶│ ISSUES │──▶│ TDD │──▶ merge ──▶ shipped
-│ targets/ │    hand      │ one ordered │   │(opt.) │   │ PRD+Linear│   │+blocked│   │ R-G │            ──▶ record
-└──────────┘              │ list+status │   └───────┘   └────┬─────┘   └────────┘   └─────┘
-                          └─────────────┘                    │ git is canon
-                                                              ▼ prd:drift-check blocks divergence
+ MODE A — Targeted adoption          MODE B — Sense-making / innovation
+┌──────────────────────────┐        ┌──────────────────────────────────┐
+│  /risoluto-researcher    │        │  /risoluto-ingest                │
+│  research/targets/<slug> │        │  reads ALL research/targets/     │
+│  Candidate features      │        │  builds research/wiki/ (wikilinks│
+│  + Leech takeaways       │        │  targets together)               │
+│        │                 │        │  gap-grounded cite-or-drop ideas │
+│        ▼ dedup           │        │        │                         │
+│  skip|merge|supersede|new│        │        ▼ gap-grounded ideas only │
+│        │ (new only)      │        └────────┼─────────────────────────┘
+│        ▼                 │                 │
+│  /risoluto-grill         │                 │
+│  (critic loop)           │                 │
+│  founder decides in/out  │                 │
+└──────────┬───────────────┘                 │
+           │  roadmap idea rows              │  roadmap idea rows
+           └──────────────┬──────────────────┘
+                          ▼
+              ┌───────────────────────┐
+              │    docs/roadmap.md    │  ← FOUNDER-OWNED: ranks, promotes, kills
+              │    one ordered list   │    Skills only APPEND (status: idea)
+              │    slug is join key   │
+              └───────────┬───────────┘
+                          │  next row
+                          ▼  SHARED BACK-HALF — proven engine
+              ┌───────────────────────┐
+              │    /risoluto-to-prd   │  PRD in git + Linear project
+              └───────────┬───────────┘
+                          │  git is canon; drift hook blocks divergence
+                          ▼
+              ┌───────────────────────┐
+              │  /risoluto-to-issues  │  flat Linear issues, blocked-by edges
+              └───────────┬───────────┘
+                          ▼
+              ┌───────────────────────┐
+              │   /risoluto-tdd       │  red-green-refactor; prints gh pr create
+              └───────────┬───────────┘
+                          ▼  ADVISORY (not blocking)
+              ┌───────────────────────┐
+              │  /code-review         │  founder applies selectively
+              │  /simplify            │
+              └───────────┬───────────┘
+                          ▼
+                        merge
+                          │
+                          ▼  RECORD (post-merge automation)
+              back-comment Linear issues
+              flip PRD status → shipped
+              flip roadmap row → shipped
+              refresh research/RISOLUTO_FEATURES.md
 ```
 
-- The **roadmap** is the spine and the single source of "what's next" — hand-owned, ordered, one file.
-- **Research** (`/risoluto-researcher`) is optional: study peers or a problem space, then fold what matters into a roadmap row **yourself**. It no longer auto-generates the plan.
-- The **back-half** (`to-prd → to-issues → tdd → post-merge`) is the proven engine that turns a `next` row into shipped code. Planning is heavy/human; implementation treats the Linear ticket as the unit of work. CLI/skills are the surface; no web frontend.
+### Principle: Skills propose; the founder disposes
 
-## Wiring status — read this first
-
-The roadmap-centric model above is the **target** ([decision #30](./decisions.md)). The skills were
-built against the old `capability-backlog.md` + `research/ideas/` model, which the reset removed.
-**Until Phase C rewires them, these skills break or misbehave** because their inputs are gone:
-
-| Skill                  | Old input (now removed)                        | Phase-C rewire                               |
-| ---------------------- | ---------------------------------------------- | -------------------------------------------- |
-| `risoluto-synthesizer` | _wrote_ `capability-backlog.md` idea-rows      | **retire** — the roadmap is hand-owned       |
-| `risoluto-grill`       | read backlog row + `research/ideas/<slug>/`    | read a roadmap row                           |
-| `risoluto-to-prd`      | read `research/ideas/<slug>/` + backlog row    | read a roadmap row; `source_idea` → `source` |
-| `risoluto-to-issues`   | read backlog row for the bundle-category label | derive category from the roadmap row / PRD   |
-
-`risoluto-researcher`, `risoluto-vault`, `risoluto-tdd`, and the drift / post-merge scripts are
-unaffected.
+The roadmap is **founder-owned**. Skills (`/risoluto-ingest`, `/risoluto-grill`) may append proposed
+rows at `status: idea` — they never reorder, promote, or delete rows. A row only advances when the
+founder edits it.
 
 ## Surfaces
 
-| Surface                           | Role                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| [`docs/roadmap.md`](./roadmap.md) | **The plan.** One hand-owned ordered list; top non-shipped row is next.       |
-| `research/` submodule             | Optional research capture + the Obsidian vault + `RISOLUTO_FEATURES.*`.       |
-| `docs/prds/`                      | Canonical PRD files (git). Linear project descriptions are generated mirrors. |
-| Linear                            | Canonical implementation planning: projects + flat issues with blocked-by.    |
-| `docs/`                           | Current-truth product / technical / decision docs.                            |
+| Surface                           | Role                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------- |
+| [`docs/roadmap.md`](./roadmap.md) | **The plan.** Founder-owned ordered list; top non-shipped row is next. Slug is the join key.  |
+| `research/targets/`               | Per-source capture: `README.md` with Candidate features + Leech takeaways, plus source files. |
+| `research/wiki/`                  | Connected knowledge base built by `/risoluto-ingest`. Wikilinks targets into a big picture.   |
+| `research/RISOLUTO_FEATURES.md`   | Canonical inventory of shipped features. Kept honest by the post-merge record step.           |
+| `research/` submodule             | Houses all of the above plus the Obsidian vault and `.schemas/`.                              |
+| `docs/prds/`                      | Canonical PRD files (git). Linear project descriptions are generated mirrors.                 |
+| Linear                            | Canonical implementation planning: projects + flat issues with blocked-by.                    |
+| `docs/`                           | Current-truth product / technical / decision docs.                                            |
 
 Git is the source of truth for PRDs; Linear mirrors them. No GitHub Issues mirror (public exposure
 deferred). Linear → git only flows for the PRD drift hook and PR back-comments.
@@ -65,53 +97,153 @@ node -v && pnpm -v                     # Node 22+, pnpm 11
 `LINEAR_API_KEY` is required for `to-prd`, `to-issues`, `tdd`, `prd:drift-check`, post-merge, and any
 `mcp__linear-server__*` call. The Linear MCP server is configured in `.mcp.json`.
 
+## The two research modes
+
+### Mode A — Targeted adoption (build path)
+
+Run when studying a specific source: a repo, an X thread, a blog post, a paper.
+
+1. **Researcher** (`/risoluto-researcher <url>`) deep-analyzes the source and writes
+   `research/targets/<slug>/README.md` with:
+   - What the source is and its observed capabilities.
+   - `## Candidate features` — per-feature candidates for Risoluto.
+   - `## Leech takeaways` — what to borrow (framing, patterns, UX).
+
+2. **Dedup** — each candidate is checked against (a) existing roadmap rows and
+   (b) `research/RISOLUTO_FEATURES.md` (already-shipped features). Each candidate gets a flag:
+
+   | Flag        | Meaning                                                           | Action                                          |
+   | ----------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+   | `skip`      | Already shipped (in FEATURES) or already covered by a roadmap row | Drop it — no new row.                           |
+   | `merge`     | Overlaps an existing `idea`/`next` row                            | Fold the takeaway into that row; no new row.    |
+   | `supersede` | A better/newer version of an existing row                         | Mark the old row `superseded`; add the new row. |
+   | `new`       | No overlap                                                        | Proceeds to critic-grill.                       |
+
+3. **Critic-grill** (`/risoluto-grill`) — for each surviving `new` candidate, a grill loop challenges:
+   - **Fit vs spine**: does it compose with Risoluto's primitives, or need a new one?
+   - **Differentiation**: N peers ship X — why us, why now?
+   - **Thinnest shippable cut**: what is the smallest version that proves value?
+     The founder decides in/out per candidate.
+
+4. **Kept candidates** become roadmap rows (`status: idea` or `next`) whose Research link points to
+   `research/targets/<slug>/README.md`. The founder ranks.
+
+### Mode B — Sense-making / innovation (run anytime)
+
+Run to find white-space ideas across all accumulated research, or to keep the connected wiki current.
+
+1. **Ingest** (`/risoluto-ingest`) reads **all** `research/targets/**/README.md` plus their sources
+   and builds a **connected wiki** at `research/wiki/`: a home note plus concept notes that wikilink
+   targets together — the big picture.
+
+2. **Gap-grounded idea generation** — an idea is only emitted if it **cites the dots it connects
+   and the gap it fills**. Required patterns: "A, B, C all do X but none do Y" or
+   "A's X + B's Y compose into Z". No citation → the idea is **dropped** (cite-or-drop).
+
+3. **Generated white-space ideas** land as roadmap rows (`status: idea`) whose Research link cites
+   the wiki note or targets they connect. They enter the same funnel → critic-grill → founder ranks.
+
+Ingest is **idempotent and non-interactive** — run it anytime to refresh the wiki and surface new ideas.
+
+> **Why the wiki matters.** Risoluto's concept (multi-agent orchestration + background/AFK agents +
+> workflow-centric state-machine/DAG) is novel. A tidy connected knowledge base is the moat and the
+> substrate the idea-engine mines.
+
 ## The stages
 
-| #   | Stage          | Invoke                                 | Reads                     | Writes                                                           | Owner    |
-| --- | -------------- | -------------------------------------- | ------------------------- | ---------------------------------------------------------------- | -------- |
-| 0   | Plan           | edit [`roadmap.md`](./roadmap.md)      | your judgement + research | a roadmap row (`idea` → `next` once it has Why + Size)           | operator |
-| 1   | Research (opt) | `/risoluto-researcher <url>`           | a URL (+ optional paste)  | `research/targets/<slug>/` + sources; INDEX                      | operator |
-| 2   | Grill (opt)    | `/risoluto-grill` / `/grill-with-docs` | a roadmap row + canon     | sharper scope; updated `docs/*` / a new ADR if canon shifts      | operator |
-| 3   | To-PRD         | `/risoluto-to-prd <slug>`              | the `next` roadmap row    | `docs/prds/<slug>.md`, Linear project, branch `pipeline/…`       | operator |
-| 3.3 | Drift gate     | `pnpm prd:drift-check`                 | PRD body vs Linear        | exit 1 on drift — also in `.husky/pre-push`                      | gate     |
-| 4.1 | To-issues      | `/risoluto-to-issues <slug>`           | `docs/prds/<slug>.md`     | Linear issues labelled `from:prd-<slug>`, blocked-by edges       | operator |
-| 4.2 | TDD            | `/risoluto-tdd <ticket-ref>`           | Linear issue + linked PRD | code + tests; PR; `from:prd-<slug>` label; prints `gh pr create` | operator |
-| 4.3 | Post-merge     | CI (`post-merge.yml`)                  | merged PR with the label  | flips PRD `status: shipped` + back-comments Linear               | CI       |
-| 5   | Record         | ADR + `decisions.md` + roadmap row     | the shipped decision      | an ADR/decision entry; roadmap row → `shipped`                   | operator |
+| #   | Stage             | Invoke                             | Reads                                               | Writes                                                                                      | Owner    |
+| --- | ----------------- | ---------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------- |
+| A1  | Research (Mode A) | `/risoluto-researcher <url>`       | a URL (+ optional paste)                            | `research/targets/<slug>/README.md` + sources; INDEX                                        | operator |
+| A2  | Dedup             | operator reviews candidates        | target README + roadmap + RISOLUTO_FEATURES         | flags on each candidate (skip/merge/supersede/new)                                          | operator |
+| A3  | Critic-grill      | `/risoluto-grill`                  | surviving `new` candidates + roadmap + product docs | roadmap idea rows for kept candidates                                                       | operator |
+| B1  | Ingest (Mode B)   | `/risoluto-ingest`                 | all `research/targets/` + sources                   | `research/wiki/` (home + concept notes); roadmap idea rows                                  | operator |
+| 0   | Plan              | edit [`roadmap.md`](./roadmap.md)  | roadmap idea rows + judgement                       | a roadmap row promoted to `next` (has Why + Size)                                           | operator |
+| 1   | To-PRD            | `/risoluto-to-prd <slug>`          | the `next` roadmap row + its linked research        | `docs/prds/<slug>.md`, Linear project, branch `pipeline/…`                                  | operator |
+| 1.3 | Drift gate        | `pnpm prd:drift-check`             | PRD body vs Linear                                  | exit 1 on drift — also in `.husky/pre-push`                                                 | gate     |
+| 2   | To-issues         | `/risoluto-to-issues <slug>`       | `docs/prds/<slug>.md` + roadmap row                 | Linear issues labelled `from:prd-<slug>`, blocked-by edges                                  | operator |
+| 3   | TDD               | `/risoluto-tdd <ticket-ref>`       | Linear issue + linked PRD                           | code + tests; prints `gh pr create`                                                         | operator |
+| 3.5 | Advisory review   | `/code-review`, `/simplify`        | the diff / PR                                       | findings; founder applies selectively                                                       | operator |
+| 4   | Post-merge (CI)   | `post-merge.yml` (auto)            | merged PR with `from:prd-<slug>` label              | PRD `status: shipped`; back-comments Linear; roadmap row flipped; RISOLUTO_FEATURES refresh | CI       |
+| 5   | Record            | ADR + `decisions.md` + roadmap row | the shipped decision                                | an ADR/decision entry                                                                       | operator |
 
 ## Walkthrough
 
 ```bash
-# 0. Plan — add/raise a roadmap row. It only reaches `next` with a Why + a Size.
+# MODE A — Targeted adoption
+/risoluto-researcher https://example.com   # deep-analyze a source; GitHub URLs get gh capture
+# Review research/targets/<slug>/README.md; run dedup against roadmap + RISOLUTO_FEATURES
+/risoluto-grill                            # critic-grill surviving new candidates; founder decides in/out
+# Kept candidates are appended to docs/roadmap.md at status: idea; founder ranks
+
+# MODE B — Sense-making (run anytime, idempotent)
+/risoluto-ingest                           # rebuilds research/wiki/ + emits gap-grounded idea rows
+# Review roadmap.md for new idea rows; promote/kill/rank
+
+# PROMOTE an idea row to next: add Why + Size in docs/roadmap.md
 $EDITOR docs/roadmap.md
 
-# 1. (optional) Research a peer/problem and fold the takeaway into the roadmap row yourself.
-/risoluto-researcher https://example.com   # GitHub URLs get deep gh capture
-pnpm validate:research                      # frontmatter must validate (exit 0)
-
-# 2. (optional) Sharpen scope before committing to a PRD.
-/risoluto-grill <slug>                      # one question at a time
-/grill-with-docs                            # only if the item touches/extends existing canon
-
-# 3. Promote the `next` row to a PRD + Linear project.
-/risoluto-to-prd <slug>                     # CREATE first run; SYNC on re-run (git → Linear)
+# BACK-HALF — shared for all next rows
+# 1. Promote the `next` row to a PRD + Linear project.
+/risoluto-to-prd <slug>                    # CREATE first run; SYNC on re-run (git → Linear)
+#  → to-prd reads the roadmap row AND its linked research (Research link cell)
+#  → flips the roadmap row next → building; stamps linear_project into the row
 #  → paste the Linear UI banner (see "PRD contract") into the new project description
-#  → the skill prints `gh pr create`; you open the PR
+pnpm validate:research                     # PRD frontmatter validates (exit 0)
 
-# 4. Slice into issues, implement test-first.
-/risoluto-to-issues <slug>                  # PRD → flat Linear issues, blocked-by inferred (review the graph)
-/risoluto-tdd RSL-123                        # validates blocked-by are Done; red-green-refactor; prints `gh pr create`
+# 2. Slice into issues, implement test-first.
+/risoluto-to-issues <slug>                 # PRD → flat Linear issues, blocked-by inferred (review the graph)
+/risoluto-tdd RSL-123                      # validates blocked-by are Done; red-green-refactor; prints `gh pr create`
 
-# 5. On merge, post-merge.yml flips the PRD to shipped + back-comments Linear.
-#    Then: flip the roadmap row to `shipped` and record the decision if notable.
+# ADVISORY — founder applies findings selectively, not a blocking gate.
+/code-review
+/simplify
+
+# 3. On merge, post-merge.yml automatically:
+#    - back-comments Linear issues
+#    - flips PRD status → shipped
+#    - flips the roadmap row → shipped
+#    - refreshes research/RISOLUTO_FEATURES.md (keeps dedup + wiki honest)
+#    Then: record the decision in ADR + decisions.md if notable.
 ```
+
+## Roadmap row spec
+
+The roadmap uses exactly **6 columns**:
+
+```
+| # | Item | Why now | Size | Status | Research link |
+```
+
+- **`#`** — priority number; order is priority; top non-shipped row is "what is next".
+- **`Item`** — short title. A row that has entered the pipeline carries its slug as a trailing HTML
+  comment: `Title <!-- slug:<slug> -->`. The slug is the join key (roadmap row ↔ PRD filename ↔
+  `prd.slug` frontmatter ↔ `from:prd-<slug>` Linear label).
+- **`Why now`** — the reason to do it now. Empty → the row cannot leave `idea`. For a `dropped` row
+  this cell carries the kill reason (there is no separate Notes column).
+- **`Size`** — `S` / `M` / `L` (rough effort). Empty → the row cannot leave `idea`.
+- **`Status`** — one of the status vocab below. Once `building`/`shipped` this cell may be a link,
+  e.g. `[building](<linear_project_url>)`.
+- **`Research link`** — backlink to what motivated the row: `research/targets/<slug>/README.md`,
+  a `research/wiki/<note>.md`, or an em-dash for pure-judgement rows.
+
+### Status vocab
+
+| Status       | Meaning                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `idea`       | Named (founder- or skill-proposed); needs Why + Size before promotion.                            |
+| `next`       | Scoped (has Why + Size) and ranked to start soon; has or is about to get a PRD.                   |
+| `building`   | A PRD exists and Linear issues are in flight (`from:prd-<slug>`).                                 |
+| `shipped`    | Merged in the canonical repo.                                                                     |
+| `dropped`    | Killed; the reason is written in the Why now cell. Never silently removed.                        |
+| `superseded` | Replaced by a newer row/feature (set by dedup `supersede`); the superseding row/feature is named. |
 
 ## PRD contract (git is canon)
 
 Each `docs/prds/<slug>.md` is the **authoritative** copy; the Linear project description is a
-generated mirror pushed by `/risoluto-to-prd`. Linear caps descriptions at 255 chars, so the mirror
-is only the **first 255 chars** of the PRD body — content past that lives only in git, and the drift
-hook only protects the prefix.
+generated mirror pushed by `/risoluto-to-prd`. `/risoluto-to-prd` reads the `next` roadmap row
+**and its linked research** (Research link cell) to draft the PRD. Linear caps descriptions at
+255 chars, so the mirror is only the **first 255 chars** of the PRD body — content past that lives
+only in git, and the drift hook only protects the prefix.
 
 - **Do not edit Linear project descriptions in the UI.** The drift hook is intentional friction; treat the description as generated content.
 - **Resolve drift** by choosing a direction:
@@ -136,16 +268,17 @@ divergence. It runs in `.husky/pre-push` (only for pushes that touch `docs/prds/
 ## Frontmatter contract
 
 JSON Schemas live under `research/.schemas/` and are checked by `pnpm validate:research`.
+`prd.schema.json` exists — `validate:research` covers `docs/prds/*`.
 
 ```yaml
 # docs/prds/<slug>.md
 slug: <slug>
 linear_project: https://linear.app/<org>/project/<name>-<slugId>
 synced_at: <ISO-8601>
-source: docs/roadmap.md#<slug> # the roadmap row this PRD came from
+source: docs/roadmap.md#<slug>   # the roadmap row this PRD came from (NOT source_idea)
 status: draft | approved | shipped | archived
 
-# research/targets/<slug>/README.md   (capture only; optional)
+# research/targets/<slug>/README.md   (capture only)
 slug: <target-slug>
 canonical_url: https://...
 category: peer | reference | adjacent
@@ -153,33 +286,45 @@ last_researched_at: 2026-05-29
 source_count: <int>
 ```
 
-- **`additionalProperties: true`** on every research schema — `research/` is also an Obsidian vault, so Web Clipper / Templater / operator fields pass through untouched.
-- **PRD frontmatter still has no schema** (`prd.schema.json`) and `validate:research` does not cover `docs/prds/*` — a known gap (below).
+- **`additionalProperties: true`** on every research schema — `research/` is also an Obsidian vault,
+  so Web Clipper / Templater / operator fields pass through untouched.
+- **`research/wiki/` notes are freeform** — not frontmatter-validated. They are authored by
+  `/risoluto-ingest` as Obsidian-compatible markdown with wikilinks.
+- **Slug consistency** — a post-merge check verifies the slug is identical across roadmap row
+  (`<!-- slug:<slug> -->`), PRD file name, `prd.slug` frontmatter, and `from:prd-<slug>` label.
 
 ## Invariants & gotchas
 
 - **The roadmap is the only plan.** No second backlog, no auto-generated idea ledger. If it isn't a roadmap row, it isn't planned.
-- **Slug is the join key.** Identical across roadmap row / PRD file + frontmatter / Linear project / `from:prd-<slug>` label. One typo silently breaks the chain — not yet enforced (gap below).
+- **Slug is the join key.** Carried as `<!-- slug:<slug> -->` in the roadmap Item cell; identical across roadmap row / PRD file + frontmatter / Linear project / `from:prd-<slug>` label. A slug consistency check enforces this post-merge.
+- **Skills propose; the founder disposes.** Skills append `idea` rows — they never reorder, promote, or delete rows.
 - **Git is canon for PRDs.** Resolve divergence with `prd:reconcile` (Linear → git) or `to-prd` sync (git → Linear). Never hand-edit Linear descriptions.
 - **No auto-PR.** Skills branch, commit, and push but never run `gh pr create` — they print it.
 - **255-char Linear cap.** Drift detection sees only the first 255 chars of the PRD body.
-- **Idempotent:** researcher, vault, to-prd sync. **Not idempotent:** to-issues, tdd (re-runs can duplicate).
+- **Advisory review.** `/code-review` and `/simplify` after TDD are advisory aids the founder applies selectively — not a blocking gate.
+- **Idempotent:** researcher, ingest, vault, to-prd sync. **Not idempotent:** to-issues, tdd (re-runs can duplicate).
 
-## Known gaps (Phase C candidates)
+## Known gaps
 
 Confirmed in code; not yet fixed:
 
 1. **Drift is shallow** — only the first 255 chars are compared. A full-body `synced_hash` in PRD frontmatter would close it.
 2. **`to-issues` is not idempotent** — re-running after a PRD change can duplicate Linear issues.
-3. **No `prd.schema.json`** — PRD frontmatter is unvalidated by `validate:research`.
-4. **Slug not enforced** — nothing checks the join key is identical across roadmap/PRD/Linear/label.
-5. **Roadmap row not auto-closed** — post-merge flips the PRD to `shipped` but not the roadmap row; close it by hand at stage 5 until wired.
 
 ## Skills
 
 Pipeline skills live in `skills/risoluto-*/` and are symlinked into `.claude/skills/` and
-`.agents/skills/`: `risoluto-vault`, `risoluto-researcher`, `risoluto-synthesizer` (being retired),
-`risoluto-grill`, `risoluto-to-prd`, `risoluto-to-issues`, `risoluto-tdd`.
+`.agents/skills/`:
+
+| Skill                 | Mode / role                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `risoluto-researcher` | Mode A step 1 — deep-analyzes a source; writes `research/targets/<slug>/README.md`.                 |
+| `risoluto-grill`      | Mode A step 3 — the critic; grill-loops surviving candidates; founder decides in/out per candidate. |
+| `risoluto-ingest`     | Mode B — the reborn synthesizer; builds `research/wiki/` + emits gap-grounded idea rows.            |
+| `risoluto-to-prd`     | Back-half — reads a `next` roadmap row + its linked research; writes PRD + Linear project.          |
+| `risoluto-to-issues`  | Back-half — slices a PRD into flat Linear issues with blocked-by edges.                             |
+| `risoluto-tdd`        | Back-half — red-green-refactor against a Linear ticket; prints `gh pr create`.                      |
+| `risoluto-vault`      | Obsidian vault helper; unaffected by pipeline changes.                                              |
 
 **Fork-not-upgrade.** `to-prd`, `to-issues`, and `tdd` are Linear-specific forks of the global
 `~/.claude/skills/{to-prd,to-issues,tdd}` — invoke the namespaced `/risoluto-*` variants here. The
@@ -196,15 +341,15 @@ global skills stay tracker-agnostic. `grill-me`, `grill-with-docs`, `save-to-obs
 
 **Scripts:** `scripts/validate-research.ts`, `scripts/prd-drift-check.ts`, `scripts/prd-reconcile.ts`,
 `scripts/prd-linear.ts`, `scripts/post-merge-prd.mjs`.
-**Key files:** [`docs/roadmap.md`](./roadmap.md), `docs/prds/`, `research/targets/`,
+**Key files:** [`docs/roadmap.md`](./roadmap.md), `docs/prds/`, `research/targets/`, `research/wiki/`,
 `docs/adr/0001-foundation.md` (§7).
 
 ## Troubleshooting
 
-| Symptom                                   | Cause / fix                                                                            |
-| ----------------------------------------- | -------------------------------------------------------------------------------------- |
-| A skill reads a missing backlog/idea path | Pre-Phase-C wiring — the skill still points at the removed backlog. See Wiring status. |
-| `validate:research` fails early           | `research/` submodule not initialized — `git submodule update --init research`.        |
-| `prd:drift-check` exits 1 "hard gate"     | `LINEAR_API_KEY` unset — export it (or set the GH secret for CI).                      |
-| `prd:drift-check` reports DRIFT           | PRD body and Linear diverged — `prd:reconcile <slug>` or `to-prd <slug>` to sync.      |
-| Post-merge didn't flip status             | PR lacked the `from:prd-<slug>` label, or a Linear call failed (flip is skipped).      |
+| Symptom                               | Cause / fix                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `validate:research` fails early       | `research/` submodule not initialized — `git submodule update --init research`.                   |
+| `prd:drift-check` exits 1 "hard gate" | `LINEAR_API_KEY` unset — export it (or set the GH secret for CI).                                 |
+| `prd:drift-check` reports DRIFT       | PRD body and Linear diverged — `prd:reconcile <slug>` or `to-prd <slug>` to sync.                 |
+| Post-merge didn't flip status         | PR lacked the `from:prd-<slug>` label, or a Linear call failed (flip is skipped).                 |
+| `risoluto-ingest` emits no ideas      | All generated ideas lacked citations — cite-or-drop is enforced. Add more research targets first. |

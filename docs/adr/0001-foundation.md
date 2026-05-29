@@ -333,14 +333,27 @@ resolution mean the security posture the ADR promises is not yet the one in forc
 
 ## 7. Research-to-Shipping Planning Pipeline
 
-> **Update 2026-05-29 (decision [#30](../decisions.md)).** The model below describes the original
-> pipeline: auto-synthesized idea clusters in `capability-backlog.md` + `research/ideas/`. That layer
-> was reset — the single plan is now a hand-owned [`docs/roadmap.md`](../roadmap.md); research is
-> optional input and the synthesizer's auto-plan role is retired. The core decision (PRDs canonical in
-> git, flat Linear issues with blocked-by, fork-not-upgrade skills, manual `/tdd`) still holds; only
-> the **plan source** changed. Current flow:
-> [`research-to-shipping-pipeline.md`](../research-to-shipping-pipeline.md). Skill rewiring to the
-> roadmap is Phase C (not yet done).
+> **Update 2026-05-29 (decision [#30](../decisions.md) superseded by two-mode pipeline).** The
+> original pipeline used auto-synthesized idea clusters written to `capability-backlog.md` and
+> `research/ideas/` — both surfaces are retired. The current model has two research modes feeding
+> one founder-owned roadmap:
+>
+> **Mode A (targeted adoption):** `risoluto-researcher` deep-analyzes a source, writes
+> `research/targets/<slug>/README.md`, deduplicates candidates against the roadmap and
+> `research/RISOLUTO_FEATURES.md`, and passes survivors to the critic-grill (`risoluto-grill`).
+> Kept candidates become roadmap rows the founder ranks.
+>
+> **Mode B (sense-making / innovation):** `risoluto-ingest` (the reborn synthesizer — retired name:
+> `risoluto-synthesizer`) reads all `research/targets/` and builds a connected wiki at
+> `research/wiki/`. It then does gap-grounded idea generation — an idea is only emitted if it cites
+> the research dots it connects (cite-or-drop); generated ideas land as roadmap rows (status: idea).
+>
+> Both modes converge on [`docs/roadmap.md`](../roadmap.md) — the single ordered plan, founder-owned.
+> Skills may append proposed rows (status: idea); no skill reorders, promotes, or deletes rows.
+> The critic-grill challenges fit-vs-spine, differentiation, and thinnest shippable cut; the founder
+> decides in/out. The back-half (PRDs canonical in git, flat Linear issues with blocked-by,
+> fork-not-upgrade skills, manual `/tdd`) is unchanged. **Skill rewiring has landed.**
+> Current flow: [`research-to-shipping-pipeline.md`](../research-to-shipping-pipeline.md).
 
 ### Context
 
@@ -354,13 +367,13 @@ runtime is the **Linear ticket**, not the harness.
 Risoluto ships a five-phase planning pipeline as composable skills + CI
 automations:
 
-| Phase | Skill / Automation                      | Artifact                                              |
-| ----- | --------------------------------------- | ----------------------------------------------------- |
-| 1     | `risoluto-researcher`, `risoluto-vault` | `research/targets/<slug>/` + sources                  |
-| 2     | `risoluto-synthesizer`                  | `research/ideas/<slug>/` + backlog row                |
-| 3     | `risoluto-grill`, `risoluto-to-prd`     | Grilled idea + `docs/prds/<slug>.md` + Linear Project |
-| 4     | `risoluto-to-issues`, `risoluto-tdd`    | Linear Issues + PRs with `from:prd-*` labels          |
-| 5     | Post-merge workflow                     | PRD `status: shipped` + Linear back-comments          |
+| Phase | Skill / Automation                           | Artifact                                                                          |
+| ----- | -------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1     | `risoluto-researcher`, `risoluto-vault`      | `research/targets/<slug>/README.md` + sources                                     |
+| 2     | `risoluto-ingest`                            | `research/wiki/` (connected wiki) + gap-grounded roadmap idea-rows (status: idea) |
+| 3     | `risoluto-grill` (critic), `risoluto-to-prd` | Roadmap rows (idea/next) + `docs/prds/<slug>.md` + Linear Project                 |
+| 4     | `risoluto-to-issues`, `risoluto-tdd`         | Linear Issues + PRs with `from:prd-*` labels                                      |
+| 5     | Post-merge workflow                          | PRD `status: shipped` + Linear back-comments                                      |
 
 Key decisions: **PRDs are canonical in git** (Linear descriptions are generated
 mirrors; a pre-push hook blocks drift). **Flat issues with blocked-by relations**
@@ -372,16 +385,16 @@ label seam).
 
 ### Implementation status
 
-| Claim                                                         | Status    | Evidence                                                                                                                                                                         |
-| ------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All seven pipeline skills exist as real skill dirs            | Delivered | `skills/risoluto-{researcher,vault,synthesizer,grill,to-prd,to-issues,tdd}/SKILL.md`                                                                                             |
-| PRDs canonical in git, Linear descriptions mirrored           | Delivered | `docs/prds/README.md`; `risoluto-to-prd/SKILL.md`                                                                                                                                |
-| A pre-push hook detects PRD drift and blocks the push         | Delivered | `.husky/pre-push` → `prd:drift-check` → `scripts/prd-drift-check.ts` (runs unconditionally; `SKIP_HOOKS` does not bypass it)                                                     |
-| The drift check requires `LINEAR_API_KEY`                     | Delivered | `scripts/prd-drift-check.ts` (`requireApiKey`, hard `exit 1` if unset)                                                                                                           |
-| Flat issues with blocked-by relations, no nesting             | Delivered | `risoluto-to-issues/SKILL.md`                                                                                                                                                    |
-| Post-merge automation flips PRD status + back-comments Linear | Delivered | `scripts/post-merge-prd.mjs`, wired to CI in `.github/workflows/post-merge.yml` (`pull_request: closed`, `merged == true`) — **CI-only, not the local `.husky/post-merge` hook** |
-| Skills are wired via symlink into `~/.claude/skills`          | Partial   | Repo-local dirs only; discovered via project-level skill loading, not symlinked into the global dir                                                                              |
-| The pipeline has been dogfooded end to end                    | Partial   | One PRD exists (`docs/prds/provider-abstraction.md`, `status: draft`); Phase 4 (`to-issues` / `tdd`) never exercised to completion                                               |
+| Claim                                                         | Status    | Evidence                                                                                                                                                                                                 |
+| ------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All seven pipeline skills exist as real skill dirs            | Delivered | `skills/risoluto-{researcher,vault,ingest,grill,to-prd,to-issues,tdd}/SKILL.md` (`risoluto-ingest` replaces the retired `risoluto-synthesizer`)                                                          |
+| PRDs canonical in git, Linear descriptions mirrored           | Delivered | `docs/prds/README.md`; `risoluto-to-prd/SKILL.md`                                                                                                                                                        |
+| A pre-push hook detects PRD drift and blocks the push         | Delivered | `.husky/pre-push` → `prd:drift-check` → `scripts/prd-drift-check.ts` (runs unconditionally; `SKIP_HOOKS` does not bypass it)                                                                             |
+| The drift check requires `LINEAR_API_KEY`                     | Delivered | `scripts/prd-drift-check.ts` (`requireApiKey`, hard `exit 1` if unset)                                                                                                                                   |
+| Flat issues with blocked-by relations, no nesting             | Delivered | `risoluto-to-issues/SKILL.md`                                                                                                                                                                            |
+| Post-merge automation flips PRD status + back-comments Linear | Delivered | `scripts/post-merge-prd.mjs`, wired to CI in `.github/workflows/post-merge.yml` (`pull_request: closed`, `merged == true`) — **CI-only, not the local `.husky/post-merge` hook**                         |
+| Skills are wired via symlink into `~/.claude/skills`          | Partial   | Repo-local dirs only; discovered via project-level skill loading, not symlinked into the global dir                                                                                                      |
+| The pipeline has been dogfooded end to end                    | Partial   | One PRD exists (`docs/prds/provider-abstraction.md`, `status: draft`); the two-mode research flow (Modes A + B) has not been run end-to-end; Phase 4 (`to-issues` / `tdd`) never exercised to completion |
 
 ### Consequences
 
@@ -429,8 +442,9 @@ reconciled. In rough dependency order:
 
 ## Consolidated status summary
 
-- **§7 (planning pipeline)** is the only fully-grounded decision — built and, for
-  the most part, dogfooded.
+- **§7 (planning pipeline)** is the most grounded decision — the back-half skills are built and
+  the roadmap-centric model is in force, but the two-mode research flow (Modes A + B) has not
+  yet been dogfooded end-to-end.
 - **§1–§6 (runtime architecture)** are largely **target architecture**: the
   vocabulary, types, and seams exist, but the load-bearing behavior (run identity,
   log-as-source-of-truth, role DAG, artifact validation, built-in definitions,

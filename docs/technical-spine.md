@@ -24,6 +24,10 @@
 14. **Harness Adapters** — Codex, Claude Code, Cursor, custom.
 15. **Model / provider configuration** — explicit / name-based first.
 16. **Versioned skill packs** — product artifacts; live in the main repo first.
+    > **Build-time operator tooling (not a runtime layer):** `research/wiki/` (the connected
+    > knowledge wiki) and the `/risoluto-ingest` skill (wiki builder + gap-grounded idea engine)
+    > are planning surfaces that feed the roadmap funnel. They run at the operator's discretion
+    > and have no presence in the execution stack above.
 17. **Scheduler / retry / concurrency** — for Workflow Runs and Role Executions.
 18. **Control plane / execution plane split** — single-node first, architecture portable.
 19. **Observability** — audit, replay, export, metrics, trace.
@@ -90,3 +94,4 @@ not restated here.
 - [Decisions](./decisions.md) — chronological log of everything else.
 - [Testing & Release](./testing-and-release.md) — how spine surfaces get covered and the `1.0.0` gate.
 - [Roadmap](./roadmap.md) — the single ordered plan of what's next.
+- [Research-to-Shipping Pipeline](./research-to-shipping-pipeline.md) — how research (Mode A targeted / Mode B ingest) feeds roadmap rows through PRD → issues → TDD → merge.

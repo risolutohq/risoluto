@@ -1,198 +1,175 @@
 ---
 name: risoluto-grill
-description: Stress-test a Risoluto research idea against the corpus and the product spine until two operator-owned sections crystallise — `## Why us / why now` and `## Smallest shippable shape` — in `research/ideas/<slug>/README.md`. Pre-loads the idea README, every cited target README, the matching `capability-backlog.md` row, and any `research/RISOLUTO_FEATURES.md` bundles the idea touches, then runs a grill loop framed for the research→product seam ("you have N peers doing X, why us, why now, smallest cut") with one question at a time. On exit, writes the two sections via the deterministic write script (preserving frontmatter, the synthesizer-owned block, and `## Analyst notes` / `## Open questions` verbatim) and offers to flip the backlog row from `status: idea` to `status: ready`. Use this skill whenever Omer says `/risoluto-grill`, "grill <idea-slug>", "stress-test the <slug> idea", "fill in why us / why now for <slug>", "scope the smallest shippable shape of <slug>", "promote <slug> from idea to ready", or any variation that implies turning a clustered idea into a scoped, shippable bet. Also trigger when Omer asks "what's the thinnest slice of <slug>?", "why should Risoluto ship <slug> before competitors X and Y?", or wants to walk the seam between a specific captured idea (named slug or vault cluster) and a product decision about it. Idempotent — re-running re-grills, operator keeps iterating; the two sections are the only ones the write touches. Companion to Phase 3.1 of `docs/research-to-shipping-pipeline.md`.
+description: Critic-grill for the Risoluto research pipeline (Mode A). Takes a source's post-dedup candidate features from research/targets/<slug>/README.md and, for each surviving candidate (dedup flag new/merge/supersede), runs a grill loop that challenges fit-vs-spine, differentiation ("N peers ship X — why us, why now?"), and the thinnest shippable cut. The founder decides in/out per candidate. Kept candidates are written as roadmap rows (status idea or next) in docs/roadmap.md whose Research link points back to research/targets/<slug>/README.md. Use this skill whenever Omer says /risoluto-grill, "grill the <slug> candidates", "critique these candidate features", "triage <slug> into the roadmap", "which of these candidates should become roadmap rows", or any variation that implies stress-testing post-dedup candidates from a research target and deciding which ones earn a roadmap row.
 ---
-
-> **⛔ RETIRED — 2026-05-29 ([decision #30](../../docs/decisions.md)).** This skill writes
-> `## Why us / why now` + `## Smallest shippable shape` into `research/ideas/<slug>/README.md`, which
-> the reset removed. In the roadmap-centric model, scoping lives in a row's **Why now + Size** in
-> [`docs/roadmap.md`](../../docs/roadmap.md). To stress-test a row, use the generic `/grill-me` or
-> `/grill-with-docs`, then write the conclusion into the roadmap row by hand. **Do not invoke this.**
 
 # risoluto-grill
 
-Idea-to-bet sharpener for the Risoluto planning pipeline. Phase 3.1 of the planning-pipeline roadmap.
+Critic-grill for Mode A of the Risoluto research-to-shipping pipeline. Receives a research target's post-dedup candidate features and stress-tests each one until the founder decides in or out. Kept candidates become roadmap rows in `docs/roadmap.md`.
+
+## Role in the pipeline
+
+```
+/risoluto-researcher
+  writes research/targets/<slug>/README.md
+    ## Candidate features   ← each carries a dedup flag
+      skip      = already shipped or covered → dropped, not grilled
+      merge     = folds into existing roadmap row → update that row, not a new one
+      supersede = replaces an existing row → mark old superseded, add new row
+      new       = no overlap → proceeds to the grill loop here
+  ↓
+/risoluto-grill  (this skill)
+  grills each surviving candidate (new / merge / supersede)
+  founder decides in / out per candidate
+  kept candidates → roadmap rows in docs/roadmap.md
+  ↓
+founder ranks the rows
+  ↓
+next rows enter the shared back-half
+  /risoluto-to-prd → /risoluto-to-issues → /risoluto-tdd → merge
+```
+
+The skill is **interactive**: one question at a time, wait for the founder's answer, continue.
 
 ## What this skill produces
 
-For one idea-slug at a time, this skill drives a grilling conversation framed for the research→product seam and writes the two operator-owned outcome sections into the existing idea README:
+For one research target at a time, this skill drives a grilling conversation and appends or edits rows in `docs/roadmap.md`:
 
 ```
-research/ideas/<idea-slug>/README.md
-  ## Why us / why now           ← rewritten by /risoluto-grill
-  ## Smallest shippable shape   ← rewritten by /risoluto-grill
+docs/roadmap.md
+  | # | Item | Why now | Size | Status | Research link |
+  ← new rows appended (status: idea or next)
+  ← existing rows edited only for merge / supersede candidates
 ```
 
-Everything else in the README is preserved verbatim:
-
-- YAML frontmatter (`slug`, `evidence_targets`, `evidence_sources`, `linear_project`, `prd_file`).
-- The synthesizer-owned block between `<!-- BEGIN risoluto-synthesizer -->` / `<!-- END risoluto-synthesizer -->` (`## Evidence`, `## Targets that ship this`, `## Variants observed`, `## Frequency`).
-- `## Analyst notes` and `## Open questions` (operator-owned, not regenerated).
-
-Optionally, after the grill, the skill offers to flip the matching row in `docs/capability-backlog.md` from `status: idea` to `status: ready`. The synthesizer (Phase 2.1) treats `ready` as operator-set and never overwrites it on subsequent runs.
+Nothing is written to `research/targets/` — that directory is read-only from this skill's perspective. Nothing is written to any other file.
 
 ## Hard preconditions
 
 Stop and report if any fail:
 
-| Check                               | Command                                           | If it fails                                                                         |
-| ----------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Run from repo root                  | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                                |
-| `research/` initialised             | `git submodule status research` starts with space | Tell Omer to `git submodule update --init research` or `/init-research`.            |
-| Idea exists                         | `test -f research/ideas/<slug>/README.md`         | Tell Omer to run `/risoluto-synthesizer` first so the idea folder + sections exist. |
-| `docs/capability-backlog.md` exists | `test -f docs/capability-backlog.md`              | This file is committed at v1 — if missing, the repo is in an unexpected state.      |
+| Check                    | Command                                           | If it fails                                                                  |
+| ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Run from repo root       | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                         |
+| `research/` initialised  | `git submodule status research` starts with space | Tell Omer to run `git submodule update --init research` or `/init-research`. |
+| Target README exists     | `test -f research/targets/<slug>/README.md`       | Tell Omer to run `/risoluto-researcher` on that source first.                |
+| `docs/roadmap.md` exists | `test -f docs/roadmap.md`                         | This file is committed — if missing, the repo is in an unexpected state.     |
 
 ## The pipeline
 
-The skill is three steps: **preload**, **grill**, **write**. The grill (the conversation itself) happens in the agent's head — the two scripts handle the deterministic context gathering and the final write so re-runs are idempotent.
+The skill is three steps: **preload**, **grill**, **write**. The grill (the conversation itself) happens in the agent's context — the scripts handle deterministic context gathering and the final roadmap write so re-runs are idempotent.
 
 ### Step 1 — Preload the context bundle
 
 ```bash
-node skills/risoluto-grill/scripts/preload.mjs <idea-slug>
+node skills/risoluto-grill/scripts/preload.mjs <target-slug>
 ```
 
-The script prints, to stdout, a JSON document listing every file the agent should read before opening the grill:
+The script prints, to stdout, a JSON manifest listing every file the agent should read before opening the grill:
 
-- The idea README itself.
-- Every `research/targets/<target-slug>/README.md` cited in `evidence_targets`.
-- Every source file in `evidence_sources`.
-- `docs/capability-backlog.md` (the row authoritatively holds `name` + `category` + current `status`).
-- Any `research/RISOLUTO_FEATURES.md` features whose `bundle` or behaviour text mentions the idea slug — these are the features Risoluto already ships in the same neighbourhood, and they're the strongest "why us" anchor.
+- `research/targets/<slug>/README.md` (the source's candidates and dedup flags).
+- `docs/roadmap.md` (the authoritative ranked plan — needed to place new rows correctly and to find rows targeted by merge/supersede candidates).
+- `research/RISOLUTO_FEATURES.md` (already-shipped features — the strongest "why us" anchor when challenging differentiation).
 
-The script does not read or load anything itself — it prints paths. The agent then uses the standard read tools to load those files into the conversation. Show Omer a one-line summary ("loaded N targets, M sources, K features-spine hits") before grilling — don't dump raw file contents.
+The script prints paths only; it does not read files itself. The agent then reads those files into context. Show Omer a one-line summary ("loaded target with N surviving candidates, roadmap has M rows, K features-spine hits") before grilling — do not dump raw file contents.
 
-### Step 2 — Grill
+**Phase 2 note:** `preload.mjs` will be rewired to parse the `## Candidate features` section of the target README, extract each candidate with its dedup flag, and emit structured JSON so the grill loop can iterate candidates cleanly. The intended output shape is `{ candidates: [{ title, flag, summary }], roadmap_rows: [...], features_spine: [...] }`. Do not implement this yet — describe the intent here for reference.
 
-Open the loop with the idea's current shape framed for the seam between research and product. Ask **one question at a time**, wait for the operator's answer, and only then continue to the next branch.
+### Step 2 — Grill each surviving candidate
 
-The grill is not a generic plan-review — it is a **research→product** stress test. The corpus has already told you what your peers ship. The operator's job is to defend (or kill) Risoluto's right to ship the same capability. Drive toward two crisp paragraphs:
+For each candidate whose dedup flag is `new`, `merge`, or `supersede` (skip `skip` candidates entirely), open a grill loop. Process candidates one at a time — finish each grill and get the founder's in/out decision before moving to the next.
 
-1. **Why us / why now** — what is Risoluto's structural advantage relative to the N cited peers? What is true today that wasn't true 12 months ago (or what is about to be true 12 months from now)? If the answer is "nothing", surface it — that's a kill signal worth knowing.
-2. **Smallest shippable shape** — the thinnest cut that proves the bet end-to-end, expressed against Risoluto's spine (workflow runs, tracker adapters, harness adapters, etc.). Not a feature list — a tracer that can land in one or two PRs and surface a real signal.
+Open the loop by stating the candidate's title and one-sentence summary from the target README. Then ask **one question at a time** and wait for the founder's answer before continuing.
 
-Branches to walk, in order, asking one question at a time and recommending an answer with each:
+The grill is a **research→product** stress test. The corpus has already shown what peers ship. The founder's job is to defend (or kill) Risoluto's right to ship the same capability. Drive toward three crisp answers:
 
-1. **Peer landscape** — "Of `evidence_targets` ∈ {…}, which is the strongest peer? Which is the closest in shape to what you'd build?" Pre-loaded target READMEs give you the bullets — quote them back.
-2. **Risoluto's right to ship** — "Your spine ships A, B, C in this neighbourhood (cite the matching `RISOLUTO_FEATURES.md` entries). Does the idea compose with those, or does it require a new primitive?"
-3. **Timing** — "Why now and not 6 months ago / 6 months from now? What changed in the corpus, in the platform, or in the operator's day that makes this the next bet?"
-4. **Failure mode** — "What does this look like at month 6 if it ships and nobody uses it? What does the kill-condition look like?"
-5. **Smallest cut** — "If you had to ship one Linear ticket today and call it the tracer, what would it do? What does it _not_ do?"
-6. **Open questions left** — "What is still uncertain? Park those in `## Open questions` (operator-owned) — the grill doesn't have to resolve everything, but the unresolved bits must be named."
+1. **Fit-vs-spine** — does this candidate compose with Risoluto's existing primitives (workflow runs, tracker adapters, harness adapters, DAG/state-machine) or does it require a net-new primitive? Quote the relevant shipped features from `RISOLUTO_FEATURES.md`.
+2. **Differentiation** — "N peers ship X (cite the target README). Why us, why now? What is Risoluto's structural advantage or timing edge?"
+3. **Thinnest shippable cut** — expressed against the spine: the smallest tracer that proves the bet end-to-end and could land in one or two PRs.
 
-If the operator stalls or contradicts something in the pre-loaded corpus, surface it directly: "Your `provider-abstraction` README quotes Composio shipping X — your answer assumes Risoluto already has Y. Which is true?"
+Branches to walk, in order, one question at a time:
 
-When the operator signals "we're done" (or both sections feel sharp), draft the two final paragraphs and show them inline before writing.
+1. **Peer landscape** — "Of the peers cited in the target README, which is the strongest? Which is closest in shape to what you'd build in Risoluto?" Quote the bullets from the pre-loaded README.
+2. **Spine fit** — "The spine ships [cite matching RISOLUTO_FEATURES entries]. Does this candidate compose with those, or does it require a new primitive? If a new primitive, name it."
+3. **Timing** — "Why now and not 6 months ago or 6 months from now? What changed in the corpus, in the platform, or in your workflow that makes this the next bet?"
+4. **Failure mode** — "What does this look like at month 6 if it ships and nobody uses it? What is the kill-condition?"
+5. **Thinnest cut** — "If you had one Linear ticket today as the tracer, what does it do? What does it explicitly not do?"
+6. **Open edge** — "What is still uncertain? These go into the roadmap row's Why now cell as a caveat — the grill doesn't resolve everything, but unresolved bets must be named."
 
-### Step 3 — Write the sections
+If the founder stalls or contradicts something in the pre-loaded corpus, surface it directly: "The target README quotes [peer] shipping X — your answer assumes Risoluto already has Y. Which is true?"
 
-Once Omer signs off on the drafts, save each section's body to a tmp file and call the write script:
+At the end of each candidate's grill, draft a one-line **Why now** and a size estimate (S / M / L), show them to the founder, and ask: **"In or out?"**
+
+- **In** → the candidate becomes a roadmap row. Confirm status: `idea` or `next` (the founder decides). Slug is derived from the candidate title (kebab-case).
+- **Out** → the candidate is dropped. No row is written.
+
+For **merge** candidates: instead of a new row, identify the existing roadmap row to fold into and state what text changes to make to its Why now cell.
+
+For **supersede** candidates: mark the old roadmap row status `superseded` (with a note naming the new row), then add the new row.
+
+### Step 3 — Write the roadmap rows
+
+Once all candidates are grilled and in/out decisions are final, call the write script once with the full set of results:
 
 ```bash
-node skills/risoluto-grill/scripts/grill-write.mjs <idea-slug> \
-  --why-us-file /tmp/grill-<slug>-why-us.md \
-  --smallest-shape-file /tmp/grill-<slug>-smallest-shape.md
+node skills/risoluto-grill/scripts/grill-write.mjs <target-slug> \
+  --results-file /tmp/grill-<slug>-results.json
 ```
 
 The script:
 
-1. Reads `research/ideas/<idea-slug>/README.md`.
-2. Locates `## Why us / why now` and `## Smallest shippable shape` and replaces their bodies (everything until the next `## ` heading or EOF) with the new content. The headings themselves are preserved.
-3. Leaves frontmatter, the synthesizer-owned block, `## Analyst notes`, and `## Open questions` byte-identical.
-4. Writes the result and reports the diff in lines added/removed.
+1. Reads `docs/roadmap.md`.
+2. For each `in` candidate: appends a new row to the roadmap table using the locked 6-column spec (`# | Item | Why now | Size | Status | Research link`). The Research link points to `research/targets/<slug>/README.md`. The slug is embedded as a trailing HTML comment in the Item cell: `Title <!-- slug:<slug> -->`.
+3. For each `merge` candidate: edits the Why now cell of the target existing row.
+4. For each `supersede` candidate: edits the Status cell of the old row to `superseded` (with a note), then appends the new row.
+5. For `skip` candidates: writes nothing.
+6. Reports the diff (rows added/edited) to stdout.
+
+**Phase 2 note:** `grill-write.mjs` will be rewired to parse the results JSON, locate the roadmap table in `docs/roadmap.md`, and make surgical edits (append rows, patch cells) without touching unrelated rows or the file's surrounding prose. The intended results JSON shape is `{ in: [{ slug, title, why_now, size, status, flag, merge_target_row? }], out: [{ slug, title }] }`. Do not implement this yet — describe the intent here for reference.
 
 Optional flags:
 
-| Flag                           | Description                                                                             |
-| ------------------------------ | --------------------------------------------------------------------------------------- |
-| `--why-us-file <path>`         | File containing the new `## Why us / why now` body (markdown, no heading). Required.    |
-| `--smallest-shape-file <path>` | File containing the new `## Smallest shippable shape` body. Required.                   |
-| `--flip-to-ready`              | After the write, flips the matching backlog row from `status: idea` to `status: ready`. |
-| `--dry-run`                    | Print the proposed diff, write nothing.                                                 |
+| Flag                    | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
+| `--results-file <path>` | JSON file with all in/out decisions and row data. Required. |
+| `--dry-run`             | Print the proposed roadmap diff, write nothing.             |
 
-After the write, ask Omer one question: **"Promote `<slug>` from `idea` to `ready` in the backlog?"** If yes, re-run with all three required flags — `--why-us-file`, `--smallest-shape-file`, and `--flip-to-ready` — because the script reads both content files before performing the flip (there is no bypass):
-
-```bash
-node skills/risoluto-grill/scripts/grill-write.mjs <idea-slug> \
-  --why-us-file /tmp/grill-<slug>-why-us.md \
-  --smallest-shape-file /tmp/grill-<slug>-smallest-shape.md \
-  --flip-to-ready
-```
-
-`--flip-to-ready` is idempotent for the status field (re-running on a `ready` row is a no-op), but the two content files must still be present.
+After the write, show Omer a summary: "Added N rows, edited M rows, dropped K candidates." Then stop — ranking is the founder's job.
 
 ### Step 4 — Validate
 
 ```bash
-pnpm validate:research
+pnpm run build && pnpm run lint
 ```
 
-Confirms the regenerated `research/ideas/<idea-slug>/README.md` still passes `idea.schema.json` — the grill never touches frontmatter, so this should pass unconditionally, but it's the safety net against accidental corruption.
+The grill only touches `docs/roadmap.md` (markdown), so the build and lint gates are the appropriate fast check. No schema validation needed for the roadmap file itself — the locked table shape is enforced by convention.
 
 ### Step 5 — Commit
 
-The grill writes into two repos at once: `research/` (the idea README lives in the submodule) and the parent repo (if `--flip-to-ready` ran, the backlog row moved). Commit submodule first:
+The grill writes only into the parent repo (`docs/roadmap.md`). Commit once:
 
 ```bash
-cd research
-git add ideas/<slug>/README.md
-git commit -m "research: grill <slug> — why us / smallest shape"
-git push
-cd ..
-git add research docs/capability-backlog.md
-git commit -m "chore: bump research submodule + promote <slug> to ready"
+git add docs/roadmap.md
+git commit -m "chore: grill <slug> candidates → N roadmap rows"
 ```
 
-If `--flip-to-ready` was not used, the second commit only bumps the submodule.
+If any supersede edits also bumped `research/` (unlikely — that directory is read-only here), bump the submodule pointer in a follow-up commit.
 
-## Idea README ownership (what the grill touches on re-runs)
+## Roadmap row ownership (what the grill writes)
 
-| Section / Field                             | Behaviour                                                       |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| Frontmatter (all fields)                    | **Never** touched.                                              |
-| Synthesizer-owned block (BEGIN/END markers) | **Never** touched — that's `/risoluto-synthesizer`'s territory. |
-| `## Analyst notes`                          | **Never** touched — operator-owned, not regenerated.            |
-| `## Open questions`                         | **Never** touched — operator-owned, not regenerated.            |
-| `## Why us / why now`                       | Body fully rewritten on every grill. Re-running re-grills.      |
-| `## Smallest shippable shape`               | Body fully rewritten on every grill. Re-running re-grills.      |
+| Column          | Behaviour                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| `#` (priority)  | Set to a placeholder (e.g. `?`) — the **founder ranks** after the grill. Never reorder existing rows. |
+| `Item`          | Set to candidate title with slug comment: `Title <!-- slug:<slug> -->`.                               |
+| `Why now`       | Set to the grill's crisp one-liner. For merge candidates: folded into the existing row's cell.        |
+| `Size`          | Set to S / M / L from the grill's estimate.                                                           |
+| `Status`        | Set to `idea` or `next` per the founder's decision.                                                   |
+| `Research link` | Always `research/targets/<target-slug>/README.md` for grill-produced rows.                            |
 
-The grill replaces only the body between each heading and the next `## ` heading (or EOF). No partial merges, no comment markers — the operator iterates by re-running, not by hand-editing fragments.
-
-## Backlog row ownership
-
-| Column          | Behaviour                                                                                                                                     |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `slug`          | Never touched.                                                                                                                                |
-| `name`          | Never touched.                                                                                                                                |
-| `category`      | Never touched.                                                                                                                                |
-| `status`        | Flipped from `idea` to `ready` only when `--flip-to-ready` is passed. Idempotent: re-running on `ready` / `in-flight` / `shipped` is a no-op. |
-| `evidence_idea` | Never touched.                                                                                                                                |
-
-The grill only ever flips one direction (`idea` → `ready`). Demotions (`ready` → `idea`) are not a real workflow — if the bet is killed, the operator sets `status: dropped` by hand, with the reason note required by [docs/capability-backlog.md](../../docs/capability-backlog.md)'s status vocabulary.
-
-## Smoke test
-
-The repo has a clustered idea at `research/ideas/provider-abstraction/` (Phase 2.3 dogfood). Running the grill on it:
-
-```bash
-node skills/risoluto-grill/scripts/preload.mjs provider-abstraction
-# (run the loop in conversation; draft the two paragraphs; save to tmp files)
-node skills/risoluto-grill/scripts/grill-write.mjs provider-abstraction \
-  --why-us-file /tmp/grill-provider-abstraction-why-us.md \
-  --smallest-shape-file /tmp/grill-provider-abstraction-smallest-shape.md \
-  --dry-run
-```
-
-Expected output:
-
-- `preload.mjs` prints a JSON manifest with `idea`, `targets`, `sources`, `features`, `backlog_row` keys — non-empty for `provider-abstraction`.
-- `grill-write.mjs --dry-run` prints the proposed diff: two section bodies rewritten, everything else byte-identical.
-- A real (non-dry-run) call writes the file; re-running with the same flags produces a clean `unchanged` (same content) or a fresh diff (operator iterated). `## Why us / why now` and `## Smallest shippable shape` are the only sections that change.
-- A follow-up `--flip-to-ready` flips the matching backlog row to `ready`; running it again is a no-op.
-- `pnpm validate:research` reports all files OK.
+The grill never touches rows it did not create or is not explicitly merging/superseding. It never reorders rows. It never promotes a row beyond `next` — only the founder does that.
 
 ## Why this skill is separate from `grill-me` and `grill-with-docs`
 
 The global `~/.claude/skills/grill-me/` is a generic plan-stress-test prompt — no domain, no writes. The global `grill-with-docs/` is the same loop with inline glossary/ADR updates. Both stay generic and unchanged.
 
-`risoluto-grill` is the **product-seam** variant: it pre-loads the research corpus (the cluster's evidence + the spine's existing surface), drives a loop framed specifically for "research has shown us N peers ship this — does Risoluto?", and writes two pre-named operator-owned sections back into a known file shape. Generalising it would dilute the seam — keeping it forked lets `grill-me` stay a 10-line prompt anyone can use anywhere.
+`risoluto-grill` is the **research-to-roadmap critic**: it pre-loads the research corpus (the target's candidates, the current roadmap, and the shipped-features spine), drives a loop framed specifically for "research has shown us N peers ship this — does Risoluto earn the right to ship it?", and writes the outcome directly into `docs/roadmap.md` using the locked row spec. Generalising it would dilute the seam — keeping it forked lets `grill-me` stay a 10-line prompt anyone can use anywhere.

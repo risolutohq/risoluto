@@ -25,11 +25,13 @@ Every PRD file carries this YAML frontmatter:
 slug: <slug>
 linear_project: https://linear.app/<org>/project/<name>-<slugId>
 synced_at: <ISO-8601 timestamp>
-source_idea: research/ideas/<slug>/README.md
+source: docs/roadmap.md#<slug>
 status: draft | approved | shipped | archived
 ```
 
-The `slug` is the join key to `research/ideas/<slug>/` and `capability-backlog.md`. The `linear_project` URL is set by `/risoluto-to-prd` on first creation.
+The `slug` is the join key to the roadmap row (`docs/roadmap.md`), the PRD filename, and the Linear `from:prd-<slug>` label. The `linear_project` URL is set by `/risoluto-to-prd` on first creation.
+
+`prd.schema.json` validates PRD frontmatter shape; run `pnpm validate:research` to check all PRDs in one pass.
 
 ## Linear UI banner
 

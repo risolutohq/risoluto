@@ -45,4 +45,4 @@ pnpm run circular
 
 ## What Is Not Here
 
-The current web dashboard/frontend, docs-site, generated reports, runtime data, private research corpus, and old roadmap/status documents are not part of this v1 repository. They can be rebuilt or referenced later through the spine and backlog when they are current again.
+The current web dashboard/frontend, docs-site, generated reports, runtime data, and private research corpus are not part of this v1 repository. The planning source of truth is the roadmap (`docs/roadmap.md`) together with Linear; there is no separate backlog document.
