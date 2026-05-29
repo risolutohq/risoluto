@@ -18,12 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { getOpenApiSpec } from "../../src/http/openapi.js";
 import type { OrchestratorPort } from "../../src/orchestrator/port.js";
-import {
-  appendWorkflowRunEvent,
-  createWorkflowRunRecord,
-  writeWorkflowRunRecord,
-} from "../../src/workflow-run/artifacts.js";
-import { startWorkflowRunAttempt } from "../../src/workflow-run/run-attempts.js";
+import { createWorkflowRunRecord, openWorkflowRun, writeWorkflowRunRecord } from "../../src/workflow-run/artifacts.js";
 import { buildStubOrchestrator, startTestServer, type TestServerResult } from "../helpers/http-server-harness.js";
 
 /* ------------------------------------------------------------------ */
@@ -505,23 +500,12 @@ describe("OpenAPI Contract Tests", () => {
         now: () => "2026-05-25T13:00:00.000Z",
       });
       await writeWorkflowRunRecord(workflowRun);
-      await appendWorkflowRunEvent({
-        archiveDir: ctx.dataDir,
-        workflowRunId: workflowRun.id,
-        eventType: "operator.note",
-        source: "cli",
-        message: "OpenAPI contract validation.",
-        now: () => "2026-05-25T13:01:00.000Z",
-      });
-      await startWorkflowRunAttempt({
-        archiveDir: ctx.dataDir,
-        workflowRunId: workflowRun.id,
-        source: "cli",
-        attemptId: "attempt-openapi-1",
-        attemptNumber: 1,
-        reason: "initial",
-        now: () => "2026-05-25T13:02:00.000Z",
-      });
+      const run = await openWorkflowRun(
+        { archiveDir: ctx.dataDir },
+        { workflowRunId: workflowRun.id, source: "cli", now: () => "2026-05-25T13:01:00.000Z" },
+      );
+      await run.appendEvent({ eventType: "operator.note", message: "OpenAPI contract validation." });
+      await run.startRunAttempt({ attemptId: "attempt-openapi-1", attemptNumber: 1, reason: "initial" });
 
       const checks = [
         {

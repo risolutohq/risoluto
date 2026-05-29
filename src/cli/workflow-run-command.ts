@@ -2,7 +2,6 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { completeWorkflowRunRoleExecution } from "../workflow-run/role-execution-artifacts.js";
 import {
   cancelRunAttemptCommand,
   completeRunAttemptCommand,
@@ -14,11 +13,10 @@ import { listWorkflowRunsCommand } from "./workflow-run-list-command.js";
 import { recordWorkspaceCleanupCommand, recordWorkspaceLifecycleCommand } from "./workflow-run-workspace-command.js";
 import { recordWorkerProcessCommand } from "./workflow-run-worker-process-command.js";
 import {
-  appendWorkflowRunEvent,
   createWorkflowRunRecord,
   DEFAULT_WORKFLOW_DEFINITION_ID,
+  openWorkflowRun,
   readWorkflowRunEvents,
-  recordWorkflowRunTransition,
   toEventAppendedOutput,
   toStartedOutput,
   writeWorkflowRunRecord,
@@ -161,13 +159,11 @@ async function appendWorkflowRunEventCommand(argv: string[]): Promise<number> {
 
   const workflowRunId = requireNonEmpty(parsed.values["run-id"], "--run-id");
   const eventType = requireNonEmpty(parsed.values["event-type"], "--event-type");
-  const event = await appendWorkflowRunEvent({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId,
-    eventType,
-    source: "cli",
-    message: parsed.values.message?.trim() || undefined,
-  });
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId, source: "cli" },
+  );
+  const event = await run.appendEvent({ eventType, message: parsed.values.message?.trim() || undefined });
 
   if (parsed.values.json) {
     console.log(JSON.stringify(toEventAppendedOutput(event)));
@@ -215,11 +211,12 @@ async function completeRoleExecutionCommand(argv: string[]): Promise<number> {
     },
   });
 
-  const completed = await completeWorkflowRunRoleExecution({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const completed = await run.recordRoleExecution({
     role: requireNonEmpty(parsed.values.role, "--role"),
-    source: "cli",
     artifactContractId: requireNonEmpty(parsed.values["artifact-contract"], "--artifact-contract"),
     artifactData: parseArtifactJson(requireNonEmpty(parsed.values["artifact-json"], "--artifact-json")),
   });
@@ -249,12 +246,13 @@ async function recordTransitionCommand(argv: string[]): Promise<number> {
     },
   });
 
-  const recorded = await recordWorkflowRunTransition({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const recorded = await run.recordTransition({
     fromState: requireNonEmpty(parsed.values["from-state"], "--from-state"),
     toState: requireNonEmpty(parsed.values["to-state"], "--to-state"),
-    source: "cli",
     gate: {
       name: requireNonEmpty(parsed.values.gate, "--gate"),
       status: parseGateStatus(requireNonEmpty(parsed.values["gate-status"], "--gate-status")),

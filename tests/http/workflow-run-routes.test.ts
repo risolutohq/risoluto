@@ -6,16 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { registerWorkflowRunRoutes } from "../../src/http/routes/workflow-runs.js";
-import {
-  appendWorkflowRunEvent,
-  createWorkflowRunRecord,
-  writeWorkflowRunRecord,
-} from "../../src/workflow-run/artifacts.js";
-import {
-  completeWorkflowRunAttempt,
-  failWorkflowRunAttempt,
-  startWorkflowRunAttempt,
-} from "../../src/workflow-run/run-attempts.js";
+import { createWorkflowRunRecord, openWorkflowRun, writeWorkflowRunRecord } from "../../src/workflow-run/artifacts.js";
 import { createMockLogger } from "../helpers.js";
 
 const tempDirs: string[] = [];
@@ -110,14 +101,11 @@ describe("Workflow Run HTTP routes", () => {
       now: () => "2026-05-25T11:55:00.000Z",
     });
     await writeWorkflowRunRecord(workflowRun);
-    await appendWorkflowRunEvent({
-      archiveDir,
-      workflowRunId: workflowRun.id,
-      eventType: "operator.note",
-      source: "cli",
-      message: "HTTP should be support/internal only.",
-      now: () => "2026-05-25T11:56:00.000Z",
-    });
+    const run = await openWorkflowRun(
+      { archiveDir },
+      { workflowRunId: workflowRun.id, source: "cli", now: () => "2026-05-25T11:56:00.000Z" },
+    );
+    await run.appendEvent({ eventType: "operator.note", message: "HTTP should be support/internal only." });
 
     const app = express();
     registerWorkflowRunRoutes(app, {
@@ -199,40 +187,14 @@ describe("Workflow Run HTTP routes", () => {
       now: () => "2026-05-25T12:30:00.000Z",
     });
     await writeWorkflowRunRecord(workflowRun);
-    await startWorkflowRunAttempt({
-      archiveDir,
-      workflowRunId: workflowRun.id,
-      source: "cli",
-      attemptId: "attempt-1",
-      attemptNumber: 1,
-      reason: "initial",
-      now: () => "2026-05-25T12:31:00.000Z",
-    });
-    await failWorkflowRunAttempt({
-      archiveDir,
-      workflowRunId: workflowRun.id,
-      source: "cli",
-      attemptId: "attempt-1",
-      message: "First attempt failed validation.",
-      now: () => "2026-05-25T12:32:00.000Z",
-    });
-    await startWorkflowRunAttempt({
-      archiveDir,
-      workflowRunId: workflowRun.id,
-      source: "cli",
-      attemptId: "attempt-2",
-      attemptNumber: 2,
-      reason: "retry",
-      now: () => "2026-05-25T12:33:00.000Z",
-    });
-    await completeWorkflowRunAttempt({
-      archiveDir,
-      workflowRunId: workflowRun.id,
-      source: "cli",
-      attemptId: "attempt-2",
-      message: "Retry passed validation.",
-      now: () => "2026-05-25T12:34:00.000Z",
-    });
+    const run = await openWorkflowRun(
+      { archiveDir },
+      { workflowRunId: workflowRun.id, source: "cli", now: () => "2026-05-25T12:31:00.000Z" },
+    );
+    await run.startRunAttempt({ attemptId: "attempt-1", attemptNumber: 1, reason: "initial" });
+    await run.failRunAttempt({ attemptId: "attempt-1", message: "First attempt failed validation." });
+    await run.startRunAttempt({ attemptId: "attempt-2", attemptNumber: 2, reason: "retry" });
+    await run.completeRunAttempt({ attemptId: "attempt-2", message: "Retry passed validation." });
 
     const app = express();
     registerWorkflowRunRoutes(app, {

@@ -115,3 +115,116 @@ export interface WorkflowRunWorkerProcessReference {
   status: "succeeded" | "failed";
   exitCode: number;
 }
+
+// Result shapes returned by the WorkflowRun handle's record* methods. Each
+// pairs a durable domain record with the event(s) appended to the Run Log.
+
+export interface WorkflowRunWorkerProcessRecord extends WorkflowRunWorkerProcessReference {
+  workflowRunId: string;
+}
+
+export interface WorkflowRunWorkerProcessRecordedOutput {
+  type: "workflow_run.worker_process_recorded";
+  workerProcess: WorkflowRunWorkerProcessRecord;
+  event: WorkflowRunEventRecord;
+}
+
+export interface WorkflowRunWorkspaceLifecycleRecord {
+  workflowRunId: string;
+  workspace: WorkflowRunWorkspaceReference;
+  repo: WorkflowRunRepoReference;
+}
+
+export interface WorkflowRunWorkspaceLifecycleRecordedOutput {
+  type: "workflow_run.workspace_lifecycle_recorded";
+  lifecycle: WorkflowRunWorkspaceLifecycleRecord;
+  events: WorkflowRunEventRecord[];
+}
+
+export interface WorkflowRunWorkspaceCleanupRecord extends WorkflowRunWorkspaceCleanupReference {
+  workflowRunId: string;
+}
+
+export interface WorkflowRunWorkspaceCleanupRecordedOutput {
+  type: "workflow_run.workspace_cleanup_recorded";
+  cleanup: WorkflowRunWorkspaceCleanupRecord;
+  event: WorkflowRunEventRecord;
+}
+
+export interface WorkflowRunRoleExecutionRecord {
+  id: string;
+  workflowRunId: string;
+  role: string;
+  status: "completed";
+  completedAt: string;
+  artifact: WorkflowRunArtifactReference;
+}
+
+export interface WorkflowRunRoleExecutionCompletedOutput {
+  type: "workflow_run.role_execution_completed";
+  roleExecution: WorkflowRunRoleExecutionRecord;
+}
+
+export interface WorkflowRunTransitionRecord {
+  workflowRunId: string;
+  fromState: string;
+  toState: string;
+  gate: WorkflowRunGateReference;
+  hook: WorkflowRunHookReference;
+}
+
+export interface WorkflowRunTransitionRecordedOutput {
+  type: "workflow_run.transition_recorded";
+  transition: WorkflowRunTransitionRecord;
+  events: WorkflowRunEventRecord[];
+}
+
+export interface WorkflowRunAttemptRecord extends WorkflowRunAttemptReference {
+  workflowRunId: string;
+  startedAt: string;
+}
+
+export interface WorkflowRunAttemptStartedOutput {
+  type: "workflow_run.run_attempt_started";
+  runAttempt: WorkflowRunAttemptRecord;
+  event: WorkflowRunEventRecord;
+}
+
+export interface WorkflowRunAttemptCompletedRecord {
+  id: string;
+  workflowRunId: string;
+  status: "completed";
+  completedAt: string;
+}
+
+export interface WorkflowRunAttemptCompletedOutput {
+  type: "workflow_run.run_attempt_completed";
+  runAttempt: WorkflowRunAttemptCompletedRecord;
+  event: WorkflowRunEventRecord;
+}
+
+export interface WorkflowRunAttemptFailedRecord {
+  id: string;
+  workflowRunId: string;
+  status: "failed";
+  failedAt: string;
+}
+
+export interface WorkflowRunAttemptFailedOutput {
+  type: "workflow_run.run_attempt_failed";
+  runAttempt: WorkflowRunAttemptFailedRecord;
+  event: WorkflowRunEventRecord;
+}
+
+export interface WorkflowRunAttemptCancelledRecord {
+  id: string;
+  workflowRunId: string;
+  status: "cancelled";
+  cancelledAt: string;
+}
+
+export interface WorkflowRunAttemptCancelledOutput {
+  type: "workflow_run.run_attempt_cancelled";
+  runAttempt: WorkflowRunAttemptCancelledRecord;
+  event: WorkflowRunEventRecord;
+}

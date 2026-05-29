@@ -2,13 +2,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import {
-  cancelWorkflowRunAttempt,
-  completeWorkflowRunAttempt,
-  failWorkflowRunAttempt,
-  startWorkflowRunAttempt,
-} from "../workflow-run/run-attempts.js";
-import type { WorkflowRunAttemptReference } from "../workflow-run/artifacts.js";
+import { openWorkflowRun, type WorkflowRunAttemptReference } from "../workflow-run/artifacts.js";
 import { listWorkflowRunAttempts } from "../workflow-run/run-attempt-projection.js";
 
 export async function startRunAttemptCommand(argv: string[]): Promise<number> {
@@ -25,10 +19,11 @@ export async function startRunAttemptCommand(argv: string[]): Promise<number> {
     },
   });
 
-  const started = await startWorkflowRunAttempt({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const started = await run.startRunAttempt({
     attemptId: requireNonEmpty(parsed.values["attempt-id"], "--attempt-id"),
     attemptNumber: parseAttemptNumber(requireNonEmpty(parsed.values["attempt-number"], "--attempt-number")),
     reason: parseAttemptReason(requireNonEmpty(parsed.values.reason, "--reason")),
@@ -55,10 +50,11 @@ export async function completeRunAttemptCommand(argv: string[]): Promise<number>
     },
   });
 
-  const completed = await completeWorkflowRunAttempt({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const completed = await run.completeRunAttempt({
     attemptId: requireNonEmpty(parsed.values["attempt-id"], "--attempt-id"),
     message: parsed.values.message?.trim() || undefined,
   });
@@ -84,10 +80,11 @@ export async function failRunAttemptCommand(argv: string[]): Promise<number> {
     },
   });
 
-  const failed = await failWorkflowRunAttempt({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const failed = await run.failRunAttempt({
     attemptId: requireNonEmpty(parsed.values["attempt-id"], "--attempt-id"),
     message: parsed.values.message?.trim() || undefined,
   });
@@ -113,10 +110,11 @@ export async function cancelRunAttemptCommand(argv: string[]): Promise<number> {
     },
   });
 
-  const cancelled = await cancelWorkflowRunAttempt({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const cancelled = await run.cancelRunAttempt({
     attemptId: requireNonEmpty(parsed.values["attempt-id"], "--attempt-id"),
     message: parsed.values.message?.trim() || undefined,
   });

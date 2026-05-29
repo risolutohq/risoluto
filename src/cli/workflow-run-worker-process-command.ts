@@ -2,8 +2,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { recordWorkflowRunWorkerProcess } from "../workflow-run/worker-process.js";
-import type { WorkflowRunWorkerProcessReference } from "../workflow-run/artifacts.js";
+import { openWorkflowRun, type WorkflowRunWorkerProcessReference } from "../workflow-run/artifacts.js";
 
 export async function recordWorkerProcessCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -21,10 +20,11 @@ export async function recordWorkerProcessCommand(argv: string[]): Promise<number
     },
   });
 
-  const recorded = await recordWorkflowRunWorkerProcess({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const recorded = await run.recordWorkerProcess({
     workerId: requireNonEmpty(parsed.values["worker-id"], "--worker-id"),
     role: requireNonEmpty(parsed.values.role, "--role"),
     harness: requireNonEmpty(parsed.values.harness, "--harness"),

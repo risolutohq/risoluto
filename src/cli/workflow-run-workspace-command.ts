@@ -2,10 +2,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import {
-  recordWorkflowRunWorkspaceCleanup,
-  recordWorkflowRunWorkspaceLifecycle,
-} from "../workflow-run/workspace-lifecycle.js";
+import { openWorkflowRun } from "../workflow-run/artifacts.js";
 
 export async function recordWorkspaceLifecycleCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -22,10 +19,11 @@ export async function recordWorkspaceLifecycleCommand(argv: string[]): Promise<n
     },
   });
 
-  const recorded = await recordWorkflowRunWorkspaceLifecycle({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const recorded = await run.recordWorkspaceLifecycle({
     workspacePath: path.resolve(requireNonEmpty(parsed.values["workspace-path"], "--workspace-path")),
     workspaceKey: requireNonEmpty(parsed.values["workspace-key"], "--workspace-key"),
     repoUrl: requireNonEmpty(parsed.values["repo-url"], "--repo-url"),
@@ -55,10 +53,11 @@ export async function recordWorkspaceCleanupCommand(argv: string[]): Promise<num
     },
   });
 
-  const recorded = await recordWorkflowRunWorkspaceCleanup({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
-    workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"),
-    source: "cli",
+  const run = await openWorkflowRun(
+    { dataDir: resolveDataDir(parsed.values["data-dir"]) },
+    { workflowRunId: requireNonEmpty(parsed.values["run-id"], "--run-id"), source: "cli" },
+  );
+  const recorded = await run.recordWorkspaceCleanup({
     workspacePath: path.resolve(requireNonEmpty(parsed.values["workspace-path"], "--workspace-path")),
     workspaceKey: requireNonEmpty(parsed.values["workspace-key"], "--workspace-key"),
     result: parseWorkspaceCleanupResult(requireNonEmpty(parsed.values.result, "--result")),
