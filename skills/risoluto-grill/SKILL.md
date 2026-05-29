@@ -3,6 +3,12 @@ name: risoluto-grill
 description: Stress-test a Risoluto research idea against the corpus and the product spine until two operator-owned sections crystallise — `## Why us / why now` and `## Smallest shippable shape` — in `research/ideas/<slug>/README.md`. Pre-loads the idea README, every cited target README, the matching `capability-backlog.md` row, and any `research/RISOLUTO_FEATURES.md` bundles the idea touches, then runs a grill loop framed for the research→product seam ("you have N peers doing X, why us, why now, smallest cut") with one question at a time. On exit, writes the two sections via the deterministic write script (preserving frontmatter, the synthesizer-owned block, and `## Analyst notes` / `## Open questions` verbatim) and offers to flip the backlog row from `status: idea` to `status: ready`. Use this skill whenever Omer says `/risoluto-grill`, "grill <idea-slug>", "stress-test the <slug> idea", "fill in why us / why now for <slug>", "scope the smallest shippable shape of <slug>", "promote <slug> from idea to ready", or any variation that implies turning a clustered idea into a scoped, shippable bet. Also trigger when Omer asks "what's the thinnest slice of <slug>?", "why should Risoluto ship <slug> before competitors X and Y?", or wants to walk the seam between a specific captured idea (named slug or vault cluster) and a product decision about it. Idempotent — re-running re-grills, operator keeps iterating; the two sections are the only ones the write touches. Companion to Phase 3.1 of `docs/research-to-shipping-pipeline.md`.
 ---
 
+> **⛔ RETIRED — 2026-05-29 ([decision #30](../../docs/decisions.md)).** This skill writes
+> `## Why us / why now` + `## Smallest shippable shape` into `research/ideas/<slug>/README.md`, which
+> the reset removed. In the roadmap-centric model, scoping lives in a row's **Why now + Size** in
+> [`docs/roadmap.md`](../../docs/roadmap.md). To stress-test a row, use the generic `/grill-me` or
+> `/grill-with-docs`, then write the conclusion into the roadmap row by hand. **Do not invoke this.**
+
 # risoluto-grill
 
 Idea-to-bet sharpener for the Risoluto planning pipeline. Phase 3.1 of the planning-pipeline roadmap.

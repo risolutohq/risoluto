@@ -3,6 +3,13 @@ name: risoluto-synthesizer
 description: Roll captured research targets into idea clusters for the Risoluto planning pipeline — reads every `research/targets/<slug>/README.md` and `research/targets/<slug>/sources/*.md` frontmatter `ideas:` tag, groups them by capability, and rewrites `research/ideas/<slug>/README.md` (synthesizer-owned `## Evidence`, `## Targets that ship this`, `## Variants observed`, `## Frequency` sections; operator-owned `## Analyst notes`, `## Open questions`, `## Why us / why now`, `## Smallest shippable shape` preserved verbatim) plus the `idea`-status row block in `docs/capability-backlog.md` (sticky name/category on re-runs, status field never clobbers operator-set `ready` / `in-flight` / `shipped`). Use this skill whenever Omer says `/risoluto-synthesizer`, "synthesize the research", "roll up the targets", "cluster the ideas", "regenerate the capability backlog idea rows", "rerun the synthesizer", "what ideas have ≥2 evidence targets", or any variation that implies turning captured targets into ranked idea clusters. Also trigger when Omer flags an idea as orphaned (no evidence) or asks why a backlog row flipped to `dropped` — the synthesizer is the one source of truth for `idea`-row authorship. Always runs full-corpus and is idempotent; LLM tag suggestions for thin targets (<2 ideas tagged) are flagged but gated behind operator confirmation. Companion to Phase 2.1 of `docs/research-to-shipping-pipeline.md`.
 ---
 
+> **⛔ RETIRED — 2026-05-29 ([decision #30](../../docs/decisions.md)).** The capability backlog and
+> auto-synthesized idea clusters were replaced by a single hand-owned
+> [`docs/roadmap.md`](../../docs/roadmap.md). This skill writes `research/ideas/` and the
+> `capability-backlog.md` idea-rows — **both removed by the reset — so do not invoke it.** Capture
+> research with `/risoluto-researcher` and fold takeaways into roadmap rows by hand. Current flow:
+> [`research-to-shipping-pipeline.md`](../../docs/research-to-shipping-pipeline.md).
+
 # risoluto-synthesizer
 
 Idea clusterer for the Risoluto research corpus. Phase 2.1 of the planning-pipeline roadmap.
