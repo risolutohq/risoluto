@@ -333,6 +333,15 @@ resolution mean the security posture the ADR promises is not yet the one in forc
 
 ## 7. Research-to-Shipping Planning Pipeline
 
+> **Update 2026-05-29 (decision [#30](../decisions.md)).** The model below describes the original
+> pipeline: auto-synthesized idea clusters in `capability-backlog.md` + `research/ideas/`. That layer
+> was reset — the single plan is now a hand-owned [`docs/roadmap.md`](../roadmap.md); research is
+> optional input and the synthesizer's auto-plan role is retired. The core decision (PRDs canonical in
+> git, flat Linear issues with blocked-by, fork-not-upgrade skills, manual `/tdd`) still holds; only
+> the **plan source** changed. Current flow:
+> [`research-to-shipping-pipeline.md`](../research-to-shipping-pipeline.md). Skill rewiring to the
+> roadmap is Phase C (not yet done).
+
 ### Context
 
 The v1 planning surface evolved ad-hoc: research in Obsidian, ideas in a flat
