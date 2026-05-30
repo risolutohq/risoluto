@@ -51,49 +51,75 @@ function checkPreconditions(slug) {
 const VALID_FLAGS = ["new", "merge", "supersede", "skip"];
 
 /**
- * Parse "## Candidate features" section from a target README.
- * Each candidate is a markdown block of the form:
+ * Parse the "## Candidate features" section of a target README.
  *
- *   ### <Title>
- *   <summary lines>
- *   [flag: <new|merge|supersede|skip>]
+ * The researcher (Step 5.1 / buildTargetBody) writes one candidate per bullet:
  *
- * The [flag: ...] marker may appear anywhere in the candidate block.
+ *   - <Title> — <one-line summary> [job: <afk-job>] [flag: <new|merge|supersede|skip>[ slug:<row-slug>]]
+ *
+ * Title is the text before the em-dash; the [job:] and [flag:] markers may appear in
+ * any order at the end. A `merge`/`supersede` flag may carry a `slug:<row>` token naming
+ * the roadmap row it folds into / replaces. An unresolved `[flag: TBD]` or a missing flag
+ * is read as `new`, so the candidate still reaches the grill. Scaffold/placeholder bullets
+ * (those still containing `<...>` angle brackets) are skipped.
  *
  * @param {string} raw
- * @returns {Array<{ title: string, flag: string, summary: string }>}
+ * @returns {Array<{ title: string, summary: string, job: string | null, flag: string, merge_target_slug: string | null }>}
  */
 function parseCandidates(raw) {
-  const FLAG_RE = /\[flag:\s*([a-z]+)\]/i;
   const candidatesIdx = raw.search(/^##\s+Candidate features/im);
   if (candidatesIdx === -1) return [];
 
-  // Slice from "## Candidate features" to the next ## heading (or EOF)
+  // Slice from "## Candidate features" to the next ## heading (or EOF).
   const afterSection = raw.slice(candidatesIdx);
   const nextHeadingMatch = afterSection.slice(1).search(/^##\s+/m);
   const section = nextHeadingMatch === -1 ? afterSection : afterSection.slice(0, nextHeadingMatch + 1);
 
-  // Split into ### sub-headings
-  const parts = section.split(/^###\s+/m).slice(1); // first part is the ## heading itself
   const candidates = [];
-  for (const part of parts) {
-    const titleEnd = part.indexOf("\n");
-    const title = (titleEnd === -1 ? part : part.slice(0, titleEnd)).trim();
-    const body = titleEnd === -1 ? "" : part.slice(titleEnd + 1).trim();
-    const flagMatch = body.match(FLAG_RE);
-    const flag = flagMatch ? flagMatch[1].toLowerCase() : "new";
-    const validFlag = VALID_FLAGS.includes(flag) ? flag : "new";
-    // Strip the flag marker from summary
-    const summary = body.replace(FLAG_RE, "").trim();
-    if (title) candidates.push({ title, flag: validFlag, summary });
+  for (const rawLine of section.split("\n")) {
+    const line = rawLine.trim();
+    if (!line.startsWith("- ")) continue; // candidates are top-level bullets
+
+    const flagMatch = line.match(/\[flag:\s*([^\]]+)\]/i);
+    const jobMatch = line.match(/\[job:\s*([^\]]+)\]/i);
+
+    // Drop the leading bullet and the [job:]/[flag:] markers, then split "title — summary".
+    const text = line
+      .replace(/^-+\s*/, "")
+      .replace(/\[(?:job|flag):[^\]]*\]/gi, "")
+      .trim();
+    const [titlePart, ...rest] = text.split(/\s+—\s+|\s+-\s+/);
+    const title = (titlePart ?? "").trim();
+    if (!title || title.includes("<")) continue; // skip scaffold placeholders like "<feature name>"
+    const summary = rest.join(" — ").trim();
+
+    let flag = "new";
+    let mergeTargetSlug = null;
+    if (flagMatch) {
+      const tokens = flagMatch[1].trim().split(/\s+/);
+      const word = (tokens[0] ?? "").toLowerCase();
+      flag = VALID_FLAGS.includes(word) ? word : "new"; // TBD / unknown → new (unresolved reaches the grill)
+      const slugTok = tokens.find((t) => t.toLowerCase().startsWith("slug:"));
+      if (slugTok) mergeTargetSlug = slugTok.slice("slug:".length);
+    }
+    const job = jobMatch ? jobMatch[1].trim() : null;
+    candidates.push({ title, summary, job, flag, merge_target_slug: mergeTargetSlug });
   }
   return candidates;
 }
 
 /**
- * Collect RISOLUTO_FEATURES.md lines that mention the slug.
+ * Collect RISOLUTO_FEATURES.md lines that mention the slug, each tagged with its `status`:
+ *
+ *   - "active"  — inside a live feature entry → "Risoluto ships this" (saturation / differentiation signal)
+ *   - "removed" — inside a `⚠️ Removed` tombstone → "Risoluto built this and deliberately dropped it"
+ *                 (the OPPOSITE of shipped — re-proposing it must clear a higher bar; never read as covered)
+ *   - "meta"    — inside `## Run history` or `## Changed since last spine` (a ledger/diff row, not an entry)
+ *
+ * The status lets the grill avoid treating a tombstone as evidence the capability is shipped — see SKILL.md.
+ *
  * @param {string} slug
- * @returns {Array<{ line: number, text: string }>}
+ * @returns {Array<{ line: number, text: string, status: "active" | "removed" | "meta" }>}
  */
 function findFeaturesHits(slug) {
   if (!existsSync(FEATURES_FILE)) return [];
@@ -101,10 +127,24 @@ function findFeaturesHits(slug) {
   const needle = slug.toLowerCase();
   const altNeedle = slug.replace(/-/g, " ").toLowerCase();
   const hits = [];
+  let section = ""; // current `## ` heading, lowercased
+  let entryStatus = "active"; // status of the current `### ` entry
   for (let i = 0; i < lines.length; i += 1) {
-    const lower = lines[i].toLowerCase();
+    const line = lines[i];
+    const h3 = line.match(/^###\s+(.*)/);
+    if (h3) {
+      entryStatus = /⚠️|removed in /i.test(h3[1]) ? "removed" : "active";
+    } else {
+      const h2 = line.match(/^##\s+(.*)/);
+      if (h2) {
+        section = h2[1].toLowerCase();
+        entryStatus = "active";
+      }
+    }
+    const lower = line.toLowerCase();
     if (lower.includes(needle) || lower.includes(altNeedle)) {
-      hits.push({ line: i + 1, text: lines[i].trim() });
+      const isMeta = section.includes("run history") || section.includes("changed since last spine");
+      hits.push({ line: i + 1, text: line.trim(), status: isMeta ? "meta" : entryStatus });
     }
   }
   return hits;
@@ -139,9 +179,12 @@ function main() {
   process.stdout.write(`${JSON.stringify(bundle, null, 2)}\n`);
 
   const surviving = candidates.filter((c) => c.flag !== "skip").length;
+  const spineActive = featuresSpine.filter((h) => h.status === "active").length;
+  const spineRemoved = featuresSpine.filter((h) => h.status === "removed").length;
   process.stderr.write(
     `risoluto-grill preload: loaded ${slug} — ${candidates.length} candidates (${surviving} surviving), ` +
-      `${roadmapRows.length} roadmap rows, ${featuresSpine.length} features-spine hits\n`,
+      `${roadmapRows.length} roadmap rows, ${featuresSpine.length} features-spine hits ` +
+      `(${spineActive} active, ${spineRemoved} tombstoned)\n`,
   );
 }
 

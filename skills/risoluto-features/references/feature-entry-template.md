@@ -39,8 +39,20 @@ Maps 1:1 to the markdown. See `references/json-schema.md` for the full schema.
     "Applies **both** `verbosity` and `minSeverity` gates — a channel set to `verbosity: \"critical\"` drops warning/info regardless of `minSeverity`."
   ],
   "citations": [
-    { "path": "src/notification/slack-webhook.ts", "start_line": 116, "end_line": 170, "symbol": "SlackWebhookChannel", "kind": "class" },
-    { "path": "src/notification/slack-webhook.ts", "start_line": 12,  "end_line": 19,  "symbol": "DEFAULT_TIMEOUT_MS",  "kind": "const" }
+    {
+      "path": "src/notification/slack-webhook.ts",
+      "start_line": 116,
+      "end_line": 170,
+      "symbol": "SlackWebhookChannel",
+      "kind": "class"
+    },
+    {
+      "path": "src/notification/slack-webhook.ts",
+      "start_line": 12,
+      "end_line": 19,
+      "symbol": "DEFAULT_TIMEOUT_MS",
+      "kind": "const"
+    }
   ],
   "shipped": { "date": "2026-04-04", "source": "roadmap issue #254", "issue": 254 },
   "issues": [254],
@@ -50,6 +62,31 @@ Maps 1:1 to the markdown. See `references/json-schema.md` for the full schema.
   "verified_at": "2026-05-26T13:15:00Z"
 }
 ```
+
+## Tombstone form (removed features)
+
+When a feature's implementation disappears from the source repo, it is **not** deleted — its full record moves from `features[]` to `removed_features[]` (so the validators, which only walk `features[]`, never trip on its now-dead citations) and it renders in-body inside its original bundle with a removal marker. This keeps the spine a durable research memory: a researcher comparing a peer's capability can see Risoluto built this and deliberately removed it, so it isn't re-proposed.
+
+```markdown
+### {{ name }} ⚠️ Removed in {{ git describe / sha }} ({{ removed_at date }})
+
+> **REMOVED {{ date }} (`{{ removed_in_sha }}`):** {{ one–two sentence reason — what replaced it, or why it was dropped }}
+
+- **Description:** {{ original body, retained verbatim }}
+- **How it works:** {{ retained }}
+- **Observable behaviors:**
+  - {{ retained }}
+- **Evidence:**
+  - Source: `{{ path }}:L{{ start }}-L{{ end }}` — `{{ symbol }}` ({{ kind }}) {{ — now points at deleted code; that is expected for a tombstone }}
+- **Shipped in:** {{ retained }}
+```
+
+Rules:
+
+1. The body below the marker is **frozen** — keep it as it last read. Don't re-verify or "repair" citations that now point at deleted code; recording what _was_ is the whole point.
+2. Tombstones are **persistent** — never dropped on a later run.
+3. They render at the **end of their bundle section**, after the active entries, so each bundle still reads "what ships today" first.
+4. In `## Changed since last spine`, the Removed subsection links to the tombstone (the anchor resolves because the body is retained).
 
 ## Style rules — non-negotiable
 

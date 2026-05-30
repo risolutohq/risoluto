@@ -123,6 +123,8 @@ Chunk existing entries into batches of ~15 and spawn one subagent per batch usin
 
 Wait for all subagents. Merge their outputs into the working JSON.
 
+**Removed features are tombstoned, never deleted.** If a verify subagent reports a feature's implementation is gone (its citations no longer resolve and no renamed/relocated replacement exists), move its **full record** out of `features[]` into `removed_features[]`, adding `status: "removed"`, `removed_in_sha: $SOURCE_SHA`, `removed_at`, and a one-line human `reason`. Do not re-verify or repair a tombstone's citations — they intentionally point at deleted code. Tombstones persist across runs and render in-body with a `⚠️ Removed` marker (see `references/feature-entry-template.md`). Keeping them makes the spine a durable dedup anchor — research comparisons can see a capability was built and deliberately dropped.
+
 ### Step 5 — Extract net-new features (spawn per-module subagents)
 
 For each `src/<module>/` (and `frontend/src/` if present) where Step 3 signals indicate change, spawn one subagent using the **`extract` template** from `references/subagent-prompts.md`. Each subagent:
@@ -166,9 +168,13 @@ python3 skills/risoluto-features/scripts/diff_spines.py \
 
 Added → Modified → Removed, with anchor links. On cold start, output is the "Initial spine cut at `<sha>`" message.
 
+Then **append this run to the ledger**: prepend one `run_history` entry to the working JSON — `{ date: $SOURCE_DATE, from_sha: $PREV_SHA (null on cold start), to_sha: $SOURCE_SHA, added, modified, removed }`, using the counts `diff_spines.py` just reported. Prior rows carry forward from the previous JSON (loaded in Step 2). This persistent ledger renders as the `## Run history` table (Step 9).
+
 ### Step 9 — Render markdown atomically
 
-Layout (top to bottom): H1 + intro → frontmatter list (with `source_repo` + `storage_repo` blocks) → `---` → Changed since last spine → `---` → per-bundle H2 sections → `---` → Summary → Coverage manifest → Needs follow-up → Analyst notes.
+Layout (top to bottom): H1 + intro → frontmatter list (with `source_repo` + `storage_repo` blocks) → `---` → Changed since last spine → `## Run history` → `---` → per-bundle H2 sections → `---` → Summary → Coverage manifest → Needs follow-up → Analyst notes.
+
+Within each per-bundle section, render active entries first, then any `⚠️ Removed` tombstones for that bundle (from `removed_features[]`, frozen bodies — see `references/feature-entry-template.md`). The `## Run history` table is the append-only ledger: render every row, newest first.
 
 Write to `.next` files first; only rename to `.md` and `.json` after Step 10 passes.
 

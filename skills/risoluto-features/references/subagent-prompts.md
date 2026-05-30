@@ -3,6 +3,7 @@
 The risoluto-features skill uses map-reduce: per-module subagents do source reading and feature extraction in parallel so the main agent's context stays compact. This file holds the **prompt templates** the main agent fills in and passes to each subagent.
 
 Two templates:
+
 - **`extract`** — used on cold start and for net-new modules. Subagent reads source, returns feature records.
 - **`verify`** — used on incremental updates. Subagent re-checks a batch of existing entries against current source.
 
@@ -99,7 +100,7 @@ For each feature, output a status:
 - "unchanged" — all checks pass; just bump verified_at to current ISO-8601 UTC timestamp
 - "drifted" — citation line ranges moved silently (symbol/file/behavior unchanged); update lines, no other changes
 - "modified" — observable_behaviors or quoted constants changed in a way that affects the contract; populate changed_since_previous with diff details
-- "removed" — citation files all gone AND symbol can't be relocated; mark for removal
+- "removed" — citation files all gone AND symbol can't be relocated; mark for removal (the main agent tombstones it — see below — it is never deleted)
 
 Output format — return a JSON array of update objects (one per input feature, in the same order):
 
@@ -114,7 +115,7 @@ Output format — return a JSON array of update objects (one per input feature, 
   ...
 ]
 
-If status is "removed", set updated_feature to null and populate removal_reason.
+If status is "removed", set updated_feature to null and populate removal_reason. The main agent then moves the feature's _prior_ record (which it already holds) into `removed_features[]` as a persistent `⚠️ Removed` tombstone, using your `removal_reason` — the entry is kept, never dropped (Step 4 of SKILL.md).
 If status is "modified", populate changed_since_previous.diff inside updated_feature.
 If status is "unchanged" or "drifted", updated_feature contains the full feature with line ranges re-derived as needed.
 
@@ -129,14 +130,15 @@ Word budget: keep `notes` under 30 words per feature.
 
 ```javascript
 // Cold start: spawn extract per module, in parallel
-const modules = ["src/notification", "src/orchestrator", /* ... */];
-const extractPrompts = modules.map(m => extractTemplate
-  .replace("<<MODULE_PATH_ABS>>", `${SOURCE_DIR_ABS}/${m}`)
-  .replace("<<SOURCE_DIR_ABS>>", SOURCE_DIR_ABS)
-  .replace("<<SOURCE_SHA>>", SOURCE_SHA)
-  .replace("<<SOURCE_SHA_SHORT>>", SOURCE_SHA.slice(0, 7))
-  .replace("<<SOURCE_DATE>>", SOURCE_DATE)
-  .replace("<<CLOSED_ISSUES_JSON_PATH>>", "/tmp/risoluto-closed-issues.json")
+const modules = ["src/notification", "src/orchestrator" /* ... */];
+const extractPrompts = modules.map((m) =>
+  extractTemplate
+    .replace("<<MODULE_PATH_ABS>>", `${SOURCE_DIR_ABS}/${m}`)
+    .replace("<<SOURCE_DIR_ABS>>", SOURCE_DIR_ABS)
+    .replace("<<SOURCE_SHA>>", SOURCE_SHA)
+    .replace("<<SOURCE_SHA_SHORT>>", SOURCE_SHA.slice(0, 7))
+    .replace("<<SOURCE_DATE>>", SOURCE_DATE)
+    .replace("<<CLOSED_ISSUES_JSON_PATH>>", "/tmp/risoluto-closed-issues.json"),
 );
 // One Agent call per prompt, all in the same message → parallel execution
 ```
@@ -144,11 +146,12 @@ const extractPrompts = modules.map(m => extractTemplate
 ```javascript
 // Incremental: chunk existing features into batches of ~15
 const batches = chunkArray(existingJson.features, 15);
-const verifyPrompts = batches.map(batch => verifyTemplate
-  .replace("<<FEATURES_JSON>>", JSON.stringify(batch))
-  .replace("<<SOURCE_DIR_ABS>>", SOURCE_DIR_ABS)
-  .replace("<<SOURCE_SHA>>", SOURCE_SHA)
-  .replace("<<SOURCE_DATE>>", SOURCE_DATE)
+const verifyPrompts = batches.map((batch) =>
+  verifyTemplate
+    .replace("<<FEATURES_JSON>>", JSON.stringify(batch))
+    .replace("<<SOURCE_DIR_ABS>>", SOURCE_DIR_ABS)
+    .replace("<<SOURCE_SHA>>", SOURCE_SHA)
+    .replace("<<SOURCE_DATE>>", SOURCE_DATE),
 );
 ```
 
@@ -158,13 +161,13 @@ The main agent never reads `.ts` files. It assembles inputs, dispatches subagent
 
 Common failures and recovery:
 
-| Failure | Cause | Recovery |
-|---|---|---|
-| Subagent returns markdown-wrapped JSON | Forgot the "no markdown" instruction | Strip ```` ```json ```` fences before parsing; if persistent, re-spawn |
-| JSON parse error | Trailing comma, comment, etc. | Re-spawn with explicit "valid JSON only — no JS comments, no trailing commas" |
-| Feature with <2 citations | Subagent padded | Drop the offending features; note in analyst_notes |
-| Citation symbol is an English phrase ("the auth helper") | Subagent didn't grep | Drop the offending citations; note in analyst_notes — these would fail fact_check anyway |
-| Subagent returns an empty array | Plumbing-only module | Accept; record the module in Coverage manifest with kind="plumbing only" |
-| Timeout / no response | Subagent stuck | Re-spawn just that module |
+| Failure                                                  | Cause                                | Recovery                                                                                 |
+| -------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Subagent returns markdown-wrapped JSON                   | Forgot the "no markdown" instruction | Strip ` ```json ` fences before parsing; if persistent, re-spawn                         |
+| JSON parse error                                         | Trailing comma, comment, etc.        | Re-spawn with explicit "valid JSON only — no JS comments, no trailing commas"            |
+| Feature with <2 citations                                | Subagent padded                      | Drop the offending features; note in analyst_notes                                       |
+| Citation symbol is an English phrase ("the auth helper") | Subagent didn't grep                 | Drop the offending citations; note in analyst_notes — these would fail fact_check anyway |
+| Subagent returns an empty array                          | Plumbing-only module                 | Accept; record the module in Coverage manifest with kind="plumbing only"                 |
+| Timeout / no response                                    | Subagent stuck                       | Re-spawn just that module                                                                |
 
 Don't restart the whole pipeline because one subagent failed. Just re-spawn the bad one.

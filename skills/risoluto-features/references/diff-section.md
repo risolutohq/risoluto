@@ -34,7 +34,7 @@ From `cbf423b` → `e4f5g6h` — **3 added · 5 modified · 1 removed**.
 - **Bundle name** appears italicised after an em-dash. Don't repeat the bundle in the entry link text.
 - **Issue numbers** appear as `(#N, #M)` only in the Added subsection. Modified and Removed entries skip them — the reader can click through if they want.
 - **Modified subsection lists which fields changed**, in alphabetical order, comma-separated in a code span. The reader scans this to decide whether the change matters to them.
-- **Removed subsection uses bold for the feature name** (not a link, since the body is gone) and shows the `id` in code so a downstream consumer can grep for it.
+- **Removed subsection links the feature name** to its tombstone — the body is retained in-bundle with a `⚠️ Removed` marker (see `feature-entry-template.md`), so the anchor resolves — and shows the `id` in code so a downstream consumer can grep for it.
 
 ## Cold start
 
@@ -52,7 +52,7 @@ No subsections. The reader knows there's nothing to diff.
 
 ## Don't
 
-- ❌ Don't summarise reasons in this section. The reader wants the *scoreboard* first; if they want the *why*, they jump to the entry.
+- ❌ Don't summarise reasons in this section. The reader wants the _scoreboard_ first; if they want the _why_, they jump to the entry.
 - ❌ Don't include cosmetic changes (line-range shifts where the symbol and behavior are identical). The diff section is for material changes only.
 - ❌ Don't reorder the subsections. Added → Modified → Removed, always. Readers scan in that order.
 - ❌ Don't make this section longer than ~30 lines on a typical run. If it is, you probably included cosmetic noise.

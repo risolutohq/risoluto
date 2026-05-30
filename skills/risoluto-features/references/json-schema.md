@@ -9,22 +9,22 @@ Authoritative shape of the JSON sidecar. The markdown spine and the HTML viewer 
   "schema_version": "1.1",
   // Two-repo model: the spine lives in ONE repo, but cites code from another.
   "source_repo": {
-    "url": "https://github.com/risolutohq/risoluto.git",  // where the cited code lives
-    "local_path": ".spine-workspace/source",              // relative to time-aura repo root; used by validators
+    "url": "https://github.com/risolutohq/risoluto.git", // where the cited code lives
+    "local_path": ".spine-workspace/source", // relative to time-aura repo root; used by validators
     "commit_sha": "cbf423b1234567890abcdef",
     "git_describe": "v0.9.0-90-gcbf423b",
-    "head_date": "2026-04-19"
+    "head_date": "2026-04-19",
   },
   "storage_repo": {
-    "url": "https://github.com/risolutohq/risoluto-research.git",  // where THIS spine file lives
-    "submodule_path": "research"                                   // relative to time-aura repo root
+    "url": "https://github.com/risolutohq/risoluto-research.git", // where THIS spine file lives
+    "submodule_path": "research", // relative to time-aura repo root
   },
   // Legacy top-level fields kept for back-compat with v1.0 consumers; mirror source_repo.
   "commit_sha": "cbf423b1234567890abcdef",
   "git_describe": "v0.9.0-90-gcbf423b",
   "head_date": "2026-04-19",
   "generated_at": "2026-05-26T13:15:00Z",
-  "previous_commit_sha": "a1b2c3d4...",   // null on cold start; refers to source_repo.commit_sha
+  "previous_commit_sha": "a1b2c3d4...", // null on cold start; refers to source_repo.commit_sha
   "previous_generated_at": "2026-04-19T10:00:00Z",
   "bundles": [
     "Notifications, Chat & Triggers",
@@ -37,29 +37,44 @@ Authoritative shape of the JSON sidecar. The markdown spine and the HTML viewer 
     "Config",
     "Security / Auth",
     "Runtime",
-    "Persistence"
+    "Persistence",
   ],
-  "features": [ /* see Feature record below */ ],
-  "removed_features": [ /* feature records dropped since last run, kept one cycle */ ],
-  "coverage": [ /* per-module accounting */ ],
+  "features": [
+    /* active features — see Feature record below */
+  ],
+  "removed_features": [
+    /* tombstones: full record + removal metadata, persistent — see below */
+  ],
+  "run_history": [
+    /* append-only ledger, one entry per update, newest first — see below */
+  ],
+  "coverage": [
+    /* per-module accounting */
+  ],
   "summary": {
-    "by_bundle": { "Notifications, Chat & Triggers": 10, /* ... */ },
+    "by_bundle": { "Notifications, Chat & Triggers": 10 /* ... */ },
     "total": 118,
-    "confidence": { "high": 118, "medium": 0, "low": 0 }
+    "confidence": { "high": 118, "medium": 0, "low": 0 },
   },
-  "needs_followup": [ /* see Followup record */ ],
-  "analyst_notes": { /* see Analyst notes record */ },
+  "needs_followup": [
+    /* see Followup record */
+  ],
+  "analyst_notes": {
+    /* see Analyst notes record */
+  },
   "open_roadmap": {
     "count": 71,
     "epic_issue": 354,
     "bundle_count": 11,
-    "as_of": "2026-04-04"
+    "as_of": "2026-04-04",
   },
   "latest_shipped_bundles": {
     "count": 22,
     "dates": ["2026-04-03", "2026-04-04"],
-    "issues": [254, 258, 260, 262, 275, 276, 278, 282, 286, 292, 299, 303, 307, 308, 315, 318, 319, 326, 333, 335, 346, 375]
-  }
+    "issues": [
+      254, 258, 260, 262, 275, 276, 278, 282, 286, 292, 299, 303, 307, 308, 315, 318, 319, 326, 333, 335, 346, 375,
+    ],
+  },
 }
 ```
 
@@ -67,9 +82,9 @@ Authoritative shape of the JSON sidecar. The markdown spine and the HTML viewer 
 
 ```jsonc
 {
-  "id": "slack-block-kit-webhook",                    // stable kebab-case
+  "id": "slack-block-kit-webhook", // stable kebab-case
   "bundle": "Notifications, Chat & Triggers",
-  "name": "Slack Block Kit webhook channel",         // H3 in markdown
+  "name": "Slack Block Kit webhook channel", // H3 in markdown
   "description": "Dedicated Slack delivery adapter that formats notifications as Block Kit payloads...",
   "how_it_works": "`SlackWebhookChannel.notify` serialises the event into a `{ text, attachments[].color, blocks[] }` payload, attaches the severity colour, and dispatches via `fetch` with a 10 s `AbortController` timeout.",
   "observable_behaviors": [
@@ -77,7 +92,7 @@ Authoritative shape of the JSON sidecar. The markdown spine and the HTML viewer 
     "Timeout: `DEFAULT_TIMEOUT_MS = 10_000`; beyond that the channel aborts and records the failure.",
     "Default channel name: `\"slack_webhook\"`; `NotificationCenter.sendSlackTest` creates a one-shot instance as `\"slack_webhook_test\"`.",
     "Block layout: `header`, two `section` blocks, `context`, optional link section, optional metadata code-block (capped at 8 entries).",
-    "Applies **both** `verbosity` and `minSeverity` gates — a channel set to `verbosity: \"critical\"` drops warning/info regardless of `minSeverity`."
+    "Applies **both** `verbosity` and `minSeverity` gates — a channel set to `verbosity: \"critical\"` drops warning/info regardless of `minSeverity`.",
   ],
   "citations": [
     {
@@ -85,26 +100,26 @@ Authoritative shape of the JSON sidecar. The markdown spine and the HTML viewer 
       "start_line": 116,
       "end_line": 170,
       "symbol": "SlackWebhookChannel",
-      "kind": "class"
+      "kind": "class",
     },
     {
       "path": "src/notification/slack-webhook.ts",
       "start_line": 12,
       "end_line": 19,
       "symbol": "DEFAULT_TIMEOUT_MS",
-      "kind": "const"
-    }
+      "kind": "const",
+    },
   ],
   "shipped": {
     "date": "2026-04-04",
     "source": "roadmap issue #254",
-    "issue": 254
+    "issue": 254,
   },
   "issues": [254],
-  "confidence": "high",                              // "high" | "medium" | "low"
-  "tier": "user-observable",                         // "user-observable" | "backend-surface"
-  "changed_since_previous": null,                    // null OR { "kind": "added"|"modified", "diff": { ... } }
-  "verified_at": "2026-05-26T13:15:00Z"              // last successful verification timestamp
+  "confidence": "high", // "high" | "medium" | "low"
+  "tier": "user-observable", // "user-observable" | "backend-surface"
+  "changed_since_previous": null, // null OR { "kind": "added"|"modified", "diff": { ... } }
+  "verified_at": "2026-05-26T13:15:00Z", // last successful verification timestamp
 }
 ```
 
@@ -132,18 +147,36 @@ Authoritative shape of the JSON sidecar. The markdown spine and the HTML viewer 
 }
 ```
 
-## `removed_features[]` entry
+## `removed_features[]` entry — tombstones
 
-Kept for one cycle so consumers can detect removal, then dropped on the next run.
+When a feature's implementation disappears from the source repo, its **full record is moved here from `features[]`** — never deleted. Tombstones are **persistent** (not dropped on a later run): the spine is the dedup anchor for research, and a researcher comparing a peer's capability needs to see "Risoluto built this and deliberately removed it" so a killed feature isn't re-proposed. A tombstone is a complete feature record (so it can still render its body) plus the removal fields:
 
 ```jsonc
 {
-  "id": "old-feature-id",
-  "name": "Old feature name",
-  "bundle": "...",
-  "removed_in_sha": "a1b2c3d",
+  // ...every field of the feature record as it last existed —
+  //    id, bundle, name, description, how_it_works, observable_behaviors,
+  //    citations, shipped, issues, tier (frozen; do not re-verify) ...
+  "status": "removed",
+  "removed_in_sha": "a1b2c3d", // source sha where it was first found gone
   "removed_at": "2026-05-26T13:15:00Z",
-  "reason": "Replaced by <new-feature-id>." // human-written
+  "reason": "Replaced by <new-feature-id>; src/old/foo.ts deleted in #412.", // human-written
+}
+```
+
+Tombstones stay in `removed_features[]` (not `features[]`) so the validators, `fact_check.py`, and `render_meta.py` — which only walk `features[]` — never choke on their now-dead citations, and `summary.total` keeps counting only what ships today. They render in-body inside their original bundle section with a `⚠️ Removed` marker (see `feature-entry-template.md`).
+
+## `run_history[]` entry
+
+Append-only ledger — one row per spine update, newest first. Gives an at-a-glance audit trail across every update; the storage repo's git log is the deep record, this is the legible summary. Rendered as the `## Run history` table.
+
+```jsonc
+{
+  "date": "2026-05-26", // source_repo head date for this update
+  "from_sha": "a1b2c3d", // previous source sha; null on the initial cut
+  "to_sha": "cbf423b", // source sha this update bumped to
+  "added": 3,
+  "modified": 5,
+  "removed": 1,
 }
 ```
 
@@ -153,8 +186,8 @@ Kept for one cycle so consumers can detect removal, then dropped on the next run
 {
   "module": "src/orchestrator/",
   "feature_count": 24,
-  "kind": "feature + plumbing",                     // or "plumbing only"
-  "note": "Highest-density feature surface: polling, dispatch, retries, watchdog..."
+  "kind": "feature + plumbing", // or "plumbing only"
+  "note": "Highest-density feature surface: polling, dispatch, retries, watchdog...",
 }
 ```
 
@@ -168,9 +201,9 @@ Kept for one cycle so consumers can detect removal, then dropped on the next run
   "question": "Is this an intentional deferral, or a missed wiring that should ship in a follow-up PR?",
   "first_raised_sha": "cbf423b",
   "last_seen_sha": "a1b2c3d",
-  "status": "open",                                 // "open" | "resolved"
+  "status": "open", // "open" | "resolved"
   "resolved_in_sha": null,
-  "resolution": null
+  "resolution": null,
 }
 ```
 
@@ -179,20 +212,32 @@ Kept for one cycle so consumers can detect removal, then dropped on the next run
 ```jsonc
 {
   "readme_vs_code_drift": [
-    { "bullet": "README.md badge: `v0.6.0`. HEAD: `v0.9.0-90-gcbf423b`.", "first_raised_sha": "cbf423b" }
+    { "bullet": "README.md badge: `v0.6.0`. HEAD: `v0.9.0-90-gcbf423b`.", "first_raised_sha": "cbf423b" },
   ],
   "net_new_undocumented": [
-    { "bullet": "Nightly CI failure issue automation — `src/linear/nightly-failures.ts`...", "first_raised_sha": "cbf423b" }
+    {
+      "bullet": "Nightly CI failure issue automation — `src/linear/nightly-failures.ts`...",
+      "first_raised_sha": "cbf423b",
+    },
   ],
   "wiring_gaps": [
-    { "bullet": "PR review feedback #333 — shipped per roadmap but not wired to retry path.", "first_raised_sha": "cbf423b" }
+    {
+      "bullet": "PR review feedback #333 — shipped per roadmap but not wired to retry path.",
+      "first_raised_sha": "cbf423b",
+    },
   ],
   "bundle_fit_decisions": [
-    { "bullet": "Persistence / State (bundle #3) vs. Persistence (bundle #11) split: kept as task brief specified.", "first_raised_sha": "cbf423b" }
+    {
+      "bullet": "Persistence / State (bundle #3) vs. Persistence (bundle #11) split: kept as task brief specified.",
+      "first_raised_sha": "cbf423b",
+    },
   ],
   "missing_worth_investigation": [
-    { "bullet": "Cloudflare Tunnel integration — referenced in README but no in-tree code.", "first_raised_sha": "cbf423b" }
-  ]
+    {
+      "bullet": "Cloudflare Tunnel integration — referenced in README but no in-tree code.",
+      "first_raised_sha": "cbf423b",
+    },
+  ],
 }
 ```
 

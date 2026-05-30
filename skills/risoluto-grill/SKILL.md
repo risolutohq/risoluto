@@ -65,15 +65,25 @@ The skill is three steps: **preload**, **grill**, **write**. The grill (the conv
 node skills/risoluto-grill/scripts/preload.mjs <target-slug>
 ```
 
-The script prints, to stdout, a JSON manifest listing every file the agent should read before opening the grill:
+`preload.mjs` is read-only and does the parsing for you. It reads the target README, the roadmap, and the features spine, and prints a single JSON bundle to **stdout**:
 
-- `research/targets/<slug>/README.md` (the source's candidates and dedup flags).
-- `docs/roadmap.md` (the authoritative ranked plan — needed to place new rows correctly and to find rows targeted by merge/supersede candidates).
-- `research/RISOLUTO_FEATURES.md` (already-shipped features — the strongest "why us" anchor when challenging differentiation).
+```json
+{
+  "target": "<slug>",
+  "candidates": [{ "title": "...", "summary": "...", "job": "cost-control", "flag": "new", "merge_target_slug": null }],
+  "roadmap_rows": [{ "slug": "...", "item": "...", "status": "..." }],
+  "features_spine": [{ "line": 42, "text": "...", "status": "active" }]
+}
+```
 
-The script prints paths only; it does not read files itself. The agent then reads those files into context. Show Omer a one-line summary ("loaded target with N surviving candidates, roadmap has M rows, K features-spine hits") before grilling — do not dump raw file contents.
+- `candidates` — every bullet under `## Candidate features`, with its `[job:]` and dedup `[flag:]` parsed out. A `merge`/`supersede` flag carries the `slug:` of the roadmap row it targets (in `merge_target_slug`). An unresolved `[flag: TBD]` or a missing flag is read as `new`, so it still reaches the grill.
+- `roadmap_rows` — the current ranked plan (slug + item + status), so you can place new rows correctly and locate rows targeted by `merge`/`supersede`.
+- `features_spine` — `RISOLUTO_FEATURES.md` lines mentioning the slug, each tagged with `status`. **Read the status — it flips the meaning of the hit:**
+  - `status: "active"` → Risoluto **ships** this. The "why us" / saturation anchor: if a candidate duplicates an active entry, it's `skip`/`merge` territory, and for a `differentiator` it's the bar to clear.
+  - `status: "removed"` → a `⚠️ Removed` tombstone: Risoluto **built this and deliberately dropped it**. This is the _opposite_ of shipped — never read it as "covered." It's a strong prior _against_ re-admitting: the candidate must clear a higher bar (what changed since we killed it? why won't it be removed again?). The tombstone's `> REMOVED:` reason names why it went.
+  - `status: "meta"` → the hit is in the `## Run history` ledger or `## Changed since last spine` diff, not a feature entry. Treat as noise unless it adds context.
 
-**Phase 2 note:** `preload.mjs` will be rewired to parse the `## Candidate features` section of the target README, extract each candidate with its dedup flag, and emit structured JSON so the grill loop can iterate candidates cleanly. The intended output shape is `{ candidates: [{ title, flag, summary }], roadmap_rows: [...], features_spine: [...] }`. Do not implement this yet — describe the intent here for reference.
+The script also writes a one-line summary to **stderr** (`loaded <slug> — N candidates (M surviving), R roadmap rows, K features-spine hits (A active, T tombstoned)`). Surface that line to Omer before grilling — do not dump the raw bundle. Consume the stdout JSON directly; you do not need to re-read or re-parse the three files.
 
 ### Step 2 — Grill each surviving candidate
 
@@ -84,7 +94,7 @@ Open the loop by stating the candidate's title and one-sentence summary from the
 The grill is a **research→product** stress test. The corpus has already shown what peers ship. The founder's job is to defend (or kill) Risoluto's right to ship the same capability. Drive toward four crisp answers:
 
 1. **Job served & alignment** — which of the five AFK jobs (`docs/product-spine.md` → "The jobs Risoluto exists to serve") does this deepen: observability/trust, failure recovery, cost control, coordination/parallelism, or review/handoff? If it maps to none — or only to a job Risoluto deliberately defers (`product-spine.md` → "What v1 does not implement") — that is a kill signal, not a caveat.
-2. **Fit-vs-spine** — does this candidate compose with Risoluto's existing primitives (workflow runs, tracker adapters, harness adapters, DAG/state-machine) or does it require a net-new primitive? Quote the relevant shipped features from `RISOLUTO_FEATURES.md`.
+2. **Fit-vs-spine** — does this candidate compose with Risoluto's existing primitives (workflow runs, tracker adapters, harness adapters, DAG/state-machine) or does it require a net-new primitive? Quote the relevant **`active`** features from `features_spine`. If a hit is `removed` (tombstone), that's not "we ship this" — it's "we built and killed this," which raises the bar (see branch 3).
 3. **Right to ship** — _class-dependent_ (the classification router below decides which question applies). For a `differentiator`: "N peers ship X — why us, why now, what is our structural or timing edge?" For `table_stakes`: "N peers ship X — its absence is a hole; what is the cheapest credible version?"
 4. **Thinnest shippable cut** — expressed against the spine: the smallest tracer that proves the bet end-to-end and could land in one or two PRs.
 
@@ -92,7 +102,7 @@ Branches to walk, in order, one question at a time:
 
 1. **Job & value** — "Which of the five AFK jobs does this serve, and what evidence is there that _Risoluto's_ operator has that need — not just that a peer shipped it?" If no job maps, stop here: the candidate is out.
 2. **Peer landscape** — "Of the peers cited in the target README, which is the strongest? Which is closest in shape to what you'd build in Risoluto?" Quote the bullets from the pre-loaded README.
-3. **Spine fit** — "The spine ships [cite matching RISOLUTO_FEATURES entries]. Does this candidate compose with those, or does it require a new primitive? If a new primitive, name it."
+3. **Spine fit** — "The spine ships [cite matching `active` features_spine entries]. Does this candidate compose with those, or does it require a new primitive? If a new primitive, name it." **If a hit is a `removed` tombstone**, run this instead/additionally: "Risoluto already built and removed `<feature>` (`<sha>`, reason: `<REMOVED note>`). Re-proposing it must clear a higher bar — what changed since we killed it, and why won't it be removed again?" A re-tread of deliberately-dropped work is a kill-leaning signal unless the founder names what's different now.
 4. **Timing** — "Why now and not 6 months ago or 6 months from now? What changed in the corpus, in the platform, or in your workflow that makes this the next bet?"
 5. **Failure mode** — "What does this look like at month 6 if it ships and nobody uses it? What is the kill-condition?"
 6. **Thinnest cut** — "If you had one Linear ticket today as the tracer, what does it do? What does it explicitly not do?"
@@ -154,7 +164,7 @@ The script:
 5. For `skip` candidates: writes nothing.
 6. Reports the diff (rows added/edited) to stdout.
 
-**Phase 2 note:** `grill-write.mjs` will be rewired to parse the results JSON, locate the roadmap table in `docs/roadmap.md`, and make surgical edits (append rows, patch cells) without touching unrelated rows or the file's surrounding prose. The intended results JSON shape is `{ in: [{ slug, title, why_now, size, status, flag, merge_target_row? }], out: [{ slug, title }] }`. Do not implement this yet — describe the intent here for reference.
+The results JSON shape is `{ in: [{ slug, title, why_now, size, status, flag, merge_target_row? }], out: [{ slug, title }] }`. `grill-write.mjs` parses it and makes the surgical edits above via `scripts/roadmap.mjs` (`parseRoadmap` → `appendRow` / `setCell` / `setStatus` → `renderRoadmap`), without touching unrelated rows or the file's surrounding prose. `merge_target_row` is the slug of the row to fold into / supersede (it maps to a candidate's `merge_target_slug` from preload). It aborts if the plan table can't be found (`parseRoadmap(...).found` is false).
 
 Optional flags:
 
@@ -167,11 +177,16 @@ After the write, show Omer a summary: "Added N rows, edited M rows, dropped K ca
 
 ### Step 4 — Validate
 
+The grill only edits `docs/roadmap.md`. Build and lint compile/scan TypeScript — they can't catch a malformed roadmap table, so they're the wrong gate here. Two things actually matter, and both are cheap:
+
+- `grill-write.mjs` already asserts the plan table parses (`parseRoadmap(...).found`) before it writes, and re-renders through the locked 6-column `renderRoadmap` — so a successful write is itself the structural check.
+- `docs/roadmap.md` is in the repo's prettier `format:check` glob, so confirm it stays clean:
+
 ```bash
-pnpm run build && pnpm run lint
+npx prettier --check docs/roadmap.md
 ```
 
-The grill only touches `docs/roadmap.md` (markdown), so the build and lint gates are the appropriate fast check. No schema validation needed for the roadmap file itself — the locked table shape is enforced by convention.
+If prettier reports drift, run `npx prettier --write docs/roadmap.md`. No schema validation is needed beyond this — the locked table shape is enforced by `renderRoadmap`, not by convention.
 
 ### Step 5 — Commit
 
