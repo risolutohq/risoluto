@@ -95,9 +95,17 @@ function todayYMD() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function contentHash(targetDir) {
+/**
+ * The Risoluto source sha this capture was researched against — provenance for the
+ * dedup step (Step 5.2 compares candidates against docs/roadmap.md + RISOLUTO_FEATURES.md,
+ * both tied to the PARENT repo). A later re-run compares this against the current HEAD to
+ * tell when a target's dedup has gone stale. Reads the parent repo HEAD, not research/'s
+ * own — the submodule's sha would be circular (this file lives in it) and is already
+ * implied by last_researched_at. Returns "pending" if HEAD can't be resolved.
+ */
+function risolutoSourceSha() {
   try {
-    const result = execSync("git rev-parse HEAD", { cwd: RESEARCH_DIR, encoding: "utf8" }).trim();
+    const result = execSync("git rev-parse HEAD", { cwd: REPO_ROOT, encoding: "utf8" }).trim();
     return result || "pending";
   } catch {
     return "pending";
@@ -365,7 +373,7 @@ async function main() {
   }
 
   const capturedAt = todayYMD();
-  const sha = contentHash(TARGETS_DIR); // null when targets/ doesn't exist yet
+  const sha = risolutoSourceSha(); // parent Risoluto repo HEAD — the code version this was researched against
 
   const targetDir = path.join(TARGETS_DIR, args.targetSlug);
   const sourcesDir = path.join(targetDir, "sources");
@@ -452,7 +460,7 @@ async function main() {
       }
     }
   } else {
-    console.log(`  ${targetExists ? "REPAIR" : "WRITE".padEnd(6)} ${targetRel}`);
+    console.log(`  ${(targetExists ? "REPAIR" : "WRITE").padEnd(6)} ${targetRel}`);
     if (!args.dryRun) {
       await mkdir(path.dirname(targetReadmePath), { recursive: true });
       const targetFm = buildTargetFrontmatter(args, newSourceCount, allIdeas, sha);
