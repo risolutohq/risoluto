@@ -78,7 +78,7 @@ founder edits it.
 | `research/wiki/`                  | Connected knowledge base built by `/risoluto-ingest`. Wikilinks targets into a big picture.   |
 | `research/RISOLUTO_FEATURES.md`   | Canonical inventory of shipped features. Kept honest by the post-merge record step.           |
 | `research/` submodule             | Houses all of the above plus the Obsidian vault and `.schemas/`.                              |
-| `docs/prds/`                      | Canonical PRD files (git). Linear project descriptions are generated mirrors.                 |
+| `docs/prds/`                      | Canonical PRD files (git). Linear project content bodies are generated mirrors.               |
 | Linear                            | Canonical implementation planning: projects + flat issues with blocked-by.                    |
 | `docs/`                           | Current-truth product / technical / decision docs.                                            |
 
@@ -193,7 +193,6 @@ $EDITOR docs/roadmap.md
 /risoluto-to-prd <slug>                    # CREATE first run; SYNC on re-run (git → Linear)
 #  → to-prd reads the roadmap row AND its linked research (Research link cell)
 #  → flips the roadmap row next → building; stamps linear_project into the row
-#  → paste the Linear UI banner (see "PRD contract") into the new project description
 pnpm validate:research                     # PRD frontmatter validates (exit 0)
 
 # 2. Slice into issues, implement test-first.
@@ -246,30 +245,25 @@ The roadmap uses exactly **6 columns**:
 
 ## PRD contract (git is canon)
 
-Each `docs/prds/<slug>.md` is the **authoritative** copy; the Linear project description is a
+Each `docs/prds/<slug>.md` is the **authoritative** copy; the Linear Project content body is a
 generated mirror pushed by `/risoluto-to-prd`. `/risoluto-to-prd` reads the `next` roadmap row
-**and its linked research** (Research link cell) to draft the PRD. Linear caps descriptions at
-255 chars, so the mirror is only the **first 255 chars** of the PRD body — content past that lives
-only in git, and the drift hook only protects the prefix.
+**and its linked research** (Research link cell) to draft the PRD.
 
-- **Do not edit Linear project descriptions in the UI.** The drift hook is intentional friction; treat the description as generated content.
+Linear has two relevant Project fields:
+
+- `description` — the short Project overview text. Keep this to a one-sentence summary.
+- `content` — the full markdown body shown in Linear's Description area. This mirrors the full PRD
+  body from git.
+
+- **Do not edit the Linear Project Description body in the UI.** The drift hook is intentional friction; treat Linear content as generated from git.
 - **Resolve drift** by choosing a direction:
   - _Git is right_ → re-run `/risoluto-to-prd <slug>` (idempotent; overwrites Linear from git).
   - _Linear is right_ → `pnpm prd:reconcile <slug>` (pulls Linear → git on a branch; prints `gh pr create`).
-- **Linear UI banner** — paste below the synced body so anyone in Linear sees the edit path:
-
-  ```
-  ---
-  > This description is generated from `docs/prds/<slug>.md` in git.
-  > Edit via a PR against the source file; UI edits are overwritten on
-  > the next sync and blocked by the pre-push drift hook.
-  ---
-  ```
 
 ## The drift gate
 
-`prd:drift-check` compares each PRD body against its Linear project description and fails on
-divergence. It runs in `.husky/pre-push` (only for pushes that touch `docs/prds/*`) and in the
+`prd:drift-check` compares each PRD body against its Linear Project content and fails on divergence.
+It runs in `.husky/pre-push` (only for pushes that touch `docs/prds/*`) and in the
 `prd-drift` GitHub Action on PRs. `LINEAR_API_KEY` unset = hard exit 1 (it does not silently pass).
 
 ## Frontmatter contract
@@ -308,9 +302,9 @@ source_count: <int>
 - **Value lens + fit are both gates, not scores.** A candidate earns a row only if it deepens one of the five AFK jobs (`product-spine.md`) _and_ composes with the spine — alignment is a hard cite-or-drop gate. Classification (`differentiator` / `table_stakes` / `nice_to_have`) _routes_ which justification standard applies; cost + reversibility are ordering scores only, never admission.
 - **Acceptance is the red-test spec.** Each issue criterion is a falsifiable behavioural assertion `/risoluto-tdd` turns into a failing test — never a restatement of the global gate (build/lint/test/typecheck/coverage). A slice with no falsifiable behaviour is not ready to start.
 - **Intake is gated; so is exit.** Pruning shipped surface is a first-class move — see the exit gate below. `deprecated` retires live capability that stopped earning its keep; `superseded` only retires a row a newer row replaces.
-- **Git is canon for PRDs.** Resolve divergence with `prd:reconcile` (Linear → git) or `to-prd` sync (git → Linear). Never hand-edit Linear descriptions.
+- **Git is canon for PRDs.** Resolve divergence with `prd:reconcile` (Linear → git) or `to-prd` sync (git → Linear). Never hand-edit Linear Project content.
 - **No auto-PR.** Skills branch, commit, and push but never run `gh pr create` — they print it.
-- **255-char Linear cap.** Drift detection sees only the first 255 chars of the PRD body.
+- **Linear field split.** Project `description` is only the short overview; the generated PRD mirror lives in Project `content`.
 - **Advisory review.** `/code-review` and `/simplify` after TDD are advisory aids the founder applies selectively — not a blocking gate.
 - **Idempotent:** researcher, ingest, vault, to-prd sync. **Not idempotent:** to-issues, tdd (re-runs can duplicate).
 
@@ -334,8 +328,7 @@ replaces; it does not retire live capability that simply stopped earning its kee
 
 Confirmed in code; not yet fixed:
 
-1. **Drift is shallow** — only the first 255 chars are compared. A full-body `synced_hash` in PRD frontmatter would close it.
-2. **`to-issues` is not idempotent** — re-running after a PRD change can duplicate Linear issues.
+1. **`to-issues` is not idempotent** — re-running after a PRD change can duplicate Linear issues.
 
 ## Skills
 
@@ -359,7 +352,7 @@ global skills stay tracker-agnostic. `grill-me`, `grill-with-docs`, `save-to-obs
 
 ## Not in scope
 
-- **Bidirectional Linear ↔ git sync.** Only git → Linear (on to-prd/to-issues create) and PR → Linear back-comment ship.
+- **General bidirectional Linear ↔ git sync.** PRD content has explicit git ↔ Linear reconciliation; the rest of the pipeline only mirrors git → Linear and PR → Linear back-comments.
 - **No GitHub Issues mirror.** Linear is the sole planning surface; public exposure deferred.
 - **Runtime auto-pickup.** Auto-consuming Linear tickets is parked behind the `auto:runtime` label seam; this pipeline stops at manual `/risoluto-tdd <ticket-ref>`.
 - **Pipeline as a Risoluto Workflow Definition.** This is the operator's manual build tool, not a product surface — it is not destined to run inside Risoluto.
@@ -377,6 +370,6 @@ global skills stay tracker-agnostic. `grill-me`, `grill-with-docs`, `save-to-obs
 | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `validate:research` fails early       | `research/` submodule not initialized — `git submodule update --init research`.                   |
 | `prd:drift-check` exits 1 "hard gate" | `LINEAR_API_KEY` unset — export it (or set the GH secret for CI).                                 |
-| `prd:drift-check` reports DRIFT       | PRD body and Linear diverged — `prd:reconcile <slug>` or `to-prd <slug>` to sync.                 |
+| `prd:drift-check` reports DRIFT       | PRD body and Linear content diverged — `prd:reconcile <slug>` or `to-prd <slug>` to sync.         |
 | Post-merge didn't flip status         | PR lacked the `from:prd-<slug>` label, or a Linear call failed (flip is skipped).                 |
 | `risoluto-ingest` emits no ideas      | All generated ideas lacked citations — cite-or-drop is enforced. Add more research targets first. |

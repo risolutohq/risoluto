@@ -1,21 +1,24 @@
 # PRDs
 
-PRDs in this folder are the **canonical source of truth**. Each `docs/prds/<slug>.md` file is the authoritative copy; the matching Linear Project description is a generated mirror pushed by `/risoluto-to-prd`.
+PRDs in this folder are the **canonical source of truth**. Each `docs/prds/<slug>.md` file is the authoritative copy; the matching Linear Project content body is a generated mirror pushed by `/risoluto-to-prd`.
 
-Linear caps Project descriptions at 255 chars, so the mirror is only the first 255 chars of the PRD body — content beyond that lives only in git, and the drift hook only protects the prefix.
+Linear has two relevant Project fields:
+
+- `description` — the short Project overview text. Keep this to a one-sentence summary.
+- `content` — the full markdown body shown in Linear's Description area. This mirrors the full PRD body from git.
 
 ## Editing a PRD
 
-Open a PR against `docs/prds/<slug>.md`. The pre-push drift hook and the `prd-drift` GitHub Action will reject pushes where the Linear Project description has been edited outside this git-canonical path.
+Open a PR against `docs/prds/<slug>.md`. The pre-push drift hook and the `prd-drift` GitHub Action will reject pushes where the Linear Project content body has been edited outside this git-canonical path.
 
-Do **not** edit Linear Project descriptions in the Linear UI. The drift hook is intentional friction — treat the Linear description as generated content.
+Do **not** edit the Linear Project Description body in the Linear UI. The drift hook is intentional friction — treat Linear content as generated from git. Editing the short overview is okay only when it remains a summary, not the PRD body.
 
 ## Resolving drift
 
 When the pre-push hook blocks because a PRD and its Linear Project have diverged:
 
-- **Git is right (reject the Linear edit):** re-run `/risoluto-to-prd <slug>`. The skill is idempotent and overwrites the Linear Project description from the current PRD file.
-- **Linear is right (adopt the UI edit):** run `pnpm prd:reconcile <slug>`. This pulls the Linear description back into `docs/prds/<slug>.md`, creates a branch, and prints a `gh pr create` command. Merge the PR to accept.
+- **Git is right (reject the Linear edit):** re-run `/risoluto-to-prd <slug>`. The skill is idempotent and overwrites the Linear Project content from the current PRD file.
+- **Linear is right (adopt the UI edit):** run `pnpm prd:reconcile <slug>`. This pulls the Linear content body back into `docs/prds/<slug>.md`, creates a branch, and prints a `gh pr create` command. Merge the PR to accept.
 
 ## Frontmatter
 
@@ -33,14 +36,6 @@ The `slug` is the join key to the roadmap row (`docs/roadmap.md`), the PRD filen
 
 `prd.schema.json` validates PRD frontmatter shape; run `pnpm validate:research` to check all PRDs in one pass.
 
-## Linear UI banner
+## Linear Field Contract
 
-Paste the following into every Linear Project description (below the auto-synced PRD body) so that anyone opening the project in Linear sees the edit path:
-
-```
----
-> **This description is generated from `docs/prds/<slug>.md` in git.**
-> To edit, open a PR against the source file. Edits made here will be
-> overwritten on the next sync and blocked by the pre-push drift hook.
----
-```
+`/risoluto-to-prd` writes the short overview into Linear `description` and the full PRD body into Linear `content`. Do not paste banners into the generated content body; that would create drift from git.

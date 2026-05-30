@@ -29,9 +29,10 @@
 > Newest decisions sit where their priority puts them, not at the bottom. Keep it short — a roadmap
 > with 40 rows is a backlog wearing a costume.
 
-| #   | Item | Why now | Size | Status | Research link |
-| --- | ---- | ------- | ---- | ------ | ------------- |
-|     |      |         |      |        |               |
+| #   | Item                                                        | Why now                                                                                                                                                                                                                                                   | Size | Status                                                                              | Research link |
+| --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------- | ------------- |
+| 1   | Workflow-first AFK MVP <!-- slug:workflow-first-afk-mvp --> | Proves Risoluto's core thesis: configurable Workflow Runs execute AFK engineering work end to end across CLI, Slack, HTTP, tracker intake, worktrees, PR/CI, verifier, evidence, memory, and handoff without making Linear/GitHub issue identity primary. | L    | [building](https://linear.app/ninetech/project/workflow-first-afk-mvp-838087658d56) | —             |
+|     |                                                             |                                                                                                                                                                                                                                                           |      |                                                                                     |               |
 
 <!--
   Add rows above. Size = S / M / L (rough effort).

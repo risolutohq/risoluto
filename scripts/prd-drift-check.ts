@@ -1,7 +1,7 @@
 /**
  * prd:drift-check — Phase 3.3 of the planning-pipeline roadmap.
  *
- * Detects drift between local PRD files and their Linear Project descriptions.
+ * Detects drift between local PRD files and their Linear Project content.
  * Runs in two modes:
  *
  *   1. Pre-push (default): reads stdin for pushed refs, diffs changed PRDs
@@ -23,7 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   diffSections,
-  fetchProjectDescription,
+  fetchProjectPrdMirror,
   normalizeForComparison,
   parsePrdFile,
   requireApiKey,
@@ -32,8 +32,6 @@ import {
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ZERO_SHA = "0000000000000000000000000000000000000000";
-/** Linear project descriptions are capped at 255 characters. */
-const LINEAR_DESCRIPTION_MAX = 255;
 
 interface PushRef {
   localRef: string;
@@ -139,29 +137,24 @@ async function checkPrdDrift(apiKey: string, relPath: string): Promise<DriftResu
   const absPath = path.join(REPO_ROOT, relPath);
   const { frontmatter, body } = await parsePrdFile(absPath);
 
-  const project = await fetchProjectDescription(apiKey, frontmatter.slugId);
-  const linearDesc = project.description ?? "";
+  const project = await fetchProjectPrdMirror(apiKey, frontmatter.slugId);
+  const linearContent = project.content ?? "";
 
-  // Linear caps project descriptions at 255 chars. Compare the first 255 chars
-  // of the normalized local PRD body against the Linear description. If they
-  // match, the Linear side is a correct prefix — no drift.
-  const localTruncated = normalizeForComparison(body).slice(0, LINEAR_DESCRIPTION_MAX).trimEnd();
-  const linearNormalized = normalizeForComparison(linearDesc);
+  const localNormalized = normalizeForComparison(body);
+  const linearNormalized = normalizeForComparison(linearContent);
 
-  if (localTruncated === linearNormalized) {
+  if (localNormalized === linearNormalized) {
     return { prdFile: relPath, slug: frontmatter.slug, linearProject: frontmatter.linearProject, status: "match" };
   }
 
-  // For the drift report, use section-level diff on the truncated local body
-  // so the operator sees which sections diverge.
-  const sectionDiffs = diffSections(localTruncated, linearDesc);
+  const sectionDiffs = diffSections(body, linearContent);
 
   return {
     prdFile: relPath,
     slug: frontmatter.slug,
     linearProject: frontmatter.linearProject,
     status: "drift",
-    detail: `Linear project "${project.name}" diverges in ${sectionDiffs.length} section(s)`,
+    detail: `Linear project "${project.name}" content diverges in ${sectionDiffs.length} section(s)`,
     sectionDiffs,
   };
 }

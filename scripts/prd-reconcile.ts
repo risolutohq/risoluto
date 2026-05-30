@@ -1,8 +1,8 @@
 /**
  * prd:reconcile — Phase 3.3 of the planning-pipeline roadmap.
  *
- * Adopts a Linear Project description edit back into git:
- *   1. Fetches the current Linear Project description
+ * Adopts a Linear Project content edit back into git:
+ *   1. Fetches the current Linear Project content
  *   2. Writes it into docs/prds/<slug>.md (replacing the body, keeping frontmatter)
  *   3. Creates a branch, commits, pushes, and prints a `gh pr create` command
  *
@@ -17,7 +17,7 @@ import { execSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchProjectDescription, parsePrdFile, requireApiKey } from "./prd-linear.js";
+import { fetchProjectPrdMirror, parsePrdFile, requireApiKey } from "./prd-linear.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PRD_DIR = path.join(REPO_ROOT, "docs", "prds");
@@ -52,10 +52,10 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
   // Read current PRD to get frontmatter and Linear project slugId
   const { frontmatter } = await parsePrdFile(prdPath);
 
-  process.stderr.write(`📋 Fetching Linear project description for "${slug}" (${frontmatter.slugId})...\n`);
+  process.stderr.write(`📋 Fetching Linear project content for "${slug}" (${frontmatter.slugId})...\n`);
 
-  // Fetch the current Linear description
-  const project = await fetchProjectDescription(apiKey, frontmatter.slugId);
+  // Fetch the current Linear content body.
+  const project = await fetchProjectPrdMirror(apiKey, frontmatter.slugId);
 
   // Read the raw file to preserve frontmatter exactly
   const rawContent = await readFile(prdPath, "utf8");
@@ -64,8 +64,8 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
     throw new Error("PRD file has no valid frontmatter");
   }
 
-  // Build new content: keep frontmatter, replace body with Linear description
-  const newBody = project.description ?? "";
+  // Build new content: keep frontmatter, replace body with Linear content.
+  const newBody = project.content ?? "";
   const newContent = frontmatterMatch[0] + newBody;
 
   if (newContent.trimEnd() === rawContent.trimEnd()) {
@@ -75,7 +75,7 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
 
   // Write the updated PRD
   await writeFile(prdPath, newContent, "utf8");
-  process.stderr.write(`📝 Updated docs/prds/${slug}.md with Linear description.\n`);
+  process.stderr.write(`📝 Updated docs/prds/${slug}.md with Linear content.\n`);
 
   // Create branch, commit, push
   const originalBranch = getCurrentBranch();
@@ -95,7 +95,7 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
 
   execSync(`git checkout -b ${reconcileBranch}`, { cwd: REPO_ROOT, stdio: "inherit" });
   execSync(`git add docs/prds/${slug}.md`, { cwd: REPO_ROOT, stdio: "inherit" });
-  execSync(`git commit -m "docs: reconcile PRD ${slug} from Linear project description"`, {
+  execSync(`git commit -m "docs: reconcile PRD ${slug} from Linear project content"`, {
     cwd: REPO_ROOT,
     stdio: "inherit",
   });
@@ -104,7 +104,7 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
   process.stderr.write(`\n✅ Branch "${reconcileBranch}" pushed.\n`);
   process.stderr.write(`   Create a PR with:\n`);
   process.stderr.write(
-    `   gh pr create --base ${originalBranch} --head ${reconcileBranch} --title "docs: reconcile PRD ${slug} from Linear" --body "Adopts the Linear Project description edit back into git for PRD \`${slug}\`."\n`,
+    `   gh pr create --base ${originalBranch} --head ${reconcileBranch} --title "docs: reconcile PRD ${slug} from Linear" --body "Adopts the Linear Project content edit back into git for PRD \`${slug}\`."\n`,
   );
 
   // Switch back to original branch

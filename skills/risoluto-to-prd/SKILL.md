@@ -12,27 +12,27 @@ Roadmap-row-to-PRD-to-Linear sharpener for the Risoluto planning pipeline. Phase
 For one `<slug>` per invocation (the slug must already exist as a roadmap row in `docs/roadmap.md`), this skill produces:
 
 1. `docs/prds/<slug>.md` — the canonical PRD, with frontmatter (`slug`, `linear_project`, `synced_at`, `source: docs/roadmap.md#<slug>`, `status: draft`) and a body following the template under [PRD body template](#prd-body-template).
-2. A Linear Project on the `Ninetech` team whose description is the PRD body (everything below the frontmatter). The Project's URL stamps the roadmap row's Status cell.
+2. A Linear Project on the `Ninetech` team whose short `description` is a one-sentence summary and whose `content` is the PRD body (everything below the frontmatter). The Project's URL stamps the roadmap row's Status cell.
 3. A pushed feature branch `pipeline/<slug>-prd` containing one commit (`docs: add PRD for <slug>`) with **both** `docs/prds/<slug>.md` and `docs/roadmap.md` (row flipped to `[building](<linear-project-url>)`). **The skill does NOT call `gh pr create`** — it prints the suggested command so the operator opens the PR when ready (memory: `feedback-skills-no-auto-pr`).
 
 On re-run (idempotent SYNC mode):
 
 - No second Linear Project.
-- The existing Project's description is overwritten from the current `docs/prds/<slug>.md` body.
+- The existing Project's `content` is overwritten from the current `docs/prds/<slug>.md` body.
 - The PRD's `synced_at` is bumped in the working tree; no branch, no commit, no PR command (the operator commits the bump only if they want to persist it).
 
 ## Hard preconditions
 
-Stop and report if any of these fail. Do **not** retry MCP auth from inside this skill.
+Stop and report if any of these fail. Do **not** retry Linear auth from inside this skill.
 
-| Check                                | Command / verification                                                | If it fails                                                                                                    |
-| ------------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Run from repo root                   | `test -f package.json`                                                | Tell Omer to `cd` into the `risoluto` checkout root.                                                           |
-| `research/` initialised              | `git submodule status research` starts with a space                   | Tell Omer to `git submodule update --init research` or `/init-research`.                                       |
-| Roadmap row exists                   | preload bundle returns a `roadmap_row` object (non-null)              | Tell Omer to add the row to `docs/roadmap.md` first (status `next`).                                           |
-| Row status is `next`                 | `roadmap_row.status` equals `next`                                    | Warn Omer — only `next` rows are ready for a PRD; confirm before proceeding if status is `idea` or `building`. |
-| Linear MCP responding                | Any `mcp__linear-server__list_teams` call succeeds                    | Surface the MCP error verbatim to Omer; do not retry auth.                                                     |
-| Working tree clean at paths we touch | `git status --porcelain -- docs/prds/<slug>.md docs/roadmap.md` empty | Tell Omer to commit or stash before running.                                                                   |
+| Check                                | Command / verification                                                   | If it fails                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Run from repo root                   | `test -f package.json`                                                   | Tell Omer to `cd` into the `risoluto` checkout root.                                                           |
+| `research/` initialised              | `git submodule status research` starts with a space                      | Tell Omer to `git submodule update --init research` or `/init-research`.                                       |
+| Roadmap row exists                   | preload bundle returns a `roadmap_row` object (non-null)                 | Tell Omer to add the row to `docs/roadmap.md` first (status `next`).                                           |
+| Row status is `next`                 | `roadmap_row.status` equals `next`                                       | Warn Omer — only `next` rows are ready for a PRD; confirm before proceeding if status is `idea` or `building`. |
+| Linear API responding                | `LINEAR_API_KEY` is set and a Linear GraphQL team/project query succeeds | Surface the Linear API error verbatim to Omer; do not retry auth.                                              |
+| Working tree clean at paths we touch | `git status --porcelain -- docs/prds/<slug>.md docs/roadmap.md` empty    | Tell Omer to commit or stash before running.                                                                   |
 
 ## Pipeline
 
@@ -62,32 +62,86 @@ Write the composed body to a temp file (e.g., `/tmp/risoluto-to-prd-<slug>-body.
 
 > **In SYNC mode, skip Step 2 and Step 3** — the existing `docs/prds/<slug>.md` body on disk is canon. Read it, push it as-is to Linear, then run Step 4 in `--mode sync`.
 
-### Step 3 — Push to Linear via MCP (CREATE mode)
+### Step 3 — Push to Linear via GraphQL (CREATE mode)
 
-Call `mcp__linear-server__save_project` with:
+Do **not** use `mcp__linear.save_project` for the PRD body: that MCP surface cannot set Linear's
+`content` field, and Linear's short `description` field is not where the PRD body belongs. Use
+Linear GraphQL directly with `LINEAR_API_KEY`.
+
+First resolve the Ninetech team ID:
+
+```graphql
+query FindTeam($key: String!) {
+  teams(filter: { key: { eq: $key } }) {
+    nodes {
+      id
+      key
+      name
+    }
+  }
+}
+```
+
+Then call `projectCreate` with:
 
 - `name`: `<slug>` (or a humanised variant; the slug is the stable join key)
-- `description`: the PRD body composed in Step 2 (literal markdown, real newlines — no escape sequences)
-- `addTeams`: `["Ninetech"]` (the default team; only one exists in this workspace — do not ask)
-- `state`: `"planned"` (Linear default; the row's Status cell in git is the canonical status)
+- `teamIds`: `[<Ninetech team id>]` (the default team; only one exists in this workspace — do not ask)
+- `description`: a clean one-sentence summary, max 255 chars
+- `content`: the PRD body composed in Step 2 (literal markdown, real newlines — no escape sequences)
+
+```graphql
+mutation CreateProject($name: String!, $teamIds: [String!]!, $description: String!, $content: String!) {
+  projectCreate(input: { name: $name, teamIds: $teamIds, description: $description, content: $content }) {
+    success
+    project {
+      id
+      name
+      url
+      description
+      content
+    }
+  }
+}
+```
 
 Capture the returned project's `url` (full Linear URL like `https://linear.app/ninetech/project/<slug>-<random>/overview`). That URL becomes the PRD frontmatter's `linear_project` value and the roadmap Status cell link.
 
-**After the project is created, instruct the operator to paste the Linear UI banner into the new Linear Project's description.** The banner template is defined in `docs/prds/README.md` under "Linear UI banner". Steps:
+### Step 3' — Push to Linear via GraphQL (SYNC mode)
 
-1. Open the newly created Linear Project at the captured URL.
-2. In the project description, append (below the auto-synced PRD body) the banner block from `docs/prds/README.md`.
-3. Save the description in the Linear UI.
+Read `docs/prds/<slug>.md` from disk. Split frontmatter from body. Look up the existing project by
+the `slugId` extracted from frontmatter `linear_project`, then call `projectUpdate` with:
 
-This is a **manual operator step** — the MCP sets the PRD body, but the banner must be appended via the Linear UI. Do not include the banner in `--body-file` or in `docs/prds/<slug>.md`.
+```graphql
+query FindProject($slugId: String!) {
+  projects(first: 1, filter: { slugId: { eq: $slugId } }) {
+    nodes {
+      id
+      name
+      slugId
+      url
+    }
+  }
+}
+```
 
-### Step 3' — Push to Linear via MCP (SYNC mode)
+- `id`: the existing project's UUID
+- `description`: a clean one-sentence summary, max 255 chars
+- `content`: the on-disk PRD body
 
-Read `docs/prds/<slug>.md` from disk. Split frontmatter from body. Call `mcp__linear-server__save_project` with:
-
-- `id`: the existing project's UUID (look it up via `mcp__linear-server__list_projects --query <slug>` and match on name)
-- `description`: the on-disk PRD body
-- **Do NOT** pass `addTeams` / `setTeams` / `name` on update — only `id` + `description`.
+```graphql
+mutation UpdateProject($id: String!, $description: String!, $content: String!) {
+  projectUpdate(id: $id, input: { description: $description, content: $content }) {
+    success
+    project {
+      id
+      name
+      url
+      description
+      content
+    }
+  }
+}
+```
 
 ### Step 4 — Write (CREATE)
 
@@ -118,7 +172,7 @@ The script bumps `synced_at` in `docs/prds/<slug>.md`'s frontmatter (body untouc
 
 ## PRD body template
 
-The PRD body (everything below frontmatter) follows this structure. Use the **exact** section headings — Phase 3.3's drift hook does a literal diff against the Linear Project description.
+The PRD body (everything below frontmatter) follows this structure. Use the **exact** section headings — Phase 3.3's drift hook does a literal diff against the Linear Project content.
 
 ```markdown
 ## Problem Statement
@@ -169,8 +223,8 @@ shape, not file path.]
 ## Notes for the agent
 
 - **Default to the `Ninetech` Linear team without asking.** Only one team exists in this workspace.
-- **Linear MCP errors are operator concerns, not skill bugs.** If `mcp__linear-server__*` returns an error, surface it verbatim to Omer and stop.
-- **The PRD body in git is canon.** Linear's description is a generated mirror. If Omer asks "is the Linear edit kept or the git edit?", the answer is always git.
+- **Linear API errors are operator concerns, not skill bugs.** If Linear GraphQL returns an auth or provider error, surface it verbatim to Omer and stop.
+- **The PRD body in git is canon.** Linear's `content` is a generated mirror. If Omer asks "is the Linear edit kept or the git edit?", the answer is always git.
 - **`pipeline/<slug>-prd` branch namespace** is reserved for this skill. If it already exists locally on a re-run of CREATE, the write script refuses — delete the stale branch first.
 - **The skill IS the sync path.** There is no `pnpm prd:reconcile` for the git→Linear direction — that's this skill in SYNC mode. Phase 3.3 adds `pnpm prd:reconcile` for the other direction (adopt the Linear edit into git).
 - **Idempotency:** re-running CREATE mode when `docs/prds/<slug>.md` already exists is an error. The write script refuses; tell Omer to use SYNC mode.

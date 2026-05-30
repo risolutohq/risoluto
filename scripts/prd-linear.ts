@@ -19,11 +19,12 @@ export interface PrdFrontmatter {
   status: string;
 }
 
-export interface ProjectDescription {
+export interface ProjectPrdMirror {
   id: string;
   name: string;
   slugId: string;
   description: string | null;
+  content: string | null;
 }
 
 interface GraphQLResponse {
@@ -31,7 +32,7 @@ interface GraphQLResponse {
   errors?: Array<{ message: string }>;
 }
 
-const PROJECT_DESCRIPTION_QUERY = `
+const PROJECT_PRD_MIRROR_QUERY = `
   query PrdDriftCheck($slugId: String!) {
     projects(first: 1, filter: { slugId: { eq: $slugId } }) {
       nodes {
@@ -39,17 +40,18 @@ const PROJECT_DESCRIPTION_QUERY = `
         name
         slugId
         description
+        content
       }
     }
   }
 `;
 
-/** Fetch a Linear project's description by slugId. */
-export async function fetchProjectDescription(apiKey: string, slugId: string): Promise<ProjectDescription> {
+/** Fetch the Linear fields that mirror a git-canonical PRD. */
+export async function fetchProjectPrdMirror(apiKey: string, slugId: string): Promise<ProjectPrdMirror> {
   const response = await fetch(LINEAR_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: apiKey },
-    body: JSON.stringify({ query: PROJECT_DESCRIPTION_QUERY, variables: { slugId } }),
+    body: JSON.stringify({ query: PROJECT_PRD_MIRROR_QUERY, variables: { slugId } }),
   });
 
   if (!response.ok) {
@@ -63,7 +65,7 @@ export async function fetchProjectDescription(apiKey: string, slugId: string): P
     throw new Error(`Linear GraphQL error: ${payload.errors.map((error) => error.message).join(", ")}`);
   }
 
-  const nodes = (payload.data?.projects as { nodes: ProjectDescription[] } | undefined)?.nodes;
+  const nodes = (payload.data?.projects as { nodes: ProjectPrdMirror[] } | undefined)?.nodes;
   const project = nodes?.at(0);
   if (!project) {
     throw new Error(`No Linear project found with slugId "${slugId}"`);
@@ -114,14 +116,49 @@ export function parsePrdContent(content: string): { frontmatter: PrdFrontmatter;
   };
 }
 
-/** Normalize text for comparison: trim trailing whitespace per line, normalize line endings. */
+function normalizeMarkdownLine(line: string, inOrderedList: boolean): { line: string; inOrderedList: boolean } {
+  const bulletNormalized = line.replace(/^(\s*)[*-](\s+)/, "$1-$2");
+  const orderedMatch = /^ {0,3}(\d+\.\s.*)$/.exec(bulletNormalized);
+  if (orderedMatch) {
+    return { line: orderedMatch[1], inOrderedList: true };
+  }
+
+  if (bulletNormalized.trim() === "" || /^#{1,6}\s/.test(bulletNormalized)) {
+    return { line: bulletNormalized, inOrderedList: false };
+  }
+
+  if (inOrderedList && bulletNormalized.startsWith("    ")) {
+    return { line: bulletNormalized.slice(1), inOrderedList: true };
+  }
+
+  return { line: bulletNormalized, inOrderedList };
+}
+
+/** Normalize text for comparison: trim trailing whitespace, line endings, and Linear markdown formatting. */
 export function normalizeForComparison(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .join("\n")
-    .trim();
+  let inFence = false;
+  let inOrderedList = false;
+  const normalizedLines: string[] = [];
+
+  for (const rawLine of text.replace(/\r\n/g, "\n").split("\n")) {
+    const trimmedLine = rawLine.trimEnd();
+    if (/^\s*(```|~~~)/.test(trimmedLine)) {
+      inFence = !inFence;
+      normalizedLines.push(trimmedLine);
+      continue;
+    }
+
+    if (inFence) {
+      normalizedLines.push(trimmedLine);
+      continue;
+    }
+
+    const normalized = normalizeMarkdownLine(trimmedLine, inOrderedList);
+    normalizedLines.push(normalized.line);
+    inOrderedList = normalized.inOrderedList;
+  }
+
+  return normalizedLines.join("\n").trim();
 }
 
 /** Split markdown body into a Map<heading, sectionBody>. Preamble before the first `## ` is keyed as `(preamble)`. */
