@@ -38,6 +38,7 @@ export interface WorkflowRunStartRecord {
   title: string;
   intent: string;
   workflowDefinitionId: string;
+  workspaceKey?: string;
   resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   createdAt: string;
   artifactDir: string;

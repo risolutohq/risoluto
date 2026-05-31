@@ -25,6 +25,7 @@ export interface CreateWorkflowRunRecordInput {
   intent: string;
   source: WorkflowRunSource;
   workflowDefinitionId?: string;
+  workspaceKey?: string;
   resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   trigger?: WorkflowRunTrigger;
   now?: () => string;
@@ -43,6 +44,10 @@ export interface WorkflowRunArchive {
   readWorkflowRunEvents: (workflowRunId: string) => Promise<WorkflowRunEventRecord[]>;
   writeWorkflowRunArtifact: (input: WriteWorkflowRunArtifactInput) => Promise<WorkflowRunArtifactReference>;
   readWorkflowRunArtifact: (input: ReadWorkflowRunArtifactInput) => Promise<WorkflowRunArtifactPayload>;
+  updateWorkflowRunStatus: (
+    workflowRunId: string,
+    status: WorkflowRunStartRecord["status"],
+  ) => Promise<WorkflowRunStartRecord>;
 }
 
 export interface WriteWorkflowRunArtifactInput {
@@ -51,6 +56,7 @@ export interface WriteWorkflowRunArtifactInput {
   data: unknown;
   producer?: WorkflowRunArtifactProducer;
   artifactId?: string;
+  ifNotExists?: boolean;
 }
 
 export interface ReadWorkflowRunArtifactInput {
@@ -75,6 +81,8 @@ export function createWorkflowRunArchive(location: WorkflowRunArchiveLocation): 
     readWorkflowRunEvents: (workflowRunId) => readWorkflowRunEventsFromArchive(archiveRoot, workflowRunId),
     writeWorkflowRunArtifact: (input) => writeWorkflowRunArtifactToArchive(archiveRoot, input),
     readWorkflowRunArtifact: (input) => readWorkflowRunArtifactFromArchive(archiveRoot, input),
+    updateWorkflowRunStatus: (workflowRunId, status) =>
+      updateWorkflowRunStatusInArchive(archiveRoot, workflowRunId, status),
   };
 }
 
@@ -90,6 +98,7 @@ function createWorkflowRunRecordInArchive(
     title: input.title,
     intent: input.intent,
     workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
+    ...(input.workspaceKey ? { workspaceKey: input.workspaceKey } : {}),
     ...(input.resolvedWorkflowDefinition ? { resolvedWorkflowDefinition: input.resolvedWorkflowDefinition } : {}),
     createdAt: input.now?.() ?? new Date().toISOString(),
     artifactDir: workflowRunDir(archiveRoot, id),
@@ -195,8 +204,22 @@ async function writeWorkflowRunArtifactToArchive(
     path: artifactPath(archiveRoot, input.workflowRunId, artifactId),
   };
   await mkdir(path.dirname(artifact.path), { recursive: true });
-  await writeFile(artifact.path, `${JSON.stringify({ contractId: input.contractId, data }, null, 2)}\n`, "utf8");
+  await writeFile(artifact.path, `${JSON.stringify({ contractId: input.contractId, data }, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: input.ifNotExists ? "wx" : "w",
+  });
   return artifact;
+}
+
+async function updateWorkflowRunStatusInArchive(
+  archiveRoot: string,
+  workflowRunId: string,
+  status: WorkflowRunStartRecord["status"],
+): Promise<WorkflowRunStartRecord> {
+  const workflowRun = await readWorkflowRunMetadataFromDir(workflowRunDir(archiveRoot, workflowRunId));
+  const updated = { ...workflowRun, status };
+  await writeFile(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+  return updated;
 }
 
 async function readWorkflowRunArtifactFromArchive(

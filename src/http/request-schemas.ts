@@ -77,6 +77,7 @@ export const createWorkflowRunSchema = z
     title: z.string().min(1),
     intent: z.string().min(1),
     workflowDefinitionId: z.string().min(1).optional(),
+    workspaceKey: z.string().min(1).optional(),
   })
   .strict();
 

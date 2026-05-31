@@ -104,6 +104,7 @@ async function createNewWorkflowRunIntake(
     ...input,
     intent: input.body,
     workflowDefinitionId: resolved.workflowDefinitionId,
+    workspaceKey: resolved.workspaceKey,
     resolvedWorkflowDefinition: input.resolvedWorkflowDefinition,
     source: input.source,
     trigger: input.trigger,

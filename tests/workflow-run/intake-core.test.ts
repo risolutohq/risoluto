@@ -50,6 +50,18 @@ describe("workflow-run intake core", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toEqual([]);
   });
 
+  it("persists the resolved workspace key on the accepted Workflow Run", async () => {
+    const dataDir = await createTempDir();
+    const rules: WorkflowRunIntakeRule[] = [trackerRule({ id: "workspace-routed", workspaceKey: "risoluto" })];
+
+    const accepted = await acceptLinearIssue({ dataDir, rules, id: () => "wr_workspace_routed" });
+
+    expect(accepted.workflowRun.workspaceKey).toBe("risoluto");
+    await expect(createWorkflowRunArchive({ dataDir }).loadWorkflowRun("wr_workspace_routed")).resolves.toMatchObject({
+      workspaceKey: "risoluto",
+    });
+  });
+
   it("maps duplicate external objects to the existing Workflow Run", async () => {
     const dataDir = await createTempDir();
     const rules: WorkflowRunIntakeRule[] = [trackerRule({ id: "afk" })];

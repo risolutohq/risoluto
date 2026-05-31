@@ -65,7 +65,7 @@ states:
           - review.v1
           - verification.v1
         produces:
-          - review.v1
+          - ci_result.v1
         dependsOn:
           - verifier
     gates:

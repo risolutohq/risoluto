@@ -73,6 +73,7 @@ const BUILT_IN_VALIDATION_PROFILES = [
       { id: "format", command: "pnpm run format:check" },
       { id: "test", command: "pnpm test" },
       { id: "typecheck", command: "pnpm run typecheck" },
+      { id: "typecheck-coverage", command: "pnpm run typecheck:coverage" },
     ],
   },
   {

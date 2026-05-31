@@ -73,13 +73,15 @@ export async function recordSlackOperatorApproval(
   }
 
   const approval = toOperatorApprovalArtifact(input, operator);
-  const artifact = await createWorkflowRunArchive(input).writeWorkflowRunArtifact({
-    workflowRunId: approval.workflowRunId,
-    artifactId: approvalArtifactId(approval.nonce),
-    contractId: "operator_approval.v1",
-    data: approval,
-    producer: { type: "action", id: "slack-operator-approval" },
-  });
+  let artifact: WorkflowRunArtifactReference;
+  try {
+    artifact = await writeApprovalArtifact(input, approval);
+  } catch (error) {
+    if (error instanceof DuplicateSlackApprovalNonceError) {
+      return rejected("duplicate_nonce");
+    }
+    throw error;
+  }
   return { type: "slack_approval.recorded", approval, artifact };
 }
 
@@ -108,6 +110,38 @@ async function hasRecordedApproval(input: RecordSlackOperatorApprovalInput): Pro
     }
     throw error;
   }
+}
+
+async function writeApprovalArtifact(
+  input: RecordSlackOperatorApprovalInput,
+  approval: OperatorApprovalArtifact,
+): Promise<WorkflowRunArtifactReference> {
+  try {
+    return await createWorkflowRunArchive(input).writeWorkflowRunArtifact({
+      workflowRunId: approval.workflowRunId,
+      artifactId: approvalArtifactId(approval.nonce),
+      contractId: "operator_approval.v1",
+      data: approval,
+      producer: { type: "action", id: "slack-operator-approval" },
+      ifNotExists: true,
+    });
+  } catch (error) {
+    if (isErrorCode(error, "EEXIST")) {
+      throw new DuplicateSlackApprovalNonceError();
+    }
+    throw error;
+  }
+}
+
+class DuplicateSlackApprovalNonceError extends Error {
+  constructor() {
+    super("duplicate Slack approval nonce");
+    this.name = "DuplicateSlackApprovalNonceError";
+  }
+}
+
+function isErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
 }
 
 function toOperatorApprovalArtifact(

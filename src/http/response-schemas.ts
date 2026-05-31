@@ -117,6 +117,7 @@ const workflowRunRecordSchema = z.object({
   title: z.string(),
   intent: z.string(),
   workflowDefinitionId: z.string(),
+  workspaceKey: z.string().optional(),
   createdAt: z.string(),
   artifactDir: z.string(),
   trigger: z.record(z.string(), z.unknown()).optional(),

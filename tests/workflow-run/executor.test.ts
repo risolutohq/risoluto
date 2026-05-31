@@ -41,6 +41,7 @@ function createDefinition(): ResolvedWorkflowDefinition {
         dependsOn: ["implementer"],
       },
     ],
+    actions: [],
   };
 }
 
@@ -100,6 +101,63 @@ describe("executeWorkflowDefinition", () => {
     expect(roleOrder).toEqual(["planner", "implementer", "reviewer"]);
     expect(result.status).toBe("done");
     expect(result.workflowStatesVisited).toEqual(["plan", "implement", "review"]);
+  });
+
+  it("executes configured actions and stores their typed artifacts", async () => {
+    const actionOrder: string[] = [];
+    const definition = { ...createDefinition(), actions: ["run-validation-profile"] };
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async ({ role }) => roleOutput(role.id),
+      runAction: async ({ actionId }) => {
+        actionOrder.push(actionId);
+        return {
+          "validation_result.v1": {
+            version: 1,
+            workflowRunId,
+            createdAt,
+            profileId: "node-pnpm-standard",
+            failureHandling: "stop_on_first",
+            status: "passed",
+            checks: [
+              {
+                id: "test",
+                command: "pnpm test",
+                status: "passed",
+                exitCode: 0,
+                stdout: "",
+                stderr: "",
+                durationMs: 1,
+              },
+            ],
+          },
+        };
+      },
+    });
+
+    expect(actionOrder).toEqual(["run-validation-profile"]);
+    expect(result.actionExecutions).toEqual(["run-validation-profile"]);
+    expect(result.artifacts["validation_result.v1"]).toMatchObject({ status: "passed" });
+  });
+
+  it("reports running and terminal Run Status through the optional status recorder", async () => {
+    const recordedStatuses: string[] = [];
+
+    const result = await executeWorkflowDefinition({
+      definition: createDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async ({ role }) => roleOutput(role.id),
+      recordStatus: async ({ status }) => {
+        recordedStatuses.push(status);
+      },
+    });
+
+    expect(result.status).toBe("done");
+    expect(recordedStatuses).toEqual(["running", "done"]);
   });
 
   it("blocks after planner triage when the plan artifact has only blocked steps", async () => {
@@ -369,3 +427,24 @@ describe("executeWorkflowDefinition", () => {
     );
   });
 });
+
+function roleOutput(roleId: string): Readonly<Record<string, unknown>> {
+  switch (roleId) {
+    case "planner":
+      return { "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] } };
+    case "implementer":
+      return {
+        "change_summary.v1": {
+          version: 1,
+          workflowRunId,
+          createdAt,
+          summary: "Changed cache invalidation.",
+          changedFiles: [{ path: "src/cache.ts", changeType: "modified", summary: "Invalidate correctly." }],
+        },
+      };
+    case "reviewer":
+      return { "review.v1": { version: 1, workflowRunId, createdAt, verdict: "pass", findings: [] } };
+    default:
+      throw new Error(`unexpected role ${roleId}`);
+  }
+}

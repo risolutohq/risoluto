@@ -71,6 +71,31 @@ describe("validation profiles", () => {
     });
   });
 
+  it("includes type coverage in the canonical node pnpm validation profile", async () => {
+    const runCommand = vi.fn(async ({ command }: { readonly command: string }) => ({
+      exitCode: 0,
+      stdout: `${command} stdout`,
+      stderr: "",
+      durationMs: 5,
+    }));
+
+    const artifact = await runValidationProfile({
+      profileId: "node-pnpm-standard",
+      workflowRunId,
+      createdAt,
+      runCommand,
+    });
+
+    expect(artifact.checks.map((check) => check.command)).toEqual([
+      "pnpm run build",
+      "pnpm run lint",
+      "pnpm run format:check",
+      "pnpm test",
+      "pnpm run typecheck",
+      "pnpm run typecheck:coverage",
+    ]);
+  });
+
   it("rejects passed validation evidence when any check failed", () => {
     const artifact = {
       version: 1,

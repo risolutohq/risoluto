@@ -41,12 +41,13 @@ export async function executeDogfoodEngine(context: DogfoodContext, workflowRun:
   return executeWorkflowDefinition({
     definition,
     workflowRunId: workflowRun.id,
-    initialArtifacts: {
-      "intent.v1": await readIntentArtifact(context, workflowRun.id),
-      "validation_result.v1": validationArtifact(workflowRun.id),
-    },
+    initialArtifacts: { "intent.v1": await readIntentArtifact(context, workflowRun.id) },
     runHook: async ({ hookId }) => ({ evidence: { hookId } }),
     runRole: async ({ role }) => roleOutput(role.id, workflowRun.id),
+    runAction: async ({ actionId }) => actionOutput(actionId, workflowRun.id),
+    recordStatus: async ({ status }) => {
+      await createWorkflowRunArchive({ dataDir: context.dataDir }).updateWorkflowRunStatus(workflowRun.id, status);
+    },
   });
 }
 
@@ -215,13 +216,46 @@ function roleOutput(roleId: string, workflowRunId: string): Readonly<Record<stri
     case "implementer":
       return { "change_summary.v1": changeSummaryArtifact(workflowRunId) };
     case "reviewer":
-    case "ci_babysitter":
       return { "review.v1": reviewArtifact(workflowRunId) };
+    case "ci_babysitter":
+      return { "ci_result.v1": ciResultArtifact(workflowRunId) };
     case "verifier":
       return { "verification.v1": singleVerificationArtifact(workflowRunId) };
     default:
       throw new Error(`unexpected dogfood role ${roleId}`);
   }
+}
+
+function actionOutput(actionId: string, workflowRunId: string): Readonly<Record<string, unknown>> {
+  switch (actionId) {
+    case "create-worktree":
+      return {};
+    case "run-validation-profile":
+      return { "validation_result.v1": validationArtifact(workflowRunId) };
+    case "publish-pr":
+      return { "publish_result.v1": evaluateDraftPublish(workflowRunId) };
+    case "poll-ci":
+      return { "ci_result.v1": ciResultArtifact(workflowRunId) };
+    case "write-handoff":
+      return { "handoff.v1": handoffArtifact(workflowRunId, "dogfood-raw") };
+    default:
+      throw new Error(`unexpected dogfood action ${actionId}`);
+  }
+}
+
+function ciResultArtifact(workflowRunId: string) {
+  return {
+    version: 1,
+    workflowRunId,
+    createdAt: CREATED_AT,
+    provider: "github_actions",
+    status: "passed",
+    route: "continue",
+    summary: "all dogfood CI checks passed",
+    logSummary: null,
+    checks: [{ id: "build", name: "build", status: "passed", classification: "unknown" }],
+    blockedEvidence: null,
+  };
 }
 
 function autoMergePublishArtifact(workflowRunId: string): PublishResultArtifact {

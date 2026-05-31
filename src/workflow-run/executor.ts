@@ -1,11 +1,7 @@
-import type {
-  ResolvedWorkflowDefinition,
-  ResolvedWorkflowRole,
-  ResolvedWorkflowState,
-} from "../workflow-definition/registry.js";
-import { evaluateWorkflowBudget, type WorkflowBudgetPolicy } from "./budget-retry.js";
-import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
+import type { ResolvedWorkflowDefinition, ResolvedWorkflowRole } from "../workflow-definition/registry.js";
+import type { WorkflowBudgetPolicy } from "./budget-retry.js";
 import type { WorkflowRunStatus } from "./contracts.js";
+import { executeConfiguredWorkflowActions, type WorkflowActionExecutionInput } from "./executor-actions.js";
 import { evaluateStateGatesWithRetry, type WorkflowGateRetryInput } from "./gate-retry-controller.js";
 import {
   fireStateEntryHooks,
@@ -15,6 +11,19 @@ import {
   type WorkflowHookExecutionInput,
   type WorkflowHookExecutionResult,
 } from "./gate-hook-engine.js";
+import {
+  appendBudgetEvent,
+  assertRequiredArtifacts,
+  nextRoleStartsNewState,
+  orderRoles,
+  pickArtifacts,
+  plannerBlocked,
+  rolesForState,
+  stateForRole,
+  storeProducedArtifacts,
+} from "./executor-roles.js";
+
+export { WorkflowExecutorError } from "./executor-errors.js";
 
 export interface ExecuteWorkflowDefinitionInput {
   readonly definition: ResolvedWorkflowDefinition;
@@ -23,6 +32,8 @@ export interface ExecuteWorkflowDefinitionInput {
   readonly evaluateGate?: (input: WorkflowGateEvaluationInput) => Promise<WorkflowGateEvaluationResult>;
   readonly runHook?: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;
   readonly runRole: (input: WorkflowRoleExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
+  readonly runAction?: (input: WorkflowActionExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
+  readonly recordStatus?: (input: WorkflowStatusRecordInput) => Promise<void>;
   readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
   readonly maxGateRetries?: number;
   readonly budget?: WorkflowBudgetPolicy;
@@ -34,70 +45,136 @@ export interface WorkflowRoleExecutionInput {
   readonly artifacts: Readonly<Record<string, unknown>>;
 }
 
+export interface WorkflowStatusRecordInput {
+  readonly workflowRunId: string;
+  readonly status: Extract<WorkflowRunStatus, "blocked" | "done" | "running">;
+}
+
 export interface WorkflowExecutorResult {
   readonly status: Extract<WorkflowRunStatus, "blocked" | "done">;
   readonly workflowStatesVisited: readonly string[];
   readonly roleExecutions: readonly string[];
+  readonly actionExecutions: readonly string[];
   readonly events: readonly WorkflowExecutorEvent[];
   readonly artifacts: Readonly<Record<string, unknown>>;
 }
 
-export class WorkflowExecutorError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "WorkflowExecutorError";
-  }
+interface WorkflowExecutionState {
+  readonly artifacts: Record<string, unknown>;
+  readonly statesVisited: string[];
+  readonly roleExecutions: string[];
+  readonly actionExecutions: string[];
+  readonly events: WorkflowExecutorEvent[];
 }
 
 export async function executeWorkflowDefinition(
   input: ExecuteWorkflowDefinitionInput,
 ): Promise<WorkflowExecutorResult> {
-  const artifacts: Record<string, unknown> = { ...input.initialArtifacts };
-  const statesVisited: string[] = [];
-  const roleExecutions: string[] = [];
-  const events: WorkflowExecutorEvent[] = [];
+  const state = createWorkflowExecutionState(input);
   const orderedRoles = orderRoles(input.definition.roles);
   let currentStateId: string | undefined;
   let gateRetryAttempts = 0;
 
+  await recordWorkflowRunStatus(input, "running");
+  await executeConfiguredWorkflowActions({ ...input, ...state, phase: "before_roles" });
   for (const [index, role] of orderedRoles.entries()) {
-    if (appendBudgetEvent(events, input.budget, role.id, input.workflowRunId)) {
-      return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+    if (appendBudgetEvent(state.events, input.budget, role.id, input.workflowRunId)) {
+      return finishWorkflowExecution(input, "blocked", state);
     }
-    currentStateId = await fireHooksForNewState(input, artifacts, events, role, currentStateId);
-    assertRequiredArtifacts(role, artifacts, input.definition.roles);
-    rememberState(statesVisited, role.stateId);
+    currentStateId = await fireHooksForNewState(input, state.artifacts, state.events, role, currentStateId);
+    assertRequiredArtifacts(role, state.artifacts, input.definition.roles);
+    rememberState(state.statesVisited, role.stateId);
     const produced = await input.runRole({
       workflowRunId: input.workflowRunId,
       role,
-      artifacts: pickArtifacts(artifacts, role.consumes),
+      artifacts: pickArtifacts(state.artifacts, role.consumes),
     });
-    storeProducedArtifacts(artifacts, role, produced);
-    roleExecutions.push(role.id);
-    if (role.id === "planner" && plannerBlocked(artifacts["plan.v1"])) {
-      return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+    storeProducedArtifacts(state.artifacts, role, produced);
+    state.roleExecutions.push(role.id);
+    if (role.id === "planner" && plannerBlocked(state.artifacts["plan.v1"])) {
+      return finishWorkflowExecution(input, "blocked", state);
     }
     if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
-      const gateResult = await evaluateStateGatesWithRetry({
-        workflowRunId: input.workflowRunId,
-        artifacts,
-        state: stateForRole(input.definition, role),
-        stateRoles: rolesForState(input.definition.roles, role.stateId),
-        evaluateGate: input.evaluateGate,
-        retryGate: input.retryGate,
-        maxGateRetries: input.maxGateRetries,
-        budget: input.budget,
-        retryAttemptsUsed: gateRetryAttempts,
-      });
+      const gateResult = await evaluateGatesAfterRole(input, role, state, gateRetryAttempts);
       gateRetryAttempts = gateResult.retryAttemptsUsed;
-      events.push(...gateResult.events);
-      if (gateResult.status === "failed") {
-        return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+      state.events.push(...gateResult.events);
+      if (gateResult.failed) {
+        return finishWorkflowExecution(input, "blocked", state);
       }
     }
   }
 
-  return { status: "done", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+  await executeConfiguredWorkflowActions({ ...input, ...state, phase: "after_roles" });
+  return finishWorkflowExecution(input, "done", state);
+}
+
+async function finishWorkflowExecution(
+  input: ExecuteWorkflowDefinitionInput,
+  status: Extract<WorkflowRunStatus, "blocked" | "done">,
+  state: WorkflowExecutionState,
+): Promise<WorkflowExecutorResult> {
+  await recordWorkflowRunStatus(input, status);
+  return {
+    status,
+    workflowStatesVisited: state.statesVisited,
+    roleExecutions: state.roleExecutions,
+    actionExecutions: state.actionExecutions,
+    events: state.events,
+    artifacts: state.artifacts,
+  };
+}
+
+function createWorkflowExecutionState(input: ExecuteWorkflowDefinitionInput): WorkflowExecutionState {
+  return {
+    artifacts: { ...input.initialArtifacts },
+    statesVisited: [],
+    roleExecutions: [],
+    actionExecutions: [],
+    events: [],
+  };
+}
+
+async function evaluateGatesAfterRole(
+  input: ExecuteWorkflowDefinitionInput,
+  role: ResolvedWorkflowRole,
+  executionState: WorkflowExecutionState,
+  retryAttemptsUsed: number,
+): Promise<{
+  readonly events: readonly WorkflowExecutorEvent[];
+  readonly failed: boolean;
+  readonly retryAttemptsUsed: number;
+}> {
+  const state = stateForRole(input.definition, role);
+  await executeConfiguredWorkflowActions({
+    ...input,
+    artifacts: executionState.artifacts,
+    actionExecutions: executionState.actionExecutions,
+    phase: "before_state_gates",
+    state,
+  });
+  const gateResult = await evaluateStateGatesWithRetry({
+    workflowRunId: input.workflowRunId,
+    artifacts: executionState.artifacts,
+    state,
+    stateRoles: rolesForState(input.definition.roles, role.stateId),
+    evaluateGate: input.evaluateGate,
+    retryGate: input.retryGate,
+    maxGateRetries: input.maxGateRetries,
+    budget: input.budget,
+    retryAttemptsUsed,
+  });
+  return {
+    events: gateResult.events,
+    failed: gateResult.status === "failed",
+    retryAttemptsUsed: gateResult.retryAttemptsUsed,
+  };
+}
+
+async function recordWorkflowRunStatus(
+  input: ExecuteWorkflowDefinitionInput,
+  status: WorkflowStatusRecordInput["status"],
+): Promise<void> {
+  await input.recordStatus?.({ workflowRunId: input.workflowRunId, status });
 }
 
 async function fireHooksForNewState(
@@ -120,133 +197,8 @@ async function fireHooksForNewState(
   return role.stateId;
 }
 
-function orderRoles(roles: readonly ResolvedWorkflowRole[]): ResolvedWorkflowRole[] {
-  const pending = new Map(roles.map((role) => [role.id, role]));
-  const ordered: ResolvedWorkflowRole[] = [];
-  while (pending.size > 0) {
-    const ready = [...pending.values()].find((role) => role.dependsOn.every((dependency) => !pending.has(dependency)));
-    if (!ready) {
-      throw new WorkflowExecutorError("workflow role DAG contains a cycle or unknown dependency");
-    }
-    ordered.push(ready);
-    pending.delete(ready.id);
-  }
-  return ordered;
-}
-
-function rolesForState(roles: readonly ResolvedWorkflowRole[], stateId: string): readonly ResolvedWorkflowRole[] {
-  return roles.filter((role) => role.stateId === stateId);
-}
-
-function nextRoleStartsNewState(roles: readonly ResolvedWorkflowRole[], index: number, stateId: string): boolean {
-  return roles[index + 1]?.stateId !== stateId;
-}
-
-function stateForRole(definition: ResolvedWorkflowDefinition, role: ResolvedWorkflowRole): ResolvedWorkflowState {
-  return definition.states.find((state) => state.id === role.stateId) ?? { id: role.stateId, gates: [], hooks: [] };
-}
-
-function assertRequiredArtifacts(
-  role: ResolvedWorkflowRole,
-  artifacts: Readonly<Record<string, unknown>>,
-  roles: readonly ResolvedWorkflowRole[],
-): void {
-  for (const contractId of role.consumes) {
-    if (artifacts[contractId] === undefined) {
-      throw new WorkflowExecutorError(
-        `${role.id} is missing required artifact ${contractId} ${producerFor(contractId, roles)}`,
-      );
-    }
-  }
-}
-
-function producerFor(contractId: string, roles: readonly ResolvedWorkflowRole[]): string {
-  const producer = roles.find((role) => role.produces.includes(contractId));
-  if (producer) {
-    return `produced by ${producer.id}`;
-  }
-  return "from intake";
-}
-
-function pickArtifacts(
-  artifacts: Readonly<Record<string, unknown>>,
-  contractIds: readonly string[],
-): Readonly<Record<string, unknown>> {
-  const picked: Record<string, unknown> = {};
-  for (const contractId of contractIds) {
-    picked[contractId] = artifacts[contractId];
-  }
-  return picked;
-}
-
-function storeProducedArtifacts(
-  artifacts: Record<string, unknown>,
-  role: ResolvedWorkflowRole,
-  produced: Readonly<Record<string, unknown>>,
-): void {
-  for (const contractId of role.produces) {
-    const artifact = produced[contractId];
-    if (artifact === undefined) {
-      throw new WorkflowExecutorError(`${role.id} did not produce required artifact ${contractId}`);
-    }
-    artifacts[contractId] = parseWorkflowRunArtifact({
-      contractId,
-      data: artifact,
-      producer: { type: "role", id: role.id },
-    });
-  }
-}
-
-function appendBudgetEvent(
-  events: WorkflowExecutorEvent[],
-  budget: WorkflowBudgetPolicy | undefined,
-  roleId: string,
-  workflowRunId: string,
-): boolean {
-  const event = evaluateBudgetBeforeRole(budget, roleId, workflowRunId);
-  if (!event) {
-    return false;
-  }
-  events.push(event);
-  return event.status === "failed";
-}
-
-function evaluateBudgetBeforeRole(
-  budget: WorkflowBudgetPolicy | undefined,
-  roleId: string,
-  workflowRunId: string,
-): WorkflowExecutorEvent | null {
-  if (!budget) {
-    return null;
-  }
-  const result = evaluateWorkflowBudget({ policy: budget, nextStepLabel: `role ${roleId}` });
-  return {
-    eventType: "workflow_budget.checked",
-    workflowRunId,
-    stateId: roleId,
-    status: result.status,
-    evidence: result.evidence,
-    ...(result.reason ? { reason: result.reason } : {}),
-  };
-}
-
 function rememberState(statesVisited: string[], stateId: string): void {
   if (statesVisited.at(-1) !== stateId) {
     statesVisited.push(stateId);
   }
-}
-
-function plannerBlocked(planArtifact: unknown): boolean {
-  if (!isRecord(planArtifact)) {
-    return false;
-  }
-  const steps = planArtifact.steps;
-  if (!Array.isArray(steps) || steps.length === 0) {
-    return false;
-  }
-  return steps.every((step) => isRecord(step) && step.status === "blocked");
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -17,11 +17,13 @@ export interface WorkflowRunRuleResolutionInput {
   readonly state?: string | null;
   readonly rules?: readonly WorkflowRunIntakeRule[];
   readonly workflowDefinitionId?: string;
+  readonly workspaceKey?: string;
 }
 
 export interface ResolvedWorkflowRunIntake {
   readonly rule: WorkflowRunIntakeRule | null;
   readonly workflowDefinitionId: string;
+  readonly workspaceKey: string;
 }
 
 export class AmbiguousWorkflowRunIntakeError extends Error {
@@ -41,7 +43,11 @@ export class InvalidWorkflowRunIntakeError extends Error {
 export function resolveWorkflowRunIntake(input: WorkflowRunRuleResolutionInput): ResolvedWorkflowRunIntake {
   const rules = input.rules ?? [];
   if (rules.length === 0) {
-    return { rule: null, workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID };
+    return {
+      rule: null,
+      workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
+      workspaceKey: input.workspaceKey ?? "default",
+    };
   }
 
   const labels = normalizeLabels(input.labels ?? []);
@@ -59,7 +65,7 @@ export function resolveWorkflowRunIntake(input: WorkflowRunRuleResolutionInput):
   if (!workflowDefinitionId || !workspaceKey) {
     throw new InvalidWorkflowRunIntakeError(`intake rule ${rule.id} did not resolve workflow and workspace`);
   }
-  return { rule, workflowDefinitionId };
+  return { rule, workflowDefinitionId, workspaceKey };
 }
 
 function ruleMatches(

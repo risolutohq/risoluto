@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { executeWorkflowDefinition } from "../../src/workflow-run/executor.js";
+import type { WorkflowRunStatus } from "../../src/workflow-run/contracts.js";
 import { projectWorkflowRunStatus } from "../../src/workflow-run/status-projection.js";
 import {
   cleanupDogfoodContext,
@@ -53,8 +54,8 @@ describe("workflow-first AFK dogfood capstone", () => {
       WORKFLOW_ID,
     ]);
     expect(engine).toMatchObject({ status: "done", workflowStatesVisited: ["plan", "implement", "review", "publish"] });
-    expect(httpStatus.workflowRun).toMatchObject({ id: cliRun.id, status: cliRun.status });
-    expect(projectCanonicalStatus(cliRun)).toMatchObject({ runStatus: cliRun.status, externalStatus: "In Progress" });
+    expect(httpStatus.workflowRun).toMatchObject({ id: cliRun.id, status: "done" });
+    expect(projectCanonicalStatus(httpStatus.workflowRun)).toMatchObject({ runStatus: "done", externalStatus: "Done" });
     expect(verification).toMatchObject({ mode: "council", decision: "satisfied", consensus: "majority" });
     expect(publish).toMatchObject({ mode: "draft", status: "published", draft: true });
     expect(autoMerge).toEqual({ status: "blocked", reason: "operator_approval_required" });
@@ -91,7 +92,7 @@ async function createTrackedDogfoodContext(): Promise<DogfoodContext> {
 function projectCanonicalStatus(workflowRun: {
   readonly id: string;
   readonly workflowDefinitionId: string;
-  readonly status: "accepted";
+  readonly status: WorkflowRunStatus;
 }) {
   return projectWorkflowRunStatus({
     workflowRunId: workflowRun.id,

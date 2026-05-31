@@ -37,6 +37,7 @@ export interface ResolvedWorkflowDefinition {
   readonly validationProfile: string;
   readonly states: readonly ResolvedWorkflowState[];
   readonly roles: readonly ResolvedWorkflowRole[];
+  readonly actions: readonly string[];
 }
 
 export interface WorkflowDefinitionRegistry {
@@ -168,6 +169,7 @@ function validateWorkflowDefinitionReferences(definition: WorkflowDefinition): v
       validateRoleReferences(role);
     }
   }
+  validateRoleGraph(definition);
 }
 
 function validateRoleReferences(role: WorkflowRoleDefinition): void {
@@ -176,6 +178,24 @@ function validateRoleReferences(role: WorkflowRoleDefinition): void {
   for (const contractId of [...role.consumes, ...role.produces]) {
     if (!isWorkflowRunArtifactContractId(contractId)) {
       throw new WorkflowDefinitionRegistryError(`unknown artifact contract id ${contractId}`);
+    }
+  }
+}
+
+function validateRoleGraph(definition: WorkflowDefinition): void {
+  const roles = definition.states.flatMap((state) => state.roles);
+  const roleIds = new Set<string>();
+  for (const role of roles) {
+    if (roleIds.has(role.id)) {
+      throw new WorkflowDefinitionRegistryError(`duplicate role id ${role.id}`);
+    }
+    roleIds.add(role.id);
+  }
+  for (const role of roles) {
+    for (const dependency of role.dependsOn) {
+      if (!roleIds.has(dependency)) {
+        throw new WorkflowDefinitionRegistryError(`unknown role dependency ${dependency}`);
+      }
     }
   }
 }
@@ -200,6 +220,7 @@ function resolveWorkflowDefinition(
         dependsOn: role.dependsOn,
       })),
     ),
+    actions: definition.actions,
   };
 }
 

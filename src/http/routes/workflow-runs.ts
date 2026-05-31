@@ -90,6 +90,7 @@ async function createWorkflowRunHandler(
       externalObject: null,
       rules: [],
       ...(parsed.data.workflowDefinitionId ? { workflowDefinitionId: parsed.data.workflowDefinitionId } : {}),
+      workspaceKey: parsed.data.workspaceKey ?? "default",
     });
     res.status(201).json(toStartedOutput(intake.workflowRun));
   } catch (error) {

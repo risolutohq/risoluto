@@ -18,6 +18,7 @@ export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
       title: { type: "string" },
       intent: { type: "string" },
       "workflow-definition": { type: "string" },
+      "workspace-key": { type: "string" },
       "data-dir": { type: "string" },
       json: { type: "boolean", default: false },
     },
@@ -40,6 +41,7 @@ export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
     externalObject: null,
     rules: [],
     workflowDefinitionId: workflowDefinition.id,
+    workspaceKey: parsed.values["workspace-key"]?.trim() || "default",
     resolvedWorkflowDefinition: toWorkflowRunResolvedDefinitionConfig(workflowDefinition),
   });
   const workflowRun = intake.workflowRun;

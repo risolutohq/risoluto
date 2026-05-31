@@ -45,6 +45,7 @@ export function createWorkflowRunRecord(input: {
   intent: string;
   source: WorkflowRunSource;
   workflowDefinitionId?: string;
+  workspaceKey?: string;
   resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   trigger?: WorkflowRunTrigger;
   now?: () => string;

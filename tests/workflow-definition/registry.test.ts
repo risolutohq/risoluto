@@ -114,6 +114,68 @@ actions: [create-worktree]
     ).rejects.toThrow(/unsupported workflow definition field command/);
   });
 
+  it("rejects role DAG dependencies that do not reference a declared role", async () => {
+    const workflowDir = await createWorkflowDir();
+    await writeWorkflowDefinition(
+      workflowDir,
+      "bad-dependency.yaml",
+      `
+version: 1
+id: bad-dependency
+defaults:
+  modelProfile: balanced
+  validationProfile: node-pnpm-standard
+states:
+  - id: plan
+    roles:
+      - id: planner
+        consumes: [intent.v1]
+        produces: [plan.v1]
+        dependsOn: [ghost]
+    gates: []
+    hooks: []
+actions: []
+`.trimStart(),
+    );
+
+    await expect(
+      loadWorkflowDefinitionRegistry({ workflowDir, globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS }),
+    ).rejects.toThrow(/unknown role dependency ghost/);
+  });
+
+  it("rejects duplicate role IDs before resolving the workflow", async () => {
+    const workflowDir = await createWorkflowDir();
+    await writeWorkflowDefinition(
+      workflowDir,
+      "duplicate-role.yaml",
+      `
+version: 1
+id: duplicate-role
+defaults:
+  modelProfile: balanced
+  validationProfile: node-pnpm-standard
+states:
+  - id: plan
+    roles:
+      - id: planner
+        consumes: [intent.v1]
+        produces: [plan.v1]
+        dependsOn: []
+      - id: planner
+        consumes: [intent.v1]
+        produces: [plan.v1]
+        dependsOn: []
+    gates: []
+    hooks: []
+actions: []
+`.trimStart(),
+    );
+
+    await expect(
+      loadWorkflowDefinitionRegistry({ workflowDir, globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS }),
+    ).rejects.toThrow(/duplicate role id planner/);
+  });
+
   it("rejects definitions without a version field", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(

@@ -11,6 +11,7 @@ function createDefinition(): ResolvedWorkflowDefinition {
     id: "single-operator-afk-coder",
     validationProfile: "node-pnpm-standard",
     states: [{ id: "plan", gates: ["validation-passed"], hooks: [] }],
+    actions: [],
     roles: [
       {
         id: "planner",

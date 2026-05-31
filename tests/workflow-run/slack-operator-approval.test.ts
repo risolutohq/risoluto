@@ -211,6 +211,30 @@ describe("recordSlackOperatorApproval", () => {
       },
     });
   });
+
+  it("rejects concurrent duplicate approval nonces atomically", async () => {
+    const dataDir = await createTempDir();
+    const rawBody = Buffer.from("payload=concurrent-duplicate");
+    const input = {
+      dataDir,
+      signingSecret: TEST_SECRET,
+      signature: signSlack(rawBody, 1000),
+      timestampEpochSeconds: 1000,
+      receivedAtEpochSeconds: 1200,
+      rawBody,
+      approval: approvalInput({ nonce: "concurrent-nonce" }),
+      operators: [operator()],
+      allowedSlackTeamIds: ["T_OK"],
+      now: () => "2026-05-31T20:30:00.000Z",
+    };
+
+    const results = await Promise.all([recordSlackOperatorApproval(input), recordSlackOperatorApproval(input)]);
+
+    expect(results.filter((result) => result.type === "slack_approval.recorded")).toHaveLength(1);
+    expect(results.filter((result) => result.type === "slack_approval.rejected")).toEqual([
+      { type: "slack_approval.rejected", reason: "duplicate_nonce" },
+    ]);
+  });
 });
 
 function approvalInput(overrides: {
