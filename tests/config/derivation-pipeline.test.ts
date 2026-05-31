@@ -15,7 +15,13 @@ describe("deriveServiceConfig pipeline", () => {
     const config = deriveServiceConfig(
       createWorkflow({
         tracker: { kind: "github", endpoint: "https://api.github.com" },
-        workspace: { root: "~/workspaces", strategy: "directory" },
+        workspace: {
+          root: "~/workspaces",
+          strategy: "directory",
+          branch_template: "afk/{workflow}/{run-id}",
+          dirty_policy: "require_approval",
+          worktree_retention_days: 14,
+        },
         hooks: { timeout_ms: 1234 },
         agent: { max_turns: 9 },
         codex: { command: "codex", auth: { mode: "api_key", source_home: "/tmp" } },
@@ -25,6 +31,9 @@ describe("deriveServiceConfig pipeline", () => {
 
     expect(config.tracker.endpoint).toBe("https://api.github.com");
     expect(config.workspace.hooks.timeoutMs).toBe(1234);
+    expect(config.workspace.branchTemplate).toBe("afk/{workflow}/{run-id}");
+    expect(config.workspace.dirtyPolicy).toBe("require_approval");
+    expect(config.workspace.worktreeRetentionDays).toBe(14);
     expect(config.agent.maxTurns).toBe(9);
     expect(config.server.port).toBe(9000);
   });

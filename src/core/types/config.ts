@@ -51,12 +51,16 @@ interface WorkspaceHooks {
 }
 
 export type WorkspaceStrategy = "directory" | "worktree";
+export type WorkspaceDirtyPolicy = "reject" | "auto_stash" | "require_approval";
 
 export interface WorkspaceConfig {
   root: string;
   hooks: WorkspaceHooks;
   strategy: WorkspaceStrategy;
   branchPrefix: string;
+  branchTemplate: string;
+  dirtyPolicy: WorkspaceDirtyPolicy;
+  worktreeRetentionDays: number;
 }
 
 export interface ServerConfig {
