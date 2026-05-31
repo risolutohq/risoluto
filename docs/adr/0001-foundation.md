@@ -149,14 +149,14 @@ artifacts.
 
 ### Implementation status
 
-| Claim                                                                     | Status        | Evidence                                                                                                                       |
-| ------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Artifacts carry a `contractId` identifier                                 | Delivered     | `WorkflowRunArtifactReference.contractId` (`workflow-run/contracts.ts:69`)                                                     |
-| A contract is a TS type + runtime validator + meaning                     | Not delivered | `data: unknown` is written raw; `contractId` is just a stored string — no schema, no validator (`workflow-run/archive.ts:194`) |
-| Contracts are versioned                                                   | Not delivered | Only a `.v1` naming convention appears in a test; no version field, registry, or migration                                     |
-| A role declares the contracts it consumes (inputs) and produces (outputs) | ⚠ Drifted     | Only a single **output** `artifactContractId` is recorded; there is no input declaration (`role-execution-artifacts.ts:25`)    |
-| Validation happens at production time, not consumption time               | Not delivered | No validation happens at any time                                                                                              |
-| Raw harness evidence (Codex JSONL) stored separately                      | Not delivered | No capture path writes Codex session JSONL into the workflow-run archive                                                       |
+| Claim                                                                     | Status        | Evidence                                                                                                                                                                             |
+| ------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Artifacts carry a `contractId` identifier                                 | Delivered     | `WorkflowRunArtifactReference.contractId` (`workflow-run/contracts.ts:69`)                                                                                                           |
+| A contract is a TS type + runtime validator + meaning                     | Partial       | `workflow-run/artifact-contracts.ts` defines runtime validators for `intent.v1`, `plan.v1`, `change_summary.v1`, and `review.v1`; prose meaning still lives in the PRD / issue slice |
+| Contracts are versioned                                                   | Partial       | The upstream contract schemas require `version: 1` and are registered by `.v1` IDs (`workflow-run/artifact-contracts.ts`)                                                            |
+| A role declares the contracts it consumes (inputs) and produces (outputs) | Partial       | Workflow Definition YAML declares role consumes/produces contracts (`.risoluto/workflows/single-operator-afk-coder.yaml`); runtime role execution still records one output artifact  |
+| Validation happens at production time, not consumption time               | Delivered     | `WorkflowRunArchive.writeWorkflowRunArtifact` parses data through the contract registry before writing (`workflow-run/archive.ts`)                                                   |
+| Raw harness evidence (Codex JSONL) stored separately                      | Not delivered | No capture path writes Codex session JSONL into the workflow-run archive                                                                                                             |
 
 ### Consequences
 
@@ -263,12 +263,12 @@ contain logic. The constraints that keep it safe:
 
 ### Implementation status
 
-| Claim                                                       | Status        | Evidence                                                                                                                        |
-| ----------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| No user-authored programming DSL exists                     | Delivered     | No DSL parser / loader / authoring surface anywhere in `src/`                                                                   |
-| YAML schema + registry + resolver + validator               | Not delivered | None exist; only `DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder"` (`workflow-run/contracts.ts:1`) — a bare string |
-| `single-operator-afk-coder` exists as a YAML definition     | Not delivered | No `.risoluto/workflows/` directory, no backing record                                                                          |
-| References resolve against a typed registry (unknown fails) | Not delivered | `--workflow-definition` accepted (`cli/workflow-run-command.ts:128`) but never resolved — any string passes                     |
+| Claim                                                       | Status    | Evidence                                                                                                                                                                        |
+| ----------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No user-authored programming DSL exists                     | Delivered | No DSL parser / loader / authoring surface anywhere in `src/`                                                                                                                   |
+| YAML schema + registry + resolver + validator               | Delivered | `workflow-definition/registry.ts` loads strict YAML, resolves defaults, validates built-in references, and rejects unknown fields                                               |
+| `single-operator-afk-coder` exists as a YAML definition     | Delivered | `.risoluto/workflows/single-operator-afk-coder.yaml`                                                                                                                            |
+| References resolve against a typed registry (unknown fails) | Delivered | `workflow-run-start-command.ts` resolves the requested Workflow Definition before creating a run record; registry tests cover unknown role / command / missing version failures |
 
 > **Foundation warning.** This is the bulk of the runtime that does not yet exist:
 > the workflow definition today is a name string with no schema, registry, or

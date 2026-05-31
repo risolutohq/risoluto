@@ -84,17 +84,24 @@ describe("WorkflowRunArchive", () => {
       now: () => "2026-05-26T17:30:00.000Z",
     });
     await archive.storeWorkflowRun(workflowRun);
+    const plan = {
+      version: 1,
+      workflowRunId: workflowRun.id,
+      createdAt: "2026-05-26T17:31:00.000Z",
+      summary: "Use archive-owned artifact persistence.",
+      steps: [{ id: "step-1", title: "Patch cache invalidation", status: "ready", dependsOn: [] }],
+    };
 
     const artifact = await archive.writeWorkflowRunArtifact({
       workflowRunId: workflowRun.id,
       artifactId: "artifact-plan",
-      contractId: "implementation_plan.v1",
-      data: { summary: "Use archive-owned artifact persistence." },
+      contractId: "plan.v1",
+      data: plan,
     });
 
     expect(artifact).toMatchObject({
       artifactId: "artifact-plan",
-      contractId: "implementation_plan.v1",
+      contractId: "plan.v1",
     });
     await expect(
       archive.readWorkflowRunArtifact({
@@ -102,8 +109,69 @@ describe("WorkflowRunArchive", () => {
         artifactId: artifact.artifactId,
       }),
     ).resolves.toEqual({
-      contractId: "implementation_plan.v1",
-      data: { summary: "Use archive-owned artifact persistence." },
+      contractId: "plan.v1",
+      data: plan,
     });
+  });
+
+  it("writes and reads a valid intent.v1 artifact without shape loss", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "Capture operator intent",
+      intent: "Normalize the operator request before workflow execution.",
+      source: "cli",
+      id: () => "wr_archive_intent_contract",
+      now: () => "2026-05-26T17:40:00.000Z",
+    });
+    await archive.storeWorkflowRun(workflowRun);
+    const intent = {
+      version: 1,
+      workflowRunId: workflowRun.id,
+      createdAt: "2026-05-26T17:41:00.000Z",
+      source: "cli",
+      title: "Capture operator intent",
+      body: "Normalize the operator request before workflow execution.",
+      externalReferences: [],
+    };
+
+    const artifact = await archive.writeWorkflowRunArtifact({
+      workflowRunId: workflowRun.id,
+      artifactId: "artifact-intent",
+      contractId: "intent.v1",
+      data: intent,
+    });
+
+    await expect(
+      archive.readWorkflowRunArtifact({
+        workflowRunId: workflowRun.id,
+        artifactId: artifact.artifactId,
+      }),
+    ).resolves.toEqual({
+      contractId: "intent.v1",
+      data: intent,
+    });
+  });
+
+  it("rejects an unknown artifact contract id before storing the artifact", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "Reject unknown contract",
+      intent: "Unknown contracts must fail before gates consume them.",
+      source: "cli",
+      id: () => "wr_archive_unknown_contract",
+      now: () => "2026-05-26T17:50:00.000Z",
+    });
+    await archive.storeWorkflowRun(workflowRun);
+
+    await expect(
+      archive.writeWorkflowRunArtifact({
+        workflowRunId: workflowRun.id,
+        artifactId: "artifact-unknown",
+        contractId: "unknown.v1",
+        data: { version: 1 },
+      }),
+    ).rejects.toThrow(/unknown artifact contract id unknown\.v1/);
   });
 });

@@ -10,16 +10,13 @@ import {
   startRunAttemptCommand,
 } from "./workflow-run-attempt-command.js";
 import { listWorkflowRunsCommand } from "./workflow-run-list-command.js";
+import { startWorkflowRunCommand } from "./workflow-run-start-command.js";
 import { recordWorkspaceCleanupCommand, recordWorkspaceLifecycleCommand } from "./workflow-run-workspace-command.js";
 import { recordWorkerProcessCommand } from "./workflow-run-worker-process-command.js";
 import {
-  createWorkflowRunRecord,
-  DEFAULT_WORKFLOW_DEFINITION_ID,
   openWorkflowRun,
   readWorkflowRunEvents,
   toEventAppendedOutput,
-  toStartedOutput,
-  writeWorkflowRunRecord,
   type WorkflowRunGateReference,
   type WorkflowRunHookReference,
 } from "../workflow-run/artifacts.js";
@@ -34,7 +31,7 @@ const workflowRunCommandHandlers: WorkflowRunCommandHandler[] = [
   {
     expected: "workflow-run start",
     matches: (argv) => argv[1] === "start",
-    handle: (argv) => startWorkflowRun(argv.slice(2)),
+    handle: (argv) => startWorkflowRunCommand(argv.slice(2)),
   },
   {
     expected: "workflow-run list",
@@ -114,34 +111,6 @@ export async function tryHandleWorkflowRunCommand(argv: string[]): Promise<numbe
   }
 
   throw new TypeError(`unsupported workflow-run command. Expected: ${formatExpectedWorkflowRunCommands()}`);
-}
-
-async function startWorkflowRun(argv: string[]): Promise<number> {
-  const parsed = parseArgs({
-    args: argv,
-    allowPositionals: false,
-    options: {
-      title: { type: "string" },
-      intent: { type: "string" },
-      "workflow-definition": { type: "string" },
-      "data-dir": { type: "string" },
-      json: { type: "boolean", default: false },
-    },
-  });
-
-  const title = requireNonEmpty(parsed.values.title, "--title");
-  const intent = requireNonEmpty(parsed.values.intent, "--intent");
-  const workflowDefinitionId = parsed.values["workflow-definition"]?.trim() || DEFAULT_WORKFLOW_DEFINITION_ID;
-  const dataDir = resolveDataDir(parsed.values["data-dir"]);
-  const workflowRun = createWorkflowRunRecord({ dataDir, title, intent, workflowDefinitionId, source: "cli" });
-
-  await writeWorkflowRunRecord(workflowRun);
-  if (parsed.values.json) {
-    console.log(JSON.stringify(toStartedOutput(workflowRun)));
-  } else {
-    console.log(`Started Workflow Run ${workflowRun.id}: ${workflowRun.title}`);
-  }
-  return 0;
 }
 
 async function appendWorkflowRunEventCommand(argv: string[]): Promise<number> {

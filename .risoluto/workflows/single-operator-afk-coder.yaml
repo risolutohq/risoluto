@@ -1,0 +1,79 @@
+version: 1
+id: single-operator-afk-coder
+defaults:
+  modelProfile: balanced
+  validationProfile: node-pnpm-standard
+states:
+  - id: plan
+    roles:
+      - id: planner
+        consumes:
+          - intent.v1
+        produces:
+          - plan.v1
+        dependsOn: []
+    gates:
+      - artifacts-valid
+    hooks:
+      - collect-evidence
+  - id: implement
+    roles:
+      - id: implementer
+        consumes:
+          - intent.v1
+          - plan.v1
+        produces:
+          - change_summary.v1
+        dependsOn:
+          - planner
+    gates:
+      - budget-available
+      - artifacts-valid
+    hooks:
+      - persist-artifact
+  - id: review
+    roles:
+      - id: reviewer
+        consumes:
+          - change_summary.v1
+        produces:
+          - review.v1
+        dependsOn:
+          - implementer
+      - id: verifier
+        modelProfile: verifier
+        consumes:
+          - intent.v1
+          - plan.v1
+          - change_summary.v1
+          - review.v1
+        produces:
+          - review.v1
+        dependsOn:
+          - reviewer
+    gates:
+      - validation-passed
+      - verifier-satisfied
+    hooks:
+      - notify-operator
+  - id: publish
+    roles:
+      - id: ci_babysitter
+        modelProfile: fast
+        consumes:
+          - change_summary.v1
+          - review.v1
+        produces:
+          - review.v1
+        dependsOn:
+          - verifier
+    gates:
+      - verifier-satisfied
+    hooks:
+      - notify-operator
+actions:
+  - create-worktree
+  - run-validation-profile
+  - publish-pr
+  - poll-ci
+  - write-handoff
