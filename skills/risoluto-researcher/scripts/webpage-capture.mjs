@@ -209,6 +209,8 @@ function parseArgs(raw) {
     force: false,
     dryRun: false,
     fromJson: "",
+    remote: false,
+    proxyCountry: "",
   };
   for (let i = 0; i < raw.length; i++) {
     switch (raw[i]) {
@@ -235,6 +237,12 @@ function parseArgs(raw) {
         break;
       case "--from-json":
         args.fromJson = raw[++i] ?? "";
+        break;
+      case "--remote":
+        args.remote = true;
+        break;
+      case "--proxy-country":
+        args.proxyCountry = raw[++i] ?? "";
         break;
       default:
         fail(`unknown flag: ${raw[i]}`);
@@ -264,6 +272,9 @@ function checkPreconditions(args) {
     } catch {
       fail("browser-harness not found — install it and enable Chrome remote debugging (see install.md)");
     }
+    if (args.remote && !process.env.BROWSER_USE_API_KEY) {
+      fail("--remote needs BROWSER_USE_API_KEY (Browser Use cloud) — export it or add it to browser-harness's .env");
+    }
   }
 }
 
@@ -279,10 +290,12 @@ function loadRecipe(url) {
 }
 
 /**
- * Build the Python driver browser-harness runs on stdin. Applies the recipe's learned steps —
- * pre-extraction clicks (cookie/consent walls), wait-for-selector (late SPA render), scroll
- * (lazy-load), settle — then injects Turndown and runs the recipe-tuned extractor. JSON-encoding
- * every interpolated value keeps the generated Python safe.
+ * Build the Python render driver browser-harness runs on stdin. Applies the recipe's learned
+ * steps — pre-extraction clicks (cookie/consent walls), wait-for-selector (late SPA render),
+ * scroll (lazy-load), settle — then injects Turndown and runs the recipe-tuned extractor. Cloud
+ * provisioning is handled separately in loadPage (a distinct invocation), so this driver is
+ * identical for local and cloud runs. JSON-encoding every interpolated value keeps the generated
+ * Python safe.
  */
 function buildDriver(url, recipe, wait) {
   const opts = {
@@ -328,17 +341,54 @@ print("BH_RESULT:" + json.dumps({"finalUrl": info.get("url", ""), "pageTitle": i
 `;
 }
 
+const REMOTE_NAME = "webcap";
+
+/** Run browser-harness with a Python driver on stdin; returns stdout (throws on failure). */
+function runHarness(input, env, timeout) {
+  return execFileSync("browser-harness", [], { input, encoding: "utf8", maxBuffer: 128 * 1024 * 1024, env, timeout });
+}
+
+/**
+ * Render the page and return the parsed BH_RESULT. Local: one invocation against the default
+ * daemon. Cloud (`--remote`): the documented three-step dance — (1) under the default daemon,
+ * clear any stale `webcap` daemon and `start_remote_daemon` (bounded timeout so billing can't run
+ * away; optional residential proxy); (2) render under `BU_NAME=webcap` (the cloud browser); (3)
+ * `stop_remote_daemon` so the cloud browser stops and billing ends, in both success and failure
+ * paths. Provisioning is a separate invocation because setting `BU_NAME=webcap` up front makes
+ * ensure_daemon auto-start a *local* webcap daemon that collides with start_remote_daemon.
+ */
 function loadPage(args, recipe, wait) {
   if (args.fromJson) return parseBHResult(`BH_RESULT:${readFileSync(args.fromJson, "utf8")}`);
+  const renderDriver = buildDriver(args.url, recipe, wait);
+  if (!args.remote) {
+    try {
+      return parseBHResult(runHarness(renderDriver, process.env, 90_000));
+    } catch (error) {
+      fail(`browser-harness failed — ${error.stderr || error.message}`);
+    }
+  }
+  const n = JSON.stringify(REMOTE_NAME);
+  const proxy = args.proxyCountry ? `, proxyCountryCode=${JSON.stringify(args.proxyCountry)}` : "";
+  const provision =
+    `from browser_harness.admin import restart_daemon, start_remote_daemon\n` +
+    `restart_daemon(${n})\nstart_remote_daemon(${n}, timeout=180${proxy})`;
+  const stop = `from browser_harness.admin import stop_remote_daemon\nstop_remote_daemon(${n})`;
   let stdout;
   try {
-    stdout = execFileSync("browser-harness", [], {
-      input: buildDriver(args.url, recipe, wait),
-      encoding: "utf8",
-      maxBuffer: 128 * 1024 * 1024,
-    });
+    runHarness(provision, process.env, 150_000);
+    stdout = runHarness(renderDriver, { ...process.env, BU_NAME: REMOTE_NAME }, 200_000);
   } catch (error) {
-    fail(`browser-harness failed — ${error.stderr || error.message}`);
+    try {
+      runHarness(stop, process.env, 60_000);
+    } catch {
+      /* best-effort — the daemon also self-stops at its timeout */
+    }
+    fail(`browser-harness (cloud) failed — ${error.stderr || error.message}`);
+  }
+  try {
+    runHarness(stop, process.env, 60_000);
+  } catch {
+    /* best-effort cleanup */
   }
   return parseBHResult(stdout);
 }
@@ -428,7 +478,7 @@ function main() {
   const recipeNote = Object.keys(recipe).length ? " [recipe applied]" : "";
   const thin = textLen < THIN_TEXT ? " ⚠️ thin extraction — add a site recipe (webpage-capture.md §7)" : "";
   console.error(
-    `webpage-capture: ${args.dryRun ? "[dry-run] " : ""}${url} → 1 source written ` +
+    `webpage-capture: ${args.dryRun ? "[dry-run] " : ""}${args.remote ? "[cloud] " : ""}${url} → 1 source written ` +
       `(target ${slugs.target}/${slugs.source}), ${textLen} chars text, ${refs.length} external refs ` +
       `→ ${discoveryRows} discovery candidates${recipeNote}${thin}`,
   );

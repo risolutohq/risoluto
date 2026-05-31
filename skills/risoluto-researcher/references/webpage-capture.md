@@ -48,6 +48,8 @@ node skills/risoluto-researcher/scripts/webpage-capture.mjs --url "https://..." 
 | `--force`       | off         | overwrite an already-captured source                                   |
 | `--dry-run`     | off         | render + report; write nothing                                         |
 | `--from-json`   | —           | read a saved BH_RESULT payload instead of driving the browser (test)   |
+| `--remote`        | off | render in a Browser Use cloud stealth browser instead of local Chromium (§6) |
+| `--proxy-country` | —   | residential proxy country code for `--remote` (e.g. `de`, `us`)              |
 
 **What it produces** under `research/targets/<host-brand>/`:
 
@@ -80,7 +82,7 @@ A single page is a closed set: its rendered DOM converted whole. The summary lin
 
 - **Browser not connected** (`active browser connections — 0` / `Connection refused`) — start the Chrome on the CDP port (§0) and retry; the capture stops rather than writing an empty source.
 - **Thin extraction** (warning in the summary) — the page rendered wrong or incompletely. Record a self-healing recipe for the host (§7), then re-run with `--force`.
-- **Bot wall / stealth needed (cloud extension)** — with `BROWSER_USE_API_KEY` set, browser-harness can drive a Browser Use cloud stealth browser (residential proxies, CAPTCHA solving) for pages that block the local Chromium, and run headless/unattended off your machine. Wiring a `--remote` path onto this script is the documented next step; v1 renders locally.
+- **Bot wall / stealth / unattended — use `--remote`.** Pass `--remote` (needs `BROWSER_USE_API_KEY`) to render in a Browser Use cloud stealth browser instead of the local Chromium — residential proxies (`--proxy-country <cc>`), CAPTCHA solving, and no dependency on a local Chrome, so it runs unattended/off-machine and past sites that block Chromium. The script provisions the cloud browser with a bounded timeout and stops it (ending billing) on both success and failure.
 - **`research.mjs` write fails** — logged; fix the reported frontmatter issue and re-run with `--force`.
 
 ## §7 — Self-healing recipes
