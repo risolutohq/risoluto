@@ -1,5 +1,6 @@
 import { z, ZodError, type ZodType } from "zod";
 
+import { handoffArtifactSchema } from "./handoff-contract.js";
 import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
 import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
 
@@ -33,6 +34,7 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "review.v1",
   "validation_result.v1",
   "verification.v1",
+  "handoff.v1",
   "operator_response.v1",
   "operator_approval.v1",
 ] as const;
@@ -206,6 +208,7 @@ const artifactContractSchemaEntries: readonly (readonly [
         .strict(),
     ]),
   ],
+  ["handoff.v1", handoffArtifactSchema],
   ["operator_response.v1", operatorResponseArtifactSchema],
   ["operator_approval.v1", operatorApprovalArtifactSchema],
 ];
