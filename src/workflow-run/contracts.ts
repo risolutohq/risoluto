@@ -20,9 +20,16 @@ export interface WorkflowRunStartRecord {
   title: string;
   intent: string;
   workflowDefinitionId: string;
+  resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   createdAt: string;
   artifactDir: string;
   trigger?: WorkflowRunTrigger;
+}
+
+export interface WorkflowRunResolvedDefinitionConfig {
+  workflowDefinitionId: string;
+  validationProfile: string;
+  modelProfiles: Record<string, string>;
 }
 
 export interface WorkflowRunStartedOutput {

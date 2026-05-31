@@ -81,6 +81,10 @@ describe("workflow-run start CLI", () => {
         title: string;
         intent: string;
         workflowDefinitionId: string;
+        resolvedWorkflowDefinition: {
+          validationProfile: string;
+          modelProfiles: Record<string, string>;
+        };
         artifactDir: string;
       };
     };
@@ -93,6 +97,16 @@ describe("workflow-run start CLI", () => {
         title: "Investigate flaky deploy",
         intent: "Find and fix the failing deployment path.",
         workflowDefinitionId: "single-operator-afk-coder",
+        resolvedWorkflowDefinition: {
+          validationProfile: "node-pnpm-standard",
+          modelProfiles: {
+            planner: "balanced",
+            implementer: "balanced",
+            reviewer: "balanced",
+            verifier: "verifier",
+            ci_babysitter: "fast",
+          },
+        },
       },
     });
     expect(output.workflowRun.id).toMatch(/^wr_/);
@@ -101,10 +115,36 @@ describe("workflow-run start CLI", () => {
     await expect(archive.loadWorkflowRun(output.workflowRun.id)).resolves.toMatchObject({
       source: "cli",
       title: "Investigate flaky deploy",
+      resolvedWorkflowDefinition: {
+        validationProfile: "node-pnpm-standard",
+      },
     });
     await expect(archive.readWorkflowRunEvents(output.workflowRun.id)).resolves.toMatchObject([
       { eventType: "workflow_run.accepted", workflowRunId: output.workflowRun.id },
     ]);
+  });
+
+  it("rejects an unknown Workflow Definition before writing a run record", async () => {
+    const dataDir = await createTempDir();
+    const { main } = await import("../../src/cli/index.js");
+
+    await expect(
+      main([
+        "workflow-run",
+        "start",
+        "--title",
+        "Reject unknown workflow",
+        "--intent",
+        "Do not create a run for an unresolved Workflow Definition.",
+        "--workflow-definition",
+        "unknown-workflow",
+        "--data-dir",
+        dataDir,
+        "--json",
+      ]),
+    ).rejects.toThrow(/unknown workflow definition unknown-workflow/);
+
+    await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toEqual([]);
   });
 
   it("appends a durable operator event to an existing Workflow Run", async () => {

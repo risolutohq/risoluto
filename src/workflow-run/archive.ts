@@ -7,6 +7,7 @@ import { parseWorkflowRunArtifact, type WorkflowRunArtifactProducer } from "./ar
 import type {
   WorkflowRunArtifactReference,
   WorkflowRunEventRecord,
+  WorkflowRunResolvedDefinitionConfig,
   WorkflowRunSource,
   WorkflowRunStartRecord,
   WorkflowRunTrigger,
@@ -24,6 +25,7 @@ export interface CreateWorkflowRunRecordInput {
   intent: string;
   source: WorkflowRunSource;
   workflowDefinitionId?: string;
+  resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   trigger?: WorkflowRunTrigger;
   now?: () => string;
   id?: () => string;
@@ -88,6 +90,7 @@ function createWorkflowRunRecordInArchive(
     title: input.title,
     intent: input.intent,
     workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
+    ...(input.resolvedWorkflowDefinition ? { resolvedWorkflowDefinition: input.resolvedWorkflowDefinition } : {}),
     createdAt: input.now?.() ?? new Date().toISOString(),
     artifactDir: workflowRunDir(archiveRoot, id),
     ...(input.trigger ? { trigger: input.trigger } : {}),
