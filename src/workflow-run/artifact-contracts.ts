@@ -3,6 +3,7 @@ import { z, ZodError, type ZodType } from "zod";
 import { handoffArtifactSchema } from "./handoff-contract.js";
 import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
 import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
+import { publishResultArtifactSchema } from "./publish-policy.js";
 
 export interface WorkflowRunArtifactProducer {
   readonly type: "role" | "action";
@@ -33,6 +34,7 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "change_summary.v1",
   "review.v1",
   "validation_result.v1",
+  "publish_result.v1",
   "verification.v1",
   "handoff.v1",
   "operator_response.v1",
@@ -184,6 +186,7 @@ const artifactContractSchemaEntries: readonly (readonly [
       .strict(),
   ],
   ["validation_result.v1", validationResultSchema],
+  ["publish_result.v1", publishResultArtifactSchema],
   [
     "verification.v1",
     z.discriminatedUnion("mode", [
