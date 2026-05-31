@@ -1,6 +1,7 @@
 import { z, ZodError, type ZodType } from "zod";
 
 import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
+import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
 
 export interface WorkflowRunArtifactProducer {
   readonly type: "role" | "action";
@@ -32,6 +33,7 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "review.v1",
   "validation_result.v1",
   "verification.v1",
+  "operator_response.v1",
   "operator_approval.v1",
 ] as const;
 
@@ -204,6 +206,7 @@ const artifactContractSchemaEntries: readonly (readonly [
         .strict(),
     ]),
   ],
+  ["operator_response.v1", operatorResponseArtifactSchema],
   ["operator_approval.v1", operatorApprovalArtifactSchema],
 ];
 
