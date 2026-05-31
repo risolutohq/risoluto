@@ -23,7 +23,14 @@ export class WorkflowRunArtifactContractError extends Error {
   }
 }
 
-export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = ["intent.v1", "plan.v1", "change_summary.v1", "review.v1"] as const;
+export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
+  "intent.v1",
+  "plan.v1",
+  "change_summary.v1",
+  "review.v1",
+  "validation_result.v1",
+  "verification.v1",
+] as const;
 
 const artifactMetadataSchema = {
   version: z.literal(1),
@@ -38,6 +45,65 @@ const externalReferenceSchema = z
     url: z.string().min(1).nullable(),
   })
   .strict();
+
+const verifierAllowedInputSchema = z.enum([
+  "intent.v1",
+  "plan.v1",
+  "change_summary.v1",
+  "review.v1",
+  "validation_result.v1",
+  "publish_result.v1",
+  "ci_result.v1",
+  "diff",
+  "evidence_links",
+]);
+
+const verifierDecisionSchema = z.enum(["satisfied", "not_satisfied", "uncertain"]);
+
+const validationCheckSchema = z
+  .object({
+    id: z.string().min(1),
+    command: z.string().min(1),
+    status: z.enum(["failed", "passed"]),
+    exitCode: z.number().int(),
+    stdout: z.string(),
+    stderr: z.string(),
+    durationMs: z.number().nonnegative(),
+  })
+  .strict();
+
+const validationResultSchema = z
+  .object({
+    ...artifactMetadataSchema,
+    profileId: z.enum(["node-pnpm-standard", "offline-smoke"]),
+    failureHandling: z.enum(["collect_all", "stop_on_first"]),
+    status: z.enum(["failed", "passed"]),
+    checks: z.array(validationCheckSchema).min(1),
+  })
+  .strict()
+  .superRefine((artifact, context) => {
+    const hasFailedCheck = artifact.checks.some((check) => check.status === "failed");
+    if (artifact.status === "passed" && hasFailedCheck) {
+      context.addIssue({ code: "custom", path: ["status"], message: "must be failed when any check failed" });
+    }
+    if (artifact.status === "failed" && !hasFailedCheck) {
+      context.addIssue({ code: "custom", path: ["status"], message: "must be passed when all checks passed" });
+    }
+  });
+
+const verificationBaseSchema = z.object({
+  ...artifactMetadataSchema,
+  decision: verifierDecisionSchema,
+  summary: z.string().min(1),
+  allowedInputs: z.array(verifierAllowedInputSchema),
+  evidenceLinks: z.array(z.string().min(1)),
+});
+
+const councillorBaseSchema = z.object({
+  id: z.string().min(1),
+  modelProfile: z.string().min(1),
+  lens: z.string().min(1),
+});
 
 const artifactContractSchemaEntries: readonly (readonly [
   (typeof WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS)[number],
@@ -109,6 +175,31 @@ const artifactContractSchemaEntries: readonly (readonly [
         ),
       })
       .strict(),
+  ],
+  ["validation_result.v1", validationResultSchema],
+  [
+    "verification.v1",
+    z.discriminatedUnion("mode", [
+      verificationBaseSchema.extend({ mode: z.literal("single") }).strict(),
+      verificationBaseSchema
+        .extend({
+          mode: z.literal("council"),
+          consensus: z.enum(["unanimous", "majority", "split"]),
+          councillors: z.array(
+            z.discriminatedUnion("status", [
+              councillorBaseSchema
+                .extend({
+                  status: z.literal("completed"),
+                  decision: verifierDecisionSchema,
+                  summary: z.string().min(1),
+                })
+                .strict(),
+              councillorBaseSchema.extend({ status: z.literal("failed"), error: z.string().min(1) }).strict(),
+            ]),
+          ),
+        })
+        .strict(),
+    ]),
   ],
 ];
 

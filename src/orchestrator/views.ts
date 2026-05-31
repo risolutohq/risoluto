@@ -43,9 +43,25 @@ export function issueView(issue: Issue, extra?: Partial<RuntimeIssueView>): Runt
 }
 
 export function usageDelta(previous: TokenUsageSnapshot | null, next: TokenUsageSnapshot): TokenUsageSnapshot {
-  return {
+  const delta: TokenUsageSnapshot = {
     inputTokens: Math.max(0, next.inputTokens - (previous?.inputTokens ?? 0)),
     outputTokens: Math.max(0, next.outputTokens - (previous?.outputTokens ?? 0)),
     totalTokens: Math.max(0, next.totalTokens - (previous?.totalTokens ?? 0)),
   };
+  const cacheReadTokens = optionalTokenDelta(previous?.cacheReadTokens, next.cacheReadTokens);
+  const cacheWriteTokens = optionalTokenDelta(previous?.cacheWriteTokens, next.cacheWriteTokens);
+  if (cacheReadTokens !== null) {
+    delta.cacheReadTokens = cacheReadTokens;
+  }
+  if (cacheWriteTokens !== null) {
+    delta.cacheWriteTokens = cacheWriteTokens;
+  }
+  return delta;
+}
+
+function optionalTokenDelta(previous: number | undefined, next: number | undefined): number | null {
+  if (previous === undefined && next === undefined) {
+    return null;
+  }
+  return Math.max(0, (next ?? 0) - (previous ?? 0));
 }

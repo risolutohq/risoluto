@@ -17,6 +17,12 @@ export interface LoadWorkflowDefinitionRegistryInput {
   readonly globalDefaults: WorkflowResolutionDefaults;
 }
 
+export interface ResolvedWorkflowState {
+  readonly id: string;
+  readonly gates: readonly string[];
+  readonly hooks: readonly string[];
+}
+
 export interface ResolvedWorkflowRole {
   readonly id: string;
   readonly stateId: string;
@@ -29,6 +35,7 @@ export interface ResolvedWorkflowRole {
 export interface ResolvedWorkflowDefinition {
   readonly id: string;
   readonly validationProfile: string;
+  readonly states: readonly ResolvedWorkflowState[];
   readonly roles: readonly ResolvedWorkflowRole[];
 }
 
@@ -182,6 +189,7 @@ function resolveWorkflowDefinition(
   return {
     id: definition.id,
     validationProfile,
+    states: definition.states.map((state) => ({ id: state.id, gates: state.gates, hooks: state.hooks })),
     roles: definition.states.flatMap((state) =>
       state.roles.map((role) => ({
         id: role.id,

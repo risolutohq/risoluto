@@ -10,6 +10,11 @@ function createDefinition(): ResolvedWorkflowDefinition {
   return {
     id: "single-operator-afk-coder",
     validationProfile: "node-pnpm-standard",
+    states: [
+      { id: "plan", gates: [], hooks: [] },
+      { id: "implement", gates: [], hooks: [] },
+      { id: "review", gates: [], hooks: [] },
+    ],
     roles: [
       {
         id: "planner",
@@ -37,6 +42,15 @@ function createDefinition(): ResolvedWorkflowDefinition {
       },
     ],
   };
+}
+
+function createPlannerOnlyDefinition(states: ResolvedWorkflowDefinition["states"]): ResolvedWorkflowDefinition {
+  const definition = createDefinition();
+  const planner = definition.roles.find((role) => role.id === "planner");
+  if (!planner) {
+    throw new Error("planner fixture role is missing");
+  }
+  return { ...definition, states, roles: [planner] };
 }
 
 function intentArtifact() {
@@ -126,5 +140,232 @@ describe("executeWorkflowDefinition", () => {
     expect(() => {
       throw new WorkflowExecutorError("example");
     }).toThrow(WorkflowExecutorError);
+  });
+
+  it("blocks when a configured gate fails after a role claims success", async () => {
+    const definition = createPlannerOnlyDefinition([{ id: "plan", gates: ["validation-passed"], hooks: [] }]);
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async () => ({
+        "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] },
+      }),
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        eventType: "validation_gate.evaluated",
+        gateId: "validation-passed",
+        status: "failed",
+        reason: "missing required artifact validation_result.v1",
+      }),
+    );
+  });
+
+  it("fires state-entry hooks as evidence without changing the gate outcome", async () => {
+    const calls: string[] = [];
+    const definition = createPlannerOnlyDefinition([
+      { id: "plan", gates: ["artifacts-valid"], hooks: ["collect-evidence"] },
+    ]);
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runHook: async ({ hookId }) => {
+        calls.push(`hook:${hookId}`);
+        return { evidence: { archivePath: "runs/wr_executor/evidence/collect-evidence.json" } };
+      },
+      runRole: async ({ role }) => {
+        calls.push(`role:${role.id}`);
+        return { "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] } };
+      },
+    });
+
+    expect(result.status).toBe("done");
+    expect(calls).toEqual(["hook:collect-evidence", "role:planner"]);
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "workflow_hook.fired",
+        hookId: "collect-evidence",
+        evidence: { archivePath: "runs/wr_executor/evidence/collect-evidence.json" },
+      }),
+      expect.objectContaining({ eventType: "validation_gate.evaluated", gateId: "artifacts-valid", status: "passed" }),
+    ]);
+  });
+
+  it("hard-stops before the next workflow step when the wall-clock budget is exceeded", async () => {
+    const runRole = vi.fn(async () => {
+      currentTimeMs = 1_201;
+      return { "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] } };
+    });
+    let currentTimeMs = 0;
+
+    const result = await executeWorkflowDefinition({
+      definition: createDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      budget: {
+        startedAtMs: 0,
+        maxWallClockMs: 1_200,
+        maxCostUsd: 10,
+        nowMs: () => currentTimeMs,
+        usage: () => ({ usageByModelProfile: {}, modelProfilePrices: {} }),
+      },
+      runRole,
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(runRole).toHaveBeenCalledOnce();
+    expect(result.roleExecutions).toEqual(["planner"]);
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        eventType: "workflow_budget.checked",
+        status: "failed",
+        reason: "wall-clock budget exceeded before role implementer",
+      }),
+    );
+  });
+
+  it("hard-stops before the next workflow step when the measured cost budget is exceeded", async () => {
+    let usageByModelProfile = {};
+    const runRole = vi.fn(async () => {
+      usageByModelProfile = {
+        balanced: { inputTokens: 900_000, outputTokens: 200_000, totalTokens: 1_100_000 },
+      };
+      return { "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] } };
+    });
+
+    const result = await executeWorkflowDefinition({
+      definition: createDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      budget: {
+        startedAtMs: 0,
+        maxWallClockMs: 120_000,
+        maxCostUsd: 1,
+        nowMs: () => 0,
+        usage: () => ({
+          usageByModelProfile,
+          modelProfilePrices: { balanced: { inputUsd: 1, outputUsd: 1, cacheReadUsd: 1, cacheWriteUsd: 1 } },
+        }),
+      },
+      runRole,
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(runRole).toHaveBeenCalledOnce();
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        eventType: "workflow_budget.checked",
+        status: "failed",
+        reason: "cost budget exceeded before role implementer",
+        evidence: expect.objectContaining({
+          costUsd: 1.1,
+          maxCostUsd: 1,
+        }),
+      }),
+    );
+  });
+
+  it("retries the first failed gate once with the exact failure evidence including cache token usage", async () => {
+    const definition = createPlannerOnlyDefinition([{ id: "plan", gates: ["validation-passed"], hooks: [] }]);
+    const gateUsage = {
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+      cacheReadTokens: 25,
+      cacheWriteTokens: 5,
+    };
+    const retryGate = vi.fn(async () => ({
+      "validation_result.v1": { status: "passed", command: "pnpm test" },
+    }));
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      evaluateGate: async ({ artifacts }) => {
+        if (artifacts["validation_result.v1"]) {
+          return { status: "passed" };
+        }
+        return {
+          status: "failed",
+          reason: "pnpm test failed",
+          evidence: { command: "pnpm test", exitCode: 1 },
+          tokenUsage: gateUsage,
+        };
+      },
+      retryGate,
+      runRole: async () => ({
+        "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] },
+      }),
+    });
+
+    expect(result.status).toBe("done");
+    expect(retryGate).toHaveBeenCalledOnce();
+    expect(retryGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptNumber: 1,
+        failureEvidence: expect.objectContaining({
+          eventType: "validation_gate.evaluated",
+          gateId: "validation-passed",
+          reason: "pnpm test failed",
+          evidence: { command: "pnpm test", exitCode: 1 },
+          tokenUsage: gateUsage,
+        }),
+      }),
+    );
+  });
+
+  it("does not start a gate retry after the cost budget is exhausted", async () => {
+    const definition = createPlannerOnlyDefinition([{ id: "plan", gates: ["validation-passed"], hooks: [] }]);
+    let usageByModelProfile = {};
+    const retryGate = vi.fn(async () => ({
+      "validation_result.v1": { status: "passed", command: "pnpm test" },
+    }));
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      budget: {
+        startedAtMs: 0,
+        maxWallClockMs: 120_000,
+        maxCostUsd: 1,
+        nowMs: () => 0,
+        usage: () => ({
+          usageByModelProfile,
+          modelProfilePrices: { balanced: { inputUsd: 1, outputUsd: 1, cacheReadUsd: 1, cacheWriteUsd: 1 } },
+        }),
+      },
+      evaluateGate: async () => {
+        usageByModelProfile = {
+          balanced: { inputTokens: 900_000, outputTokens: 200_000, totalTokens: 1_100_000 },
+        };
+        return {
+          status: "failed",
+          reason: "validation failed",
+          evidence: { command: "pnpm test", exitCode: 1 },
+        };
+      },
+      retryGate,
+      runRole: async () => ({
+        "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] },
+      }),
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(retryGate).not.toHaveBeenCalled();
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        eventType: "workflow_budget.checked",
+        status: "failed",
+        reason: "cost budget exceeded before gate retry validation-passed",
+      }),
+    );
   });
 });
