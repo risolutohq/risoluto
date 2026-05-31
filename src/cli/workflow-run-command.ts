@@ -13,6 +13,8 @@ import { listWorkflowRunsCommand } from "./workflow-run-list-command.js";
 import { startWorkflowRunCommand } from "./workflow-run-start-command.js";
 import { recordWorkspaceCleanupCommand, recordWorkspaceLifecycleCommand } from "./workflow-run-workspace-command.js";
 import { recordWorkerProcessCommand } from "./workflow-run-worker-process-command.js";
+import { tryHandleRunCommand } from "./run-command.js";
+import { tryHandleWorkflowCommand } from "./workflow-command.js";
 import {
   openWorkflowRun,
   readWorkflowRunEvents,
@@ -101,6 +103,16 @@ const workflowRunCommandHandlers: WorkflowRunCommandHandler[] = [
 ];
 
 export async function tryHandleWorkflowRunCommand(argv: string[]): Promise<number | null> {
+  const runCommandExitCode = await tryHandleRunCommand(argv);
+  if (runCommandExitCode !== null) {
+    return runCommandExitCode;
+  }
+
+  const workflowCommandExitCode = await tryHandleWorkflowCommand(argv);
+  if (workflowCommandExitCode !== null) {
+    return workflowCommandExitCode;
+  }
+
   if (argv[0] !== "workflow-run") {
     return null;
   }
