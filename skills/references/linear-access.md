@@ -154,6 +154,71 @@ query ByLabel($label: String!) {
 }
 ```
 
+### List project milestones + issues (wave derivation)
+
+Waves are project milestones. Pull them sorted, each with its issues and `blocked-by` edges — this is the
+query `risoluto-goal` freezes into `WAVES.md`:
+
+Resolve the project UUID from the PRD `linear_project` URL first. The URL segment after `/project/` is
+Linear's `slugId`:
+
+```graphql
+query ProjectBySlug($slugId: String!) {
+  projects(first: 1, filter: { slugId: { eq: $slugId } }) {
+    nodes {
+      id
+      name
+      url
+      slugId
+    }
+  }
+}
+```
+
+Use the `from:prd-<slug>` label query and group issues by `projectMilestone` locally. This is cheaper than a
+deep project -> milestones -> issues -> relations query, which can exceed Linear's complexity limit.
+
+```graphql
+query IssuesByPrd($label: String!) {
+  issues(first: 250, filter: { labels: { name: { eq: $label } } }) {
+    nodes {
+      identifier
+      title
+      branchName
+      url
+      state {
+        name
+        type
+      }
+      projectMilestone {
+        id
+        name
+        sortOrder
+      }
+      inverseRelations(first: 50) {
+        nodes {
+          type
+          issue {
+            identifier
+            title
+            state {
+              name
+              type
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Group by `projectMilestone.id`, then sort groups by `projectMilestone.sortOrder` ascending. Within a
+milestone, an `inverseRelations` node of `type: "blocks"` is one of the issue's `blocked-by` edges (the
+ready-set filter). A project with **no** milestones → one wave, all `from:prd-<slug>` issues ordered by
+`blocked-by`. Under Claude, `mcp__linear-server__list_milestones` + `list_issues` cover the same data without
+GraphQL, but keep the same grouping semantics.
+
 ### List / create a label (label preflight)
 
 ```graphql
