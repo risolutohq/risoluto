@@ -10,6 +10,7 @@ export const VERIFIER_ALLOWED_ARTIFACT_IDS = [
 
 export type VerifierAllowedArtifactId = (typeof VERIFIER_ALLOWED_ARTIFACT_IDS)[number];
 export type SingleVerifierDecision = "satisfied" | "not_satisfied" | "uncertain";
+export type CouncilConsensusTag = "majority" | "split" | "unanimous";
 
 export interface BuildSingleVerifierInput {
   readonly artifacts: Readonly<Record<string, unknown>>;
@@ -22,6 +23,68 @@ export interface SingleVerifierInput {
   readonly diff?: string;
   readonly evidenceLinks: readonly string[];
 }
+
+export interface CouncilVerifier {
+  readonly id: string;
+  readonly modelProfile: string;
+  readonly lens: string;
+}
+
+export type CouncilVerifierResult =
+  | { readonly status: "completed"; readonly decision: SingleVerifierDecision; readonly summary: string }
+  | { readonly status: "failed"; readonly error: string };
+
+export interface CouncilVerifierRecord extends CouncilVerifier {
+  readonly status: CouncilVerifierResult["status"];
+  readonly decision?: SingleVerifierDecision;
+  readonly summary?: string;
+  readonly error?: string;
+}
+
+export interface CouncilSynthesizerInput {
+  readonly input: SingleVerifierInput;
+  readonly completedResults: readonly CouncilVerifierRecord[];
+  readonly failedResults: readonly CouncilVerifierRecord[];
+}
+
+export interface CouncilSynthesizerResult {
+  readonly decision: SingleVerifierDecision;
+  readonly summary: string;
+}
+
+export interface RunCouncilVerifierInput {
+  readonly workflowRunId: string;
+  readonly createdAt: string;
+  readonly input: SingleVerifierInput;
+  readonly councillors: readonly CouncilVerifier[];
+  readonly runCouncillor: (input: {
+    readonly input: SingleVerifierInput;
+    readonly councillor: CouncilVerifier;
+  }) => Promise<CouncilVerifierResult>;
+  readonly synthesize: (input: CouncilSynthesizerInput) => Promise<CouncilSynthesizerResult>;
+}
+
+export type RunCouncilVerifierResult =
+  | {
+      readonly status: "completed";
+      readonly artifact: {
+        readonly version: 1;
+        readonly workflowRunId: string;
+        readonly createdAt: string;
+        readonly mode: "council";
+        readonly decision: SingleVerifierDecision;
+        readonly summary: string;
+        readonly allowedInputs: readonly string[];
+        readonly evidenceLinks: readonly string[];
+        readonly consensus: CouncilConsensusTag;
+        readonly councillors: readonly CouncilVerifierRecord[];
+      };
+    }
+  | {
+      readonly status: "blocked";
+      readonly reason: "all_councillors_failed";
+      readonly failedResults: readonly CouncilVerifierRecord[];
+    };
 
 export interface RouteSingleVerifierDecisionInput {
   readonly decision: SingleVerifierDecision;
@@ -71,6 +134,36 @@ export function routeSingleVerifierDecision(input: RouteSingleVerifierDecisionIn
   return { action: "block", reason: "retry_budget_exhausted" };
 }
 
+export async function runCouncilVerifier(input: RunCouncilVerifierInput): Promise<RunCouncilVerifierResult> {
+  const councillorResults = await Promise.all(
+    input.councillors.map(async (councillor) =>
+      recordCouncilResult(councillor, await input.runCouncillor({ input: input.input, councillor })),
+    ),
+  );
+  const completedResults = councillorResults.filter(hasCouncilDecision);
+  const failedResults = councillorResults.filter(isFailedCouncilRecord);
+  if (completedResults.length === 0) {
+    return { status: "blocked", reason: "all_councillors_failed", failedResults };
+  }
+
+  const synthesized = await input.synthesize({ input: input.input, completedResults, failedResults });
+  return {
+    status: "completed",
+    artifact: {
+      version: 1,
+      workflowRunId: input.workflowRunId,
+      createdAt: input.createdAt,
+      mode: "council",
+      decision: synthesized.decision,
+      summary: synthesized.summary,
+      allowedInputs: verifierAllowedInputsFor(input.input),
+      evidenceLinks: input.input.evidenceLinks,
+      consensus: councilConsensusFor(completedResults),
+      councillors: councillorResults,
+    },
+  };
+}
+
 export function assertPublishAllowedByVerification(input: AssertPublishAllowedByVerificationInput): void {
   if (!isSatisfiedVerificationArtifact(input.artifacts["verification.v1"])) {
     throw new VerifierPolicyError("publish requires satisfied verification.v1");
@@ -83,4 +176,46 @@ export function isSatisfiedVerificationArtifact(value: unknown): boolean {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function recordCouncilResult(councillor: CouncilVerifier, result: CouncilVerifierResult): CouncilVerifierRecord {
+  if (result.status === "failed") {
+    return { ...councillor, status: "failed", error: result.error };
+  }
+  return { ...councillor, status: "completed", decision: result.decision, summary: result.summary };
+}
+
+function hasCouncilDecision(record: CouncilVerifierRecord): record is CouncilVerifierRecord & {
+  readonly status: "completed";
+  readonly decision: SingleVerifierDecision;
+} {
+  return record.status === "completed" && record.decision !== undefined;
+}
+
+function isFailedCouncilRecord(record: CouncilVerifierRecord): boolean {
+  return record.status === "failed";
+}
+
+function verifierAllowedInputsFor(input: SingleVerifierInput): readonly string[] {
+  const artifactInputs = VERIFIER_ALLOWED_ARTIFACT_IDS.filter(
+    (artifactId) => input.artifacts[artifactId] !== undefined,
+  );
+  return [
+    ...artifactInputs,
+    ...(input.diff ? ["diff"] : []),
+    ...(input.evidenceLinks.length > 0 ? ["evidence_links"] : []),
+  ];
+}
+
+function councilConsensusFor(
+  results: readonly (CouncilVerifierRecord & { readonly decision: SingleVerifierDecision })[],
+): CouncilConsensusTag {
+  const counts = new Map<SingleVerifierDecision, number>();
+  for (const result of results) {
+    counts.set(result.decision, (counts.get(result.decision) ?? 0) + 1);
+  }
+  if (counts.size === 1) {
+    return "unanimous";
+  }
+  return [...counts.values()].some((count) => count > results.length / 2) ? "majority" : "split";
 }

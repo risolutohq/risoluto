@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { parseWorkflowRunArtifact } from "../../src/workflow-run/artifact-contracts.js";
 import {
   assertPublishAllowedByVerification,
   buildSingleVerifierInput,
   routeSingleVerifierDecision,
+  runCouncilVerifier,
   VerifierPolicyError,
 } from "../../src/workflow-run/verifier.js";
 
@@ -105,5 +106,148 @@ describe("single verifier policy", () => {
         producer: { type: "role", id: "verifier" },
       }),
     ).toEqual(satisfiedVerification);
+  });
+});
+
+describe("council verifier policy", () => {
+  const singleInput = buildSingleVerifierInput({
+    artifacts: {
+      "intent.v1": intent,
+      "plan.v1": plan,
+      "change_summary.v1": changeSummary,
+      "review.v1": review,
+    },
+    evidenceLinks: ["runs/wr_verifier/evidence/review.json"],
+  });
+
+  it("records councillor decisions and synthesizer decision with a majority consensus tag", async () => {
+    const result = await runCouncilVerifier({
+      workflowRunId,
+      createdAt,
+      input: singleInput,
+      councillors: [
+        { id: "correctness", modelProfile: "verifier", lens: "intent satisfaction" },
+        { id: "risk", modelProfile: "strong", lens: "regression risk" },
+        { id: "scope", modelProfile: "verifier", lens: "scope control" },
+      ],
+      runCouncillor: async ({ councillor }) => ({
+        status: "completed",
+        decision: councillor.id === "risk" ? "not_satisfied" : "satisfied",
+        summary: `${councillor.id} checked.`,
+      }),
+      synthesize: async () => ({
+        decision: "satisfied",
+        summary: "Two councillors judged the implementation satisfied.",
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    if (result.status !== "completed") {
+      throw new Error("expected council verification to complete");
+    }
+    expect(result.artifact).toMatchObject({
+      mode: "council",
+      decision: "satisfied",
+      consensus: "majority",
+      councillors: [
+        expect.objectContaining({ id: "correctness", decision: "satisfied", status: "completed" }),
+        expect.objectContaining({ id: "risk", decision: "not_satisfied", status: "completed" }),
+        expect.objectContaining({ id: "scope", decision: "satisfied", status: "completed" }),
+      ],
+    });
+    expect(
+      parseWorkflowRunArtifact({
+        contractId: "verification.v1",
+        data: result.artifact,
+        producer: { type: "role", id: "verifier" },
+      }),
+    ).toEqual(result.artifact);
+  });
+
+  it("records split council evidence without overriding the synthesizer decision", async () => {
+    const result = await runCouncilVerifier({
+      workflowRunId,
+      createdAt,
+      input: singleInput,
+      councillors: [
+        { id: "correctness", modelProfile: "verifier", lens: "intent satisfaction" },
+        { id: "risk", modelProfile: "strong", lens: "regression risk" },
+      ],
+      runCouncillor: async ({ councillor }) => ({
+        status: "completed",
+        decision: councillor.id === "correctness" ? "satisfied" : "not_satisfied",
+        summary: `${councillor.id} checked.`,
+      }),
+      synthesize: async () => ({
+        decision: "satisfied",
+        summary: "The split is recorded, but the synthesizer accepts the final evidence.",
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    if (result.status !== "completed") {
+      throw new Error("expected council verification to complete");
+    }
+    expect(result.artifact.consensus).toBe("split");
+    expect(result.artifact.decision).toBe("satisfied");
+    expect(() =>
+      assertPublishAllowedByVerification({ artifacts: { "verification.v1": result.artifact } }),
+    ).not.toThrow();
+  });
+
+  it("uses the synthesizer when only some councillors fail", async () => {
+    const synthesize = vi.fn(async () => ({
+      decision: "uncertain" as const,
+      summary: "One councillor completed and one failed; preserve uncertainty.",
+    }));
+
+    const result = await runCouncilVerifier({
+      workflowRunId,
+      createdAt,
+      input: singleInput,
+      councillors: [
+        { id: "correctness", modelProfile: "verifier", lens: "intent satisfaction" },
+        { id: "risk", modelProfile: "strong", lens: "regression risk" },
+      ],
+      runCouncillor: async ({ councillor }) =>
+        councillor.id === "risk"
+          ? { status: "failed", error: "model timed out" }
+          : { status: "completed", decision: "satisfied", summary: "Looks complete." },
+      synthesize,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        completedResults: [expect.objectContaining({ id: "correctness", decision: "satisfied" })],
+        failedResults: [expect.objectContaining({ id: "risk", error: "model timed out" })],
+      }),
+    );
+  });
+
+  it("blocks when all councillors fail instead of silently passing", async () => {
+    const synthesize = vi.fn(async () => ({ decision: "satisfied" as const, summary: "Should not run." }));
+
+    const result = await runCouncilVerifier({
+      workflowRunId,
+      createdAt,
+      input: singleInput,
+      councillors: [
+        { id: "correctness", modelProfile: "verifier", lens: "intent satisfaction" },
+        { id: "risk", modelProfile: "strong", lens: "regression risk" },
+      ],
+      runCouncillor: async ({ councillor }) => ({ status: "failed", error: `${councillor.id} failed` }),
+      synthesize,
+    });
+
+    expect(result).toEqual({
+      status: "blocked",
+      reason: "all_councillors_failed",
+      failedResults: [
+        expect.objectContaining({ id: "correctness", error: "correctness failed" }),
+        expect.objectContaining({ id: "risk", error: "risk failed" }),
+      ],
+    });
+    expect(synthesize).not.toHaveBeenCalled();
   });
 });

@@ -57,6 +57,22 @@ const verifierAllowedInputSchema = z.enum([
   "evidence_links",
 ]);
 
+const verifierDecisionSchema = z.enum(["satisfied", "not_satisfied", "uncertain"]);
+
+const verificationBaseSchema = z.object({
+  ...artifactMetadataSchema,
+  decision: verifierDecisionSchema,
+  summary: z.string().min(1),
+  allowedInputs: z.array(verifierAllowedInputSchema),
+  evidenceLinks: z.array(z.string().min(1)),
+});
+
+const councillorBaseSchema = z.object({
+  id: z.string().min(1),
+  modelProfile: z.string().min(1),
+  lens: z.string().min(1),
+});
+
 const artifactContractSchemaEntries: readonly (readonly [
   (typeof WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS)[number],
   ZodType<unknown>,
@@ -130,16 +146,27 @@ const artifactContractSchemaEntries: readonly (readonly [
   ],
   [
     "verification.v1",
-    z
-      .object({
-        ...artifactMetadataSchema,
-        mode: z.literal("single"),
-        decision: z.enum(["satisfied", "not_satisfied", "uncertain"]),
-        summary: z.string().min(1),
-        allowedInputs: z.array(verifierAllowedInputSchema),
-        evidenceLinks: z.array(z.string().min(1)),
-      })
-      .strict(),
+    z.discriminatedUnion("mode", [
+      verificationBaseSchema.extend({ mode: z.literal("single") }).strict(),
+      verificationBaseSchema
+        .extend({
+          mode: z.literal("council"),
+          consensus: z.enum(["unanimous", "majority", "split"]),
+          councillors: z.array(
+            z.discriminatedUnion("status", [
+              councillorBaseSchema
+                .extend({
+                  status: z.literal("completed"),
+                  decision: verifierDecisionSchema,
+                  summary: z.string().min(1),
+                })
+                .strict(),
+              councillorBaseSchema.extend({ status: z.literal("failed"), error: z.string().min(1) }).strict(),
+            ]),
+          ),
+        })
+        .strict(),
+    ]),
   ],
 ];
 
