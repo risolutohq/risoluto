@@ -28,6 +28,7 @@ function makeDeps(overrides: Partial<GitHubWebhookHandlerDeps> = {}): GitHubWebh
     },
     requestTargetedRefresh: vi.fn(),
     stopWorkerForIssue: vi.fn(),
+    acceptGitHubTriggeredWorkflowRun: vi.fn(),
     webhookInbox: {
       insertVerified: vi.fn().mockResolvedValue({ isNew: true }),
     },
@@ -127,6 +128,50 @@ describe("handleWebhookGitHub", () => {
     expect(deps.stopWorkerForIssue).not.toHaveBeenCalled();
   });
 
+  it("forwards a verified GitHub issue webhook to Workflow Run intake", async () => {
+    const deps = makeDeps();
+    const payload = makeIssuePayload({
+      issue: {
+        number: 7,
+        title: "Run tracker intake",
+        body: "Launch the AFK workflow from GitHub.",
+        html_url: "https://github.com/acme/awesome/issues/7",
+        state: "open",
+        labels: [{ name: "risoluto" }, { name: "ready" }],
+      },
+    });
+    const rawBody = Buffer.from(JSON.stringify(payload));
+    const req = makeRequest(
+      payload,
+      {
+        "x-hub-signature-256": `sha256=${sign(rawBody.toString())}`,
+        "x-github-event": "issues",
+        "x-github-delivery": "delivery-intake",
+      },
+      rawBody,
+    );
+    const res = makeResponse();
+
+    handleWebhookGitHub(deps, req, res);
+    await flushMicrotasks();
+
+    expect(res._status).toBe(200);
+    expect(deps.acceptGitHubTriggeredWorkflowRun).toHaveBeenCalledWith({
+      deliveryKind: "webhook",
+      deliveryId: "delivery-intake",
+      action: "opened",
+      issue: {
+        id: "7",
+        identifier: "acme/awesome#7",
+        title: "Run tracker intake",
+        url: "https://github.com/acme/awesome/issues/7",
+        description: "Launch the AFK workflow from GitHub.",
+        labels: ["risoluto", "ready"],
+        state: "open",
+      },
+    });
+  });
+
   it("stops a running worker when GitHub reports the issue closed", async () => {
     const deps = makeDeps();
     const payload = makeIssuePayload({ action: "closed" });
@@ -191,6 +236,7 @@ describe("handleWebhookGitHub", () => {
 
     expect(res._status).toBe(401);
     expect(deps.requestTargetedRefresh).not.toHaveBeenCalled();
+    expect(deps.acceptGitHubTriggeredWorkflowRun).not.toHaveBeenCalled();
   });
 
   it("returns 400 when X-GitHub-Delivery header is missing", () => {

@@ -1,5 +1,12 @@
 import { z, ZodError, type ZodType } from "zod";
 
+import { ciResultArtifactSchema } from "./ci-babysitter.js";
+import { handoffArtifactSchema } from "./handoff-contract.js";
+import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
+import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
+import { publishResultArtifactSchema } from "./publish-policy.js";
+import { verificationArtifactSchema } from "./verification-contract.js";
+
 export interface WorkflowRunArtifactProducer {
   readonly type: "role" | "action";
   readonly id: string;
@@ -29,7 +36,12 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "change_summary.v1",
   "review.v1",
   "validation_result.v1",
+  "publish_result.v1",
+  "ci_result.v1",
   "verification.v1",
+  "handoff.v1",
+  "operator_response.v1",
+  "operator_approval.v1",
 ] as const;
 
 const artifactMetadataSchema = {
@@ -40,25 +52,11 @@ const artifactMetadataSchema = {
 
 const externalReferenceSchema = z
   .object({
-    provider: z.enum(["cli", "github", "linear", "slack"]),
+    provider: z.enum(["api", "cli", "github", "linear", "slack"]),
     id: z.string().min(1),
     url: z.string().min(1).nullable(),
   })
   .strict();
-
-const verifierAllowedInputSchema = z.enum([
-  "intent.v1",
-  "plan.v1",
-  "change_summary.v1",
-  "review.v1",
-  "validation_result.v1",
-  "publish_result.v1",
-  "ci_result.v1",
-  "diff",
-  "evidence_links",
-]);
-
-const verifierDecisionSchema = z.enum(["satisfied", "not_satisfied", "uncertain"]);
 
 const validationCheckSchema = z
   .object({
@@ -91,20 +89,6 @@ const validationResultSchema = z
     }
   });
 
-const verificationBaseSchema = z.object({
-  ...artifactMetadataSchema,
-  decision: verifierDecisionSchema,
-  summary: z.string().min(1),
-  allowedInputs: z.array(verifierAllowedInputSchema),
-  evidenceLinks: z.array(z.string().min(1)),
-});
-
-const councillorBaseSchema = z.object({
-  id: z.string().min(1),
-  modelProfile: z.string().min(1),
-  lens: z.string().min(1),
-});
-
 const artifactContractSchemaEntries: readonly (readonly [
   (typeof WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS)[number],
   ZodType<unknown>,
@@ -114,7 +98,7 @@ const artifactContractSchemaEntries: readonly (readonly [
     z
       .object({
         ...artifactMetadataSchema,
-        source: z.enum(["cli", "github", "linear", "slack"]),
+        source: z.enum(["api", "cli", "github", "linear", "slack"]),
         title: z.string().min(1),
         body: z.string().min(1),
         externalReferences: z.array(externalReferenceSchema),
@@ -177,30 +161,12 @@ const artifactContractSchemaEntries: readonly (readonly [
       .strict(),
   ],
   ["validation_result.v1", validationResultSchema],
-  [
-    "verification.v1",
-    z.discriminatedUnion("mode", [
-      verificationBaseSchema.extend({ mode: z.literal("single") }).strict(),
-      verificationBaseSchema
-        .extend({
-          mode: z.literal("council"),
-          consensus: z.enum(["unanimous", "majority", "split"]),
-          councillors: z.array(
-            z.discriminatedUnion("status", [
-              councillorBaseSchema
-                .extend({
-                  status: z.literal("completed"),
-                  decision: verifierDecisionSchema,
-                  summary: z.string().min(1),
-                })
-                .strict(),
-              councillorBaseSchema.extend({ status: z.literal("failed"), error: z.string().min(1) }).strict(),
-            ]),
-          ),
-        })
-        .strict(),
-    ]),
-  ],
+  ["publish_result.v1", publishResultArtifactSchema],
+  ["ci_result.v1", ciResultArtifactSchema],
+  ["verification.v1", verificationArtifactSchema],
+  ["handoff.v1", handoffArtifactSchema],
+  ["operator_response.v1", operatorResponseArtifactSchema],
+  ["operator_approval.v1", operatorApprovalArtifactSchema],
 ];
 
 const artifactContractSchemas: ReadonlyMap<string, ZodType<unknown>> = new Map(artifactContractSchemaEntries);
