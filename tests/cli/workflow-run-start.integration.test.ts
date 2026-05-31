@@ -380,9 +380,9 @@ describe("workflow-run start CLI", () => {
         "--role",
         "planner",
         "--artifact-contract",
-        "implementation_plan.v1",
+        "plan.v1",
         "--artifact-json",
-        '{"summary":"Use a focused cache invalidation patch.","risk":"low"}',
+        `{"version":1,"workflowRunId":"${started.workflowRun.id}","createdAt":"2026-05-26T18:10:00.000Z","summary":"Use a focused cache invalidation patch.","steps":[{"id":"step-1","title":"Patch cache invalidation","status":"ready","dependsOn":[]}]}`,
         "--data-dir",
         dataDir,
         "--json",
@@ -396,6 +396,7 @@ describe("workflow-run start CLI", () => {
         role: string;
         status: string;
         artifact: {
+          artifactId: string;
           contractId: string;
           path: string;
         };
@@ -408,7 +409,7 @@ describe("workflow-run start CLI", () => {
         role: "planner",
         status: "completed",
         artifact: {
-          contractId: "implementation_plan.v1",
+          contractId: "plan.v1",
         },
       },
     });
@@ -419,10 +420,13 @@ describe("workflow-run start CLI", () => {
         artifactId: completed.roleExecution.artifact.artifactId,
       }),
     ).resolves.toEqual({
-      contractId: "implementation_plan.v1",
+      contractId: "plan.v1",
       data: {
+        version: 1,
+        workflowRunId: started.workflowRun.id,
+        createdAt: "2026-05-26T18:10:00.000Z",
         summary: "Use a focused cache invalidation patch.",
-        risk: "low",
+        steps: [{ id: "step-1", title: "Patch cache invalidation", status: "ready", dependsOn: [] }],
       },
     });
 
@@ -445,7 +449,7 @@ describe("workflow-run start CLI", () => {
     expect(listed.events[1]).toMatchObject({
       role: "planner",
       artifact: {
-        contractId: "implementation_plan.v1",
+        contractId: "plan.v1",
         path: completed.roleExecution.artifact.path,
       },
     });

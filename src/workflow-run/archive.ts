@@ -3,6 +3,7 @@ import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promise
 import path from "node:path";
 
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
+import { parseWorkflowRunArtifact, type WorkflowRunArtifactProducer } from "./artifact-contracts.js";
 import type {
   WorkflowRunArtifactReference,
   WorkflowRunEventRecord,
@@ -46,6 +47,7 @@ export interface WriteWorkflowRunArtifactInput {
   workflowRunId: string;
   contractId: string;
   data: unknown;
+  producer?: WorkflowRunArtifactProducer;
   artifactId?: string;
 }
 
@@ -182,6 +184,7 @@ async function writeWorkflowRunArtifactToArchive(
   archiveRoot: string,
   input: WriteWorkflowRunArtifactInput,
 ): Promise<WorkflowRunArtifactReference> {
+  const data = parseWorkflowRunArtifact({ contractId: input.contractId, data: input.data, producer: input.producer });
   const artifactId = input.artifactId ?? `art_${randomUUID()}`;
   const artifact: WorkflowRunArtifactReference = {
     artifactId,
@@ -189,11 +192,7 @@ async function writeWorkflowRunArtifactToArchive(
     path: artifactPath(archiveRoot, input.workflowRunId, artifactId),
   };
   await mkdir(path.dirname(artifact.path), { recursive: true });
-  await writeFile(
-    artifact.path,
-    `${JSON.stringify({ contractId: input.contractId, data: input.data }, null, 2)}\n`,
-    "utf8",
-  );
+  await writeFile(artifact.path, `${JSON.stringify({ contractId: input.contractId, data }, null, 2)}\n`, "utf8");
   return artifact;
 }
 

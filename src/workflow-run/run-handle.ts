@@ -190,6 +190,7 @@ async function recordRoleExecution(
     artifactId: input.artifactId,
     contractId: input.artifactContractId,
     data: input.artifactData,
+    producer: { type: "role", id: input.role },
   });
   const event = await emit(ctx, "role_execution.completed", { roleExecutionId, role: input.role, artifact });
   return {
