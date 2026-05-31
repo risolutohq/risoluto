@@ -28,6 +28,7 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "plan.v1",
   "change_summary.v1",
   "review.v1",
+  "validation_result.v1",
   "verification.v1",
 ] as const;
 
@@ -58,6 +59,37 @@ const verifierAllowedInputSchema = z.enum([
 ]);
 
 const verifierDecisionSchema = z.enum(["satisfied", "not_satisfied", "uncertain"]);
+
+const validationCheckSchema = z
+  .object({
+    id: z.string().min(1),
+    command: z.string().min(1),
+    status: z.enum(["failed", "passed"]),
+    exitCode: z.number().int(),
+    stdout: z.string(),
+    stderr: z.string(),
+    durationMs: z.number().nonnegative(),
+  })
+  .strict();
+
+const validationResultSchema = z
+  .object({
+    ...artifactMetadataSchema,
+    profileId: z.enum(["node-pnpm-standard", "offline-smoke"]),
+    failureHandling: z.enum(["collect_all", "stop_on_first"]),
+    status: z.enum(["failed", "passed"]),
+    checks: z.array(validationCheckSchema).min(1),
+  })
+  .strict()
+  .superRefine((artifact, context) => {
+    const hasFailedCheck = artifact.checks.some((check) => check.status === "failed");
+    if (artifact.status === "passed" && hasFailedCheck) {
+      context.addIssue({ code: "custom", path: ["status"], message: "must be failed when any check failed" });
+    }
+    if (artifact.status === "failed" && !hasFailedCheck) {
+      context.addIssue({ code: "custom", path: ["status"], message: "must be passed when all checks passed" });
+    }
+  });
 
 const verificationBaseSchema = z.object({
   ...artifactMetadataSchema,
@@ -144,6 +176,7 @@ const artifactContractSchemaEntries: readonly (readonly [
       })
       .strict(),
   ],
+  ["validation_result.v1", validationResultSchema],
   [
     "verification.v1",
     z.discriminatedUnion("mode", [

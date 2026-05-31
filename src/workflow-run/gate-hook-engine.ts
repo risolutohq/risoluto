@@ -1,5 +1,6 @@
 import type { ResolvedWorkflowRole, ResolvedWorkflowState } from "../workflow-definition/registry.js";
 import type { TokenUsageSnapshot } from "../core/types.js";
+import { evaluateValidationResultGate, ValidationProfileError } from "./validation-profile.js";
 import { isSatisfiedVerificationArtifact } from "./verifier.js";
 
 export interface WorkflowGateEvaluationInput {
@@ -132,10 +133,24 @@ async function evaluateBuiltInGate(input: WorkflowGateEvaluationInput): Promise<
   if (missingArtifact) {
     return { status: "failed", reason: `missing required artifact ${missingArtifact}` };
   }
+  if (input.gateId === "validation-passed") {
+    return evaluateValidationPassedGate(input.artifacts["validation_result.v1"]);
+  }
   if (input.gateId === "verifier-satisfied" && !isSatisfiedVerificationArtifact(input.artifacts["verification.v1"])) {
     return { status: "failed", reason: "verification.v1 decision is not satisfied" };
   }
   return { status: "passed" };
+}
+
+function evaluateValidationPassedGate(artifact: unknown): WorkflowGateEvaluationResult {
+  try {
+    return evaluateValidationResultGate(artifact);
+  } catch (error) {
+    if (error instanceof ValidationProfileError) {
+      return { status: "failed", reason: error.message, evidence: { validationResult: artifact } };
+    }
+    throw error;
+  }
 }
 
 function buildGateEvent(
