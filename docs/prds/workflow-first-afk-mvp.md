@@ -1,7 +1,7 @@
 ---
 slug: workflow-first-afk-mvp
 linear_project: https://linear.app/ninetech/project/workflow-first-afk-mvp-838087658d56
-synced_at: 2026-05-30T23:09:10Z
+synced_at: 2026-05-31T00:00:00Z
 source: docs/roadmap.md#workflow-first-afk-mvp
 status: draft
 ---
@@ -28,10 +28,13 @@ adapter support to dogfood real code changes end to end.
 ## Solution
 
 Ship a workflow-first AFK MVP centered on the `single-operator-afk-coder` Workflow Definition. The
-definition is authored as YAML under a repo-local workflow directory, but it references only
-registered built-in roles, hooks, gates, actions, validation profiles, model profiles, and artifact
-contracts. This gives Omer a config-authored workflow surface without introducing arbitrary command
-execution or a full user-authored DSL.
+definition is authored as **thin** YAML in `.risoluto/workflows/`: it carries no behavior, only
+references to registered built-in roles, hooks, gates, actions, validation profiles, model profiles,
+and artifact contracts, the DAG edges between them, and parameter values. Every reference resolves
+against a typed registry at load — an unknown ID is a hard failure before the run starts — and the
+schema carries a `version` field from day one. This gives Omer a config-authored workflow surface
+without introducing arbitrary command execution or a full user-authored DSL. (See ADR-0001 §5, which
+this PRD updates.)
 
 Every intake normalizes to an `intent.v1` artifact and creates or resumes a Workflow Run. The MVP
 supports CLI start, Slack slash command and modal start, first-class experimental HTTP endpoints,
@@ -60,7 +63,7 @@ clarification replies, risky-action approvals, budget override approvals, cancel
 handoff delivery. Slack answers and approvals are persisted as typed artifacts and auditable events.
 
 Risoluto stores all structured artifacts and raw evidence locally under the Workflow Run archive with
-a redaction policy. It uses run memory for retries and handoff, and it can propose project memory
+a redaction policy. It uses Attempt Memory for retries and handoff, and it can propose project memory
 candidates from evidence. Approved project memory is local/private by default inside workspace
 metadata. Stable repo-wide guidance may be promoted into repo docs only through explicit approval and
 a normal PR path.
@@ -100,34 +103,40 @@ targeted live checks.
     intake does not pollute the Workflow Run archive.
 13. As a workflow author, I want Workflow Definitions in YAML under the repo workflow directory, so
     that workflows are versioned, reviewable, and portable.
-14. As a workflow author, I want YAML to reference built-in action IDs rather than shell commands, so
-    that MVP workflows remain deterministic and testable.
-15. As a workflow author, I want a generic Workflow Definition schema, so that I can add more
-    workflows later without rewriting the engine.
+14. As a workflow author, I want YAML to reference only built-in IDs (roles, hooks, gates, actions,
+    profiles, contracts) resolved against a typed registry at load — an unknown ID failing before the
+    run starts — rather than shell commands, so that MVP workflows remain deterministic and testable.
+15. As a workflow author, I want a versioned, generic Workflow Definition schema (a `version` field
+    from day one), so that I can add more workflows later and evolve the schema without breaking files
+    already on disk.
 16. As a workflow author, I want a registry that loads and validates workflow files, so that invalid
     workflow configuration fails before a run starts.
 17. As a workflow author, I want role DAGs in the config, so that future workflows can express
     dependencies even if the MVP executes mostly linear role chains.
 18. As a workflow author, I want per-role model profiles, so that planner, implementer, reviewer,
     verifier, and CI babysitter can use different model strengths.
-19. As a workflow author, I want workflow-level defaults with workspace/global fallback, so that
-    configuration is specific where necessary and centralized where possible.
-20. As a workflow author, I want configurable budgets for time and estimated cost, so that AFK runs
-    cannot spend without bounds.
+19. As a workflow author, I want definition-level config with a single global-default fallback (two
+    levels, no per-workspace tier) and the resolved values recorded on the run, so that configuration
+    is simple and every run can explain why it used a given model, budget, or PR mode.
+20. As a workflow author, I want configurable budgets for wall-clock time and measured cost (token
+    usage × per-model-profile price, checked between steps), so that AFK runs cannot spend without
+    bounds.
 21. As a workflow author, I want one default LLM retry per failed gate and a configurable override,
     so that recovery is predictable but adaptable for larger work.
 22. As a workflow author, I want configurable dirty workspace policy for existing checkouts, so that
     operator-owned changes are never overwritten accidentally.
 23. As a Risoluto operator, I want code-changing workflows to always use Git worktrees, so that each
     run has an isolated branch and workspace.
-24. As a Risoluto operator, I want branch names to be unique and template-driven, so that branches are
-    traceable without depending on tracker issue IDs.
+24. As a Risoluto operator, I want branch names to be unique and built from a fixed set of template
+    tokens (`{workflow}`, `{run-id}`, `{date}`, `{short-intent}`) rather than arbitrary expressions, so
+    that branches are traceable without depending on tracker issue IDs.
 25. As a Risoluto operator, I want worktree retention to be configurable with a 7-day default, so
     that blocked and cancelled runs remain inspectable without unbounded disk growth.
 26. As a Risoluto operator, I want worktrees with PRs to remain until the PR is merged or closed, so
     that review and follow-up are not disrupted.
-27. As a Risoluto operator, I want the planner role to produce a valid `plan.v1`, so that later roles
-    have a structured plan instead of prose-only intent.
+27. As a Risoluto operator, I want the planner role to first triage the intent for clarity and size
+    (blocking early if it is ambiguous or too large) and then produce a valid `plan.v1`, so that later
+    roles have a structured plan and budget is not spent on an under-scoped intent.
 28. As a Risoluto operator, I want the implementer role to consume the plan and produce a
     `change_summary.v1`, so that the system can inspect what changed.
 29. As a Risoluto operator, I want the reviewer role to produce `review.v1`, so that technical safety
@@ -136,16 +145,20 @@ targeted live checks.
     output, so that "tests passed" does not hide incomplete work.
 31. As a Risoluto operator, I want the verifier to run before publishing, so that obviously incomplete
     or mismatched changes do not create noisy PRs.
-32. As a Risoluto operator, I want the verifier to run after publishing for ready and auto-merge
-    modes, so that PR/CI state and handoff completeness are included in the final judgment.
-33. As a Risoluto operator, I want the verifier to be partially isolated from implementer context, so
-    that it judges evidence rather than the implementer's narrative.
+32. As a Risoluto operator, I want the post-publish verifier (ready and auto-merge only) to be a cheap
+    incremental re-confirm over the new evidence (CI result, PR state, handoff) — flipping the verdict
+    only if that evidence contradicts it, not a second full judgment — so that PR/CI state is included
+    without paying the full (possibly council) cost twice. Draft and none get the pre-publish pass only.
+33. As a Risoluto operator, I want the verifier isolated to a fixed input allowlist — the original
+    `intent.v1`, `plan.v1`, `change_summary.v1`/diff, `review.v1`, validation output, and CI output,
+    never the implementer transcript — so that it judges evidence rather than the implementer's narrative.
 34. As a Risoluto operator, I want the verifier to support a council mode, so that high-stakes work
     can use multiple perspectives before semantic satisfaction is decided.
 35. As a Risoluto operator, I want council disagreement captured as evidence, so that the final
     handoff preserves uncertainty and tradeoffs.
-36. As a Risoluto operator, I want the council synthesizer to decide semantic satisfaction, so that
-    semantic judgment is not reduced to a crude vote threshold.
+36. As a Risoluto operator, I want diverse councillors (different model profiles and lenses) and a
+    synthesizer that always decides semantic satisfaction and tags consensus as `unanimous`/`majority`/`split`,
+    so that judgment is not a crude vote threshold and a split is recorded for review rather than hidden.
 37. As a Risoluto operator, I want deterministic gates to own mechanical prerequisites, so that a
     verifier cannot declare success when validation, artifacts, approvals, or budget policy failed.
 38. As a Risoluto operator, I want `not_satisfied` verification to route back to the implementer when
@@ -201,8 +214,9 @@ targeted live checks.
     intake pipeline as CLI, so that Slack is not a special execution path.
 63. As a Risoluto operator, I want every Slack action to become an event or artifact, so that the
     audit trail is complete.
-64. As a Risoluto operator, I want canonical internal statuses, so that run state is consistent
-    across CLI, HTTP, Slack, Linear, and GitHub.
+64. As a Risoluto operator, I want a canonical Run Status axis (operational lifecycle) kept distinct
+    from Workflow State (per-definition DAG position), so that run state is consistent across CLI, HTTP,
+    Slack, Linear, and GitHub and boards project from Run Status.
 65. As a Risoluto operator, I want explicit adapter status mapping tables, so that external boards
     project Workflow Run state without owning it.
 66. As a Risoluto operator, I want unmapped adapter statuses to block projection with a clear error,
@@ -220,7 +234,7 @@ targeted live checks.
     debuggability does not require remote persistence.
 72. As a Risoluto operator, I want structured artifacts and raw evidence stored separately, so that
     gates can use typed records while humans can inspect full context.
-73. As a Risoluto operator, I want run memory for retries and handoff, so that repeated attempts do
+73. As a Risoluto operator, I want Attempt Memory for retries and handoff, so that repeated attempts do
     not repeat the same mistakes.
 74. As a Risoluto operator, I want project memory candidates proposed from evidence, so that reusable
     lessons can accumulate without becoming automatic prompt pollution.
@@ -274,15 +288,19 @@ targeted live checks.
   not reduce semantic satisfaction to vote counts.
 - The initial role pack is planner, implementer, reviewer, verifier, and CI babysitter. Reviewer and
   verifier are separate roles even if they use the same harness.
-- The verifier is partially isolated from implementer context and consumes structured artifacts,
-  diffs, validation output, publish output, review output, and evidence links. It does not see the
-  full implementer conversation by default.
-- Verifier mode is configurable as single or council. Council mode supports per-councillor model
-  profiles, a synthesizer model profile, timeout/retry policy, individual results, disagreement
-  capture, and a synthesized decision of satisfied, not_satisfied, or uncertain.
-- Per-role model profiles are required. Resolution order is role, workflow, workspace, then global
-  default. The verifier should be at least as strong as the implementer by default, and a different
-  model family/provider should be possible.
+- The verifier is isolated to a fixed input allowlist: the original `intent.v1`, `plan.v1`,
+  `change_summary.v1`/diffs, `review.v1`, validation output, publish output, CI output, and evidence
+  links. It never sees the implementer transcript, and it compares against the original `intent.v1`,
+  not a restatement of it.
+- Verifier mode is configurable as single (default) or council. Council mode runs diverse councillors
+  (distinct model profiles and lenses) in parallel; a synthesizer model always produces the decision
+  (satisfied, not_satisfied, or uncertain) plus a consensus tag (`unanimous`/`majority`/`split`).
+  Individual councillor results and any split are captured in `verification.v1` and surfaced in the
+  handoff and the auto-merge approval prompt — not auto-escalated by a hard rule.
+- Per-role model profiles are required. Resolution is two levels: the value in the definition, else a
+  global default (the per-workspace tier is cut for now); resolved values are stamped on the run. The
+  verifier should be at least as strong as the implementer by default, and a different model
+  family/provider should be possible.
 - Artifacts are strict runtime-validated JSON records. Required MVP contracts are `intent.v1`,
   `plan.v1`, `change_summary.v1`, `review.v1`, `validation_result.v1`, `publish_result.v1`,
   `verification.v1`, `ci_result.v1`, `handoff.v1`, `operator_response.v1`, and
@@ -291,8 +309,11 @@ targeted live checks.
   required fields. Freeform notes may exist, but gates never depend on prose.
 - Validation profiles are built in. MVP includes a Node/pnpm standard profile suitable for Risoluto
   and a repo-declared profile if safe to infer. Validation failure handling is configurable.
-- Recovery uses configurable LLM retries per failed gate, defaulting to one. Time and estimated cost
-  are hard-stop budgets, defaulting to 120 minutes and 10 USD unless overridden.
+- Recovery uses configurable LLM retries per failed gate, defaulting to one. Wall-clock time and
+  measured cost are hard-stop budgets, defaulting to 120 minutes and 10 USD unless overridden. Measured
+  cost is the running total of token usage × per-model-profile price (input, output, and cache
+  read/write tokens), checked between steps; it reuses the existing usage accounting in
+  `src/orchestrator/core/lifecycle-state.ts`, extended with cache-token fields on `TokenUsageSnapshot`.
 - Slack may request budget override once per run, only to a new explicit cap, recorded in
   `operator_approval.v1`.
 - Workspaces are configured explicitly. A run must select a configured workspace. If only one
@@ -320,25 +341,32 @@ targeted live checks.
   interactive buttons, clarification replies, approvals, cancellation, retry, and handoff delivery.
 - Slack inbound must verify provider signatures, timestamp replay window, allowed team/workspace, and
   mapped operator permissions. Every inbound Slack action is recorded.
-- Operator permissions include start_run, answer_clarification, approve_pr_create,
-  approve_budget_override, approve_destructive_action, approve_secret_access, approve_auto_merge, and
-  cancel_run. View status is implied for mapped operators.
+- Operator permissions (standing capabilities) include start_run, answer_clarification,
+  approve_pr_create, approve_budget_override, approve_destructive_action, approve_secret_access,
+  approve_auto_merge, and cancel_run; view status is implied for mapped operators. Distinct from
+  permissions, each `operator_approval.v1` is a per-action, scoped, single-use record referencing the
+  exact run, the exact action, and a nonce carried by the Slack button — a stale or duplicate tap does
+  nothing. The Slack-user→operator mapping lives in workspace config.
 - Automatic Linear/GitHub issue intake is supported through explicit intake rules. Rules match labels,
   states, workflow labels, workspace labels, and provider-specific fields. Webhooks provide the fast
   path; polling provides anti-entropy reconciliation.
 - Idempotency has two layers: provider delivery dedupe by provider and delivery ID, and logical run
-  mapping by provider, external object ID, and intake rule ID. The logical mapping is claimed
-  transactionally before side effects.
+  mapping keyed by provider and external object ID only (the intake rule is recorded as metadata, not
+  part of the key, so one issue is one run). Two rules matching one issue is an ambiguous-intake
+  rejection, not two runs. The logical mapping is claimed transactionally before side effects and maps
+  to a fresh Risoluto-owned Workflow Run ID — never the tracker issue ID. This work fixes the
+  run-vs-issue identity collapse in ADR-0001 §1; it does not extend it.
 - Explicit retry from Linear/GitHub labels or comments, Slack buttons, or CLI creates a new Run
   Attempt under the same Workflow Run by default.
-- Canonical internal run statuses are accepted, queued, running, waiting_for_operator, validating,
-  publishing, blocked, done, and cancelled. External adapter status mappings are explicit and live at
-  workspace level with workflow override.
+- Run Status (operational, the same for every workflow) is accepted, queued, running,
+  waiting_for_operator, blocked, done, and cancelled. Workflow State (validate, publish, etc.) is a
+  separate per-definition axis, not a Run Status value. Adapters project boards from Run Status;
+  mappings are explicit and live at workspace level with workflow override.
 - Unmapped adapter status blocks projection until configured. External status is a projection, not
   the source of Workflow Run truth.
-- The experimental HTTP API is first-class documented for runs, workflows, events, artifacts, intake,
-  Slack, webhooks, and doctor. It uses bearer-token auth for normal API calls and provider-native
-  signatures for webhook/Slack endpoints.
+- The experimental HTTP API is well-documented (not promoted to a primary surface — CLI stays primary)
+  for runs, workflows, events, artifacts, intake, Slack, webhooks, and doctor. It uses bearer-token
+  auth for normal API calls and provider-native signatures for webhook/Slack endpoints.
 - User-facing CLI uses `risoluto run` commands while low-level `workflow-run` commands may remain for
   debugging and migration.
 - Evidence archive is local filesystem first, with storage boundaries that can become a port later.
@@ -346,9 +374,10 @@ targeted live checks.
 - All evidence is stored with redaction policy. Evidence includes role transcripts/session IDs,
   action stdout/stderr, validation logs, CI logs, diffs/stats, PR/API responses, Slack metadata, and
   provider webhook payload metadata.
-- Memory has tiers: evidence archive, run memory, and project memory candidates. Project memory
-  promotion is configurable, defaulting to propose-only. Approved project memory is local/private by
-  default inside workspace metadata.
+- Memory tiers are Attempt Memory (same run, for retries) and Project Memory candidates; the evidence
+  archive is the store they draw from, not a tier, and Run Memory (cross-run) is reserved for later.
+  Project memory promotion is configurable, defaulting to propose-only. Approved project memory is
+  local/private by default inside workspace metadata.
 - Repo documentation candidates require explicit approval and PR. Raw evidence is never committed by
   default.
 - `handoff.v1` is both structured JSON and rendered Markdown. It is compact, redacted,
@@ -363,8 +392,8 @@ targeted live checks.
   test starts from an intake, workflow config, artifact, adapter event, CLI/API command, or provider
   response and verifies the observable result.
 - Workflow schema and registry tests should prove valid YAML loads, invalid references are rejected,
-  inheritance resolves predictably, and workflow definitions cannot reference unknown roles, gates,
-  hooks, actions, profiles, or contracts.
+  two-level config resolution (definition then global default) resolves predictably, and workflow
+  definitions cannot reference unknown roles, gates, hooks, actions, profiles, or contracts.
 - Workflow executor tests should prove state transitions, hook/action ordering, gate evaluation,
   retry behavior, budget stops, and blocked/done outcomes from realistic run inputs.
 - Artifact contract tests should prove every MVP contract accepts valid examples, rejects malformed
@@ -400,7 +429,7 @@ targeted live checks.
 - Evidence and redaction tests should verify raw evidence is written, sensitive fields are redacted
   for export/display, structured artifacts are stored separately, and evidence links in handoff
   resolve locally.
-- Memory tests should verify run memory is available for retries, project memory candidates include
+- Memory tests should verify Attempt Memory is available for retries, project memory candidates include
   provenance, local/private is default visibility, repo-doc candidates are not committed
   automatically, and raw evidence never becomes repo memory by default.
 - Handoff tests should verify structured JSON and rendered Markdown are produced, required sections

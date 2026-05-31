@@ -228,53 +228,71 @@ the decision exists to eliminate.
 
 ---
 
-## 5. Built-In TypeScript Workflow Definitions Before a User-Authored DSL
+## 5. YAML Config-Authored Workflow Definitions (No User-Authored DSL)
 
 ### Context
 
 Risoluto's value depends on Workflow Definitions — the planner → implementer →
 reviewer pipeline, the fanout-and-grade pipeline, the spec-first interviewer
-pipeline. Operators will eventually want to author their own; a DSL is the
-natural shape. Designing the DSL before the first built-ins exist would encode
-guesses about which primitives, contracts, and hooks actually matter.
+pipeline. Operators will want to author and tune their own, and the natural
+authoring surface is a config file, not TypeScript. This **reverses the earlier
+v1 stance** ("built-in TypeScript records; YAML rejected as a DSL without the
+type system"). The type-safety objection is answered below by keeping the YAML
+thin and resolving every reference against a typed registry.
 
 ### Decision
 
-v1 **ships** built-in TypeScript Workflow Definitions as typed records (state
-machine + role DAG + artifact contracts) in the main repo. **No user-authored
-workflow DSL in v1.** Operators **select** definitions by name and **tune** via
-parameters, not authoring. The DSL is a deferred decision (decisions.md #27),
-triggered after at least three built-in definitions ship and authoring pain is
-observed.
+Workflow Definitions are **config-authored YAML** in `.risoluto/workflows/`, with
+**no user-authored programming DSL** — the YAML names typed built-ins, it does not
+contain logic. The constraints that keep it safe:
+
+- **Thin wiring, zero behavior.** YAML carries only references to built-in
+  roles / hooks / gates / actions / validation profiles / model profiles /
+  artifact contracts, the DAG edges between them, and parameter values. No shell,
+  no conditionals, no expressions.
+- **References resolve against a typed registry at load** — an unknown ID is a
+  hard failure before the run starts. `tsc` still owns what each built-in is; the
+  YAML only wires them.
+- **The schema carries a `version` field from day one**, so it can evolve without
+  breaking files already on disk.
+- **Branch templates are a fixed token set** (`{workflow}`, `{run-id}`, `{date}`,
+  `{short-intent}`), never arbitrary expressions.
+- **Config resolution is two levels** — value in the definition, else a global
+  default; the per-workspace tier is cut for now. **Resolved values are stamped on
+  the run record** so "why did this run use model X?" is readable, not replayed.
 
 ### Implementation status
 
-| Claim                                                     | Status        | Evidence                                                                                                                                                                                      |
-| --------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No user-authored workflow DSL exists in v1                | Delivered     | No DSL parser / loader / authoring surface anywhere in `src/`                                                                                                                                 |
-| v1 ships the first three built-in TS Workflow Definitions | ⚠ Drifted     | **Zero** definitions exist. Only the string `DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder"` (`workflow-run/contracts.ts:1`); no backing record, no fanout-grade, no spec-first |
-| Operators select definitions by name                      | Partial       | `--workflow-definition` flag is accepted (`cli/workflow-run-command.ts:128`) but never resolved against a registry — any string passes                                                        |
-| Operators tune definitions via parameters                 | Not delivered | No parameter mechanism for definitions exists                                                                                                                                                 |
+| Claim                                                       | Status        | Evidence                                                                                                                        |
+| ----------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| No user-authored programming DSL exists                     | Delivered     | No DSL parser / loader / authoring surface anywhere in `src/`                                                                   |
+| YAML schema + registry + resolver + validator               | Not delivered | None exist; only `DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder"` (`workflow-run/contracts.ts:1`) — a bare string |
+| `single-operator-afk-coder` exists as a YAML definition     | Not delivered | No `.risoluto/workflows/` directory, no backing record                                                                          |
+| References resolve against a typed registry (unknown fails) | Not delivered | `--workflow-definition` accepted (`cli/workflow-run-command.ts:128`) but never resolved — any string passes                     |
 
-> **Foundation warning.** ADR-0005's own deferral trigger — "after at least three
-> built-in definitions ship" — currently rests on **zero** shipped definitions.
-> The DSL deferral is therefore effectively unbounded until the first real
-> built-in lands. An agent must not read "v1 ships built-in definitions" as fact.
+> **Foundation warning.** This is the bulk of the runtime that does not yet exist:
+> the workflow definition today is a name string with no schema, registry, or
+> behavior behind it. An agent must not read "definitions are config-authored
+> YAML" as already built — it is the target this PRD delivers.
 
 ### Consequences
 
-When real built-ins exist, the eventual DSL encodes observed patterns instead of
-imagined ones, and v1 ships concrete dogfooded shapes. **Cost:** until then, the
-"definition" is a name string with no behavior, and the deferral has no trigger
-floor.
+The authoring surface is the one operators will keep, and the `version` field plus
+the thin surface mean the schema can be redesigned because behavior lives in TS,
+not YAML. **Cost:** the first schema is shaped by a single workflow
+(`single-operator-afk-coder`) — treat it as version 1, not the final shape. The
+per-workspace config tier and cross-workspace defaults are deferred until
+multi-workspace pain is real.
 
 ### Alternatives considered
 
-- **Ship the DSL in v1.** Rejected: premature; encodes guesses.
-- **No built-in definitions; operators always write code.** Rejected: defeats the
-  product.
-- **YAML / JSON descriptor as a half-step.** Rejected: behaves like a DSL without
-  the type system.
+- **Built-in TypeScript records (the earlier v1 stance).** Reversed: YAML is the
+  intended long-term authoring surface, and the type safety is recovered via the
+  typed registry rather than the file format.
+- **Hybrid — TS definition, YAML only for selection / overrides.** Considered as a
+  half-step; full YAML authoring was chosen instead.
+- **User-authored programming DSL / shell in YAML.** Rejected: out of scope; the
+  line stays at config-authored references to typed built-ins.
 
 ---
 
