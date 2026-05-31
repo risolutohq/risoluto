@@ -1,4 +1,5 @@
 import type { ResolvedWorkflowRole, ResolvedWorkflowState } from "../workflow-definition/registry.js";
+import type { TokenUsageSnapshot } from "../core/types.js";
 import { isSatisfiedVerificationArtifact } from "./verifier.js";
 
 export interface WorkflowGateEvaluationInput {
@@ -12,6 +13,8 @@ export interface WorkflowGateEvaluationInput {
 export interface WorkflowGateEvaluationResult {
   readonly status: "passed" | "failed";
   readonly reason?: string;
+  readonly evidence?: Readonly<Record<string, unknown>>;
+  readonly tokenUsage?: TokenUsageSnapshot;
 }
 
 export interface WorkflowHookExecutionInput {
@@ -26,7 +29,11 @@ export interface WorkflowHookExecutionResult {
 }
 
 export interface WorkflowExecutorEvent {
-  readonly eventType: "validation_gate.evaluated" | "workflow_hook.fired";
+  readonly eventType:
+    | "validation_gate.evaluated"
+    | "workflow_budget.checked"
+    | "workflow_gate.retry_requested"
+    | "workflow_hook.fired";
   readonly workflowRunId: string;
   readonly stateId: string;
   readonly gateId?: string;
@@ -34,6 +41,19 @@ export interface WorkflowExecutorEvent {
   readonly status?: WorkflowGateEvaluationResult["status"];
   readonly reason?: string;
   readonly evidence?: Readonly<Record<string, unknown>>;
+  readonly tokenUsage?: TokenUsageSnapshot;
+  readonly attemptNumber?: number;
+}
+
+export interface WorkflowGateFailureEvidence {
+  readonly eventType: "validation_gate.evaluated";
+  readonly workflowRunId: string;
+  readonly stateId: string;
+  readonly gateId: string;
+  readonly status: "failed";
+  readonly reason?: string;
+  readonly evidence?: Readonly<Record<string, unknown>>;
+  readonly tokenUsage?: TokenUsageSnapshot;
 }
 
 export class WorkflowGateHookEngineError extends Error {
@@ -61,6 +81,7 @@ export interface EvaluateStateGatesInput {
 export interface EvaluateStateGatesResult {
   readonly status: WorkflowGateEvaluationResult["status"];
   readonly events: readonly WorkflowExecutorEvent[];
+  readonly failureEvidence?: WorkflowGateFailureEvidence;
 }
 
 export async function fireStateEntryHooks(input: FireStateEntryHooksInput): Promise<readonly WorkflowExecutorEvent[]> {
@@ -93,9 +114,10 @@ export async function evaluateStateGates(input: EvaluateStateGatesInput): Promis
       stateRoles: input.stateRoles,
       artifacts: input.artifacts,
     });
-    events.push(buildGateEvent(input.workflowRunId, input.state.id, gateId, result));
+    const event = buildGateEvent(input.workflowRunId, input.state.id, gateId, result);
+    events.push(event);
     if (result.status === "failed") {
-      return { status: "failed", events };
+      return { status: "failed", events, failureEvidence: buildGateFailureEvidence(event) };
     }
   }
   return { status: "passed", events };
@@ -129,6 +151,24 @@ function buildGateEvent(
     gateId,
     status: result.status,
     ...(result.reason ? { reason: result.reason } : {}),
+    ...(result.evidence ? { evidence: result.evidence } : {}),
+    ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
+  };
+}
+
+function buildGateFailureEvidence(event: WorkflowExecutorEvent): WorkflowGateFailureEvidence {
+  if (event.eventType !== "validation_gate.evaluated" || event.status !== "failed" || !event.gateId) {
+    throw new WorkflowGateHookEngineError("cannot build gate failure evidence from a non-failed gate event");
+  }
+  return {
+    eventType: "validation_gate.evaluated",
+    workflowRunId: event.workflowRunId,
+    stateId: event.stateId,
+    gateId: event.gateId,
+    status: "failed",
+    ...(event.reason ? { reason: event.reason } : {}),
+    ...(event.evidence ? { evidence: event.evidence } : {}),
+    ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
   };
 }
 

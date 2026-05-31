@@ -25,6 +25,8 @@ function extractTokenUsageSnapshot(value: unknown): TokenUsageSnapshot | null {
     inputTokens,
     outputTokens,
     totalTokens,
+    ...(typeof usage.cacheReadTokens === "number" ? { cacheReadTokens: usage.cacheReadTokens } : {}),
+    ...(typeof usage.cacheWriteTokens === "number" ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
   };
 }
 
