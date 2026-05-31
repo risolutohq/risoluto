@@ -155,6 +155,23 @@ describe("extractTokenUsageSnapshot", () => {
     const result = extractTokenUsageSnapshot({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
     expect(result).toEqual({ inputTokens: 0, outputTokens: 0, totalTokens: 0 });
   });
+
+  it("preserves cache read and write token fields when present", () => {
+    const result = extractTokenUsageSnapshot({
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+      cacheReadTokens: 25,
+      cacheWriteTokens: 5,
+    });
+    expect(result).toEqual({
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+      cacheReadTokens: 25,
+      cacheWriteTokens: 5,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

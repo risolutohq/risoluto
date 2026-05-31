@@ -3,10 +3,11 @@ import type {
   ResolvedWorkflowRole,
   ResolvedWorkflowState,
 } from "../workflow-definition/registry.js";
+import { evaluateWorkflowBudget, type WorkflowBudgetPolicy } from "./budget-retry.js";
 import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
 import type { WorkflowRunStatus } from "./contracts.js";
+import { evaluateStateGatesWithRetry, type WorkflowGateRetryInput } from "./gate-retry-controller.js";
 import {
-  evaluateStateGates,
   fireStateEntryHooks,
   type WorkflowExecutorEvent,
   type WorkflowGateEvaluationInput,
@@ -22,6 +23,9 @@ export interface ExecuteWorkflowDefinitionInput {
   readonly evaluateGate?: (input: WorkflowGateEvaluationInput) => Promise<WorkflowGateEvaluationResult>;
   readonly runHook?: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;
   readonly runRole: (input: WorkflowRoleExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
+  readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
+  readonly maxGateRetries?: number;
+  readonly budget?: WorkflowBudgetPolicy;
 }
 
 export interface WorkflowRoleExecutionInput {
@@ -54,18 +58,13 @@ export async function executeWorkflowDefinition(
   const events: WorkflowExecutorEvent[] = [];
   const orderedRoles = orderRoles(input.definition.roles);
   let currentStateId: string | undefined;
+  let gateRetryAttempts = 0;
 
   for (const [index, role] of orderedRoles.entries()) {
-    if (role.stateId !== currentStateId) {
-      currentStateId = role.stateId;
-      const hookEvents = await fireStateEntryHooks({
-        workflowRunId: input.workflowRunId,
-        state: stateForRole(input.definition, role),
-        artifacts,
-        runHook: input.runHook,
-      });
-      events.push(...hookEvents);
+    if (appendBudgetEvent(events, input.budget, role.id, input.workflowRunId)) {
+      return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
     }
+    currentStateId = await fireHooksForNewState(input, artifacts, events, role, currentStateId);
     assertRequiredArtifacts(role, artifacts, input.definition.roles);
     rememberState(statesVisited, role.stateId);
     const produced = await input.runRole({
@@ -79,13 +78,18 @@ export async function executeWorkflowDefinition(
       return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
     }
     if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
-      const gateResult = await evaluateStateGates({
+      const gateResult = await evaluateStateGatesWithRetry({
         workflowRunId: input.workflowRunId,
+        artifacts,
         state: stateForRole(input.definition, role),
         stateRoles: rolesForState(input.definition.roles, role.stateId),
-        artifacts,
         evaluateGate: input.evaluateGate,
+        retryGate: input.retryGate,
+        maxGateRetries: input.maxGateRetries,
+        budget: input.budget,
+        retryAttemptsUsed: gateRetryAttempts,
       });
+      gateRetryAttempts = gateResult.retryAttemptsUsed;
       events.push(...gateResult.events);
       if (gateResult.status === "failed") {
         return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
@@ -94,6 +98,26 @@ export async function executeWorkflowDefinition(
   }
 
   return { status: "done", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+}
+
+async function fireHooksForNewState(
+  input: ExecuteWorkflowDefinitionInput,
+  artifacts: Readonly<Record<string, unknown>>,
+  events: WorkflowExecutorEvent[],
+  role: ResolvedWorkflowRole,
+  currentStateId: string | undefined,
+): Promise<string | undefined> {
+  if (role.stateId === currentStateId) {
+    return currentStateId;
+  }
+  const hookEvents = await fireStateEntryHooks({
+    workflowRunId: input.workflowRunId,
+    state: stateForRole(input.definition, role),
+    artifacts,
+    runHook: input.runHook,
+  });
+  events.push(...hookEvents);
+  return role.stateId;
 }
 
 function orderRoles(roles: readonly ResolvedWorkflowRole[]): ResolvedWorkflowRole[] {
@@ -171,6 +195,39 @@ function storeProducedArtifacts(
       producer: { type: "role", id: role.id },
     });
   }
+}
+
+function appendBudgetEvent(
+  events: WorkflowExecutorEvent[],
+  budget: WorkflowBudgetPolicy | undefined,
+  roleId: string,
+  workflowRunId: string,
+): boolean {
+  const event = evaluateBudgetBeforeRole(budget, roleId, workflowRunId);
+  if (!event) {
+    return false;
+  }
+  events.push(event);
+  return event.status === "failed";
+}
+
+function evaluateBudgetBeforeRole(
+  budget: WorkflowBudgetPolicy | undefined,
+  roleId: string,
+  workflowRunId: string,
+): WorkflowExecutorEvent | null {
+  if (!budget) {
+    return null;
+  }
+  const result = evaluateWorkflowBudget({ policy: budget, nextStepLabel: `role ${roleId}` });
+  return {
+    eventType: "workflow_budget.checked",
+    workflowRunId,
+    stateId: roleId,
+    status: result.status,
+    evidence: result.evidence,
+    ...(result.reason ? { reason: result.reason } : {}),
+  };
 }
 
 function rememberState(statesVisited: string[], stateId: string): void {
