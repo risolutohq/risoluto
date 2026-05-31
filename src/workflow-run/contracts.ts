@@ -1,6 +1,6 @@
 export const DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder";
 
-export type WorkflowRunSource = "cli" | "linear";
+export type WorkflowRunSource = "api" | "cli" | "github" | "linear" | "slack";
 export type WorkflowRunStatus =
   | "accepted"
   | "queued"
