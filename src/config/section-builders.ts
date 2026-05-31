@@ -5,8 +5,6 @@
  * records. `derivation-pipeline.ts` owns the end-to-end orchestration.
  */
 
-import path from "node:path";
-
 import type { ServiceConfig } from "../core/types.js";
 import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../state/topology.js";
 import { asBoolean, asNumber, asNumberMap, asRecord, asString, asLooseStringArray, asStringArray } from "./coercion.js";
@@ -17,8 +15,9 @@ import {
   normalizeCodexProvider,
   normalizeTurnSandboxPolicy,
 } from "./normalizers.js";
-import { resolveConfigString, resolvePathConfigString } from "./resolvers.js";
+import { resolveConfigString } from "./resolvers.js";
 import { normalizeTrackerEndpoint } from "./url-policy.js";
+export { deriveWorkspaceConfig } from "./workspace-section.js";
 
 const WEBHOOK_ALIAS_REGISTRY: ReadonlyArray<readonly [string, string]> = [
   ["webhook_url", "webhookUrl"],
@@ -98,35 +97,6 @@ export function deriveTrackerConfig(
     repo: asString(tracker.repo, "") || (secretResolver?.("GITHUB_REPO") ?? ""),
     activeStates: asStringArray(tracker.active_states, DEFAULT_ACTIVE_STATES),
     terminalStates: asStringArray(tracker.terminal_states, DEFAULT_TERMINAL_STATES),
-  };
-}
-
-export function deriveWorkspaceConfig(
-  workspace: Record<string, unknown>,
-  hooks: Record<string, unknown>,
-  secretResolver?: (name: string) => string | undefined,
-): ServiceConfig["workspace"] {
-  const containerRoot = process.env.RISOLUTO_CONTAINER_WORKSPACE_ROOT;
-  const defaultWorkspaceRoot = containerRoot || "../risoluto-workspaces";
-  const workspaceRoot = resolvePathConfigString(asString(workspace.root, defaultWorkspaceRoot), secretResolver);
-  const rawHookTimeoutMs = asNumber(hooks.timeout_ms, 60000);
-  const hookTimeoutMs = rawHookTimeoutMs > 0 ? rawHookTimeoutMs : 60000;
-
-  const rawStrategy = asString(workspace.strategy, "directory");
-  const strategy: ServiceConfig["workspace"]["strategy"] = rawStrategy === "worktree" ? "worktree" : "directory";
-  const branchPrefix = asString(workspace.branch_prefix, "risoluto/");
-
-  return {
-    root: path.resolve(workspaceRoot),
-    hooks: {
-      afterCreate: asString(hooks.after_create) || null,
-      beforeRun: asString(hooks.before_run) || null,
-      afterRun: asString(hooks.after_run) || null,
-      beforeRemove: asString(hooks.before_remove) || null,
-      timeoutMs: hookTimeoutMs,
-    },
-    strategy,
-    branchPrefix,
   };
 }
 

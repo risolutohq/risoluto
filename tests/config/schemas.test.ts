@@ -62,6 +62,9 @@ describe("workspaceConfigSchema", () => {
     expect(result.root).toBe("../risoluto-workspaces");
     expect(result.strategy).toBe("directory");
     expect(result.branchPrefix).toBe("risoluto/");
+    expect(result.branchTemplate).toBe("risoluto/{workflow}/{date}-{short-intent}-{run-id}");
+    expect(result.dirtyPolicy).toBe("reject");
+    expect(result.worktreeRetentionDays).toBe(7);
     expect(result.hooks.afterCreate).toBe(null);
     expect(result.hooks.timeoutMs).toBe(60000);
   });
@@ -83,6 +86,18 @@ describe("workspaceConfigSchema", () => {
   it("accepts worktree strategy", () => {
     const result = workspaceConfigSchema.parse({ strategy: "worktree" });
     expect(result.strategy).toBe("worktree");
+  });
+
+  it("accepts workflow-run worktree lifecycle policy", () => {
+    const result = workspaceConfigSchema.parse({
+      branchTemplate: "afk/{workflow}/{run-id}",
+      dirtyPolicy: "require_approval",
+      worktreeRetentionDays: 14,
+    });
+
+    expect(result.branchTemplate).toBe("afk/{workflow}/{run-id}");
+    expect(result.dirtyPolicy).toBe("require_approval");
+    expect(result.worktreeRetentionDays).toBe(14);
   });
 
   it("defaults all hook slots to null", () => {
