@@ -1,8 +1,9 @@
 # Risoluto Skills
 
 Index of the skills that operate this repo's **research → shipping pipeline**. Each lives in a
-`skills/risoluto-*/` folder (plus `init-research`) and is symlinked into `.claude/skills/` and
-`.agents/skills/`. Canonical references: [`docs/research-to-shipping-pipeline.md`](../docs/research-to-shipping-pipeline.md)
+`skills/<name>/` folder — the `risoluto-*` pipeline skills plus the `init-research` and `v1-check`
+helpers — and is symlinked into both `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex).
+Canonical references: [`docs/research-to-shipping-pipeline.md`](../docs/research-to-shipping-pipeline.md)
 (the full funnel) and [`docs/product-spine.md`](../docs/product-spine.md) (the value model — the five
 AFK jobs every candidate is gated against).
 
@@ -16,6 +17,15 @@ Mode A  researcher → dedup → grill ┐
                                    ├─▶ docs/roadmap.md ─▶ to-prd ─▶ to-issues ─▶ tdd ─▶ merge ─▶ post-merge CI records
 Mode B  ingest (wiki + cite-or-drop)┘   (founder ranks/promotes)     next-bundle schedules parallel worktrees
 ```
+
+## Agent portability (Claude + Codex)
+
+One canonical body per skill, symlinked into both `.claude/skills/` and `.agents/skills/` — **no per-agent forks**. Both harnesses discover skills the same way (name + description always loaded, body on demand) and follow symlinked skill folders. Keep the shared body agent-neutral and absorb the few real differences inline:
+
+- **Tool calls by intent, not by name.** A skill names an _operation_ ("create issue", "save comment"); each agent binds it to its own surface. The literal Claude MCP names (`mcp__linear-server__…`) appear only inside a skill's **Linear access** callout, as the Claude fast-path example.
+- **Linear access.** `LINEAR_API_KEY` + Linear GraphQL is the portable baseline — ready-to-run queries for every back-half operation live in [`references/linear-access.md`](references/linear-access.md) (`risoluto-to-prd` Step 3 is the original reference for the project mutations); the Linear MCP is a Claude convenience. `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path.
+- **Approval gates.** Where a skill must hard-stop for human approval (e.g. `risoluto-features`), Claude enforces it with an `AskUserQuestion` tool call; other agents stop and wait for an explicit yes. Same requirement, agent-specific enforcement.
+- **Metadata.** The portable surface is SKILL.md frontmatter `name` + `description` (both agents honour it). Codex also supports an optional `agents/openai.yaml` (UI metadata, `allow_implicit_invocation`, MCP tool dependencies) — available if a skill ever needs explicit invocation/dependency control; none use it today.
 
 ## Setup & supporting tooling
 
@@ -41,19 +51,19 @@ Mode B  ingest (wiki + cite-or-drop)┘   (founder ranks/promotes)     next-bund
 
 ## Back-half — a `next` roadmap row → merged code
 
-| Skill                            | What it does                                                                                                                                                                                                                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **`/risoluto-to-prd <slug>`**    | Promote a `next` row to `docs/prds/<slug>.md` + a mirrored Linear Project + a pushed `pipeline/<slug>-prd` branch; flips the row to `building`. Git is canon, Linear is a generated mirror. Idempotent (sync on re-run). Prints `gh pr create`, never runs it.                                   |
-| **`/risoluto-to-issues <slug>`** | Slice a PRD into flat Linear issues (`from:prd-<slug>` label, `blocked-by` edges). Acceptance criteria must be **falsifiable behavioural assertions** (the future red test) — not a restatement of the global gate.                                                                              |
-| **`/risoluto-tdd <ticket>`**     | Implement one Linear issue red-green-refactor (delegates the loop to the global `tdd` skill). Validates upstream `blocked-by` are Done; on PR-ready, back-comments the ticket with the PR URL + label and prints `gh pr create`.                                                                 |
-| **`/risoluto-next-bundle`**      | The **parallel-worktree scheduler**. Filters open issues to the ready-set (every `blocked-by` is Done), then groups them into **mutually conflict-free** bundles — predicted code-locality acts as a lock so two worktrees never edit overlapping regions. Read-only; proposes, creates nothing. |
+| Skill                            | What it does                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`/risoluto-to-prd <slug>`**    | Promote a `next` row to `docs/prds/<slug>.md` + a mirrored Linear Project + a pushed `pipeline/<slug>-prd` branch; flips the row to `building`. Git is canon, Linear is a generated mirror. Idempotent (sync on re-run). Prints `gh pr create`, never runs it.                                                                                              |
+| **`/risoluto-to-issues <slug>`** | Slice a PRD into flat Linear issues (`from:prd-<slug>` label, `blocked-by` edges). Acceptance criteria must be **falsifiable behavioural assertions** (the future red test) — not a restatement of the global gate.                                                                                                                                         |
+| **`/risoluto-tdd <ticket>`**     | Implement one Linear issue red-green-refactor (runs the loop from its **bundled** TDD companion files — `tests.md`, `interface-design.md`, `refactoring.md`, `mocking.md`, `deep-modules.md` — so it is self-contained). Validates upstream `blocked-by` are Done; on PR-ready, back-comments the ticket with the PR URL + label and prints `gh pr create`. |
+| **`/risoluto-next-bundle`**      | The **parallel-worktree scheduler**. Filters open issues to the ready-set (every `blocked-by` is Done), then groups them into **mutually conflict-free** bundles — predicted code-locality acts as a lock so two worktrees never edit overlapping regions. Read-only; proposes, creates nothing.                                                            |
 
 ## Cross-cutting notes
 
 - **Forks, not upgrades.** `to-prd`, `to-issues`, `tdd` are Linear-specific forks of the generic
-  global `~/.claude/skills/{to-prd,to-issues,tdd}` — invoke the namespaced `risoluto-*` variants in
-  this repo. The global skills stay tracker-agnostic; `grill-me`, `grill-with-docs`,
-  `save-to-obsidian` are used as-is.
+  global `{to-prd,to-issues,tdd}` skills (under Claude at `~/.claude/skills/…`) — invoke the
+  namespaced `risoluto-*` variants in this repo. The global skills stay tracker-agnostic; `grill-me`,
+  `grill-with-docs`, `save-to-obsidian` are used as-is.
 - **Post-merge recording is not a skill** — flipping PRD→shipped, back-commenting Linear, flipping
   the roadmap row, and refreshing `RISOLUTO_FEATURES.md` run in CI (`post-merge.yml` /
   `scripts/post-merge-prd.mjs`).

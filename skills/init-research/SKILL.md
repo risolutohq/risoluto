@@ -5,7 +5,7 @@ description: Initialize or refresh the private `research/` submodule (risolutohq
 
 # /init-research
 
-The `research/` submodule (`risolutohq/risoluto-research`, private) is a hard prerequisite for any Claude work in this repo per `CLAUDE.md`. This skill verifies it and initializes it if missing.
+The `research/` submodule (`risolutohq/risoluto-research`, private) is a hard prerequisite for any work in this repo per `AGENTS.md` (which `CLAUDE.md` imports). This skill verifies it and initializes it if missing.
 
 ## Steps
 

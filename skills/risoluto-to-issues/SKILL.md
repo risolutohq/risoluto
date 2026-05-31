@@ -1,11 +1,13 @@
 ---
 name: risoluto-to-issues
-description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill at ~/.claude/skills/to-issues/ and must not be conflated with this one). Fork of the global skill; this one is Linear MCP only. Phase 4.1 of docs/research-to-shipping-pipeline.md.'
+description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill and must not be conflated with this one). Fork of the global skill; this one is Linear-specific. Phase 4.1 of docs/research-to-shipping-pipeline.md.'
 ---
 
 # risoluto-to-issues
 
-PRD-to-Linear-Issues breaker for the Risoluto planning pipeline. Phase 4.1 of the planning-pipeline roadmap. **Fork of `~/.claude/skills/to-issues/`** — keep the global skill generic, never edit it. Linear-specific behaviour and the flat-issue-with-blocked-by layout live here.
+PRD-to-Linear-Issues breaker for the Risoluto planning pipeline. Phase 4.1 of the planning-pipeline roadmap. Forked from the generic global `to-issues` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the flat-issue-with-blocked-by layout live here.
+
+> **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `list_issues`, `save_issue`, `list_issue_labels`, `create_issue_label`, `save_milestone`, native attachment/link operation, `list_teams`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
 
 ## What this skill produces
 
@@ -26,17 +28,17 @@ For one `<prd-slug>` per invocation:
 
 ## Hard preconditions
 
-Stop and report if any of these fail. Do **not** retry MCP auth from inside this skill — if Linear MCP errors, surface it to the operator.
+Stop and report if any of these fail. Do **not** retry Linear auth from inside this skill — if Linear errors, surface it to the operator.
 
-| Check                             | Command / verification                                                | If it fails                                                                                                                               |
-| --------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Run from repo root                | `test -f package.json && test -f .gitmodules`                         | Tell Omer to `cd` into the `risoluto` checkout root.                                                                                      |
-| `research/` initialised           | `git submodule status research` starts with a space                   | Tell Omer to `git submodule update --init research`.                                                                                      |
-| PRD exists                        | `test -f docs/prds/<slug>.md`                                         | Tell Omer to run `/risoluto-to-prd <slug>` first.                                                                                         |
-| PRD has `linear_project`          | frontmatter `linear_project` is non-null                              | Tell Omer to run `/risoluto-to-prd <slug>` first.                                                                                         |
-| PRD has `source`                  | frontmatter `source` is non-null                                      | Acceptable to proceed; `source` may be absent for older PRDs.                                                                             |
-| Linear MCP responding             | Any `mcp__linear-server__list_teams` call succeeds                    | Surface the MCP error verbatim; do not retry auth.                                                                                        |
-| Issues for this PRD already exist | `mcp__linear-server__list_issues` with label filter returns non-empty | This is a re-run — go to **Step 0 — Reconcile**: resume to create only missing slices, or abort. Never blind-create over an existing set. |
+| Check                             | Command / verification                                   | If it fails                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Run from repo root                | `test -f package.json && test -f .gitmodules`            | Tell Omer to `cd` into the `risoluto` checkout root.                                                                                      |
+| `research/` initialised           | `git submodule status research` starts with a space      | Tell Omer to `git submodule update --init research`.                                                                                      |
+| PRD exists                        | `test -f docs/prds/<slug>.md`                            | Tell Omer to run `/risoluto-to-prd <slug>` first.                                                                                         |
+| PRD has `linear_project`          | frontmatter `linear_project` is non-null                 | Tell Omer to run `/risoluto-to-prd <slug>` first.                                                                                         |
+| PRD has `source`                  | frontmatter `source` is non-null                         | Acceptable to proceed; `source` may be absent for older PRDs.                                                                             |
+| Linear reachable                  | A Linear connectivity probe succeeds (see Linear access) | Surface the error verbatim; do not retry auth.                                                                                            |
+| Issues for this PRD already exist | A list-issues-by-label query returns non-empty           | This is a re-run — go to **Step 0 — Reconcile**: resume to create only missing slices, or abort. Never blind-create over an existing set. |
 
 ## Pipeline
 
@@ -44,9 +46,9 @@ Steps: **preload** → **extract + review** → **label preflight** → **milest
 
 ### Step 0 — Reconcile if issues already exist (re-run only)
 
-Runs only when the precondition found existing `from:prd-<slug>` issues — i.e. a previous run created some or all of them, possibly partially (a `links` rate-limit or an MCP error can leave a batch half-created — see Notes). Blind-creating on top duplicates the board, so reconcile first.
+Runs only when the precondition found existing `from:prd-<slug>` issues — i.e. a previous run created some or all of them, possibly partially (an attachment rate-limit or a Linear error can leave a batch half-created — see Notes). Blind-creating on top duplicates the board, so reconcile first.
 
-1. Fetch the existing set (`mcp__linear-server__list_issues`, label `from:prd-<slug>`) with their titles and `blockedBy` relations.
+1. Fetch the existing set (list issues with label `from:prd-<slug>`) with their titles and `blockedBy` relations.
 2. Run the normal extraction (Step 2) to get the slice graph the PRD _would_ produce now, then diff it against what exists, matching by slice title:
    - **Missing** — slices with no matching issue.
    - **Extra** — existing issues with no matching slice (PRD shrank, or a stale run).
@@ -101,11 +103,11 @@ Iterate until Omer approves. If Omer rejects, re-run the inference with his feed
 
 ### Step 2.5 — Label preflight
 
-Before creating any issue, make sure the labels it will reference exist — Linear rejects an issue that names a missing label, and creating them mid-loop is noisy. For each required label — `from:prd-<slug>`, `tracer`, `slice:afk`, `slice:hitl`, `bundle:<category>` — check `mcp__linear-server__list_issue_labels` (team `Ninetech`) and create any missing one with `mcp__linear-server__create_issue_label`, giving it a short `description` and a stable `color` so the board stays legible. Suggested palette: `from:prd-*` grey, `tracer` cyan, `slice:afk` green, `slice:hitl` orange, `bundle:*` indigo. These are team-level labels — create once, reuse across PRDs.
+Before creating any issue, make sure the labels it will reference exist — Linear rejects an issue that names a missing label, and creating them mid-loop is noisy. For each required label — `from:prd-<slug>`, `tracer`, `slice:afk`, `slice:hitl`, `bundle:<category>` — list existing labels (list-issue-labels operation, team `Ninetech`) and create any missing one (create-issue-label operation), giving it a short `description` and a stable `color` so the board stays legible. Suggested palette: `from:prd-*` grey, `tracer` cyan, `slice:afk` green, `slice:hitl` orange, `bundle:*` indigo. These are team-level labels — create once, reuse across PRDs.
 
 ### Step 2.6 — Derive build-wave milestones
 
-Group the approved slices into 3–6 **build waves** by dependency depth (roots first, capstone last) and create one Linear milestone per wave with `mcp__linear-server__save_milestone` on the PRD's project. Name them `Wave N - <theme>` and give each a short theme description first; the issue IDs do not exist yet. Each issue created in Step 3 gets its wave's `milestone`. After issue creation, update each milestone description with the member issue IDs/URLs.
+Group the approved slices into 3–6 **build waves** by dependency depth (roots first, capstone last) and create one Linear milestone per wave (save-milestone operation) on the PRD's project. Name them `Wave N - <theme>` and give each a short theme description first; the issue IDs do not exist yet. Each issue created in Step 3 gets its wave's `milestone`. After issue creation, update each milestone description with the member issue IDs/URLs.
 
 Milestones here are a **visual build-order aid, not a ready-set gate.** A slice can be dependency-shallow yet sit in a late wave because it is thematically "readiness" (e.g. an offline doctor probe that only needs the registry). The live ready-set — what is startable _now_ — is whatever has no open `blocked-by`, which `risoluto-next-bundle` computes dynamically. Say this to Omer when you present the waves so a late-wave-but-shallow slice isn't mistaken for "blocked."
 
@@ -125,7 +127,7 @@ Before creating anything, run the approved graph through these checks. They exis
 
 For each approved slice, in dependency order (blockers first):
 
-1. Call `mcp__linear-server__save_issue` (no `id` field = create) with:
+1. Create the issue (save-issue operation, create mode — no `id` field) with:
    - `team`: `"Ninetech"` — required on create (the schema mandates it even when `project` would seem to imply it)
    - `title`: slice title
    - `description`: issue body (using the template below)
@@ -134,7 +136,7 @@ For each approved slice, in dependency order (blockers first):
    - `milestone`: the slice's build-wave milestone from Step 2.6
    - `blockedBy`: Linear issue IDs of blocker slices (already created since we go in order)
    - `relatedTo`: Linear issue IDs of soft-coupling slices that already exist; set any that point at not-yet-created slices in a second pass once all issues exist (`relatedTo` is append-only)
-   - `links`: `[{ "url": "<git blob URL of the PRD>", "title": "PRD (canonical git source)" }]` — the native attachment (see Notes for the URL shape and the rate-limit caveat)
+   - PRD attachment: create a native URL attachment on the new issue (attach-url operation) with `url: "<git blob URL of the PRD>"` and `title: "PRD (canonical git source)"` (see Notes for the URL shape and the rate-limit caveat)
 2. Record the returned issue ID/URL for use in subsequent slices' `blockedBy` / `relatedTo`.
 3. Do **not** set `priority` or `estimate` by default — see Notes.
 
@@ -175,22 +177,22 @@ PRD: [docs/prds/<slug>.md](https://github.com/risolutohq/risoluto/blob/<default-
 ## Notes for the agent
 
 - **Default to the `Ninetech` Linear team without asking.** Only one team exists.
-- **Linear MCP errors are operator concerns.** Surface verbatim, stop, do not retry.
+- **Linear errors are operator concerns.** Surface verbatim, stop, do not retry.
 - **The `from:prd-<slug>` label is load-bearing.** Phase 4.2's TDD skill uses it to find the linked PRD, and Phase 4.3's post-merge workflow uses it to trigger automation. Always apply it.
 - **`bundle:<category>` is derived from the PRD/roadmap**, not from a deleted backlog file. The preload script checks for an explicit `**Category:**` line in the PRD body first; if absent it infers from the first word of the roadmap Item cell. If neither yields a value, omit the `bundle:` label and note it to Omer.
 - **Acceptance criteria are the red-test spec — gate on it.** Each criterion must be a falsifiable behavioural assertion the future `/risoluto-tdd` run can turn into a failing test (e.g. "a Workflow Run failing at step 3 replays from 3, not 0"). **Refuse to emit any issue that cannot name at least one such assertion** — a slice with no falsifiable behaviour is not ready to start; sharpen it with Omer first. Do **not** restate the global gate (build / lint / test / typecheck / coverage) as acceptance — every merge enforces it already, so it is noise. The failing test is the definition of done; there is no separate DoD field.
 - **Non-deterministic slice extraction is intentional.** The operator reviews and approves — the skill doesn't claim to produce the "correct" graph, just a reasonable starting point.
 - **Issues are flat, not nested.** No parent-child hierarchy. Ordering dependencies are `blocked-by`; soft couplings are `related` — both are flat relations, never sub-issues.
 - **Do NOT close or modify the Linear Project.** Issues are created under it; the Project stays open.
-- **PRD link is the git blob URL, not the Linear project.** The canonical PRD lives in git; link to `https://github.com/risolutohq/risoluto/blob/<default-branch>/docs/prds/<slug>.md` (read the branch with `git symbolic-ref --short HEAD`, usually `master`). Put it in the body "## Parent" line _and_ as a native `links` attachment so it shows in Linear's sidebar. Never point it at the `linear_project` URL — that is circular (clicking "the PRD" from inside Linear just reloads the project).
-- **Attaching links can rate-limit.** Linear throttles attachment creation; if a `links` write returns a rate-limit error the issue's other fields still saved — just retry the `links` field on that issue after a short gap.
-- **Announce the create batch before firing.** Before the Step 3 loop, state how many issues you will create and in what dependency order. If a mid-batch call fails (the link rate-limit above, an MCP hiccup), Omer can see how far it got — and the next run's Step 0 can resume from the gap instead of starting over.
-- **Never remove a `blocks` edge and add a `related` edge for the same pair in one `save_issue` call** — Linear rejects the mixed relation transaction. Do it in two calls (remove first, then relate).
+- **PRD link is the git blob URL, not the Linear project.** The canonical PRD lives in git; link to `https://github.com/risolutohq/risoluto/blob/<default-branch>/docs/prds/<slug>.md` (read the branch with `git symbolic-ref --short HEAD`, usually `master`). Put it in the body "## Parent" line _and_ create a native URL attachment so it shows in Linear's sidebar. Never point it at the `linear_project` URL — that is circular (clicking "the PRD" from inside Linear just reloads the project).
+- **Attaching PRD URLs can rate-limit.** Linear throttles attachment creation; if the attach-url operation returns a rate-limit error the issue's other fields still saved — just retry the attachment on that issue after a short gap.
+- **Announce the create batch before firing.** Before the Step 3 loop, state how many issues you will create and in what dependency order. If a mid-batch call fails (the attachment rate-limit above, a Linear hiccup), Omer can see how far it got — and the next run's Step 0 can resume from the gap instead of starting over.
+- **Never remove a `blocks` edge and add a `related` edge for the same pair in one save-issue call** — Linear rejects the mixed relation transaction. Do it in two calls (remove first, then relate).
 - **Priority and estimates are off by default.** Linear `priority` means importance/urgency, not build order — using it for topological depth is semantically muddy, and milestones + `blocked-by` + a "not blocked" saved view already convey order. Set `priority` only coarsely (High = current wave, Low = capstone tail) and only if Omer asks for Linear's priority sort. Leave `estimate` until a first run reveals real slice size.
 
 ## Companion files
 
 - `docs/research-to-shipping-pipeline.md` — Phase 4.1 spec
-- `~/.claude/skills/to-issues/` — the generic upstream skill this forks from
+- the generic global `to-issues` skill — the tracker-agnostic upstream this forks from
 - `skills/risoluto-to-prd/` — Phase 3.2; produces the PRD this skill consumes
 - `skills/risoluto-tdd/` — Phase 4.2; picks up individual issues created by this skill

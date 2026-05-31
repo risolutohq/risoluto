@@ -5,7 +5,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 ## (root)/
 
 - `.dockerignore` — Docker build exclusion list; keeps build artifacts, dev config, tests, and docs out of the image context. <!--hash:ce855e61-->
-- `.gitignore` — Git ignore rules; excludes build outputs, test coverage, secrets, editor noise, and the spine skill workspace. <!--hash:388b62ca-->
+- `.gitignore` — Git ignore rules; excludes build outputs, test coverage, secrets, editor noise, agent worktrees, and the spine skill workspace. <!--hash:61f64d38-->
 - `.gitleaks.toml` — Gitleaks config stub for Risoluto; referenced by pre-commit hook and CI secret scan step. <!--hash:8b7979ce-->
 - `.gitmodules` — Git submodule registration; maps the research/ directory to the private risolutohq/risoluto-research repo. <!--hash:5c68ed07-->
 - `.lintstagedrc.json` — lint-staged config; runs ESLint --fix and Prettier on staged TypeScript files, Prettier on JSON/YAML files. <!--hash:4e140f99-->
@@ -39,14 +39,6 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `vitest.live.config.ts` — Live integration test suite config; runs tests against real external APIs in tests/integration/live/ with a 30-second timeout. <!--hash:fb6be9c1-->
 - `vitest.load.config.ts` — Load/performance test suite config; targets the HTTP load test file with a 30-second timeout. <!--hash:c2959d3a-->
 
-## .agents/skills/init-research/
-
-- `SKILL.md` — Skill definition for /init-research; verifies and initializes the private research/ git submodule. <!--hash:70f7e43c-->
-
-## .agents/skills/v1-check/
-
-- `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build, lint, format, test, typecheck) in order. <!--hash:bf9cf752-->
-
 ## .claude/
 
 - `settings.json` — Claude Code project settings; configures PostToolUse Prettier auto-format and Stop hook for TS lint reminders. <!--hash:2e895358-->
@@ -54,14 +46,6 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 ## .claude/hooks/
 
 - `stop-ts-check.sh` — Claude Code Stop hook; runs ESLint on uncommitted TypeScript files and emits a typecheck reminder. <!--hash:57df8651-->
-
-## .claude/skills/init-research/
-
-- `SKILL.md` — Skill definition for /init-research; verifies and initializes the private research/ git submodule. <!--hash:1f84c5c5-->
-
-## .claude/skills/v1-check/
-
-- `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build → lint → format → test → typecheck) in order. <!--hash:bf9cf752-->
 
 ## .codex/
 
@@ -164,11 +148,19 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/
 
-- `README.md` — Index of the research→shipping pipeline skills (risoluto-* + init-research), pointing to the pipeline and product-spine docs. <!--hash:72ff1f03-->
+- `README.md` — Index of the research→shipping pipeline skills (risoluto-* + init-research + v1-check) plus the shared-core + per-agent-adapter portability model for Claude and Codex; points to the pipeline and product-spine docs. <!--hash:5266406e-->
+
+## skills/init-research/
+
+- `SKILL.md` — Skill definition for /init-research; verifies and initializes the private research/ git submodule. <!--hash:7b96bfe1-->
+
+## skills/references/
+
+- `linear-access.md` — Agent-portable Linear binding for the back-half skills: a curl helper plus ready-to-run GraphQL for every operation (probe, team/state lookup, issues, labels, milestones, attachments, relations, comments, status) — the Codex path where no Linear MCP is configured. <!--hash:d9a143ab-->
 
 ## skills/risoluto-features/
 
-- `SKILL.md` — Skill definition for the risoluto-features spine updater: two-repo model, 12-step pipeline, map-reduce architecture. <!--hash:46494e29-->
+- `SKILL.md` — Skill definition for the risoluto-features spine updater: two-repo model, 12-step pipeline, map-reduce architecture. <!--hash:90f7e384-->
 
 ## skills/risoluto-features/assets/
 
@@ -212,7 +204,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-next-bundle/
 
-- `SKILL.md` — next-bundle skill: groups open from:prd-<slug> Linear issues across PRDs by predicted code-locality and proposes build bundles with goals. <!--hash:6865a4dc-->
+- `SKILL.md` — next-bundle skill: groups open from:prd-<slug> Linear issues across PRDs by predicted code-locality and proposes build bundles with goals. <!--hash:472f1e9f-->
 
 ## skills/risoluto-next-bundle/scripts/
 
@@ -220,7 +212,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-researcher/
 
-- `SKILL.md` — Researcher skill (Mode A): captures a URL into research/targets/<slug>/, extracts Candidate features + Leech takeaways, dedups against roadmap + FEATURES. <!--hash:913f6b00-->
+- `SKILL.md` — Researcher skill (Mode A): captures a URL into research/targets/<slug>/, extracts Candidate features + Leech takeaways, dedups against roadmap + FEATURES. <!--hash:e4e5a540-->
 
 ## skills/risoluto-researcher/references/
 
@@ -246,7 +238,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-tdd/
 
-- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:aa22bfa2-->
+- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:6b5c973d-->
 - `deep-modules.md` — TDD reference: designing deep modules — simple interface over substantial implementation. <!--hash:0d9720cf-->
 - `interface-design.md` — TDD reference: interface-design principles applied during the red-green-refactor loop. <!--hash:a0a20ca4-->
 - `mocking.md` — TDD reference: when to mock versus use real collaborators in tests. <!--hash:71cbfee6-->
@@ -255,7 +247,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-to-issues/
 
-- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug>; category derived from the PRD/roadmap row. Linear MCP only. <!--hash:4daff533-->
+- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug>; category derived from the PRD/roadmap row; agent-portable Linear access (Claude MCP or LINEAR_API_KEY GraphQL). <!--hash:edf4c9af-->
 
 ## skills/risoluto-to-issues/scripts/
 
@@ -294,6 +286,10 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 ## skills/risoluto-vault/scripts/
 
 - `apply.mjs` — Vault apply script; deploys/repairs .obsidian config, templates, and Dataview notes into research/ (WRITE/REPAIR/KEEP per file; --dry-run/--force). <!--hash:ffb65b0e-->
+
+## skills/v1-check/
+
+- `SKILL.md` — Skill definition for /v1-check; runs the five-step pre-PR gate (build, lint, format, test, typecheck) in order. <!--hash:bf9cf752-->
 
 ## src/agent/
 

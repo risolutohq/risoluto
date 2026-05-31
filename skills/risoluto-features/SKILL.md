@@ -1,6 +1,6 @@
 ---
 name: risoluto-features
-description: 'Update the Risoluto Feature Spine, the code-backed inventory of user-observable and backend-surface features. Use when Omer says /risoluto-features, "update the spine", "regenerate risoluto features", "check what''s new in risoluto", "diff the risoluto spine", "refresh feature inventory", or "rebuild RISOLUTO_FEATURES". Uses the two-repo model: source code in `.spine-workspace/source/`, spine output in the private `research/` submodule. Re-verifies existing entries, detects net-new features, preserves analyst nuance, renders markdown/json/html, validates citations, and requires an AskUserQuestion commit gate.'
+description: 'Update the Risoluto Feature Spine, the code-backed inventory of user-observable and backend-surface features. Use when Omer says /risoluto-features, "update the spine", "regenerate risoluto features", "check what''s new in risoluto", "diff the risoluto spine", "refresh feature inventory", or "rebuild RISOLUTO_FEATURES". Uses the two-repo model: source code in `.spine-workspace/source/`, spine output in the private `research/` submodule. Re-verifies existing entries, detects net-new features, preserves analyst nuance, renders markdown/json/html, validates citations, and requires a human-approval commit gate (AskUserQuestion under Claude).'
 ---
 
 # Risoluto Feature Spine Updater
@@ -46,7 +46,7 @@ Main agent (you)
   ├─→ merge, assign bundles, render meta, build diff section
   ├─→ render markdown + json + html
   ├─→ validate_json + fact_check + lint_md (all must pass)
-  └─→ AskUserQuestion gate → commit
+  └─→ human-approval gate → commit
 ```
 
 Subagent prompt templates live in `references/subagent-prompts.md`. Use the **`extract` template** for cold start / new-module runs. Use the **`verify` template** to re-check batches of existing entries on incremental runs.
@@ -225,9 +225,12 @@ python3 skills/risoluto-features/scripts/render_html.py \
 
 The viewer is cold-start-aware (filters that wouldn't discriminate are hidden, "Initial spine cut" banner replaces the diff chips when there's no previous SHA).
 
-### Step 12 — Commit gate (MANDATORY AskUserQuestion)
+### Step 12 — Commit gate (MANDATORY human approval)
 
-> **STOP**. Do NOT run `git commit` next. The previous version of this skill instructed "show the message and wait" via prose, and models proceeded anyway. Use the `AskUserQuestion` tool as the gate. Tool calls are harder to bypass than prose instructions.
+> **STOP**. Do NOT run `git commit` next. The previous version of this skill instructed "show the message and wait" via prose, and models proceeded anyway — so the gate must be an explicit, hard-to-bypass approval step:
+>
+> - **Claude** — call the `AskUserQuestion` tool. A tool call is far harder to skip than prose.
+> - **Codex / any agent without `AskUserQuestion`** — print the full proposed message, then stop and wait for an explicit typed approval. Treat silence or an unrelated reply as "not approved"; never commit on implicit continuation.
 
 Construct the proposed commit message:
 
@@ -257,10 +260,10 @@ New analyst notes:
 fact_check: <0 hard, N soft warning(s)> [list each soft warning briefly]
 ```
 
-Then **call `AskUserQuestion`** with that message embedded as the question text and these options:
+Then present the approval gate with that message embedded as the question text — under Claude **call `AskUserQuestion`**; otherwise print the message and wait — offering these options:
 
 - **Apply with this message** — proceed to commit
-- **Modify the message** — ask follow-up; iterate the message; call AskUserQuestion again
+- **Modify the message** — ask follow-up; iterate the message; re-present the gate
 - **Cancel** — leave files written but don't commit
 
 ONLY after receiving "Apply", run:
@@ -312,7 +315,7 @@ If `$PREV_SHA` is empty (Step 2), follow `references/cold-start.md` for Steps 3�
 
 A feature spine is only useful if it's **falsifiable** and **fresh**. Falsifiable means every claim points to a specific file range and a real symbol, AND that quoted constants actually appear in cited code. Fresh means it tracks HEAD, not a snapshot. The biggest failure mode is silent rot — line numbers drift, constants get tweaked, features get yanked. The verification step (Step 4) plus `fact_check.py` (Step 10) is what keeps the spine honest.
 
-The second-biggest failure mode is the model committing without approval. Prose-based "stop and wait" instructions get bypassed; a mandatory `AskUserQuestion` tool call doesn't.
+The second-biggest failure mode is the model committing without approval. Prose-based "stop and wait" instructions get bypassed; a mandatory tool call (Claude's `AskUserQuestion`) or an explicit typed approval (other agents) does not.
 
 The third-biggest failure mode is confusing the source and storage repos. The two-repo model and `source_repo.local_path` in the JSON make the distinction explicit so validators auto-target the right tree.
 

@@ -24,6 +24,8 @@ This is an **initial minimal version** (heuristic grouping; the agent does the l
 reasoning against its knowledge of the codebase). The grouping heuristic will sharpen as more
 PRDs and issues accumulate.
 
+> **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `list_issues`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
+
 ## Two constraints, neither of which is the roadmap
 
 Running multiple worktrees in parallel faces two independent constraints — and the roadmap owns
@@ -65,12 +67,12 @@ The founder picks a bundle. The skill stops there — no issue updates, no Linea
 
 Stop and report if any fail:
 
-| Check                       | Command                                        | If it fails                                                                       |
-| --------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------- |
-| Run from repo root          | `test -f package.json && test -f .gitmodules`  | Tell Omer to `cd` into the `risoluto` checkout root.                              |
-| `docs/prds/` exists         | `test -d docs/prds`                            | No PRDs yet — run `/risoluto-to-prd` on a `next` roadmap row first.               |
-| At least one non-README PRD | `ls docs/prds/*.md` (excluding README.md)      | No PRDs to pull issues for — nothing to bundle. Tell Omer to promote a row first. |
-| Linear MCP responding       | Any `mcp__linear-server__list_issues` succeeds | Surface the MCP error verbatim; do not retry auth.                                |
+| Check                       | Command                                                  | If it fails                                                                       |
+| --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Run from repo root          | `test -f package.json && test -f .gitmodules`            | Tell Omer to `cd` into the `risoluto` checkout root.                              |
+| `docs/prds/` exists         | `test -d docs/prds`                                      | No PRDs yet — run `/risoluto-to-prd` on a `next` roadmap row first.               |
+| At least one non-README PRD | `ls docs/prds/*.md` (excluding README.md)                | No PRDs to pull issues for — nothing to bundle. Tell Omer to promote a row first. |
+| Linear reachable            | A Linear connectivity probe succeeds (see Linear access) | Surface the error verbatim; do not retry auth.                                    |
 
 ## Pipeline
 
@@ -91,7 +93,7 @@ Show Omer the summary line; do not dump the JSON unless asked.
 
 For each PRD entry from preload:
 
-1. Query open issues with that PRD's label via `mcp__linear-server__list_issues` (filter by `label: "from:prd-<slug>"`).
+1. Query open issues with that PRD's label (list-issues operation, filter by `label: "from:prd-<slug>"`).
 2. Collect all open issues across all PRDs into a flat list with their title and label.
 3. Group by predicted code-locality:
    - **Same PRD** = obvious candidate for a bundle (they share the PRD's module surface).
@@ -119,7 +121,7 @@ planning — the skill's job is to surface the grouping, not to act on it.
   If there are fewer than three open issues total, one bundle is fine.
 - **Only include open issues.** Skip completed, cancelled, or in-progress issues unless Omer
   asks otherwise.
-- **Linear MCP errors are operator concerns.** Surface verbatim, do not retry.
+- **Linear errors are operator concerns.** Surface verbatim, do not retry.
 - **The roadmap_item field** in preload output annotates each slug with its roadmap row title —
   use it in the bundle goal text so Omer can orient without opening Linear.
 
