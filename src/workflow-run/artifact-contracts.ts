@@ -23,6 +23,8 @@ export class WorkflowRunArtifactContractError extends Error {
   }
 }
 
+export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = ["intent.v1", "plan.v1", "change_summary.v1", "review.v1"] as const;
+
 const artifactMetadataSchema = {
   version: z.literal(1),
   workflowRunId: z.string().min(1),
@@ -37,7 +39,10 @@ const externalReferenceSchema = z
   })
   .strict();
 
-const artifactContractSchemaEntries: readonly (readonly [string, ZodType<unknown>])[] = [
+const artifactContractSchemaEntries: readonly (readonly [
+  (typeof WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS)[number],
+  ZodType<unknown>,
+])[] = [
   [
     "intent.v1",
     z
@@ -108,6 +113,10 @@ const artifactContractSchemaEntries: readonly (readonly [string, ZodType<unknown
 ];
 
 const artifactContractSchemas: ReadonlyMap<string, ZodType<unknown>> = new Map(artifactContractSchemaEntries);
+
+export function isWorkflowRunArtifactContractId(contractId: string): boolean {
+  return artifactContractSchemas.has(contractId);
+}
 
 export function parseWorkflowRunArtifact(input: ParseWorkflowRunArtifactInput): unknown {
   const schema = artifactContractSchemas.get(input.contractId);

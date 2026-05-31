@@ -3,6 +3,7 @@ import type {
   WorkflowRunEventAppendedOutput,
   WorkflowRunEventRecord,
   WorkflowRunEventsListedOutput,
+  WorkflowRunResolvedDefinitionConfig,
   WorkflowRunSource,
   WorkflowRunStartedOutput,
   WorkflowRunStartRecord,
@@ -22,6 +23,7 @@ export type {
   WorkflowRunGateReference,
   WorkflowRunHookReference,
   WorkflowRunRepoReference,
+  WorkflowRunResolvedDefinitionConfig,
   WorkflowRunRoleExecutionCompletedOutput,
   WorkflowRunSource,
   WorkflowRunStartedOutput,
@@ -41,6 +43,7 @@ export function createWorkflowRunRecord(input: {
   intent: string;
   source: WorkflowRunSource;
   workflowDefinitionId?: string;
+  resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   trigger?: WorkflowRunTrigger;
   now?: () => string;
   id?: () => string;
