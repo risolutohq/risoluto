@@ -1,6 +1,14 @@
 export const DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder";
 
 export type WorkflowRunSource = "cli" | "linear";
+export type WorkflowRunStatus =
+  | "accepted"
+  | "queued"
+  | "running"
+  | "waiting_for_operator"
+  | "blocked"
+  | "done"
+  | "cancelled";
 
 export interface LinearIssueWorkflowRunTrigger {
   type: "linear_issue";
@@ -16,7 +24,7 @@ export type WorkflowRunTrigger = LinearIssueWorkflowRunTrigger;
 export interface WorkflowRunStartRecord {
   id: string;
   source: WorkflowRunSource;
-  status: "accepted";
+  status: WorkflowRunStatus;
   title: string;
   intent: string;
   workflowDefinitionId: string;
