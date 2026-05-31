@@ -108,9 +108,11 @@ const alertHistoryRecordSchema = z.object({
   createdAt: z.string(),
 });
 
+const workflowRunSourceSchema = z.enum(["api", "cli", "github", "linear", "slack"]);
+
 const workflowRunRecordSchema = z.object({
   id: z.string(),
-  source: z.enum(["cli", "linear"]),
+  source: workflowRunSourceSchema,
   status: z.literal("accepted"),
   title: z.string(),
   intent: z.string(),
@@ -125,7 +127,7 @@ const workflowRunEventRecordSchema = z
     at: z.string(),
     eventType: z.string(),
     workflowRunId: z.string(),
-    source: z.enum(["cli", "linear"]),
+    source: workflowRunSourceSchema,
     workflowDefinitionId: z.string().optional(),
     message: z.string().optional(),
   })
@@ -148,6 +150,11 @@ const workflowRunAttemptSummarySchema = z.object({
 export const workflowRunsListResponseSchema = z.object({
   type: z.literal("workflow_runs.listed"),
   workflowRuns: z.array(workflowRunRecordSchema),
+});
+
+export const workflowRunStartedResponseSchema = z.object({
+  type: z.literal("workflow_run.started"),
+  workflowRun: workflowRunRecordSchema,
 });
 
 /** GET /api/v1/workflow-runs/:workflow_run_id — Workflow Run metadata projection. */

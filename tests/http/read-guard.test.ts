@@ -165,6 +165,7 @@ describe("createReadGuard", () => {
     "/api/v1/notifications",
     "/api/v1/automations",
     "/api/v1/alerts/history",
+    "/api/v1/workflow-runs",
     "/api/v1/setup/status",
     "/api/v1/codex/admin",
   ])("protects sensitive operator read route %s", (path) => {

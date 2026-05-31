@@ -507,6 +507,20 @@ describe("OpenAPI Contract Tests", () => {
       await run.appendEvent({ eventType: "operator.note", message: "OpenAPI contract validation." });
       await run.startRunAttempt({ attemptId: "attempt-openapi-1", attemptNumber: 1, reason: "initial" });
 
+      const createResponseSchema = compileResponseSchema("/api/v1/workflow-runs", "post", "201");
+      const createdResponse = await fetchApi("/api/v1/workflow-runs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Validate support HTTP creation",
+          intent: "Prove the Workflow Run start response matches the runtime OpenAPI spec.",
+        }),
+      });
+
+      expect(createdResponse.status).toBe(201);
+      expect(createdResponse.headers.get("content-type")).toContain("application/json");
+      expectSchemaValid(createResponseSchema, await createdResponse.json(), "POST /api/v1/workflow-runs 201");
+
       const checks = [
         {
           specPath: "/api/v1/workflow-runs",
