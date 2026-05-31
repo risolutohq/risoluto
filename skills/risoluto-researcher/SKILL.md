@@ -1,6 +1,6 @@
 ---
 name: risoluto-researcher
-description: 'Mode A of the Risoluto research-to-shipping pipeline. Use when Omer says /risoluto-researcher, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", "capture / import my X (Twitter) bookmarks", or pastes text with a URL to store as a source. Captures content into `research/targets/<slug>/`, writes source files with valid frontmatter, regenerates `research/INDEX.md`, extracts candidate features, deduplicates them against roadmap rows and `RISOLUTO_FEATURES.md`, and hands survivors to /risoluto-grill. GitHub repo URLs get deeper capture via `gh` metadata and source scans; X/Twitter sources (including a bulk "import my bookmarks" flow with all media, engagement-ranked replies, and a follow-on discovery queue) get deep capture via `twitter-cli` and `scripts/x-bookmarks.mjs`.'
+description: 'Mode A of the Risoluto research-to-shipping pipeline. Use when Omer says /risoluto-researcher, "research this URL", "capture this article / paper / repo / talk", "add this to the research vault", "clip this into targets", "capture / import my X (Twitter) bookmarks", "capture this reddit thread", "capture this youtube video / transcript", or pastes text with a URL to store as a source. Captures content into `research/targets/<slug>/`, writes source files with valid frontmatter, regenerates `research/INDEX.md`, extracts candidate features, deduplicates them against roadmap rows and `RISOLUTO_FEATURES.md`, and hands survivors to /risoluto-grill. GitHub repo URLs get deeper capture via `gh` metadata and source scans; X/Twitter sources (including a bulk "import my bookmarks" flow with all media, engagement-ranked replies, and a follow-on discovery queue) get deep capture via `twitter-cli` and `scripts/x-bookmarks.mjs`; Reddit threads get full-tree capture (post, media, all comments sorted by top) via `rdt-cli` and `scripts/reddit-capture.mjs`; YouTube videos get deep capture (comprehensive info, channel statistics, an English transcript cleaned from subtitles, thumbnail, and a discovery queue of description links) via `yt-dlp` and `scripts/youtube-capture.mjs`; generic web pages (including JS-rendered SPAs) get rendered in a real Chromium and converted to clean structured markdown via `browser-harness` + Turndown in `scripts/webpage-capture.mjs`, with self-healing per-host capture recipes.'
 ---
 
 # risoluto-researcher
@@ -44,6 +44,9 @@ These checks are deliberately **not** global gates:
 
 - **`gh` CLI authed** — needed only for GitHub repo URLs. Checked when Step 2b routes to `github-capture.md`, so a plain article / paper / reddit capture never requires `gh`.
 - **`twitter-cli` authed** — needed only for `x` (Twitter) sources. Checked when Step 2b routes to `x-capture.md`, never globally.
+- **`rdt-cli` authed** — needed only for `reddit` sources. Checked when Step 2b routes to `reddit-capture.md`, never globally.
+- **`yt-dlp` present** — needed only for `video` (YouTube) sources. Checked when Step 2b routes to `youtube-capture.md`, never globally. No API key or login required.
+- **`browser-harness` + a Chrome on the CDP port** — needed only for `article` (generic web page) sources. Checked when Step 2b routes to `webpage-capture.md`, never globally. `browser-harness --doctor` must show an active browser connection; no API key for local capture.
 - **`research/templates/`** — the researcher does not read templates at runtime (its body builders are self-contained — see the closing note), so a missing vault never blocks a capture. `/risoluto-vault` is still the recommended companion since it owns the Obsidian config.
 
 ## The pipeline
@@ -74,14 +77,20 @@ Fetch the URL content (use a web fetch tool). From the response, extract:
 
 Some source types earn a deep, content-verified capture instead of the shallow Step 2 excerpt. Route by `source-type` and read the matching reference **only** when capturing that type — each declares its own conditional precondition (so unrelated captures stay dependency-free) and its own enumerate-and-reconcile recall discipline:
 
-| `source-type`                                 | Deep-capture reference                                         | Tool / precondition                    |
-| --------------------------------------------- | -------------------------------------------------------------- | -------------------------------------- |
-| `repo`                                        | [`references/github-capture.md`](references/github-capture.md) | `gh` (verify `gh auth status` exits 0) |
-| `x`                                           | [`references/x-capture.md`](references/x-capture.md)           | `twitter-cli` (cookie / token auth)    |
-| `article`, `reddit`, `video`, `paper`, `talk` | — (fall back to the Step 2 shallow excerpt for now)            | —                                      |
+| `source-type`   | Deep-capture reference                                           | Tool / precondition                        |
+| --------------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| `repo`          | [`references/github-capture.md`](references/github-capture.md)   | `gh` (verify `gh auth status` exits 0)     |
+| `x`             | [`references/x-capture.md`](references/x-capture.md)             | `twitter-cli` (cookie / token auth)        |
+| `reddit`        | [`references/reddit-capture.md`](references/reddit-capture.md)   | `rdt-cli` (cookie auth — `rdt login`)      |
+| `video`         | [`references/youtube-capture.md`](references/youtube-capture.md) | `yt-dlp` (no API key / login)              |
+| `article`       | [`references/webpage-capture.md`](references/webpage-capture.md) | `browser-harness` (Chrome on the CDP port) |
+| `paper`, `talk` | — (fall back to the Step 2 shallow excerpt for now)              | —                                          |
 
 - **`repo`** — shallow clone + `gh` metadata + source-tree scan + a registry-reconciled feature inventory (count each registry, report coverage). Verify `gh auth status` exits 0; tell Omer to `gh auth login` if not.
 - **`x`** — twitter-cli capture via `scripts/x-bookmarks.mjs`: a single pasted tweet URL is turnkey (`--tweet <url>`, targets the author's handle), or bulk-import every bookmark (default, targets `x-bookmarks`). Both pull full text, all media, engagement-ranked replies, and a discovery queue of follow-on targets. Verify `twitter --help` works; tell Omer to install + authenticate if not.
+- **`reddit`** — rdt-cli capture via `scripts/reddit-capture.mjs --post <url>`: one thread, captured whole — full comment tree sorted by top, post media, references → discovery queue, written under a `r/<subreddit>` target. Reddit disabled unauthenticated `.json`, so verify `rdt --help` and that `rdt login` has stored cookies. (Bulk modes — `saved`, subreddit top-N — are planned.)
+- **`video`** — yt-dlp capture via `scripts/youtube-capture.mjs --video <url>`: one video — comprehensive info (channel + statistics, full description, chapters), the best English subtitle track de-timestamped for the agent to clean into a transcript (translating if the source isn't English), the thumbnail, and description links → discovery queue, written under a `<channel>` target. No API key or login — verify `yt-dlp --version`. (Playlist / channel sweeps are planned.)
+- **`article`** — generic web-page capture via `scripts/webpage-capture.mjs --url <url>`: renders the page in a real Chromium through `browser-harness` (so JS/SPA content materialises), converts the cleaned DOM to structured markdown with a vendored Turndown (deterministic — no per-page LLM step), and writes cross-site links → discovery queue under a `<host-brand>` target. **Self-healing:** when a page captures thin/wrong, record a per-host recipe in `scripts/site-recipes.json` (content selector, prune/click selectors, wait, scroll) and every future capture of that host auto-applies it (`references/webpage-capture.md` §7). Verify `browser-harness --doctor` shows an active browser connection; start the Chrome on the CDP port if not.
 
 Non-deep types skip this step entirely and use the Step 2 excerpt.
 

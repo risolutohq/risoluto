@@ -1,0 +1,24 @@
+{
+  "_doc": "Self-healing capture recipes for webpage-capture.mjs. When a page captures thin or wrong, record a per-site fix here once; every future capture of that host auto-applies it. Key by exact host (docs.python.org) or host brand (python) — exact wins. All recipe fields are optional. See references/webpage-capture.md §7.",
+  "_schema": {
+    "<host-or-brand>": {
+      "note": "why this recipe exists (what was broken) — for the next human",
+      "contentSelector": "CSS selector for the content root, overriding the default main/article/[role=main]",
+      "removeSelectors": ["extra CSS selectors to prune, e.g. .newsletter, .related-posts"],
+      "keepSelectors": [
+        "base-prune tags to spare when the site puts content in them, e.g. button for accordion guides"
+      ],
+      "clickSelectors": ["CSS selectors clicked before extraction, e.g. #accept-cookies"],
+      "waitForSelector": "CSS selector to wait for before extracting (late SPA render)",
+      "scrollToBottom": "true to scroll to the page bottom before extracting (lazy-load)",
+      "wait": "settle seconds after load (number) — overrides the 1.5s default"
+    }
+  },
+  "recipes": {
+    "ona": {
+      "note": "No <main>; the guide body is the first <article> (~13k chars), and its sections sit inside <button> accordions — so keep buttons. The default main/article/[role=main] selector matched a small early node first (~1.9k).",
+      "contentSelector": "article",
+      "keepSelectors": ["button"]
+    }
+  }
+}

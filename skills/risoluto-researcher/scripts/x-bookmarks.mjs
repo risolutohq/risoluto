@@ -27,6 +27,11 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { classifyDiscovery, suggestSlug } from "./capture-lib.mjs";
+
+// Re-exported so this script's fixture tests keep a stable import surface.
+export { classifyDiscovery, suggestSlug };
+
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..", "..", "..");
 const RESEARCH_DIR = path.join(REPO_ROOT, "research");
@@ -179,17 +184,6 @@ export function extractReferences(tweet) {
       : null,
     mentions: [...new Set(mentions)],
   };
-}
-
-/** Map a reference URL to a research source-type so the queue suggests the right capture path. */
-export function classifyDiscovery(url) {
-  const u = url.toLowerCase();
-  if (/github\.com/.test(u)) return "repo";
-  if (/youtube\.com|youtu\.be/.test(u)) return "video";
-  if (/arxiv\.org/.test(u)) return "paper";
-  if (/reddit\.com/.test(u)) return "reddit";
-  if (/x\.com|twitter\.com/.test(u)) return "x";
-  return "article";
 }
 
 /** File extension for a media item, from its URL or its declared type. */
@@ -459,21 +453,6 @@ function writeDiscoveryQueue(discoveries, args) {
     writeFileSync(dest, content);
   }
   return rows.length;
-}
-
-export function suggestSlug(ref) {
-  const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  const repo = /github\.com\/[^/]+\/([^/?#]+)/.exec(ref);
-  if (repo) return slugify(repo[1]);
-  // An X/Twitter handle URL → the handle itself, not the bare "x" hostname. Reserved
-  // first-segments (/i/, /home, /search) are not handles, so fall through to the host.
-  const xHandle = /(?:x|twitter)\.com\/([A-Za-z0-9_]+)(?:$|[/?#])/.exec(ref);
-  if (xHandle && !["i", "home", "search", "explore", "status"].includes(xHandle[1].toLowerCase())) {
-    return slugify(xHandle[1]);
-  }
-  const host = /https?:\/\/(?:www\.)?([^/]+)/.exec(ref);
-  if (host) return slugify(host[1].split(".")[0]);
-  return slugify(ref).slice(0, 40);
 }
 
 function collectDiscoveries(discoveries, refs, slug, selfHandle) {
