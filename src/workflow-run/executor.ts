@@ -1,11 +1,26 @@
-import type { ResolvedWorkflowDefinition, ResolvedWorkflowRole } from "../workflow-definition/registry.js";
+import type {
+  ResolvedWorkflowDefinition,
+  ResolvedWorkflowRole,
+  ResolvedWorkflowState,
+} from "../workflow-definition/registry.js";
 import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
 import type { WorkflowRunStatus } from "./contracts.js";
+import {
+  evaluateStateGates,
+  fireStateEntryHooks,
+  type WorkflowExecutorEvent,
+  type WorkflowGateEvaluationInput,
+  type WorkflowGateEvaluationResult,
+  type WorkflowHookExecutionInput,
+  type WorkflowHookExecutionResult,
+} from "./gate-hook-engine.js";
 
 export interface ExecuteWorkflowDefinitionInput {
   readonly definition: ResolvedWorkflowDefinition;
   readonly workflowRunId: string;
   readonly initialArtifacts: Readonly<Record<string, unknown>>;
+  readonly evaluateGate?: (input: WorkflowGateEvaluationInput) => Promise<WorkflowGateEvaluationResult>;
+  readonly runHook?: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;
   readonly runRole: (input: WorkflowRoleExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
 }
 
@@ -19,6 +34,7 @@ export interface WorkflowExecutorResult {
   readonly status: Extract<WorkflowRunStatus, "blocked" | "done">;
   readonly workflowStatesVisited: readonly string[];
   readonly roleExecutions: readonly string[];
+  readonly events: readonly WorkflowExecutorEvent[];
   readonly artifacts: Readonly<Record<string, unknown>>;
 }
 
@@ -35,8 +51,21 @@ export async function executeWorkflowDefinition(
   const artifacts: Record<string, unknown> = { ...input.initialArtifacts };
   const statesVisited: string[] = [];
   const roleExecutions: string[] = [];
+  const events: WorkflowExecutorEvent[] = [];
+  const orderedRoles = orderRoles(input.definition.roles);
+  let currentStateId: string | undefined;
 
-  for (const role of orderRoles(input.definition.roles)) {
+  for (const [index, role] of orderedRoles.entries()) {
+    if (role.stateId !== currentStateId) {
+      currentStateId = role.stateId;
+      const hookEvents = await fireStateEntryHooks({
+        workflowRunId: input.workflowRunId,
+        state: stateForRole(input.definition, role),
+        artifacts,
+        runHook: input.runHook,
+      });
+      events.push(...hookEvents);
+    }
     assertRequiredArtifacts(role, artifacts, input.definition.roles);
     rememberState(statesVisited, role.stateId);
     const produced = await input.runRole({
@@ -47,11 +76,24 @@ export async function executeWorkflowDefinition(
     storeProducedArtifacts(artifacts, role, produced);
     roleExecutions.push(role.id);
     if (role.id === "planner" && plannerBlocked(artifacts["plan.v1"])) {
-      return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, artifacts };
+      return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+    }
+    if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
+      const gateResult = await evaluateStateGates({
+        workflowRunId: input.workflowRunId,
+        state: stateForRole(input.definition, role),
+        stateRoles: rolesForState(input.definition.roles, role.stateId),
+        artifacts,
+        evaluateGate: input.evaluateGate,
+      });
+      events.push(...gateResult.events);
+      if (gateResult.status === "failed") {
+        return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
+      }
     }
   }
 
-  return { status: "done", workflowStatesVisited: statesVisited, roleExecutions, artifacts };
+  return { status: "done", workflowStatesVisited: statesVisited, roleExecutions, events, artifacts };
 }
 
 function orderRoles(roles: readonly ResolvedWorkflowRole[]): ResolvedWorkflowRole[] {
@@ -66,6 +108,18 @@ function orderRoles(roles: readonly ResolvedWorkflowRole[]): ResolvedWorkflowRol
     pending.delete(ready.id);
   }
   return ordered;
+}
+
+function rolesForState(roles: readonly ResolvedWorkflowRole[], stateId: string): readonly ResolvedWorkflowRole[] {
+  return roles.filter((role) => role.stateId === stateId);
+}
+
+function nextRoleStartsNewState(roles: readonly ResolvedWorkflowRole[], index: number, stateId: string): boolean {
+  return roles[index + 1]?.stateId !== stateId;
+}
+
+function stateForRole(definition: ResolvedWorkflowDefinition, role: ResolvedWorkflowRole): ResolvedWorkflowState {
+  return definition.states.find((state) => state.id === role.stateId) ?? { id: role.stateId, gates: [], hooks: [] };
 }
 
 function assertRequiredArtifacts(

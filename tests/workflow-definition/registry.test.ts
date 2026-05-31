@@ -37,6 +37,11 @@ describe("Workflow Definition registry", () => {
 
     const resolved = registry.resolve("single-operator-afk-coder");
 
+    expect(resolved.states).toContainEqual({
+      id: "plan",
+      gates: ["artifacts-valid"],
+      hooks: ["collect-evidence"],
+    });
     expect(toWorkflowRunResolvedDefinitionConfig(resolved)).toEqual({
       workflowDefinitionId: "single-operator-afk-coder",
       validationProfile: "node-pnpm-standard",

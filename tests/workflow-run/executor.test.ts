@@ -10,6 +10,11 @@ function createDefinition(): ResolvedWorkflowDefinition {
   return {
     id: "single-operator-afk-coder",
     validationProfile: "node-pnpm-standard",
+    states: [
+      { id: "plan", gates: [], hooks: [] },
+      { id: "implement", gates: [], hooks: [] },
+      { id: "review", gates: [], hooks: [] },
+    ],
     roles: [
       {
         id: "planner",
@@ -37,6 +42,15 @@ function createDefinition(): ResolvedWorkflowDefinition {
       },
     ],
   };
+}
+
+function createPlannerOnlyDefinition(states: ResolvedWorkflowDefinition["states"]): ResolvedWorkflowDefinition {
+  const definition = createDefinition();
+  const planner = definition.roles.find((role) => role.id === "planner");
+  if (!planner) {
+    throw new Error("planner fixture role is missing");
+  }
+  return { ...definition, states, roles: [planner] };
 }
 
 function intentArtifact() {
@@ -126,5 +140,60 @@ describe("executeWorkflowDefinition", () => {
     expect(() => {
       throw new WorkflowExecutorError("example");
     }).toThrow(WorkflowExecutorError);
+  });
+
+  it("blocks when a configured gate fails after a role claims success", async () => {
+    const definition = createPlannerOnlyDefinition([{ id: "plan", gates: ["validation-passed"], hooks: [] }]);
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async () => ({
+        "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] },
+      }),
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        eventType: "validation_gate.evaluated",
+        gateId: "validation-passed",
+        status: "failed",
+        reason: "missing required artifact validation_result.v1",
+      }),
+    );
+  });
+
+  it("fires state-entry hooks as evidence without changing the gate outcome", async () => {
+    const calls: string[] = [];
+    const definition = createPlannerOnlyDefinition([
+      { id: "plan", gates: ["artifacts-valid"], hooks: ["collect-evidence"] },
+    ]);
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runHook: async ({ hookId }) => {
+        calls.push(`hook:${hookId}`);
+        return { evidence: { archivePath: "runs/wr_executor/evidence/collect-evidence.json" } };
+      },
+      runRole: async ({ role }) => {
+        calls.push(`role:${role.id}`);
+        return { "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] } };
+      },
+    });
+
+    expect(result.status).toBe("done");
+    expect(calls).toEqual(["hook:collect-evidence", "role:planner"]);
+    expect(result.events).toEqual([
+      expect.objectContaining({
+        eventType: "workflow_hook.fired",
+        hookId: "collect-evidence",
+        evidence: { archivePath: "runs/wr_executor/evidence/collect-evidence.json" },
+      }),
+      expect.objectContaining({ eventType: "validation_gate.evaluated", gateId: "artifacts-valid", status: "passed" }),
+    ]);
   });
 });
