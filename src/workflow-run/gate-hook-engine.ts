@@ -1,4 +1,5 @@
 import type { ResolvedWorkflowRole, ResolvedWorkflowState } from "../workflow-definition/registry.js";
+import { isSatisfiedVerificationArtifact } from "./verifier.js";
 
 export interface WorkflowGateEvaluationInput {
   readonly workflowRunId: string;
@@ -108,6 +109,9 @@ async function evaluateBuiltInGate(input: WorkflowGateEvaluationInput): Promise<
   const missingArtifact = missingArtifactForGate(input);
   if (missingArtifact) {
     return { status: "failed", reason: `missing required artifact ${missingArtifact}` };
+  }
+  if (input.gateId === "verifier-satisfied" && !isSatisfiedVerificationArtifact(input.artifacts["verification.v1"])) {
+    return { status: "failed", reason: "verification.v1 decision is not satisfied" };
   }
   return { status: "passed" };
 }

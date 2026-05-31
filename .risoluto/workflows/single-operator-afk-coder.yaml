@@ -48,7 +48,7 @@ states:
           - change_summary.v1
           - review.v1
         produces:
-          - review.v1
+          - verification.v1
         dependsOn:
           - reviewer
     gates:
@@ -63,6 +63,7 @@ states:
         consumes:
           - change_summary.v1
           - review.v1
+          - verification.v1
         produces:
           - review.v1
         dependsOn:
