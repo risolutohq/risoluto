@@ -1,0 +1,141 @@
+import type { ResolvedWorkflowDefinition, ResolvedWorkflowRole } from "../workflow-definition/registry.js";
+import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
+import type { WorkflowRunStatus } from "./contracts.js";
+
+export interface ExecuteWorkflowDefinitionInput {
+  readonly definition: ResolvedWorkflowDefinition;
+  readonly workflowRunId: string;
+  readonly initialArtifacts: Readonly<Record<string, unknown>>;
+  readonly runRole: (input: WorkflowRoleExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
+}
+
+export interface WorkflowRoleExecutionInput {
+  readonly workflowRunId: string;
+  readonly role: ResolvedWorkflowRole;
+  readonly artifacts: Readonly<Record<string, unknown>>;
+}
+
+export interface WorkflowExecutorResult {
+  readonly status: Extract<WorkflowRunStatus, "blocked" | "done">;
+  readonly workflowStatesVisited: readonly string[];
+  readonly roleExecutions: readonly string[];
+  readonly artifacts: Readonly<Record<string, unknown>>;
+}
+
+export class WorkflowExecutorError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkflowExecutorError";
+  }
+}
+
+export async function executeWorkflowDefinition(
+  input: ExecuteWorkflowDefinitionInput,
+): Promise<WorkflowExecutorResult> {
+  const artifacts: Record<string, unknown> = { ...input.initialArtifacts };
+  const statesVisited: string[] = [];
+  const roleExecutions: string[] = [];
+
+  for (const role of orderRoles(input.definition.roles)) {
+    assertRequiredArtifacts(role, artifacts, input.definition.roles);
+    rememberState(statesVisited, role.stateId);
+    const produced = await input.runRole({
+      workflowRunId: input.workflowRunId,
+      role,
+      artifacts: pickArtifacts(artifacts, role.consumes),
+    });
+    storeProducedArtifacts(artifacts, role, produced);
+    roleExecutions.push(role.id);
+    if (role.id === "planner" && plannerBlocked(artifacts["plan.v1"])) {
+      return { status: "blocked", workflowStatesVisited: statesVisited, roleExecutions, artifacts };
+    }
+  }
+
+  return { status: "done", workflowStatesVisited: statesVisited, roleExecutions, artifacts };
+}
+
+function orderRoles(roles: readonly ResolvedWorkflowRole[]): ResolvedWorkflowRole[] {
+  const pending = new Map(roles.map((role) => [role.id, role]));
+  const ordered: ResolvedWorkflowRole[] = [];
+  while (pending.size > 0) {
+    const ready = [...pending.values()].find((role) => role.dependsOn.every((dependency) => !pending.has(dependency)));
+    if (!ready) {
+      throw new WorkflowExecutorError("workflow role DAG contains a cycle or unknown dependency");
+    }
+    ordered.push(ready);
+    pending.delete(ready.id);
+  }
+  return ordered;
+}
+
+function assertRequiredArtifacts(
+  role: ResolvedWorkflowRole,
+  artifacts: Readonly<Record<string, unknown>>,
+  roles: readonly ResolvedWorkflowRole[],
+): void {
+  for (const contractId of role.consumes) {
+    if (artifacts[contractId] === undefined) {
+      throw new WorkflowExecutorError(
+        `${role.id} is missing required artifact ${contractId} ${producerFor(contractId, roles)}`,
+      );
+    }
+  }
+}
+
+function producerFor(contractId: string, roles: readonly ResolvedWorkflowRole[]): string {
+  const producer = roles.find((role) => role.produces.includes(contractId));
+  if (producer) {
+    return `produced by ${producer.id}`;
+  }
+  return "from intake";
+}
+
+function pickArtifacts(
+  artifacts: Readonly<Record<string, unknown>>,
+  contractIds: readonly string[],
+): Readonly<Record<string, unknown>> {
+  const picked: Record<string, unknown> = {};
+  for (const contractId of contractIds) {
+    picked[contractId] = artifacts[contractId];
+  }
+  return picked;
+}
+
+function storeProducedArtifacts(
+  artifacts: Record<string, unknown>,
+  role: ResolvedWorkflowRole,
+  produced: Readonly<Record<string, unknown>>,
+): void {
+  for (const contractId of role.produces) {
+    const artifact = produced[contractId];
+    if (artifact === undefined) {
+      throw new WorkflowExecutorError(`${role.id} did not produce required artifact ${contractId}`);
+    }
+    artifacts[contractId] = parseWorkflowRunArtifact({
+      contractId,
+      data: artifact,
+      producer: { type: "role", id: role.id },
+    });
+  }
+}
+
+function rememberState(statesVisited: string[], stateId: string): void {
+  if (statesVisited.at(-1) !== stateId) {
+    statesVisited.push(stateId);
+  }
+}
+
+function plannerBlocked(planArtifact: unknown): boolean {
+  if (!isRecord(planArtifact)) {
+    return false;
+  }
+  const steps = planArtifact.steps;
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return false;
+  }
+  return steps.every((step) => isRecord(step) && step.status === "blocked");
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
