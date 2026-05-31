@@ -23,7 +23,13 @@ export class WorkflowRunArtifactContractError extends Error {
   }
 }
 
-export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = ["intent.v1", "plan.v1", "change_summary.v1", "review.v1"] as const;
+export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
+  "intent.v1",
+  "plan.v1",
+  "change_summary.v1",
+  "review.v1",
+  "verification.v1",
+] as const;
 
 const artifactMetadataSchema = {
   version: z.literal(1),
@@ -38,6 +44,18 @@ const externalReferenceSchema = z
     url: z.string().min(1).nullable(),
   })
   .strict();
+
+const verifierAllowedInputSchema = z.enum([
+  "intent.v1",
+  "plan.v1",
+  "change_summary.v1",
+  "review.v1",
+  "validation_result.v1",
+  "publish_result.v1",
+  "ci_result.v1",
+  "diff",
+  "evidence_links",
+]);
 
 const artifactContractSchemaEntries: readonly (readonly [
   (typeof WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS)[number],
@@ -107,6 +125,19 @@ const artifactContractSchemaEntries: readonly (readonly [
             })
             .strict(),
         ),
+      })
+      .strict(),
+  ],
+  [
+    "verification.v1",
+    z
+      .object({
+        ...artifactMetadataSchema,
+        mode: z.literal("single"),
+        decision: z.enum(["satisfied", "not_satisfied", "uncertain"]),
+        summary: z.string().min(1),
+        allowedInputs: z.array(verifierAllowedInputSchema),
+        evidenceLinks: z.array(z.string().min(1)),
       })
       .strict(),
   ],
