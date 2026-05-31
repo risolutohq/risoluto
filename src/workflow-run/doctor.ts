@@ -5,11 +5,12 @@ import {
   DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
   loadWorkflowDefinitionRegistry,
 } from "../workflow-definition/registry.js";
+import type { LivePreflightCheck, LivePreflightReport } from "../live/preflight.js";
 
-export type DoctorCheckStatus = "passed" | "failed";
+export type DoctorCheckStatus = "passed" | "failed" | "skipped";
 
 export interface DoctorCheck {
-  readonly id: "workflow_definitions" | "evidence_path";
+  readonly id: string;
   readonly status: DoctorCheckStatus;
   readonly message: string;
 }
@@ -17,6 +18,7 @@ export interface DoctorCheck {
 export interface RunDoctorInput {
   readonly workflowDir: string;
   readonly evidenceDir?: string;
+  readonly livePreflight?: LivePreflightReport;
 }
 
 export interface DoctorResult {
@@ -29,6 +31,7 @@ export async function runDoctor(input: RunDoctorInput): Promise<DoctorResult> {
   const checks = [
     await checkWorkflowDefinitions(input.workflowDir),
     ...(input.evidenceDir ? [await checkEvidencePath(input.evidenceDir)] : []),
+    ...(input.livePreflight ? liveDoctorChecks(input.livePreflight) : []),
   ];
   return {
     type: "doctor.result",
@@ -60,6 +63,51 @@ async function checkEvidencePath(evidenceDir: string): Promise<DoctorCheck> {
       message: `missing or unreadable ${evidenceDir}: ${toErrorMessage(error)}`,
     };
   }
+}
+
+function liveDoctorChecks(report: LivePreflightReport): readonly DoctorCheck[] {
+  return [
+    {
+      id: "live_write_intent",
+      status: "passed",
+      message: "doctor --live explicitly enabled provider write probes",
+    },
+    ...report.checks.map(livePreflightCheckToDoctorCheck),
+  ];
+}
+
+function livePreflightCheckToDoctorCheck(check: LivePreflightCheck): DoctorCheck {
+  return {
+    id: `live_${check.name}`,
+    status: check.status,
+    message: livePreflightMessage(check),
+  };
+}
+
+function livePreflightMessage(check: LivePreflightCheck): string {
+  const permission = livePreflightPermission(check.name);
+  const provider = livePreflightProvider(check.name);
+  return permission
+    ? `provider=${provider} permission=${permission} ${check.detail}`
+    : `provider=${provider} ${check.detail}`;
+}
+
+function livePreflightProvider(name: LivePreflightCheck["name"]): string {
+  switch (name) {
+    case "config":
+      return "config";
+    case "github_app":
+    case "github_app_sandbox_lifecycle":
+      return "github_app";
+    case "linear":
+      return "linear";
+    case "model_proxy":
+      return "model_proxy";
+  }
+}
+
+function livePreflightPermission(name: LivePreflightCheck["name"]): string | null {
+  return name === "github_app_sandbox_lifecycle" ? "sandbox_write" : null;
 }
 
 function toErrorMessage(error: unknown): string {
