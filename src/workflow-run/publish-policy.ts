@@ -5,6 +5,7 @@ const publishStatusSchema = z.enum(["blocked", "not_published", "published"]);
 const publishCheckStatusSchema = z.enum(["failed", "passed"]);
 const publishCheckIdSchema = z.enum([
   "ci_green",
+  "ci_result",
   "local_validation",
   "merge_policy",
   "operator_approval",
@@ -43,7 +44,7 @@ export interface PrPublishPolicyInput {
   readonly requestedMode?: PrPublishMode;
   readonly validation: { readonly status: "failed" | "passed" };
   readonly verification: { readonly decision: "not_satisfied" | "satisfied" | "uncertain" } | null;
-  readonly ci: { readonly status: "failed" | "passed" } | null;
+  readonly ci: { readonly status: "blocked" | "failed" | "passed" | "pending" | "rerun_requested" } | null;
   readonly operatorApproval: { readonly permission: "approve_auto_merge" } | null;
   readonly mergePolicy: { readonly status: "failed" | "passed" } | null;
 }
@@ -69,7 +70,7 @@ function checksForMode(mode: PrPublishMode, input: PrPublishPolicyInput): readon
         mergePolicyCheck(input),
       ];
     case "ready":
-      return [localValidationCheck(input), verifierCheck(input)];
+      return [localValidationCheck(input), verifierCheck(input), ciCheck(input)];
     case "incomplete_draft":
       return [operatorApprovalCheck(input)];
     case "draft":
@@ -140,6 +141,8 @@ function blockedReasonForCheck(check: PublishCheck): string {
   switch (check.id) {
     case "ci_green":
       return "ci_not_green";
+    case "ci_result":
+      return "ci_result_required";
     case "local_validation":
       return "local_validation_failed";
     case "merge_policy":
@@ -168,10 +171,17 @@ function verifierCheck(input: PrPublishPolicyInput): PublishCheck {
 }
 
 function ciCheck(input: PrPublishPolicyInput): PublishCheck {
+  if (!input.ci) {
+    return {
+      id: "ci_result",
+      status: "failed",
+      summary: "ci_result.v1 is required",
+    };
+  }
   return {
     id: "ci_green",
-    status: input.ci?.status === "passed" ? "passed" : "failed",
-    summary: input.ci?.status === "passed" ? "remote CI passed" : "remote CI is not green",
+    status: input.ci.status === "passed" ? "passed" : "failed",
+    summary: input.ci.status === "passed" ? "remote CI passed" : "remote CI is not green",
   };
 }
 

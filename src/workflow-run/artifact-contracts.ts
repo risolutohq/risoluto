@@ -1,5 +1,6 @@
 import { z, ZodError, type ZodType } from "zod";
 
+import { ciResultArtifactSchema } from "./ci-babysitter.js";
 import { handoffArtifactSchema } from "./handoff-contract.js";
 import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
 import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
@@ -35,6 +36,7 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "review.v1",
   "validation_result.v1",
   "publish_result.v1",
+  "ci_result.v1",
   "verification.v1",
   "handoff.v1",
   "operator_response.v1",
@@ -187,6 +189,7 @@ const artifactContractSchemaEntries: readonly (readonly [
   ],
   ["validation_result.v1", validationResultSchema],
   ["publish_result.v1", publishResultArtifactSchema],
+  ["ci_result.v1", ciResultArtifactSchema],
   [
     "verification.v1",
     z.discriminatedUnion("mode", [
