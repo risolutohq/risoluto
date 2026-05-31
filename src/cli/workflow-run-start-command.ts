@@ -7,12 +7,8 @@ import {
   loadWorkflowDefinitionRegistry,
   toWorkflowRunResolvedDefinitionConfig,
 } from "../workflow-definition/registry.js";
-import {
-  createWorkflowRunRecord,
-  DEFAULT_WORKFLOW_DEFINITION_ID,
-  toStartedOutput,
-  writeWorkflowRunRecord,
-} from "../workflow-run/artifacts.js";
+import { DEFAULT_WORKFLOW_DEFINITION_ID, toStartedOutput } from "../workflow-run/artifacts.js";
+import { acceptWorkflowRunIntake } from "../workflow-run/intake-core.js";
 
 export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -35,16 +31,19 @@ export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
     globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
   });
   const workflowDefinition = workflowRegistry.resolve(workflowDefinitionId);
-  const workflowRun = createWorkflowRunRecord({
+  const intake = await acceptWorkflowRunIntake({
     dataDir: resolveDataDir(parsed.values["data-dir"]),
+    source: "cli",
+    mode: "start",
     title,
-    intent,
+    body: intent,
+    externalObject: null,
+    rules: [],
     workflowDefinitionId: workflowDefinition.id,
     resolvedWorkflowDefinition: toWorkflowRunResolvedDefinitionConfig(workflowDefinition),
-    source: "cli",
   });
+  const workflowRun = intake.workflowRun;
 
-  await writeWorkflowRunRecord(workflowRun);
   if (parsed.values.json) {
     console.log(JSON.stringify(toStartedOutput(workflowRun)));
   } else {

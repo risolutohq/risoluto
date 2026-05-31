@@ -40,7 +40,7 @@ const artifactMetadataSchema = {
 
 const externalReferenceSchema = z
   .object({
-    provider: z.enum(["cli", "github", "linear", "slack"]),
+    provider: z.enum(["api", "cli", "github", "linear", "slack"]),
     id: z.string().min(1),
     url: z.string().min(1).nullable(),
   })
@@ -114,7 +114,7 @@ const artifactContractSchemaEntries: readonly (readonly [
     z
       .object({
         ...artifactMetadataSchema,
-        source: z.enum(["cli", "github", "linear", "slack"]),
+        source: z.enum(["api", "cli", "github", "linear", "slack"]),
         title: z.string().min(1),
         body: z.string().min(1),
         externalReferences: z.array(externalReferenceSchema),
