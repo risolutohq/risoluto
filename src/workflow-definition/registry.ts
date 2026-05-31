@@ -19,7 +19,11 @@ export interface LoadWorkflowDefinitionRegistryInput {
 
 export interface ResolvedWorkflowRole {
   readonly id: string;
+  readonly stateId: string;
   readonly modelProfile: string;
+  readonly consumes: readonly string[];
+  readonly produces: readonly string[];
+  readonly dependsOn: readonly string[];
 }
 
 export interface ResolvedWorkflowDefinition {
@@ -181,7 +185,11 @@ function resolveWorkflowDefinition(
     roles: definition.states.flatMap((state) =>
       state.roles.map((role) => ({
         id: role.id,
+        stateId: state.id,
         modelProfile: role.modelProfile ?? modelProfile,
+        consumes: role.consumes,
+        produces: role.produces,
+        dependsOn: role.dependsOn,
       })),
     ),
   };

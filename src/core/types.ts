@@ -39,6 +39,7 @@ export type {
   PollingConfig,
   WebhookConfig,
   WorkspaceConfig,
+  WorkspaceDirtyPolicy,
   WorkspaceStrategy,
   ServerConfig,
   StateMachineConfig,

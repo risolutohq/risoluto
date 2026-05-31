@@ -26,6 +26,7 @@ export type {
   WorkflowRunResolvedDefinitionConfig,
   WorkflowRunRoleExecutionCompletedOutput,
   WorkflowRunSource,
+  WorkflowRunStatus,
   WorkflowRunStartedOutput,
   WorkflowRunStartRecord,
   WorkflowRunTransitionRecord,
