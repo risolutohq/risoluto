@@ -25,6 +25,7 @@ const PROTECTED_READ_PREFIXES = [
   "/api/v1/secrets",
   "/api/v1/audit",
   "/api/v1/attempts",
+  "/api/v1/workflow-runs",
 ];
 
 const DYNAMIC_ISSUE_ROUTE_PREFIXES = new Set([
@@ -84,71 +85,71 @@ export function hasConfiguredReadAccessToken(): boolean {
 }
 
 export function createReadGuard(): (req: Request, res: Response, next: NextFunction) => void {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!SAFE_READ_METHODS.has(req.method) || !isProtectedReadPath(req.path)) {
-      next();
-      return;
-    }
+  return guardReadRequest;
+}
 
-    if (isLoopbackAddress(req.socket.remoteAddress)) {
-      next();
-      return;
-    }
+function guardReadRequest(req: Request, res: Response, next: NextFunction): void {
+  if (!SAFE_READ_METHODS.has(req.method) || !isProtectedReadPath(req.path)) {
+    next();
+    return;
+  }
 
-    const configuredHeaderTokens = resolveConfiguredReadTokens();
-    const configuredQueryTokens = configuredHeaderTokens;
-    if (configuredHeaderTokens.length === 0 && configuredQueryTokens.length === 0) {
-      res.status(403).json({
-        error: {
-          code: "read_forbidden",
-          message:
-            "Sensitive read routes are only allowed from loopback addresses. " +
-            "Set RISOLUTO_READ_TOKEN or RISOLUTO_WRITE_TOKEN to allow remote read access.",
-        },
-      });
-      return;
-    }
+  if (isLoopbackAddress(req.socket.remoteAddress)) {
+    next();
+    return;
+  }
 
-    // Bearer token from Authorization header
-    const bearerToken = extractBearerToken(req);
-    if (bearerToken) {
-      if (includesMatchingToken(bearerToken, configuredHeaderTokens)) {
-        next();
-        return;
-      }
+  const configuredTokens = resolveConfiguredReadTokens();
+  if (configuredTokens.length === 0) {
+    sendReadForbidden(res);
+    return;
+  }
 
-      res.status(401).json({
-        error: {
-          code: "read_unauthorized",
-          message: "Sensitive read routes require a valid read token.",
-        },
-      });
-      return;
-    }
+  const bearerToken = extractBearerToken(req);
+  if (bearerToken) {
+    authorizeReadToken(bearerToken, configuredTokens, res, next);
+    return;
+  }
 
-    // Query-string token (?read_token=...) — used by browser EventSource which cannot send headers
-    const queryValue = req.query["read_token"];
-    const queryToken = typeof queryValue === "string" ? queryValue : null;
-    if (queryToken) {
-      if (includesMatchingToken(queryToken, configuredQueryTokens)) {
-        next();
-        return;
-      }
+  const queryValue = req.query["read_token"];
+  const queryToken = typeof queryValue === "string" ? queryValue : null;
+  if (queryToken) {
+    authorizeReadToken(queryToken, configuredTokens, res, next);
+    return;
+  }
 
-      res.status(401).json({
-        error: {
-          code: "read_unauthorized",
-          message: "Sensitive read routes require a valid read token.",
-        },
-      });
-      return;
-    }
+  sendReadUnauthorized(res);
+}
 
-    res.status(401).json({
-      error: {
-        code: "read_unauthorized",
-        message: "Sensitive read routes require a valid read token.",
-      },
-    });
-  };
+function authorizeReadToken(
+  token: string,
+  configuredTokens: readonly string[],
+  res: Response,
+  next: NextFunction,
+): void {
+  if (includesMatchingToken(token, configuredTokens)) {
+    next();
+    return;
+  }
+  sendReadUnauthorized(res);
+}
+
+function sendReadForbidden(res: Response): void {
+  res.status(403).json({
+    error: {
+      code: "read_forbidden",
+      message:
+        "Sensitive read routes are only allowed from loopback addresses. " +
+        "Set RISOLUTO_READ_TOKEN or RISOLUTO_WRITE_TOKEN to allow remote read access.",
+    },
+  });
+}
+
+function sendReadUnauthorized(res: Response): void {
+  res.status(401).json({
+    error: {
+      code: "read_unauthorized",
+      message: "Sensitive read routes require a valid read token.",
+    },
+  });
 }

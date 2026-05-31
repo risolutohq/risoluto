@@ -85,6 +85,15 @@ describe("getOpenApiSpec", () => {
     expect(listItem.get.security).toEqual([{ bearerAuth: [] }]);
     expect(listItem.get.responses).toHaveProperty("200");
     expect(listItem.get.responses).toHaveProperty("503");
+    expect(listItem).toHaveProperty("post");
+    expect(listItem.post.operationId).toBe("createWorkflowRun");
+    expect(listItem.post.tags).toContain("Workflow Runs");
+    expect(listItem.post.security).toEqual([{ bearerAuth: [] }]);
+    expect(listItem.post.requestBody).toBeDefined();
+    expect(listItem.post.responses).toHaveProperty("201");
+    expect(listItem.post.responses).toHaveProperty("400");
+    expect(listItem.post.responses).toHaveProperty("401");
+    expect(listItem.post.responses).toHaveProperty("503");
 
     expect(detailItem).toHaveProperty("get");
     expect(detailItem.get.operationId).toBe("getWorkflowRun");
@@ -141,6 +150,9 @@ describe("getOpenApiSpec", () => {
 
     const triggerPost = paths["/api/v1/webhooks/trigger"].post;
     expect(triggerPost).toHaveProperty("requestBody");
+
+    const workflowRunPost = paths["/api/v1/workflow-runs"].post;
+    expect(workflowRunPost).toHaveProperty("requestBody");
   });
 
   it("groups routes by tags", () => {
