@@ -14,6 +14,7 @@ export { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 export { openWorkflowRun } from "./run-handle.js";
 export type { WorkflowRun } from "./run-handle.js";
 export type {
+  GitHubIssueWorkflowRunTrigger,
   LinearIssueWorkflowRunTrigger,
   WorkflowRunArtifactReference,
   WorkflowRunAttemptReference,

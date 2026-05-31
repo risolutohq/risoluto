@@ -19,7 +19,17 @@ export interface LinearIssueWorkflowRunTrigger {
   deliveryId: string | null;
 }
 
-export type WorkflowRunTrigger = LinearIssueWorkflowRunTrigger;
+export interface GitHubIssueWorkflowRunTrigger {
+  type: "github_issue";
+  issueId: string;
+  issueIdentifier: string;
+  issueUrl: string | null;
+  action: string;
+  deliveryId: string | null;
+  deliveryKind: "polling" | "webhook";
+}
+
+export type WorkflowRunTrigger = GitHubIssueWorkflowRunTrigger | LinearIssueWorkflowRunTrigger;
 
 export interface WorkflowRunStartRecord {
   id: string;

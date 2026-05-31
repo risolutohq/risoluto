@@ -1,19 +1,22 @@
 import { DEFAULT_WORKFLOW_DEFINITION_ID, toStartedOutput, type WorkflowRunStartedOutput } from "./artifacts.js";
-import { acceptWorkflowRunIntake, type WorkflowRunIntakeRule } from "./intake-core.js";
+import { acceptTrackerIssueWorkflowRun } from "./tracker-intake.js";
 
 export interface LinearTriggeredWorkflowRunIssue {
-  id: string;
-  identifier: string;
-  title: string;
-  url?: string | null;
-  description?: string | null;
+  readonly id: string;
+  readonly identifier: string;
+  readonly title: string;
+  readonly url?: string | null;
+  readonly description?: string | null;
+  readonly labels?: readonly string[];
+  readonly state?: string | null;
+  readonly comments?: readonly string[];
 }
 
 export interface LinearTriggeredWorkflowRunRequest {
-  action: string;
-  deliveryId?: string | null;
-  issue: LinearTriggeredWorkflowRunIssue;
-  workflowDefinitionId?: string;
+  readonly action: string;
+  readonly deliveryId?: string | null;
+  readonly issue: LinearTriggeredWorkflowRunIssue;
+  readonly workflowDefinitionId?: string;
 }
 
 export async function acceptLinearTriggeredWorkflowRun(
@@ -24,42 +27,17 @@ export async function acceptLinearTriggeredWorkflowRun(
     id?: () => string;
   } & LinearTriggeredWorkflowRunRequest,
 ): Promise<WorkflowRunStartedOutput> {
-  const intake = await acceptWorkflowRunIntake({
+  const intake = await acceptTrackerIssueWorkflowRun({
     dataDir: input.dataDir,
     archiveDir: input.archiveDir,
-    source: "linear",
-    mode: "start",
-    title: `${input.issue.identifier}: ${input.issue.title}`,
-    body: input.issue.description?.trim() || input.issue.title,
-    workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
-    externalObject: {
-      provider: "linear",
-      id: input.issue.id,
-      url: input.issue.url ?? null,
-    },
+    provider: "linear",
+    deliveryKind: "webhook",
+    action: input.action,
     deliveryId: input.deliveryId ?? null,
-    labels: [],
-    state: null,
-    rules: [defaultLinearIntakeRule(input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID)],
-    trigger: {
-      type: "linear_issue",
-      issueId: input.issue.id,
-      issueIdentifier: input.issue.identifier,
-      issueUrl: input.issue.url ?? null,
-      action: input.action,
-      deliveryId: input.deliveryId ?? null,
-    },
+    issue: input.issue,
+    workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
     now: input.now,
     id: input.id,
   });
   return toStartedOutput(intake.workflowRun);
-}
-
-function defaultLinearIntakeRule(workflowDefinitionId: string): WorkflowRunIntakeRule {
-  return {
-    id: "linear-default",
-    provider: "linear",
-    workflowDefinitionId,
-    workspaceKey: "linear",
-  };
 }
