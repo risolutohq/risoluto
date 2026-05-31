@@ -23,6 +23,9 @@ outputs/
 # Personal Claude preferences (project-local override)
 CLAUDE.local.md
 
+# Agent worktrees
+.claude/worktrees/
+
 # OS / editor noise
 .DS_Store
 .idea/
