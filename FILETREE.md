@@ -107,21 +107,22 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## docs/
 
-- `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:15f78cea-->
-- `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:57e0884d-->
-- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:09a3cd45-->
-- `roadmap.md` — The single ordered plan; founder-owned roadmap table (#/Item/Why now/Size/Status/Research link) — the top non-shipped row is what's next. <!--hash:9f469475-->
+- `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:a446464e-->
+- `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:4bc7314f-->
+- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:a534e8c4-->
+- `roadmap.md` — The single ordered plan; founder-owned roadmap table (#/Item/Why now/Size/Status/Research link) — the top non-shipped row is what's next. <!--hash:eca16132-->
 - `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:6f3f5fe4-->
 - `testing-and-release.md` — Testing tiers and release flow; the four vitest configs, the 1.0.0 Foundation Baseline gate, and the semantic-release process. <!--hash:f8aa9042-->
 
 ## docs/adr/
 
-- `0001-foundation.md` — Consolidated v1 foundation ADR (former ADR-0001..0007); seven decisions in intent voice, each with an as-built status table verified against source. <!--hash:9c8ba4b4-->
+- `0001-foundation.md` — Consolidated v1 foundation ADR (former ADR-0001..0007); seven decisions in intent voice, each with an as-built status table verified against source. <!--hash:bc38ac19-->
 
 ## docs/prds/
 
 - `.gitkeep` — Placeholder keeping the empty docs/prds/ directory tracked in git. <!--hash:e69de29b-->
-- `README.md` — PRDs folder guide; PRDs are canonical in git, mirrored to Linear; documents the drift hook, frontmatter, and the roadmap slug join key. <!--hash:ea1f36a2-->
+- `README.md` — PRDs folder guide; PRDs are canonical in git, mirrored to Linear; documents the drift hook, frontmatter, and the roadmap slug join key. <!--hash:aa5850c6-->
+- `workflow-first-afk-mvp.md` — PRD for the workflow-first AFK MVP roadmap row; mirrored to a Linear project (the v1 workflow-run product cut). <!--hash:4dc14158-->
 
 ## scripts/
 
@@ -134,9 +135,9 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `nightly-linear-intake.ts` — Creates or updates a Linear nightly failure issue from the nightly summary; supports dry-run and live modes. <!--hash:5186fe50-->
 - `nightly-validation-fail.ts` — Intentionally fails a named nightly CI job on workflow_dispatch for pipeline validation testing. <!--hash:5fcf1be6-->
 - `post-merge-prd.mjs` — Post-merge PRD automation; back-comments from:prd-<slug> Linear issues, flips the PRD + roadmap row to shipped, and reminds to refresh RISOLUTO_FEATURES. <!--hash:47f794b5-->
-- `prd-drift-check.ts` — Pre-push/CI gate; compares each docs/prds/<slug>.md body (first 255 chars) against its Linear project description and exits non-zero on drift. <!--hash:29cf44cc-->
-- `prd-linear.ts` — Linear GraphQL helpers for the PRD pipeline; API-key hard gate, project fetch, and extractSlugId URL parsing shared by drift-check and reconcile. <!--hash:c5294154-->
-- `prd-reconcile.ts` — Adopts a Linear-side PRD edit back into git; writes the Linear description into docs/prds/<slug>.md on branch pipeline/<slug>-prd-reconcile. <!--hash:7f0b645f-->
+- `prd-drift-check.ts` — Pre-push/CI gate; compares each docs/prds/<slug>.md body (first 255 chars) against its Linear project description and exits non-zero on drift. <!--hash:f2246edc-->
+- `prd-linear.ts` — Linear GraphQL helpers for the PRD pipeline; API-key hard gate, project fetch, and extractSlugId URL parsing shared by drift-check and reconcile. <!--hash:c0904863-->
+- `prd-reconcile.ts` — Adopts a Linear-side PRD edit back into git; writes the Linear description into docs/prds/<slug>.md on branch pipeline/<slug>-prd-reconcile. <!--hash:80e58888-->
 - `quarantine-heal.ts` — Reads Vitest JSON results and updates quarantine.json: increments pass counts, auto-heals at threshold, removes stale entries. <!--hash:308c9c5d-->
 - `quarantine-shared.ts` — Shared quarantine types, constants (MAX_QUARANTINED, HEAL_THRESHOLD), path, and loadEntries utility used by quarantine scripts. <!--hash:ab92fe6d-->
 - `quarantine.ts` — CLI for managing the flaky-test quarantine registry: add, remove, and list quarantined tests with cap enforcement. <!--hash:5315b5e5-->
@@ -161,9 +162,13 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `summary.json` — Saved outcome record for a successful review-only pipeline run on 2026-04-08. <!--hash:e686e323-->
 
+## skills/
+
+- `README.md` — Index of the research→shipping pipeline skills (risoluto-* + init-research), pointing to the pipeline and product-spine docs. <!--hash:72ff1f03-->
+
 ## skills/risoluto-features/
 
-- `SKILL.md` — Skill definition for the risoluto-features spine updater: two-repo model, 12-step pipeline, map-reduce architecture. <!--hash:36ed0e34-->
+- `SKILL.md` — Skill definition for the risoluto-features spine updater: two-repo model, 12-step pipeline, map-reduce architecture. <!--hash:46494e29-->
 
 ## skills/risoluto-features/assets/
 
@@ -173,10 +178,10 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `bundle-rules.md` — Defines the 11 feature bundles, what belongs in each, and a decision tree for resolving ambiguous assignments. <!--hash:0f470246-->
 - `cold-start.md` — Procedure for building the feature spine from scratch when no prior RISOLUTO_FEATURES.md exists. <!--hash:94e4a0a5-->
-- `diff-section.md` — Template and rules for the 'Changed since last spine' markdown section; generated by diff_spines.py, not hand-written. <!--hash:66250992-->
-- `feature-entry-template.md` — Canonical markdown and JSON shape for a single feature entry in the spine, with non-negotiable style rules. <!--hash:be30a488-->
-- `json-schema.md` — Authoritative JSON schema for RISOLUTO_FEATURES.json, covering every top-level field and validation rules. <!--hash:4c13edfc-->
-- `subagent-prompts.md` — Filled-in prompt templates for extract and verify subagents used in the risoluto-features map-reduce pipeline. <!--hash:c32f3935-->
+- `diff-section.md` — Template and rules for the 'Changed since last spine' markdown section; generated by diff_spines.py, not hand-written. <!--hash:3c30bd5f-->
+- `feature-entry-template.md` — Canonical markdown and JSON shape for a single feature entry in the spine, with non-negotiable style rules. <!--hash:f304a1ac-->
+- `json-schema.md` — Authoritative JSON schema for RISOLUTO_FEATURES.json, covering every top-level field and validation rules. <!--hash:b23788f3-->
+- `subagent-prompts.md` — Filled-in prompt templates for extract and verify subagents used in the risoluto-features map-reduce pipeline. <!--hash:703364d8-->
 - `verification-checklist.md` — Six-step checklist run on every existing spine entry to detect symbol drift, constant changes, and removals. <!--hash:6aa21704-->
 
 ## skills/risoluto-features/scripts/
@@ -190,16 +195,16 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-grill/
 
-- `SKILL.md` — Critic-grill (Mode A): stress-tests a target's post-dedup candidate features and writes the kept ones as roadmap rows in docs/roadmap.md. <!--hash:e722c264-->
+- `SKILL.md` — Critic-grill (Mode A): stress-tests a target's post-dedup candidate features and writes the kept ones as roadmap rows in docs/roadmap.md. <!--hash:4815658f-->
 
 ## skills/risoluto-grill/scripts/
 
 - `grill-write.mjs` — Grill writer; applies in/out grill decisions to docs/roadmap.md via scripts/roadmap.mjs — appends kept rows, edits merge/supersede rows. <!--hash:b3d2bc6e-->
-- `preload.mjs` — Grill preloader; parses a target README's Candidate features + dedup flags, the roadmap rows, and RISOLUTO_FEATURES mentions into a JSON bundle. <!--hash:e8ff15d0-->
+- `preload.mjs` — Grill preloader; parses a target README's Candidate features + dedup flags, the roadmap rows, and RISOLUTO_FEATURES mentions into a JSON bundle. <!--hash:86499910-->
 
 ## skills/risoluto-ingest/
 
-- `SKILL.md` — Ingest skill (Mode B): reads all research targets, builds the research/wiki/ knowledge base, and emits cite-or-drop idea rows into the roadmap. <!--hash:164a27ad-->
+- `SKILL.md` — Ingest skill (Mode B): reads all research targets, builds the research/wiki/ knowledge base, and emits cite-or-drop idea rows into the roadmap. <!--hash:caf4b031-->
 
 ## skills/risoluto-ingest/scripts/
 
@@ -207,7 +212,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-next-bundle/
 
-- `SKILL.md` — next-bundle skill: groups open from:prd-<slug> Linear issues across PRDs by predicted code-locality and proposes build bundles with goals. <!--hash:edd196f0-->
+- `SKILL.md` — next-bundle skill: groups open from:prd-<slug> Linear issues across PRDs by predicted code-locality and proposes build bundles with goals. <!--hash:6865a4dc-->
 
 ## skills/risoluto-next-bundle/scripts/
 
@@ -215,11 +220,29 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-researcher/
 
-- `SKILL.md` — Researcher skill (Mode A): captures a URL into research/targets/<slug>/, extracts Candidate features + Leech takeaways, dedups against roadmap + FEATURES. <!--hash:d458ee60-->
+- `SKILL.md` — Researcher skill (Mode A): captures a URL into research/targets/<slug>/, extracts Candidate features + Leech takeaways, dedups against roadmap + FEATURES. <!--hash:913f6b00-->
+
+## skills/risoluto-researcher/references/
+
+- `github-capture.md` — Researcher reference: deep GitHub repo capture via gh — registry-reconciled feature inventory with coverage reporting. <!--hash:a7e31c03-->
+- `reddit-capture.md` — Researcher reference: Reddit thread capture via rdt-cli — full top-sorted comment tree, post media, references → discovery. <!--hash:6f13f6db-->
+- `webpage-capture.md` — Researcher reference: generic web-page capture via browser-harness + Turndown — render→markdown, self-healing recipes, --remote cloud. <!--hash:07ee7b6d-->
+- `x-capture.md` — Researcher reference: X/Twitter capture via twitter-cli — bookmarks or single tweet, media, engagement-ranked replies, discovery. <!--hash:2871dbef-->
+- `youtube-capture.md` — Researcher reference: YouTube capture via yt-dlp — video info, channel stats, cleaned transcript, description-link discovery. <!--hash:19b2d25b-->
 
 ## skills/risoluto-researcher/scripts/
 
-- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:1787be54-->
+- `capture-lib.mjs` — Shared researcher capture helpers (slugify, classifyDiscovery, suggestSlug, hostLabel) reused across the x/reddit/youtube/webpage scripts. <!--hash:9e6930ad-->
+- `reddit-capture.mjs` — Researcher Reddit capture (rdt-cli): one thread → post + full top-sorted comment tree + media + discovery queue, via research.mjs. <!--hash:714c73e3-->
+- `research.mjs` — Researcher write script; builds target/source markdown with pipeline-valid frontmatter (deep gh capture for repos) and regenerates research/INDEX.md. <!--hash:b02cc369-->
+- `site-recipes.json` — Per-host self-healing recipes for webpage-capture (content/keep/remove selectors, clicks, wait, scroll), auto-applied by host. <!--hash:d939efa3-->
+- `webpage-capture.mjs` — Researcher web-page capture: browser-harness renders any page, Turndown → markdown; self-healing site-recipes; --remote cloud stealth. <!--hash:b8b77b65-->
+- `x-bookmarks.mjs` — Researcher X/Twitter capture (twitter-cli): bulk bookmarks or single --tweet; all media, engagement-ranked replies, discovery queue. <!--hash:cf03240a-->
+- `youtube-capture.mjs` — Researcher YouTube capture (yt-dlp): video info + channel stats + de-timestamped transcript + description-link discovery, via research.mjs. <!--hash:4a2e1e79-->
+
+## skills/risoluto-researcher/scripts/vendor/
+
+- `turndown.js` — Vendored Turndown (browser UMD, MIT) — HTML→markdown converter injected into the page by webpage-capture.mjs. <!--hash:9a746a47-->
 
 ## skills/risoluto-tdd/
 
@@ -232,7 +255,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-to-issues/
 
-- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug>; category derived from the PRD/roadmap row. Linear MCP only. <!--hash:6e0b0710-->
+- `SKILL.md` — to-issues skill: breaks docs/prds/<slug>.md into flat Linear issues labelled from:prd-<slug>; category derived from the PRD/roadmap row. Linear MCP only. <!--hash:4daff533-->
 
 ## skills/risoluto-to-issues/scripts/
 
@@ -240,7 +263,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-to-prd/
 
-- `SKILL.md` — to-prd skill: promotes a next roadmap row into docs/prds/<slug>.md + a mirrored Linear project + branch, flipping the row to building. Idempotent create/sync. <!--hash:3159b68c-->
+- `SKILL.md` — to-prd skill: promotes a next roadmap row into docs/prds/<slug>.md + a mirrored Linear project + branch, flipping the row to building. Idempotent create/sync. <!--hash:c43beadb-->
 
 ## skills/risoluto-to-prd/scripts/
 
@@ -249,7 +272,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-vault/
 
-- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, source/target templates, Dataview views, research/wiki); idempotent drift repair. <!--hash:6c57392e-->
+- `SKILL.md` — Vault skill: configures research/ as a scoped Obsidian vault (.obsidian config, source/target templates, Dataview views, research/wiki); idempotent drift repair. <!--hash:e652e85b-->
 
 ## skills/risoluto-vault/assets/dataview/
 
@@ -266,7 +289,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 ## skills/risoluto-vault/assets/templates/
 
 - `source.md` — Vault asset: pipeline template for a research source file. <!--hash:598f088a-->
-- `target-readme.md` — Vault asset: pipeline template for a target README. <!--hash:7efdd86b-->
+- `target-readme.md` — Vault asset: pipeline template for a target README. <!--hash:fb53afa5-->
 
 ## skills/risoluto-vault/scripts/
 
@@ -1060,6 +1083,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## tests/scripts/
 
+- `prd-linear.test.ts` — Unit tests for prd-linear.ts helpers (fetchProjectPrdMirror, normalizeForComparison). <!--hash:51bc6d7d-->
 - `quarantine.test.ts` — Tests for quarantine CLI scripts: addEntry, removeEntry, listEntries, loadEntries, healQuarantine pass/fail/threshold/stale logic, and runCli help text. <!--hash:2beafb78-->
 
 ## tests/secrets/
