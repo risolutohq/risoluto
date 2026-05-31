@@ -5,6 +5,7 @@ import { handoffArtifactSchema } from "./handoff-contract.js";
 import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
 import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
 import { publishResultArtifactSchema } from "./publish-policy.js";
+import { verificationArtifactSchema } from "./verification-contract.js";
 
 export interface WorkflowRunArtifactProducer {
   readonly type: "role" | "action";
@@ -57,20 +58,6 @@ const externalReferenceSchema = z
   })
   .strict();
 
-const verifierAllowedInputSchema = z.enum([
-  "intent.v1",
-  "plan.v1",
-  "change_summary.v1",
-  "review.v1",
-  "validation_result.v1",
-  "publish_result.v1",
-  "ci_result.v1",
-  "diff",
-  "evidence_links",
-]);
-
-const verifierDecisionSchema = z.enum(["satisfied", "not_satisfied", "uncertain"]);
-
 const validationCheckSchema = z
   .object({
     id: z.string().min(1),
@@ -101,20 +88,6 @@ const validationResultSchema = z
       context.addIssue({ code: "custom", path: ["status"], message: "must be passed when all checks passed" });
     }
   });
-
-const verificationBaseSchema = z.object({
-  ...artifactMetadataSchema,
-  decision: verifierDecisionSchema,
-  summary: z.string().min(1),
-  allowedInputs: z.array(verifierAllowedInputSchema),
-  evidenceLinks: z.array(z.string().min(1)),
-});
-
-const councillorBaseSchema = z.object({
-  id: z.string().min(1),
-  modelProfile: z.string().min(1),
-  lens: z.string().min(1),
-});
 
 const artifactContractSchemaEntries: readonly (readonly [
   (typeof WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS)[number],
@@ -190,30 +163,7 @@ const artifactContractSchemaEntries: readonly (readonly [
   ["validation_result.v1", validationResultSchema],
   ["publish_result.v1", publishResultArtifactSchema],
   ["ci_result.v1", ciResultArtifactSchema],
-  [
-    "verification.v1",
-    z.discriminatedUnion("mode", [
-      verificationBaseSchema.extend({ mode: z.literal("single") }).strict(),
-      verificationBaseSchema
-        .extend({
-          mode: z.literal("council"),
-          consensus: z.enum(["unanimous", "majority", "split"]),
-          councillors: z.array(
-            z.discriminatedUnion("status", [
-              councillorBaseSchema
-                .extend({
-                  status: z.literal("completed"),
-                  decision: verifierDecisionSchema,
-                  summary: z.string().min(1),
-                })
-                .strict(),
-              councillorBaseSchema.extend({ status: z.literal("failed"), error: z.string().min(1) }).strict(),
-            ]),
-          ),
-        })
-        .strict(),
-    ]),
-  ],
+  ["verification.v1", verificationArtifactSchema],
   ["handoff.v1", handoffArtifactSchema],
   ["operator_response.v1", operatorResponseArtifactSchema],
   ["operator_approval.v1", operatorApprovalArtifactSchema],
