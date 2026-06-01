@@ -13,7 +13,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `.prettierignore` — Prettier ignore list; excludes dist/, node_modules/, and coverage/ from formatting runs. <!--hash:fde1bb00-->
 - `.prettierrc.json` — Prettier formatting config; 120-col, double quotes, 2-space indent, trailing commas, LF line endings. <!--hash:eac2feef-->
 - `.releaserc.yml` — semantic-release config; drives automated changelog, package.json version bump, and GitHub release from Conventional Commits. <!--hash:35f90251-->
-- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:7275ed7a-->
+- `AGENTS.md` — Primary AI agent instruction file; defines project intent, working rules, verification gate, code-style ceilings, and living context index. <!--hash:01e257c9-->
 - `CHANGELOG.md` — Project changelog; records v0.1.0 foundation release scope and what was included or excluded from the clean baseline. <!--hash:fbdd3c5c-->
 - `CLAUDE.md` — Claude Code entry point; single-line redirector that imports AGENTS.md as the canonical agent instruction source. <!--hash:ba336879-->
 - `Dockerfile` — Main service Dockerfile; multi-stage build producing a Node 24 production image that runs the CLI entrypoint on port 4000. <!--hash:b82eaebe-->
@@ -23,7 +23,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 - `README.md` — Project README; describes Risoluto's purpose, current shape (CLI-first, Workflow Run primitive), and development setup commands. <!--hash:f8dfc05c-->
 - `commitlint.config.ts` — commitlint config; extends conventional-commits and enforces a fixed allowlist of commit scopes for this repo. <!--hash:52f11662-->
 - `docker-compose.yml` — Docker Compose spec; defines risoluto service, optional Cloudflare tunnel, and optional data-plane service with shared volumes and env wiring. <!--hash:49819d2b-->
-- `eslint.config.js` — ESLint config enforcing naming, complexity, file/function length, dead-code, and tech-debt rules for src/ and tests/. <!--hash:4605591a-->
+- `eslint.config.js` — ESLint config enforcing naming, complexity, dead-code, and tech-debt rules for src/ and tests/. <!--hash:4a6152a0-->
 - `knip.config.ts` — Knip unused-export finder config; scopes analysis to src/ TypeScript files. <!--hash:305987d5-->
 - `knip.json` — Knip dead-code config: entry points, project globs, and barrel index files exempted from export analysis. <!--hash:c0e37760-->
 - `package.json` — Root package manifest: scripts (build/test/lint/typecheck), runtime and dev dependencies, and bin entry point. <!--hash:930f9499-->
@@ -93,7 +93,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 - `decisions.md` — Chronological register of all accepted Risoluto decisions; links to ADRs for hard-to-reverse ones. <!--hash:a446464e-->
 - `product-spine.md` — Canonical product identity, glossary, architecture principles, and v1 scope boundaries for Risoluto. <!--hash:4bc7314f-->
-- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:a534e8c4-->
+- `research-to-shipping-pipeline.md` — The planning pipeline: stage-by-stage how-to, frontmatter contracts, ownership rules, and troubleshooting — the single operational reference (decisions in `0001-foundation.md` §7). <!--hash:42685620-->
 - `roadmap.md` — The single ordered plan; founder-owned roadmap table (#/Item/Why now/Size/Status/Research link) — the top non-shipped row is what's next. <!--hash:eca16132-->
 - `technical-spine.md` — Maximal v1 technical surface map: all layers, adapter contracts, boundary rules, and what v1 does not ship. <!--hash:6f3f5fe4-->
 - `testing-and-release.md` — Testing tiers and release flow; the four vitest configs, the 1.0.0 Foundation Baseline gate, and the semantic-release process. <!--hash:f8aa9042-->
@@ -148,7 +148,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/
 
-- `README.md` — Index of the research→shipping pipeline skills (risoluto-* + init-research + v1-check) plus the shared-core + per-agent-adapter portability model for Claude and Codex; points to the pipeline and product-spine docs. <!--hash:5266406e-->
+- `README.md` — Index of the research→shipping pipeline skills (risoluto-* + init-research + v1-check) plus the shared-core + per-agent-adapter portability model for Claude and Codex; points to the pipeline and product-spine docs. <!--hash:3fd90341-->
 
 ## skills/init-research/
 
@@ -187,7 +187,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-grill/
 
-- `SKILL.md` — Critic-grill (Mode A): stress-tests a target's post-dedup candidate features and writes the kept ones as roadmap rows in docs/roadmap.md. <!--hash:4815658f-->
+- `SKILL.md` — Critic-grill (Mode A): stress-tests a target's post-dedup candidate features and writes the kept ones as roadmap rows in docs/roadmap.md. <!--hash:e7791907-->
 
 ## skills/risoluto-grill/scripts/
 
@@ -209,6 +209,10 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 ## skills/risoluto-next-bundle/scripts/
 
 - `preload.mjs` — next-bundle preloader; lists docs/prds/* with slug, status, linear_project, and the from:prd-<slug> label as JSON for locality grouping. <!--hash:b731c5f3-->
+
+## skills/risoluto-pre-pr/
+
+- `SKILL.md` — pre-pr skill (Stage 3.5): advisory review/cleanup on a ticket branch — /code-review → triage → /simplify → mandatory /v1-check; prints gh pr create, never runs it; no Linear writes. <!--hash:4111e87b-->
 
 ## skills/risoluto-researcher/
 
@@ -238,7 +242,7 @@ _Auto-maintained by `/filetree:update`. Each entry carries a content hash; misma
 
 ## skills/risoluto-tdd/
 
-- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:6b5c973d-->
+- `SKILL.md` — TDD skill: Linear-aware red-green-refactor for a ticket ref; validates blocked-by, back-comments the PR, applies from:prd-<slug> label (Phase 4.2). <!--hash:27c76d51-->
 - `deep-modules.md` — TDD reference: designing deep modules — simple interface over substantial implementation. <!--hash:0d9720cf-->
 - `interface-design.md` — TDD reference: interface-design principles applied during the red-green-refactor loop. <!--hash:a0a20ca4-->
 - `mocking.md` — TDD reference: when to mock versus use real collaborators in tests. <!--hash:71cbfee6-->

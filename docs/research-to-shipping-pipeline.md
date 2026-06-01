@@ -50,9 +50,9 @@
               └───────────┬───────────┘
                           ▼  ADVISORY (not blocking)
               ┌───────────────────────┐
-              │  /code-review         │  founder applies selectively
-              │  /simplify            │
-              └───────────┬───────────┘
+              │  /risoluto-pre-pr     │  wraps /code-review + /simplify,
+              │                       │  then a mandatory /v1-check;
+              └───────────┬───────────┘  founder applies selectively
                           ▼
                         merge
                           │
@@ -168,7 +168,7 @@ Ingest is **idempotent and non-interactive** — run it anytime to refresh the w
 | 1.3 | Drift gate        | `pnpm prd:drift-check`             | PRD body vs Linear                                  | exit 1 on drift — also in `.husky/pre-push`                                                 | gate     |
 | 2   | To-issues         | `/risoluto-to-issues <slug>`       | `docs/prds/<slug>.md` + roadmap row                 | Linear issues labelled `from:prd-<slug>`, blocked-by edges                                  | operator |
 | 3   | TDD               | `/risoluto-tdd <ticket-ref>`       | Linear issue + linked PRD                           | code + tests; prints `gh pr create`                                                         | operator |
-| 3.5 | Advisory review   | `/code-review`, `/simplify`        | the diff / PR                                       | findings; founder applies selectively                                                       | operator |
+| 3.5 | Advisory review   | `/risoluto-pre-pr`                 | the diff / PR                                       | findings; founder applies selectively                                                       | operator |
 | 4   | Post-merge (CI)   | `post-merge.yml` (auto)            | merged PR with `from:prd-<slug>` label              | PRD `status: shipped`; back-comments Linear; roadmap row flipped; RISOLUTO_FEATURES refresh | CI       |
 | 5   | Record            | ADR + `decisions.md` + roadmap row | the shipped decision                                | an ADR/decision entry                                                                       | operator |
 
@@ -200,8 +200,7 @@ pnpm validate:research                     # PRD frontmatter validates (exit 0)
 /risoluto-tdd RSL-123                      # validates blocked-by are Done; red-green-refactor; prints `gh pr create`
 
 # ADVISORY — founder applies findings selectively, not a blocking gate.
-/code-review
-/simplify
+/risoluto-pre-pr                           # code-review → triage → simplify → mandatory v1-check; reprints `gh pr create`
 
 # 3. On merge, post-merge.yml automatically:
 #    - back-comments Linear issues
@@ -327,7 +326,7 @@ summary in Linear. The conductor (Codex or Claude Code) then resumes the `/goal`
 - **Git is canon for PRDs.** Resolve divergence with `prd:reconcile` (Linear → git) or `to-prd` sync (git → Linear). Never hand-edit Linear Project content.
 - **No auto-PR.** Skills branch, commit, and push but never run `gh pr create` — they print it.
 - **Linear field split.** Project `description` is only the short overview; the generated PRD mirror lives in Project `content`.
-- **Advisory review.** `/code-review` and `/simplify` after TDD are advisory aids the founder applies selectively — not a blocking gate.
+- **Advisory review.** `/risoluto-pre-pr` (Stage 3.5) runs `/code-review` and `/simplify` after TDD as advisory aids the founder applies selectively — not a blocking gate.
 - **Idempotent:** researcher, ingest, vault, to-prd sync. **Not idempotent:** to-issues, tdd (re-runs can duplicate).
 
 ## Exit gate: pruning shipped surface

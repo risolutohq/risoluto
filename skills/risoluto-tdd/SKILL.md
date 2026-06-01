@@ -137,6 +137,7 @@ When implementation is complete and all tests pass:
 - **Claiming (In Progress) is not optional and not confirmed** — it is the lock that stops two parallel runs from grabbing the same ticket. Leave the ticket In Progress at PR-open; moving it to Done is the operator's call after merge (Phase 4.3), never the skill's.
 - **Acceptance criteria are ticked from proof, not from status.** Step 5.6's PR-open reconciliation is the only place boxes get checked, and every tick must cite the test or entry point that closes it. Status never auto-ticks a box: a `Done` issue with an unchecked box is the intended signal that the slice deliberately deferred that criterion, not a bookkeeping miss. This closes the gap where a whole goal reaches `Done` with every acceptance box still empty because no step ever wrote them back.
 - **Filed discoveries vs. the Out-of-Scope boundary.** Incidental finds become `discovered` issues (Step 4.5); things the PRD deliberately excludes are surfaced to Omer, not filed.
+- **Hand off to Stage 3.5 before the PR opens.** After this skill prints `gh pr create`, the operator may run `/risoluto-pre-pr` — the advisory review/cleanup pass (`/code-review` → `/simplify` → mandatory `/v1-check`) — on the branch before opening the PR. It is advisory and writes no Linear state, so the label, back-comment, and acceptance-criteria reconciliation in Step 5 remain this skill's job after the PR exists.
 
 ## Companion files
 
