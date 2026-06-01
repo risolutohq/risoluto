@@ -84,7 +84,7 @@ export async function fetchSandboxDefaultBranch(env: NodeJS.ProcessEnv, token: s
     throw new Error("E2E_GITHUB_REPO must be set to owner/name for a live run start");
   }
   const response = await fetch(`${GITHUB_API_BASE_URL}/repos/${repoRef.owner}/${repoRef.name}`, {
-    headers: githubHeaders(token),
+    headers: githubHeaders(`Bearer ${token}`),
   });
   if (!response.ok) {
     throw new Error(`failed to resolve sandbox default branch: ${response.status} ${await response.text()}`);
