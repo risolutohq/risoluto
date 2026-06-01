@@ -6,6 +6,7 @@ import { WorkflowExecutorError, type ExecuteWorkflowDefinitionInput, type Workfl
 import type { WorkflowExecutorEvent } from "./gate-hook-engine.js";
 import type { HandoffArtifact } from "./handoff-contract.js";
 import type { WorkflowRunIntentArtifact } from "./intake-core.js";
+import { WorkflowRunActionError } from "./run-action-runner.js";
 import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
 import { driveWorkflowRun } from "./workflow-run-driver.js";
 
@@ -56,7 +57,13 @@ export async function driveAcceptedWorkflowRun(
     });
     return await finishDrivenRun(archive, input, result);
   } catch (error) {
-    if (!(error instanceof WorkflowExecutorError || error instanceof WorkflowRunRoleDispatchError)) {
+    if (
+      !(
+        error instanceof WorkflowExecutorError ||
+        error instanceof WorkflowRunRoleDispatchError ||
+        error instanceof WorkflowRunActionError
+      )
+    ) {
       throw error;
     }
     return await finishFailedRun(archive, input, error.message);

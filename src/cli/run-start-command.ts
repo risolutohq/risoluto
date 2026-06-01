@@ -8,6 +8,10 @@ import { DEFAULT_WORKFLOW_DEFINITION_ID } from "../workflow-run/artifacts.js";
 import type { WorkflowBudgetPolicy } from "../workflow-run/budget-retry.js";
 import { driveAcceptedWorkflowRun, type DriveAcceptedWorkflowRunResult } from "../workflow-run/drive-accepted-run.js";
 import type { WorkflowGateRetryInput } from "../workflow-run/gate-retry-controller.js";
+import {
+  createWorkflowRunActionRunner,
+  type WorkflowRunValidationCommandRunner,
+} from "../workflow-run/run-action-runner.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
 import { resolveWorkflowRunIntake } from "./workflow-run-intake.js";
@@ -21,6 +25,7 @@ import { resolveWorkflowRunIntake } from "./workflow-run-intake.js";
 export interface RunStartCommandDeps {
   readonly dispatchRole?: WorkflowRunRoleDispatch;
   readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
+  readonly runValidationCommand?: WorkflowRunValidationCommandRunner;
   readonly budget?: WorkflowBudgetPolicy;
   readonly maxGateRetries?: number;
   readonly now?: () => string;
@@ -52,9 +57,15 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
   });
 
   const archive = createWorkflowRunArchive({ dataDir });
+  const nowString = deps.now ?? (() => new Date().toISOString());
   const runRole = createWorkflowRunRoleRunner({
     dispatchRole: deps.dispatchRole ?? createUnconfiguredAgentRoleDispatch(),
     readArtifact: (input) => archive.readWorkflowRunArtifact(input),
+  });
+  const runAction = createWorkflowRunActionRunner({
+    effects: { ...(deps.runValidationCommand ? { runValidationCommand: deps.runValidationCommand } : {}) },
+    now: nowString,
+    writeArtifact: (input) => archive.writeWorkflowRunArtifact(input),
   });
   const result = await driveAcceptedWorkflowRun({
     dataDir,
@@ -62,6 +73,7 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     workflowRun: accepted.workflowRun,
     intent: accepted.intent,
     runRole,
+    runAction,
     budget: deps.budget ?? createDefaultWorkflowBudget(),
     ...(deps.retryGate ? { retryGate: deps.retryGate } : {}),
     ...(deps.maxGateRetries === undefined ? {} : { maxGateRetries: deps.maxGateRetries }),

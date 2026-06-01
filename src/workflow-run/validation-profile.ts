@@ -182,7 +182,7 @@ function isValidationCheckResult(check: unknown): check is ValidationCheckResult
   );
 }
 
-function isValidationProfileId(value: unknown): value is ValidationProfileId {
+export function isValidationProfileId(value: unknown): value is ValidationProfileId {
   return value === "node-pnpm-standard" || value === "offline-smoke";
 }
 
