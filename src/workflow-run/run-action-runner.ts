@@ -1,4 +1,5 @@
 import type { WriteWorkflowRunArtifactInput } from "./archive.js";
+import { evaluateCiBabysitter, type CiCheckResult } from "./ci-babysitter.js";
 import type { WorkflowRunArtifactReference } from "./contracts.js";
 import type { WorkflowActionExecutionInput } from "./executor-actions.js";
 import type { OperatorPermission } from "./operator-approval-contract.js";
@@ -21,9 +22,23 @@ export type WorkflowRunValidationCommandRunner = (
  * effects; tests inject fakes for the leaves they exercise. Unset effects fail honestly rather than
  * fabricating an artifact, so the run reaches a real blocked handoff.
  */
+/** Result of polling a CI provider: the raw checks plus the run's retry/rerun policy context. */
+export interface WorkflowRunCiPollResult {
+  readonly checks: readonly CiCheckResult[];
+  readonly retryBudgetRemaining: number;
+  readonly rerunsAllowed: boolean;
+}
+
+/** Effect port that polls a CI provider for the babysitter. Production binds GitHub Actions; tests fake it. */
+export type WorkflowRunCiPoller = (input: {
+  readonly workflowRunId: string;
+  readonly provider: "github_actions";
+}) => Promise<WorkflowRunCiPollResult>;
+
 export interface WorkflowRunActionEffects {
   readonly prepareWorkspace?: WorkflowRunWorkspacePreparer;
   readonly runValidationCommand?: WorkflowRunValidationCommandRunner;
+  readonly pollCi?: WorkflowRunCiPoller;
 }
 
 export class WorkflowRunActionError extends Error {
@@ -46,8 +61,9 @@ export interface CreateWorkflowRunActionRunnerDeps {
  * Production `runAction`: map each configured action id to its real effect and deposit the produced
  * artifact in the run archive. `create-worktree` produces no artifact; `run-validation-profile` runs the
  * real stop-on-first / collect-all profile logic over an injected command runner; `publish-pr` applies
- * the deterministic publish-mode policy and records `publish_result.v1`. Other actions are not wired for
- * this entry point yet and fail honestly.
+ * the deterministic publish-mode policy and records `publish_result.v1`; `poll-ci` runs the CI babysitter
+ * over an injected CI poller and records `ci_result.v1`. Other actions are not wired for this entry point
+ * yet and fail honestly.
  */
 export function createWorkflowRunActionRunner(
   deps: CreateWorkflowRunActionRunnerDeps,
@@ -61,6 +77,9 @@ export function createWorkflowRunActionRunner(
     }
     if (input.actionId === "publish-pr") {
       return publishPrAction(deps, input);
+    }
+    if (input.actionId === "poll-ci") {
+      return pollCiAction(deps, input);
     }
     throw new WorkflowRunActionError(`action ${input.actionId} is not configured for this entry point yet`);
   };
@@ -202,4 +221,38 @@ function isCiResultStatus(value: unknown): value is CiResultStatus {
 
 function isVerifierDecision(value: unknown): value is VerifierDecision {
   return typeof value === "string" && (VERIFIER_DECISIONS as readonly string[]).includes(value);
+}
+
+/**
+ * GitHub Actions CI babysitter reachable from `run start`. Polls the configured CI provider for this run's
+ * checks, classifies them (code failure -> retry, flaky -> rerun, timeout/unavailable -> blocked evidence),
+ * and records `ci_result.v1`. Without a configured poller the action fails honestly rather than fabricating
+ * a green result, so a run that reaches CI blocks until a provider is wired.
+ */
+async function pollCiAction(
+  deps: CreateWorkflowRunActionRunnerDeps,
+  input: WorkflowActionExecutionInput,
+): Promise<Readonly<Record<string, unknown>>> {
+  if (!deps.effects.pollCi) {
+    throw new WorkflowRunActionError(
+      `CI poller is not configured for ${input.actionId} (no CI provider is wired for this entry point yet)`,
+    );
+  }
+  const poll = await deps.effects.pollCi({ workflowRunId: input.workflowRunId, provider: "github_actions" });
+  const artifact = evaluateCiBabysitter({
+    workflowRunId: input.workflowRunId,
+    createdAt: deps.now(),
+    provider: "github_actions",
+    retryBudgetRemaining: poll.retryBudgetRemaining,
+    rerunsAllowed: poll.rerunsAllowed,
+    checks: poll.checks,
+  });
+  await deps.writeArtifact({
+    workflowRunId: input.workflowRunId,
+    contractId: "ci_result.v1",
+    artifactId: "ci_result",
+    data: artifact,
+    producer: { type: "action", id: input.actionId },
+  });
+  return { "ci_result.v1": artifact };
 }

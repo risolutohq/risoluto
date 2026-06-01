@@ -10,6 +10,7 @@ import { driveAcceptedWorkflowRun, type DriveAcceptedWorkflowRunResult } from ".
 import type { WorkflowGateRetryInput } from "../workflow-run/gate-retry-controller.js";
 import {
   createWorkflowRunActionRunner,
+  type WorkflowRunCiPoller,
   type WorkflowRunValidationCommandRunner,
 } from "../workflow-run/run-action-runner.js";
 import type { PrPublishMode } from "../workflow-run/publish-policy.js";
@@ -29,6 +30,7 @@ export interface RunStartCommandDeps {
   readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
   readonly runValidationCommand?: WorkflowRunValidationCommandRunner;
   readonly prepareWorkspace?: WorkflowRunWorkspacePreparer;
+  readonly pollCi?: WorkflowRunCiPoller;
   readonly budget?: WorkflowBudgetPolicy;
   readonly maxGateRetries?: number;
   readonly now?: () => string;
@@ -81,6 +83,7 @@ async function driveAcceptedRun(
     effects: {
       ...(deps.prepareWorkspace ? { prepareWorkspace: deps.prepareWorkspace } : {}),
       ...(deps.runValidationCommand ? { runValidationCommand: deps.runValidationCommand } : {}),
+      ...(deps.pollCi ? { pollCi: deps.pollCi } : {}),
     },
     workflowDefinitionId: accepted.definition.id,
     now: nowString,
