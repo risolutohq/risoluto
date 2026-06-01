@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { startAndDriveRunCommand } from "../../src/cli/run-start-command.js";
 import type { ModelSelection, RunOutcome } from "../../src/core/types.js";
 import type { RunAttemptDispatcher } from "../../src/dispatch/types.js";
-import { createAgentRoleDispatch } from "../../src/workflow-run/agent-role-dispatch.js";
+import { createAgentRoleDispatch, createWorkflowRunAgentDispatch } from "../../src/workflow-run/agent-role-dispatch.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { workflowRunArtifactIdForContract } from "../../src/workflow-run/run-role-runner.js";
 
@@ -184,5 +184,46 @@ describe("agent role dispatch adapter drives the engine from `run start` (NIN-22
     const handoff = await archive.readWorkflowRunArtifact({ workflowRunId: runId, artifactId: "handoff" });
     const blockers = (handoff as { data: { blockers: Array<{ message: string }> } }).data.blockers;
     expect(blockers.some((blocker) => /ended failed|codex session crashed/.test(blocker.message))).toBe(true);
+  });
+
+  it("feeds the per-role D1 deposit prompt to the agent via createWorkflowRunAgentDispatch", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const dataDir = await createTempDir("risoluto-agent-data-");
+    const workflowDir = await writeWorkflowFixture();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const captured: CapturedAttempt[] = [];
+
+    const dispatchRole = createWorkflowRunAgentDispatch({
+      dispatcher: depositingDispatcher(archive, captured),
+      workspace: { path: "/tmp/agent-workspace", workspaceKey: "default", createdNow: true },
+      archiveRoot: path.join(dataDir, "archives"),
+      modelForProfile: () => liveModel(),
+      signal: new AbortController().signal,
+    });
+
+    await expect(
+      startAndDriveRunCommand(
+        [
+          "--title",
+          "Agent",
+          "--intent",
+          "Ship a change",
+          "--data-dir",
+          dataDir,
+          "--workflow-dir",
+          workflowDir,
+          "--workflow-definition",
+          "agent-flow",
+          "--json",
+        ],
+        { dispatchRole, now: () => FIXED_TIME },
+      ),
+    ).resolves.toBe(0);
+
+    const runId = (await archive.listWorkflowRuns())[0]?.id ?? "";
+    await expect(archive.loadWorkflowRun(runId)).resolves.toMatchObject({ status: "done" });
+    // The prompt the agent receives names the exact D1 deposit path + envelope for plan.v1.
+    expect(captured[0]?.promptTemplate).toContain(`/workflow-runs/${runId}/artifacts/plan.json`);
+    expect(captured[0]?.promptTemplate).toContain('{ "contractId": "<id>", "data": <DATA> }');
   });
 });

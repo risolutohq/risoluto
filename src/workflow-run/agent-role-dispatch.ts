@@ -1,6 +1,7 @@
 import type { AgentRunnerEventHandler } from "../agent-runner/contracts.js";
 import type { Issue, ModelSelection, WorkflowRunReference, Workspace } from "../core/types.js";
 import type { RunAttemptDispatcher } from "../dispatch/types.js";
+import { buildAgentRolePrompt } from "./agent-role-prompt.js";
 import {
   WorkflowRunRoleDispatchError,
   type WorkflowRunRoleDispatch,
@@ -69,6 +70,40 @@ export function createAgentRoleDispatch(context: AgentRoleDispatchContext): Work
 }
 
 const noopAgentEvent: AgentRunnerEventHandler = () => {};
+
+/** Inputs the `run start` composition supplies once the real dispatcher + prepared workspace exist. */
+export interface CreateWorkflowRunAgentDispatchInput {
+  readonly dispatcher: RunAttemptDispatcher;
+  readonly workspace: Workspace;
+  /** Archive root mounted into the agent container; where the per-role prompt tells the agent to deposit. */
+  readonly archiveRoot: string;
+  readonly modelForProfile: (modelProfile: string) => ModelSelection;
+  readonly signal: AbortSignal;
+  readonly onEvent?: AgentRunnerEventHandler;
+}
+
+/**
+ * The production Workflow Run agent dispatch: binds the per-role prompt builder (D1 deposit instructions)
+ * into the dispatch adapter over a composed {@link RunAttemptDispatcher}. This is the single seam the
+ * `run start` composition wires once it has the real dispatcher and the prepared workspace.
+ */
+export function createWorkflowRunAgentDispatch(input: CreateWorkflowRunAgentDispatchInput): WorkflowRunRoleDispatch {
+  return createAgentRoleDispatch({
+    dispatcher: input.dispatcher,
+    workspace: input.workspace,
+    modelForProfile: input.modelForProfile,
+    promptForRole: (dispatchInput) =>
+      buildAgentRolePrompt({
+        role: dispatchInput.role,
+        workflowRunId: dispatchInput.workflowRunId,
+        archiveRoot: input.archiveRoot,
+        intentTitle: intentField(dispatchInput, "title") ?? dispatchInput.workflowRunId,
+        intentBody: intentField(dispatchInput, "body") ?? "",
+      }),
+    signal: input.signal,
+    ...(input.onEvent ? { onEvent: input.onEvent } : {}),
+  });
+}
 
 /** Project the Workflow Run into the `Issue` shape the agent harness consumes (this entry point is run-keyed). */
 function issueFromInput(input: WorkflowRunRoleDispatchInput): Issue {
