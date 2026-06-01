@@ -1,11 +1,21 @@
 import type { ResolvedWorkflowDefinition } from "../workflow-definition/registry.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import type { WorkflowRunStartRecord } from "./contracts.js";
+import {
+  createWorkflowRunEvidenceStore,
+  type WorkflowRunEvidenceRecord,
+  type WriteWorkflowRunEvidenceInput,
+} from "./evidence-store.js";
 import { toWorkflowRunEventRecords } from "./executor-event-log.js";
 import { WorkflowExecutorError, type ExecuteWorkflowDefinitionInput, type WorkflowExecutorResult } from "./executor.js";
-import type { WorkflowExecutorEvent } from "./gate-hook-engine.js";
+import type {
+  WorkflowExecutorEvent,
+  WorkflowHookExecutionInput,
+  WorkflowHookExecutionResult,
+} from "./gate-hook-engine.js";
 import type { HandoffArtifact } from "./handoff-contract.js";
 import type { WorkflowRunIntentArtifact } from "./intake-core.js";
+import { createWorkflowRunMemoryStore } from "./memory-store.js";
 import { WorkflowRunActionError } from "./run-action-runner.js";
 import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
 import { driveWorkflowRun } from "./workflow-run-driver.js";
@@ -41,20 +51,26 @@ export async function driveAcceptedWorkflowRun(
   input: DriveAcceptedWorkflowRunInput,
 ): Promise<DriveAcceptedWorkflowRunResult> {
   const archive = createWorkflowRunArchive(input);
+  const location = archiveLocation(input);
+  const now = input.now ?? defaultNow;
+  const { runHook, getEvidenceRefs } = input.runHook
+    ? { runHook: input.runHook, getEvidenceRefs: () => [] as EvidenceRef[] }
+    : createEvidenceCapturingHook(location, now);
   try {
     const result = await driveWorkflowRun({
-      ...archiveLocation(input),
+      ...location,
       definition: input.definition,
       workflowRunId: input.workflowRun.id,
       initialArtifacts: { "intent.v1": input.intent },
       runRole: input.runRole,
       ...(input.runAction ? { runAction: input.runAction } : {}),
-      runHook: input.runHook ?? defaultEvidenceHook,
+      runHook,
       ...(input.evaluateGate ? { evaluateGate: input.evaluateGate } : {}),
       ...(input.retryGate ? { retryGate: input.retryGate } : {}),
       ...(input.maxGateRetries === undefined ? {} : { maxGateRetries: input.maxGateRetries }),
       ...(input.budget ? { budget: input.budget } : {}),
     });
+    await writeAttemptMemory(input, location, now, result.status, getEvidenceRefs());
     return await finishDrivenRun(archive, input, result);
   } catch (error) {
     if (
@@ -66,6 +82,7 @@ export async function driveAcceptedWorkflowRun(
     ) {
       throw error;
     }
+    await writeAttemptMemory(input, location, now, "blocked", getEvidenceRefs());
     return await finishFailedRun(archive, input, error.message);
   }
 }
@@ -175,9 +192,54 @@ async function persistExecutorEvents(
   await archive.appendWorkflowRunEvents(input.workflowRun.id, records);
 }
 
-const defaultEvidenceHook: NonNullable<ExecuteWorkflowDefinitionInput["runHook"]> = async ({ hookId, state }) => ({
-  evidence: { hookId, stateId: state.id },
-});
+interface EvidenceRef {
+  readonly evidenceId: string;
+  readonly path: string;
+}
+
+interface EvidenceCapturingHook {
+  readonly runHook: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;
+  readonly getEvidenceRefs: () => readonly EvidenceRef[];
+}
+
+function createEvidenceCapturingHook(location: WorkflowRunArchiveLocation, now: () => string): EvidenceCapturingHook {
+  const store = createWorkflowRunEvidenceStore(location);
+  const refs: EvidenceRef[] = [];
+  const runHook = async (hookInput: WorkflowHookExecutionInput): Promise<WorkflowHookExecutionResult> => {
+    const evidenceId = `${hookInput.hookId}-${hookInput.state.id}`;
+    const writeInput: WriteWorkflowRunEvidenceInput = {
+      workflowRunId: hookInput.workflowRunId,
+      evidenceId,
+      kind: "hook_fired",
+      source: hookInput.hookId,
+      createdAt: now(),
+      content: { hookId: hookInput.hookId, stateId: hookInput.state.id },
+      classifiedFields: [],
+    };
+    const record: WorkflowRunEvidenceRecord = await store.writeEvidence(writeInput);
+    refs.push({ evidenceId: record.evidenceId, path: record.path });
+    return { evidence: { hookId: hookInput.hookId, stateId: hookInput.state.id, evidenceId } };
+  };
+  return { runHook, getEvidenceRefs: () => refs };
+}
+
+async function writeAttemptMemory(
+  input: DriveAcceptedWorkflowRunInput,
+  location: WorkflowRunArchiveLocation,
+  now: () => string,
+  status: "blocked" | "done",
+  evidenceRefs: readonly EvidenceRef[],
+): Promise<void> {
+  const store = createWorkflowRunMemoryStore(location);
+  await store.writeAttemptMemory({
+    workflowRunId: input.workflowRun.id,
+    attemptId: "attempt-1",
+    attemptNumber: 1,
+    createdAt: now(),
+    summary: `Workflow Run ${input.workflowRun.id} completed with status: ${status}`,
+    evidenceRefs,
+  });
+}
 
 function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveLocation {
   return {
