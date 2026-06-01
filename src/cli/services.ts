@@ -37,6 +37,7 @@ import { WorkspaceManager } from "../workspace/manager.js";
 import { PrMonitorService } from "../git/pr-monitor.js";
 import { initWebhookInfrastructure, buildWebhookHandlerDeps } from "../webhook/composition.js";
 import { acceptLinearTriggeredWorkflowRun } from "../workflow-run/linear-intake.js";
+import { acceptGitHubTriggeredWorkflowRun } from "../workflow-run/tracker-intake.js";
 
 export { evaluateWebhookConfig } from "../webhook/composition.js";
 export type { WebhookConfig };
@@ -444,6 +445,7 @@ export async function createServices(
     eventBus: events.eventBus,
     secretsStore,
     acceptLinearTriggeredWorkflowRun: (input) => acceptLinearTriggeredWorkflowRun({ ...input, archiveDir }),
+    acceptGitHubTriggeredWorkflowRun: (input) => acceptGitHubTriggeredWorkflowRun({ ...input, archiveDir }),
     logger,
   });
 

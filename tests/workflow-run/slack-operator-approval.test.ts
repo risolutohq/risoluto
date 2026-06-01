@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -43,7 +43,7 @@ describe("recordSlackOperatorApproval", () => {
     await expect(
       createWorkflowRunArchive({ dataDir }).readWorkflowRunArtifact({
         workflowRunId: "wr_slack_old",
-        artifactId: "operator-approval-old-nonce",
+        artifactId: approvalArtifactId("old-nonce"),
       }),
     ).rejects.toThrow();
   });
@@ -155,14 +155,14 @@ describe("recordSlackOperatorApproval", () => {
         nonce: "approve-nonce",
       },
       artifact: {
-        artifactId: "operator-approval-approve-nonce",
+        artifactId: approvalArtifactId("approve-nonce"),
         contractId: "operator_approval.v1",
       },
     });
     await expect(
       createWorkflowRunArchive({ dataDir }).readWorkflowRunArtifact({
         workflowRunId: "wr_slack_approval",
-        artifactId: "operator-approval-approve-nonce",
+        artifactId: approvalArtifactId("approve-nonce"),
       }),
     ).resolves.toMatchObject({
       contractId: "operator_approval.v1",
@@ -202,7 +202,7 @@ describe("recordSlackOperatorApproval", () => {
     await expect(
       createWorkflowRunArchive({ dataDir }).readWorkflowRunArtifact({
         workflowRunId: "wr_slack_approval",
-        artifactId: "operator-approval-duplicate-nonce",
+        artifactId: approvalArtifactId("duplicate-nonce"),
       }),
     ).resolves.toMatchObject({
       data: {
@@ -265,3 +265,16 @@ function signSlack(rawBody: Buffer, timestampEpochSeconds: number): string {
   const base = `v0:${timestampEpochSeconds}:${rawBody.toString("utf8")}`;
   return `v0=${createHmac("sha256", TEST_SECRET).update(base).digest("hex")}`;
 }
+
+// Mirrors the production id derivation in slack-operator-approval.ts so the assertions verify the id is
+// derived from the nonce rather than depending on a magic hex string.
+function approvalArtifactId(nonce: string): string {
+  return `operator-approval-${createHash("sha256").update(nonce).digest("hex").slice(0, 16)}`;
+}
+
+describe("approvalArtifactId (N2 collision resistance)", () => {
+  it("derives distinct artifact ids for nonces sharing a 64-char prefix", () => {
+    const prefix = "n".repeat(64);
+    expect(approvalArtifactId(`${prefix}a`)).not.toEqual(approvalArtifactId(`${prefix}b`));
+  });
+});

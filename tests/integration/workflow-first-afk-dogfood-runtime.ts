@@ -16,7 +16,7 @@ import {
   createWorkflowRunEvidenceStore,
   type WorkflowRunEvidenceRecord,
 } from "../../src/workflow-run/evidence-store.js";
-import { executeWorkflowDefinition } from "../../src/workflow-run/executor.js";
+import { driveWorkflowRun } from "../../src/workflow-run/workflow-run-driver.js";
 import { renderHandoffMarkdown } from "../../src/workflow-run/handoff-contract.js";
 import { evaluatePrPublishPolicy, type PublishResultArtifact } from "../../src/workflow-run/publish-policy.js";
 import { runDoctor } from "../../src/workflow-run/doctor.js";
@@ -38,16 +38,17 @@ const CREATED_AT = "2026-05-31T22:20:00.000Z";
 
 export async function executeDogfoodEngine(context: DogfoodContext, workflowRun: WorkflowRunStartRecord) {
   const definition = await loadBundledWorkflowDefinition(context.workflowDir);
-  return executeWorkflowDefinition({
+  // Drive through the production driver (not executeWorkflowDefinition directly), with hermetic fakes for
+  // the agent harness (runRole) and external action effects (runAction). recordStatus is left unset so the
+  // driver's archive-backed default persists the running -> terminal transitions (CR-04).
+  return driveWorkflowRun({
+    dataDir: context.dataDir,
     definition,
     workflowRunId: workflowRun.id,
     initialArtifacts: { "intent.v1": await readIntentArtifact(context, workflowRun.id) },
     runHook: async ({ hookId }) => ({ evidence: { hookId } }),
     runRole: async ({ role }) => roleOutput(role.id, workflowRun.id),
     runAction: async ({ actionId }) => actionOutput(actionId, workflowRun.id),
-    recordStatus: async ({ status }) => {
-      await createWorkflowRunArchive({ dataDir: context.dataDir }).updateWorkflowRunStatus(workflowRun.id, status);
-    },
   });
 }
 
@@ -187,7 +188,6 @@ export async function requestAutoMergeWithoutApproval(workflowRunId: string) {
     postPublishVerification: { decision: "satisfied", postPublishReconfirm: satisfiedPostPublishReconfirm() },
     mergePolicy: { status: "passed" },
     operatorApproval: null,
-    consumedApprovalNonces: [],
     requestAutoMerge: async () => {
       throw new Error("auto-merge must not be requested without operator approval");
     },

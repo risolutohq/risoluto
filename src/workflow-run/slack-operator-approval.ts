@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { WorkflowRunArtifactReference } from "./artifacts.js";
 import { createWorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import { verifySlackSignature } from "../webhook/signature.js";
@@ -168,6 +170,5 @@ function toOperatorApprovalArtifact(
 }
 
 function approvalArtifactId(nonce: string): string {
-  const sanitized = nonce.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
-  return `operator-approval-${sanitized || "nonce"}`;
+  return `operator-approval-${createHash("sha256").update(nonce).digest("hex").slice(0, 16)}`;
 }

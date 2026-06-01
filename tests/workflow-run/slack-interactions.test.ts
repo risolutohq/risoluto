@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -119,7 +119,7 @@ describe("Slack workflow-run interactions", () => {
     });
 
     expect(result.artifact).toMatchObject({
-      artifactId: "operator-response-clarify-scope",
+      artifactId: `operator-response-${createHash("sha256").update("clarify-scope").digest("hex").slice(0, 16)}`,
       contractId: "operator_response.v1",
     });
     expect(parseWorkflowRunArtifact({ contractId: "operator_response.v1", data: result.response })).toEqual(

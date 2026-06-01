@@ -1,14 +1,30 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { completeAutoMerge, type AutoMergeCompletionInput } from "../../src/workflow-run/auto-merge-completion.js";
 
 const workflowRunId = "wr_auto_merge";
 const createdAt = "2026-06-01T00:45:00.000Z";
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+async function createTempDir(): Promise<string> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-auto-merge-"));
+  tempDirs.push(dir);
+  return dir;
+}
 
 describe("auto-merge completion", () => {
   it("requests auto-merge only when every composed precondition is satisfied", async () => {
+    const dataDir = await createTempDir();
     const requestAutoMerge = vi.fn(async () => undefined);
-    const result = await completeAutoMerge(makeInput({ requestAutoMerge }));
+    const result = await completeAutoMerge(makeInput({ dataDir, requestAutoMerge }));
 
     expect(result).toEqual({ status: "merge_requested", approvalNonce: "nonce-1" });
     expect(requestAutoMerge).toHaveBeenCalledWith({
@@ -20,30 +36,46 @@ describe("auto-merge completion", () => {
   });
 
   it("blocks instead of merging when any single required precondition is missing", async () => {
+    const dataDir = await createTempDir();
     const cases = [
+      { name: "ci", input: makeInput({ dataDir, ci: { status: "failed" } }), reason: "ci_not_green" },
+      { name: "ci result missing", input: makeInput({ dataDir, ci: null }), reason: "ci_not_green" },
       {
-        name: "ci",
-        input: makeInput({ ci: { status: "failed" } }),
-        reason: "ci_not_green",
+        name: "post-publish reconfirm not required",
+        input: makeInput({
+          dataDir,
+          postPublishVerification: {
+            decision: "satisfied",
+            postPublishReconfirm: {
+              required: false,
+              prePublishDecision: "satisfied",
+              decision: "satisfied",
+              summary: "no reconfirm performed",
+              checkedInputs: [],
+              contradictedBy: [],
+            },
+          },
+        }),
+        reason: "post_publish_verifier_not_satisfied",
       },
       {
         name: "auto-merge publish result",
-        input: makeInput({ publish: { ...readyAutoMergePublish(), status: "blocked", autoMerge: false } }),
+        input: makeInput({ dataDir, publish: { ...readyAutoMergePublish(), status: "blocked", autoMerge: false } }),
         reason: "auto_merge_publish_not_ready",
       },
       {
         name: "post-publish verifier",
-        input: makeInput({ postPublishVerification: postPublishVerification("not_satisfied") }),
+        input: makeInput({ dataDir, postPublishVerification: postPublishVerification("not_satisfied") }),
         reason: "post_publish_verifier_not_satisfied",
       },
       {
         name: "merge policy",
-        input: makeInput({ mergePolicy: { status: "failed" } }),
+        input: makeInput({ dataDir, mergePolicy: { status: "failed" } }),
         reason: "merge_policy_not_satisfied",
       },
       {
         name: "operator approval",
-        input: makeInput({ operatorApproval: null }),
+        input: makeInput({ dataDir, operatorApproval: null }),
         reason: "operator_approval_required",
       },
     ] as const;
@@ -56,19 +88,35 @@ describe("auto-merge completion", () => {
     }
   });
 
-  it("blocks stale or duplicate approval nonces without requesting a merge", async () => {
-    const input = makeInput({ consumedApprovalNonces: ["nonce-1"] });
+  it("blocks a replayed approval nonce after the first merge via the atomic consumed-nonce sentinel", async () => {
+    const dataDir = await createTempDir();
+    const input = makeInput({ dataDir });
 
-    const result = await completeAutoMerge(input);
+    const first = await completeAutoMerge(input);
+    const second = await completeAutoMerge(input);
 
-    expect(result).toEqual({ status: "blocked", reason: "approval_nonce_already_consumed" });
-    expect(input.requestAutoMerge).not.toHaveBeenCalled();
+    expect(first).toEqual({ status: "merge_requested", approvalNonce: "nonce-1" });
+    expect(second).toEqual({ status: "blocked", reason: "approval_nonce_already_consumed" });
+    expect(input.requestAutoMerge).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks concurrent duplicate approval taps atomically — only one merge is requested", async () => {
+    const dataDir = await createTempDir();
+    const input = makeInput({ dataDir });
+
+    const results = await Promise.all([completeAutoMerge(input), completeAutoMerge(input)]);
+
+    expect(results.filter((result) => result.status === "merge_requested")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "blocked")).toEqual([
+      { status: "blocked", reason: "approval_nonce_already_consumed" },
+    ]);
+    expect(input.requestAutoMerge).toHaveBeenCalledTimes(1);
   });
 });
 
 function makeInput(overrides: {
+  readonly dataDir: string;
   readonly ci?: AutoMergeCompletionInput["ci"];
-  readonly consumedApprovalNonces?: readonly string[];
   readonly mergePolicy?: AutoMergeCompletionInput["mergePolicy"];
   readonly operatorApproval?: AutoMergeCompletionInput["operatorApproval"];
   readonly postPublishVerification?: AutoMergeCompletionInput["postPublishVerification"];
@@ -76,6 +124,7 @@ function makeInput(overrides: {
   readonly requestAutoMerge?: AutoMergeCompletionInput["requestAutoMerge"];
 }): AutoMergeCompletionInput {
   return {
+    dataDir: overrides.dataDir,
     workflowRunId,
     pullRequest: { owner: "risolutohq", repo: "risoluto", pullNumber: 42 },
     mergeMethod: "squash",
@@ -112,7 +161,6 @@ function makeInput(overrides: {
             nonce: "nonce-1",
             slack: { teamId: "T_OK", userId: "U_OK" },
           } as const),
-    consumedApprovalNonces: overrides.consumedApprovalNonces ?? [],
     requestAutoMerge: overrides.requestAutoMerge ?? vi.fn(async () => undefined),
   };
 }

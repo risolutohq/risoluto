@@ -7,6 +7,11 @@ export interface IssueBlockerRef {
 export interface Issue {
   id: string;
   identifier: string;
+  /**
+   * Risoluto-owned Workflow Run id (wr_UUID) this issue projection belongs to, when known. Used to isolate
+   * per-run worktrees so a retry on the same issue gets its own workspace. Absent for legacy issue-keyed runs.
+   */
+  workflowRunId?: string;
   title: string;
   description: string | null;
   priority: number | null;

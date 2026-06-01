@@ -54,6 +54,15 @@ describe("workflow-first AFK dogfood capstone", () => {
       WORKFLOW_ID,
     ]);
     expect(engine).toMatchObject({ status: "done", workflowStatesVisited: ["plan", "implement", "review", "publish"] });
+    expect(engine.actionExecutions).toEqual(
+      expect.arrayContaining(["create-worktree", "run-validation-profile", "publish-pr", "poll-ci", "write-handoff"]),
+    );
+    expect(engine.artifacts).toMatchObject({
+      "validation_result.v1": expect.anything(),
+      "publish_result.v1": expect.anything(),
+      "ci_result.v1": expect.anything(),
+      "handoff.v1": expect.anything(),
+    });
     expect(httpStatus.workflowRun).toMatchObject({ id: cliRun.id, status: "done" });
     expect(projectCanonicalStatus(httpStatus.workflowRun)).toMatchObject({ runStatus: "done", externalStatus: "Done" });
     expect(verification).toMatchObject({ mode: "council", decision: "satisfied", consensus: "majority" });

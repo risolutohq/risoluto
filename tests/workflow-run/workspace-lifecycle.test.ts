@@ -5,6 +5,7 @@ import {
   prepareWorkflowRunWorktree,
   renderWorkflowRunBranchName,
   WorkflowRunBranchTemplateError,
+  WorkflowRunAutoStashNotImplementedError,
   WorkflowRunDirtyWorkspaceError,
 } from "../../src/workflow-run/workspace-lifecycle.js";
 
@@ -49,6 +50,21 @@ describe("workflow-run workspace lifecycle", () => {
         createWorktree,
       }),
     ).rejects.toThrow(WorkflowRunDirtyWorkspaceError);
+
+    expect(createWorktree).not.toHaveBeenCalled();
+  });
+
+  it("rejects a dirty checkout before creating a worktree when auto_stash is not implemented", async () => {
+    const createWorktree = vi.fn(async () => undefined);
+
+    await expect(
+      prepareWorkflowRunWorktree({
+        dirtyPolicy: "auto_stash",
+        existingCheckoutPath: "/repo/app",
+        hasUncommittedChanges: async () => true,
+        createWorktree,
+      }),
+    ).rejects.toThrow(WorkflowRunAutoStashNotImplementedError);
 
     expect(createWorktree).not.toHaveBeenCalled();
   });

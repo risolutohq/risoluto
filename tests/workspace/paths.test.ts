@@ -157,4 +157,25 @@ describe("resolveWorkspacePath", () => {
     expect(result.workspaceKey).toBe(".._.._etc_passwd");
     expect(isWithinRoot("/workspaces", result.workspacePath)).toBe(true);
   });
+
+  it("isolates two runs of the same issue onto distinct workspace paths when a run id is supplied", () => {
+    const first = resolveWorkspacePath("/workspaces", "MT-42", "wr_run_a");
+    const second = resolveWorkspacePath("/workspaces", "MT-42", "wr_run_b");
+
+    expect(first.workspaceKey).toBe("MT-42_wr_run_a");
+    expect(second.workspaceKey).toBe("MT-42_wr_run_b");
+    expect(first.workspacePath).not.toBe(second.workspacePath);
+  });
+
+  it("falls back to the issue-keyed path when no run id is supplied", () => {
+    expect(resolveWorkspacePath("/workspaces", "MT-42").workspaceKey).toBe(
+      resolveWorkspacePath("/workspaces", "MT-42", undefined).workspaceKey,
+    );
+  });
+
+  it("sanitizes the run id segment of the workspace key", () => {
+    const result = resolveWorkspacePath("/workspaces", "MT-42", "wr/run#1");
+    expect(result.workspaceKey).toBe("MT-42_wr_run_1");
+    expect(isWithinRoot("/workspaces", result.workspacePath)).toBe(true);
+  });
 });

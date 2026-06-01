@@ -42,7 +42,16 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "handoff.v1",
   "operator_response.v1",
   "operator_approval.v1",
+  "consumed_approval_nonce.v1",
 ] as const;
+
+const consumedApprovalNonceSchema = z
+  .object({
+    version: z.literal(1),
+    workflowRunId: z.string().min(1),
+    nonce: z.string().min(1),
+  })
+  .strict();
 
 const artifactMetadataSchema = {
   version: z.literal(1),
@@ -167,6 +176,7 @@ const artifactContractSchemaEntries: readonly (readonly [
   ["handoff.v1", handoffArtifactSchema],
   ["operator_response.v1", operatorResponseArtifactSchema],
   ["operator_approval.v1", operatorApprovalArtifactSchema],
+  ["consumed_approval_nonce.v1", consumedApprovalNonceSchema],
 ];
 
 const artifactContractSchemas: ReadonlyMap<string, ZodType<unknown>> = new Map(artifactContractSchemaEntries);

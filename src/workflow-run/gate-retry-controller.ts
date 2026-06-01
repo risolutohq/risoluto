@@ -1,4 +1,5 @@
 import type { ResolvedWorkflowRole, ResolvedWorkflowState } from "../workflow-definition/registry.js";
+import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
 import { DEFAULT_GATE_RETRY_LIMIT, evaluateWorkflowBudget, type WorkflowBudgetPolicy } from "./budget-retry.js";
 import {
   evaluateStateGates,
@@ -45,6 +46,7 @@ export async function evaluateStateGatesWithRetry(
     stateRoles: input.stateRoles,
     artifacts: input.artifacts,
     evaluateGate: input.evaluateGate,
+    budget: input.budget,
   });
   if (gateResult.status === "passed" || !gateResult.failureEvidence) {
     return { status: gateResult.status, events: gateResult.events, retryAttemptsUsed: input.retryAttemptsUsed };
@@ -88,7 +90,7 @@ async function retryAllowedGate(
     failureEvidence,
     attemptNumber,
   });
-  storeRetryArtifacts(input.artifacts, produced);
+  storeRetryArtifacts(input.artifacts, produced, failureEvidence.gateId);
   return evaluateRetriedGate(input, gateEvents, failureEvidence, attemptNumber);
 }
 
@@ -126,6 +128,7 @@ async function evaluateRetriedGate(
     stateRoles: input.stateRoles,
     artifacts: input.artifacts,
     evaluateGate: input.evaluateGate,
+    budget: input.budget,
   });
   return {
     status: retriedGateResult.status,
@@ -138,9 +141,20 @@ async function evaluateRetriedGate(
   };
 }
 
-function storeRetryArtifacts(artifacts: Record<string, unknown>, produced: Readonly<Record<string, unknown>>): void {
+function storeRetryArtifacts(
+  artifacts: Record<string, unknown>,
+  produced: Readonly<Record<string, unknown>>,
+  gateId: string,
+): void {
+  // Validate + attribute every retry/repair-produced artifact, exactly like the normal role path
+  // (storeProducedArtifacts). parseWorkflowRunArtifact rejects unknown contract ids and schema mismatches,
+  // so a malformed repair artifact can no longer flow forward unchecked.
   for (const [contractId, artifact] of Object.entries(produced)) {
-    artifacts[contractId] = artifact;
+    artifacts[contractId] = parseWorkflowRunArtifact({
+      contractId,
+      data: artifact,
+      producer: { type: "role", id: `retry:${gateId}` },
+    });
   }
 }
 

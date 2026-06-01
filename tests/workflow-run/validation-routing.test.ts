@@ -108,4 +108,26 @@ describe("validation repair routing", () => {
       }),
     );
   });
+
+  it("rejects a gate-repair attempt that produces a malformed validation_result.v1 artifact", async () => {
+    const retryGate = vi.fn(async () => ({
+      "validation_result.v1": { status: "passed", command: "pnpm run build" },
+    }));
+
+    await expect(
+      executeWorkflowDefinition({
+        definition: createDefinition(),
+        workflowRunId,
+        initialArtifacts: {
+          "intent.v1": intentArtifact(),
+          "validation_result.v1": failedValidationArtifact(),
+        },
+        retryGate,
+        runRole: async () => ({
+          "plan.v1": { version: 1, workflowRunId, createdAt, summary: "Patch cache", steps: [] },
+        }),
+      }),
+    ).rejects.toThrow(/validation_result\.v1/);
+    expect(retryGate).toHaveBeenCalledOnce();
+  });
 });

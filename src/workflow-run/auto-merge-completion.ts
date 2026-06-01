@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+
+import { createWorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import type { CiResultArtifact } from "./ci-babysitter.js";
 import type { OperatorApprovalArtifact } from "./operator-approval-contract.js";
 import type { VerificationArtifact } from "./post-publish-verifier.js";
@@ -18,7 +21,7 @@ export interface AutoMergeRequest {
   readonly mergeMethod: "merge" | "rebase" | "squash";
 }
 
-export interface AutoMergeCompletionInput {
+export interface AutoMergeCompletionInput extends WorkflowRunArchiveLocation {
   readonly workflowRunId: string;
   readonly pullRequest: Omit<AutoMergeRequest, "mergeMethod">;
   readonly mergeMethod: AutoMergeRequest["mergeMethod"];
@@ -27,7 +30,6 @@ export interface AutoMergeCompletionInput {
   readonly postPublishVerification: Pick<VerificationArtifact, "decision" | "postPublishReconfirm"> | null;
   readonly mergePolicy: { readonly status: "failed" | "passed" } | null;
   readonly operatorApproval: Pick<OperatorApprovalArtifact, "actionId" | "nonce" | "permission"> | null;
-  readonly consumedApprovalNonces: readonly string[];
   readonly requestAutoMerge: (request: AutoMergeRequest) => Promise<void>;
 }
 
@@ -45,8 +47,38 @@ export async function completeAutoMerge(input: AutoMergeCompletionInput): Promis
   if (!approvalNonce) {
     return { status: "blocked", reason: "operator_approval_required" };
   }
+
+  // Atomically stamp the nonce as consumed BEFORE requesting the merge. The wx exclusive-create closes the
+  // TOCTOU window in the prior in-memory `consumedApprovalNonces` check so a concurrent or replayed approval
+  // tap cannot drive a second merge. A merge that later fails requires a fresh approval — the safe default.
+  if (!(await stampConsumedNonce(input, approvalNonce))) {
+    return { status: "blocked", reason: "approval_nonce_already_consumed" };
+  }
   await input.requestAutoMerge({ ...input.pullRequest, mergeMethod: input.mergeMethod });
   return { status: "merge_requested", approvalNonce };
+}
+
+async function stampConsumedNonce(input: AutoMergeCompletionInput, nonce: string): Promise<boolean> {
+  try {
+    await createWorkflowRunArchive(input).writeWorkflowRunArtifact({
+      workflowRunId: input.workflowRunId,
+      artifactId: consumedNonceArtifactId(nonce),
+      contractId: "consumed_approval_nonce.v1",
+      data: { version: 1, workflowRunId: input.workflowRunId, nonce },
+      producer: { type: "action", id: "auto-merge-completion" },
+      ifNotExists: true,
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function consumedNonceArtifactId(nonce: string): string {
+  return `consumed-nonce-${createHash("sha256").update(nonce).digest("hex").slice(0, 16)}`;
 }
 
 function autoMergeBlockReason(input: AutoMergeCompletionInput): AutoMergeBlockReason | null {
@@ -64,9 +96,6 @@ function autoMergeBlockReason(input: AutoMergeCompletionInput): AutoMergeBlockRe
   }
   if (!isUsableAutoMergeApproval(input.operatorApproval)) {
     return "operator_approval_required";
-  }
-  if (input.consumedApprovalNonces.includes(input.operatorApproval.nonce)) {
-    return "approval_nonce_already_consumed";
   }
   return null;
 }

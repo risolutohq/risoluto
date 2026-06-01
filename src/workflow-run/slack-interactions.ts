@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { WorkflowRunArtifactReference } from "./artifacts.js";
 import { createWorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import { acceptWorkflowRunIntake, type WorkflowRunIntakeOutput, type WorkflowRunIntakeRule } from "./intake-core.js";
@@ -148,6 +150,5 @@ function toOperatorResponseArtifact(input: RecordSlackOperatorResponseInput): Op
 }
 
 function operatorResponseArtifactId(questionId: string): string {
-  const sanitized = questionId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
-  return `operator-response-${sanitized || "question"}`;
+  return `operator-response-${createHash("sha256").update(questionId).digest("hex").slice(0, 16)}`;
 }

@@ -67,4 +67,45 @@ describe("PR publishing policy", () => {
       checks: expect.arrayContaining([expect.objectContaining({ id: "operator_approval", status: "failed" })]),
     });
   });
+
+  it("accepts an incomplete_draft approved with the lower-risk approve_pr_create permission", () => {
+    const result = evaluatePrPublishPolicy({
+      workflowRunId,
+      createdAt,
+      requestedMode: "incomplete_draft",
+      validation: { status: "passed" },
+      verification: null,
+      ci: null,
+      operatorApproval: { permission: "approve_pr_create" },
+      mergePolicy: null,
+    });
+
+    expect(result).toMatchObject({
+      mode: "incomplete_draft",
+      status: "blocked",
+      draft: true,
+      reason: "incomplete_draft_requires_followup",
+      checks: expect.arrayContaining([expect.objectContaining({ id: "operator_approval", status: "passed" })]),
+    });
+  });
+
+  it("does not let the lower-risk approve_pr_create permission satisfy an auto_merge approval", () => {
+    const result = evaluatePrPublishPolicy({
+      workflowRunId,
+      createdAt,
+      requestedMode: "auto_merge",
+      validation: { status: "passed" },
+      verification: { decision: "satisfied" },
+      ci: { status: "passed" },
+      operatorApproval: { permission: "approve_pr_create" },
+      mergePolicy: { status: "passed" },
+    });
+
+    expect(result).toMatchObject({
+      mode: "auto_merge",
+      status: "blocked",
+      reason: "operator_approval_required",
+      checks: expect.arrayContaining([expect.objectContaining({ id: "operator_approval", status: "failed" })]),
+    });
+  });
 });

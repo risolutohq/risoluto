@@ -1,5 +1,6 @@
 import type { ResolvedWorkflowRole, ResolvedWorkflowState } from "../workflow-definition/registry.js";
 import type { TokenUsageSnapshot } from "../core/types.js";
+import { evaluateWorkflowBudget, type WorkflowBudgetPolicy } from "./budget-retry.js";
 import { evaluateValidationResultGate, ValidationProfileError } from "./validation-profile.js";
 import { isSatisfiedVerificationArtifact } from "./verifier.js";
 
@@ -9,6 +10,7 @@ export interface WorkflowGateEvaluationInput {
   readonly state: ResolvedWorkflowState;
   readonly stateRoles: readonly ResolvedWorkflowRole[];
   readonly artifacts: Readonly<Record<string, unknown>>;
+  readonly budget?: WorkflowBudgetPolicy;
 }
 
 export interface WorkflowGateEvaluationResult {
@@ -77,6 +79,7 @@ export interface EvaluateStateGatesInput {
   readonly stateRoles: readonly ResolvedWorkflowRole[];
   readonly artifacts: Readonly<Record<string, unknown>>;
   readonly evaluateGate?: (input: WorkflowGateEvaluationInput) => Promise<WorkflowGateEvaluationResult>;
+  readonly budget?: WorkflowBudgetPolicy;
 }
 
 export interface EvaluateStateGatesResult {
@@ -114,6 +117,7 @@ export async function evaluateStateGates(input: EvaluateStateGatesInput): Promis
       state: input.state,
       stateRoles: input.stateRoles,
       artifacts: input.artifacts,
+      budget: input.budget,
     });
     const event = buildGateEvent(input.workflowRunId, input.state.id, gateId, result);
     events.push(event);
@@ -139,7 +143,22 @@ async function evaluateBuiltInGate(input: WorkflowGateEvaluationInput): Promise<
   if (input.gateId === "verifier-satisfied" && !isSatisfiedVerificationArtifact(input.artifacts["verification.v1"])) {
     return { status: "failed", reason: "verification.v1 decision is not satisfied" };
   }
+  if (input.gateId === "budget-available") {
+    return evaluateBudgetAvailableGate(input.budget);
+  }
   return { status: "passed" };
+}
+
+function evaluateBudgetAvailableGate(budget: WorkflowBudgetPolicy | undefined): WorkflowGateEvaluationResult {
+  if (!budget) {
+    return { status: "passed" };
+  }
+  const result = evaluateWorkflowBudget({ policy: budget, nextStepLabel: "gate budget-available" });
+  return {
+    status: result.status,
+    ...(result.reason ? { reason: result.reason } : {}),
+    evidence: result.evidence,
+  };
 }
 
 function evaluateValidationPassedGate(artifact: unknown): WorkflowGateEvaluationResult {

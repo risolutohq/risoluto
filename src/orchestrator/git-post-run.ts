@@ -19,8 +19,13 @@ interface AutoMergeClient {
 }
 
 /**
- * Optional context for the auto-merge policy evaluation step.
- * When absent, the auto-merge step is skipped entirely.
+ * Optional context for the LEGACY auto-merge policy evaluation step.
+ *
+ * @deprecated This legacy path requests a merge from the merge policy ALONE — it does not enforce operator
+ * approval, green CI, the post-publish verifier, or single-use approval nonces that
+ * `completeAutoMerge` (src/workflow-run/auto-merge-completion.ts) requires. It is gated off by default and
+ * only runs when `RISOLUTO_LEGACY_AUTO_MERGE=enabled`. New callers must route auto-merge through
+ * `completeAutoMerge` instead.
  */
 export interface AutoMergeContext {
   policy: MergePolicy;
@@ -129,29 +134,48 @@ export async function executeGitPostRun(
   const pullRequest = await gitManager.createPullRequest(repoMatch, issue, commitResult.branchName, summary);
   const pullRequestUrl = pullRequest?.html_url ?? null;
 
-  // ── Auto-merge policy evaluation ────────────────────────────────────────
-  // Only runs when an AutoMergeContext is provided. All failures are non-fatal.
+  // ── Auto-merge policy evaluation (LEGACY, gated off — see CR-02) ─────────
+  // Only runs when an AutoMergeContext is provided AND the legacy override flag is set. Disabled by default
+  // so no caller can reach client.requestAutoMerge without the completeAutoMerge preconditions.
   if (autoMerge && pullRequestUrl) {
-    try {
-      await tryRequestAutoMerge(
-        gitManager,
-        autoMerge,
-        pullRequestUrl,
-        issue.identifier,
-        issue.labels,
-        workspace.path,
-        repoMatch,
-      );
-    } catch (policyError) {
-      autoMerge.logger.warn(
-        {
-          issue_identifier: issue.identifier,
-          error: policyError instanceof Error ? policyError.message : String(policyError),
-        },
-        "auto-merge policy evaluation failed (non-fatal)",
-      );
-    }
+    await runGatedLegacyAutoMerge(gitManager, autoMerge, pullRequestUrl, issue, workspace.path, repoMatch);
   }
 
   return { pullRequestUrl, summary };
+}
+
+async function runGatedLegacyAutoMerge(
+  gitManager: GitDiffPort,
+  autoMerge: AutoMergeContext,
+  pullRequestUrl: string,
+  issue: Issue,
+  workspacePath: string,
+  repoMatch: RepoMatch,
+): Promise<void> {
+  if (process.env.RISOLUTO_LEGACY_AUTO_MERGE !== "enabled") {
+    autoMerge.logger.warn(
+      { issue_identifier: issue.identifier, pull_request_url: pullRequestUrl },
+      "legacy auto-merge is gated off — route through completeAutoMerge (set RISOLUTO_LEGACY_AUTO_MERGE=enabled to override)",
+    );
+    return;
+  }
+  try {
+    await tryRequestAutoMerge(
+      gitManager,
+      autoMerge,
+      pullRequestUrl,
+      issue.identifier,
+      issue.labels,
+      workspacePath,
+      repoMatch,
+    );
+  } catch (policyError) {
+    autoMerge.logger.warn(
+      {
+        issue_identifier: issue.identifier,
+        error: policyError instanceof Error ? policyError.message : String(policyError),
+      },
+      "auto-merge policy evaluation failed (non-fatal)",
+    );
+  }
 }

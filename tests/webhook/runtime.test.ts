@@ -162,6 +162,26 @@ describe("createWebhookRuntime", () => {
     );
   });
 
+  it("forwards both the GitHub and Linear workflow-run intake adapters into the handler deps", () => {
+    const acceptGitHubTriggeredWorkflowRun = vi.fn();
+    const acceptLinearTriggeredWorkflowRun = vi.fn();
+    const runtime = createWebhookRuntime({
+      persistence: makePersistence(),
+      webhookConfig: makeWebhookConfig(),
+      linearClient: null,
+      eventBus: new TypedEventBus<RisolutoEventMap>(),
+      secretsStore: makeSecretsStore(),
+      acceptLinearTriggeredWorkflowRun,
+      acceptGitHubTriggeredWorkflowRun,
+      logger: makeLogger(),
+    });
+
+    const handlerDeps = runtime.buildHandlerDeps({ orchestrator: makeOrchestrator(), logger: makeLogger() });
+
+    expect(handlerDeps?.acceptGitHubTriggeredWorkflowRun).toBe(acceptGitHubTriggeredWorkflowRun);
+    expect(handlerDeps?.acceptLinearTriggeredWorkflowRun).toBe(acceptLinearTriggeredWorkflowRun);
+  });
+
   it("merges persistence and health state behind one runtime snapshot", async () => {
     const runtime = createWebhookRuntime({
       persistence: makePersistence({

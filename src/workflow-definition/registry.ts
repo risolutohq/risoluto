@@ -236,6 +236,8 @@ function resolveRegisteredWorkflowDefinition(
 }
 
 function assertKnownId(ids: ReadonlySet<string>, value: string | undefined, kind: string): void {
+  // `value === undefined` means the referencing field is optional and unset — intentionally skip
+  // validation so optional ids need no value. Only a present-but-unknown id is rejected.
   if (value && !ids.has(value)) {
     throw new WorkflowDefinitionRegistryError(`unknown ${kind} id ${value}`);
   }

@@ -136,6 +136,28 @@ describe("workflow-run intake core", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
+  it("deduplicates an edit that turns labels ambiguous on an already-mapped issue instead of throwing", async () => {
+    const dataDir = await createTempDir();
+
+    const first = await acceptLinearIssue({
+      dataDir,
+      rules: [trackerRule({ id: "afk" })],
+      deliveryId: "delivery-initial",
+      id: () => "wr_mapped_issue",
+    });
+    const editedToAmbiguous = await acceptLinearIssue({
+      dataDir,
+      rules: [trackerRule({ id: "bugfix" }), trackerRule({ id: "maintenance" })],
+      deliveryId: "delivery-edit",
+      id: () => "wr_should_not_be_used",
+    });
+
+    expect(first.action).toBe("created");
+    expect(editedToAmbiguous.action).toBe("deduplicated");
+    expect(editedToAmbiguous.workflowRun.id).toBe("wr_mapped_issue");
+    await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
+  });
+
   it("starts a retry attempt under an existing mapped Workflow Run", async () => {
     const dataDir = await createTempDir();
     const rules: WorkflowRunIntakeRule[] = [trackerRule({ id: "afk" })];

@@ -53,6 +53,13 @@ export class WorkflowRunDirtyWorkspaceError extends Error {
   }
 }
 
+export class WorkflowRunAutoStashNotImplementedError extends Error {
+  constructor(readonly checkoutPath: string) {
+    super(`auto_stash dirty workspace policy is not yet implemented for ${checkoutPath}`);
+    this.name = "WorkflowRunAutoStashNotImplementedError";
+  }
+}
+
 export function renderWorkflowRunBranchName(input: RenderWorkflowRunBranchNameInput): string {
   assertBranchLength(input.maxLength);
   assertTemplateIsWellFormed(input.template);
@@ -69,6 +76,9 @@ export async function prepareWorkflowRunWorktree(input: PrepareWorkflowRunWorktr
   }
   if (dirty && input.dirtyPolicy === "require_approval") {
     throw new WorkflowRunDirtyWorkspaceError(input.existingCheckoutPath);
+  }
+  if (dirty && input.dirtyPolicy === "auto_stash") {
+    throw new WorkflowRunAutoStashNotImplementedError(input.existingCheckoutPath);
   }
   await input.createWorktree();
 }

@@ -391,7 +391,8 @@ class RunLifecycleCoordinatorImpl implements RunLifecycleCoordinator {
 
 function workflowRunReferenceFromIssue(issue: Issue): WorkflowRunReference {
   return {
-    id: issue.id,
+    // wr_UUID identifies the run, never the tracker issue id (CR-03); legacy issues fall back to issue.id.
+    id: issue.workflowRunId ?? issue.id,
     identifier: issue.identifier,
     title: issue.title,
     description: issue.description ?? null,
@@ -408,10 +409,12 @@ const WORKSPACE_EVENT_STATUSES: Record<string, string> = {
 function emitLifecycleEvent(deps: OrchestratorDeps, event: RuntimeEventRecord): void {
   const issueId = event.issueId ?? "";
   const identifier = event.issueIdentifier ?? "";
+  // Prefer the Risoluto-owned wr_UUID for workflow_run.* events; fall back to the tracker id when absent.
+  const workflowRunId = event.workflowRunId ?? issueId;
   const workspaceStatus = WORKSPACE_EVENT_STATUSES[event.event];
 
   if (workspaceStatus !== undefined) {
-    emitWorkspaceWorkflowRun(deps, issueId, identifier, workspaceStatus);
+    emitWorkspaceWorkflowRun(deps, issueId, identifier, workspaceStatus, workflowRunId);
     return;
   }
 
@@ -420,7 +423,7 @@ function emitLifecycleEvent(deps: OrchestratorDeps, event: RuntimeEventRecord): 
     case "worker_stalled":
       deps.eventBus?.emit("issue.stalled", { issueId, identifier, reason: event.message });
       deps.eventBus?.emit("workflow_run.stalled", {
-        workflowRunId: issueId,
+        workflowRunId,
         identifier,
         reason: event.message,
       });
@@ -428,25 +431,31 @@ function emitLifecycleEvent(deps: OrchestratorDeps, event: RuntimeEventRecord): 
     case "worker_failed":
       deps.eventBus?.emit("worker.failed", { issueId, identifier, error: event.message });
       deps.eventBus?.emit("workflow_run.worker_failed", {
-        workflowRunId: issueId,
+        workflowRunId,
         identifier,
         error: event.message,
       });
       return;
     case "issue_queued":
-      emitQueuedWorkflowRun(deps, event, issueId, identifier);
+      emitQueuedWorkflowRun(deps, event, issueId, identifier, workflowRunId);
       return;
   }
 }
 
-function emitWorkspaceWorkflowRun(deps: OrchestratorDeps, issueId: string, identifier: string, status: string): void {
+function emitWorkspaceWorkflowRun(
+  deps: OrchestratorDeps,
+  issueId: string,
+  identifier: string,
+  status: string,
+  workflowRunId: string,
+): void {
   deps.eventBus?.emit("workspace.event", {
     issueId,
     identifier,
     status,
   });
   deps.eventBus?.emit("workflow_run.workspace_event", {
-    workflowRunId: issueId,
+    workflowRunId,
     identifier,
     status,
   });
@@ -457,11 +466,12 @@ function emitQueuedWorkflowRun(
   event: RuntimeEventRecord,
   issueId: string,
   identifier: string,
+  workflowRunId: string,
 ): void {
   const metadata = event.metadata ?? {};
   deps.eventBus?.emit("issue.queued", { issueId, identifier });
   deps.eventBus?.emit("workflow_run.queued", {
-    workflowRunId: issueId,
+    workflowRunId,
     identifier,
     state: typeof metadata.state === "string" ? metadata.state : null,
     priority: typeof metadata.priority === "number" ? metadata.priority : null,
@@ -482,7 +492,7 @@ function forwardToEventBus(deps: OrchestratorDeps, event: RuntimeEventRecord): v
     content,
   });
   deps.eventBus?.emit("workflow_run.agent_event", {
-    workflowRunId: event.issueId ?? "",
+    workflowRunId: event.workflowRunId ?? event.issueId ?? "",
     identifier: event.issueIdentifier ?? "",
     type: event.event,
     message: event.message,

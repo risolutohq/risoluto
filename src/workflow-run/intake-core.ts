@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { setImmediate } from "node:timers/promises";
 
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
-import { createWorkflowRunRecord, openWorkflowRun, writeWorkflowRunRecord } from "./artifacts.js";
+import {
+  createWorkflowRunRecord,
+  DEFAULT_WORKFLOW_DEFINITION_ID,
+  openWorkflowRun,
+  writeWorkflowRunRecord,
+} from "./artifacts.js";
 import type {
   WorkflowRunResolvedDefinitionConfig,
   WorkflowRunSource,
@@ -16,6 +21,8 @@ import {
   readExternalMapping,
 } from "./intake-idempotency-store.js";
 import {
+  AmbiguousWorkflowRunIntakeError,
+  InvalidWorkflowRunIntakeError,
   resolveWorkflowRunIntake,
   type ResolvedWorkflowRunIntake,
   type WorkflowRunIntakeRule,
@@ -25,7 +32,7 @@ export type WorkflowRunIntakeSource = WorkflowRunSource;
 export type WorkflowRunIntakeMode = "retry" | "start";
 export type WorkflowRunIntakeAction = "created" | "deduplicated" | "retried";
 export type { WorkflowRunIntakeRule } from "./intake-rules.js";
-export { AmbiguousWorkflowRunIntakeError, InvalidWorkflowRunIntakeError } from "./intake-rules.js";
+export { AmbiguousWorkflowRunIntakeError, InvalidWorkflowRunIntakeError };
 
 export interface WorkflowRunIntakeExternalObject {
   readonly provider: WorkflowRunIntakeSource;
@@ -76,7 +83,6 @@ export interface AcceptWorkflowRunIntakeInput extends WorkflowRunArchiveLocation
 }
 
 export async function acceptWorkflowRunIntake(input: AcceptWorkflowRunIntakeInput): Promise<WorkflowRunIntakeOutput> {
-  const resolved = resolveWorkflowRunIntake(input);
   const delivery = await readDeliveryMapping({
     location: input,
     provider: input.source,
@@ -89,10 +95,28 @@ export async function acceptWorkflowRunIntake(input: AcceptWorkflowRunIntakeInpu
   const existing = await readExternalMapping({ location: input, externalObject: input.externalObject });
   if (existing) {
     const action = input.mode === "retry" ? "retried" : "deduplicated";
-    return acceptExistingWorkflowRunIntake(input, existing.workflowRunId, resolved, action);
+    return acceptExistingWorkflowRunIntake(input, existing.workflowRunId, tryResolveWorkflowRunIntake(input), action);
   }
 
-  return createNewWorkflowRunIntake(input, resolved);
+  return createNewWorkflowRunIntake(input, resolveWorkflowRunIntake(input));
+}
+
+// On the dedup paths the issue already maps to a run, so rule resolution is best-effort: a tracker edit
+// that newly makes labels ambiguous/invalid must still deduplicate, not throw. Strict resolution is only
+// required when creating a brand-new run.
+function tryResolveWorkflowRunIntake(input: AcceptWorkflowRunIntakeInput): ResolvedWorkflowRunIntake {
+  try {
+    return resolveWorkflowRunIntake(input);
+  } catch (error) {
+    if (error instanceof AmbiguousWorkflowRunIntakeError || error instanceof InvalidWorkflowRunIntakeError) {
+      return {
+        rule: null,
+        workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
+        workspaceKey: input.workspaceKey ?? "default",
+      };
+    }
+    throw error;
+  }
 }
 
 async function createNewWorkflowRunIntake(

@@ -329,7 +329,8 @@ targeted live checks.
   until PR merged/closed; blocked and cancelled worktrees are retained until resolved or expired.
 - PR modes are none, draft, ready, incomplete_draft, and auto_merge. Draft is the default. Incomplete
   draft requires operator approval and leaves the run blocked.
-- Ready PR requires local validation green and verifier satisfied. Auto-merge requires local
+- Ready PR requires local validation green, verifier satisfied, and remote CI green (CI babysitter
+  required for ready and auto-merge modes; see user story 52). Auto-merge requires local
   validation green, PR creation, remote CI green, post-publish verifier satisfied, Slack approval by
   an operator with auto-merge permission, and merge policy satisfaction.
 - A CI/CD adapter contract is required, with GitHub Actions as the first implementation. Provider

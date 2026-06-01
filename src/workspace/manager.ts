@@ -190,7 +190,11 @@ export class WorkspaceManager implements WorkspacePort {
     }
 
     await mkdir(config.workspace.root, { recursive: true });
-    const { workspaceKey, workspacePath } = resolveWorkspacePath(config.workspace.root, issueIdentifier);
+    const { workspaceKey, workspacePath } = resolveWorkspacePath(
+      config.workspace.root,
+      issueIdentifier,
+      issue.workflowRunId,
+    );
     const baseCloneDir = this.worktreeDeps.gitManager.deriveBaseCloneDir(config.workspace.root, repoMatch.repoUrl);
 
     const worktreeExists = await pathIsDirectory(workspacePath);
@@ -242,7 +246,11 @@ export class WorkspaceManager implements WorkspacePort {
       throw new Error("worktree strategy requires gitManager and repoRouter deps");
     }
 
-    const { workspaceKey, workspacePath } = resolveWorkspacePath(config.workspace.root, issueIdentifier);
+    const { workspaceKey, workspacePath } = resolveWorkspacePath(
+      config.workspace.root,
+      issueIdentifier,
+      issue?.workflowRunId,
+    );
 
     if (!(await pathIsDirectory(workspacePath))) {
       return emptyRemovalResult();

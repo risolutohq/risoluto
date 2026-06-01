@@ -25,6 +25,7 @@ export async function acceptLinearTriggeredWorkflowRun(
     archiveDir?: string;
     now?: () => string;
     id?: () => string;
+    attemptId?: () => string;
   } & LinearTriggeredWorkflowRunRequest,
 ): Promise<WorkflowRunStartedOutput> {
   const intake = await acceptTrackerIssueWorkflowRun({
@@ -38,6 +39,7 @@ export async function acceptLinearTriggeredWorkflowRun(
     workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
     now: input.now,
     id: input.id,
+    attemptId: input.attemptId,
   });
   return toStartedOutput(intake.workflowRun);
 }

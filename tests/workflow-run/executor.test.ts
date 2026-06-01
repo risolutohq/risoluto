@@ -339,7 +339,25 @@ describe("executeWorkflowDefinition", () => {
       cacheWriteTokens: 5,
     };
     const retryGate = vi.fn(async () => ({
-      "validation_result.v1": { status: "passed", command: "pnpm test" },
+      "validation_result.v1": {
+        version: 1,
+        workflowRunId,
+        createdAt,
+        profileId: "node-pnpm-standard",
+        failureHandling: "stop_on_first",
+        status: "passed",
+        checks: [
+          {
+            id: "build",
+            command: "pnpm test",
+            status: "passed",
+            exitCode: 0,
+            stdout: "tests passed",
+            stderr: "",
+            durationMs: 12,
+          },
+        ],
+      },
     }));
 
     const result = await executeWorkflowDefinition({

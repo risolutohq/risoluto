@@ -20,7 +20,8 @@ export function issueRef(issue: Issue) {
 
 export function workflowRunRef(issue: Issue): WorkflowRunReference {
   return {
-    id: issue.id,
+    // wr_UUID identifies the run, never the tracker issue id (CR-03); legacy issues fall back to issue.id.
+    id: issue.workflowRunId ?? issue.id,
     identifier: issue.identifier,
     title: issue.title,
     description: issue.description,

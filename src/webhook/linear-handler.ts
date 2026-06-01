@@ -15,6 +15,7 @@ import {
   validateWebhookPayload,
 } from "../http/webhook-types.js";
 import type { LinearTriggeredWorkflowRunRequest } from "../workflow-run/linear-intake.js";
+import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 
 const REPLAY_WINDOW_MS = 60_000;
 
@@ -35,6 +36,7 @@ export interface WebhookHandlerDeps {
   stopWorkerForIssue?: (issueIdentifier: string, reason: string) => void;
   recordVerifiedDelivery: (eventType: string) => void;
   acceptLinearTriggeredWorkflowRun?: (input: LinearTriggeredWorkflowRunRequest) => Promise<unknown>;
+  acceptGitHubTriggeredWorkflowRun?: (input: GitHubTriggeredWorkflowRunRequest) => Promise<unknown>;
   webhookInbox?: VerifiedWebhookDeliveryStore;
   eventBus?: Pick<TypedEventBus<RisolutoEventMap>, "emit">;
   logger: RisolutoLogger;

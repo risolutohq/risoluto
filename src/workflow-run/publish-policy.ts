@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { OperatorPermission } from "./operator-approval-contract.js";
+
 const publishModeSchema = z.enum(["auto_merge", "draft", "incomplete_draft", "none", "ready"]);
 const publishStatusSchema = z.enum(["blocked", "not_published", "published"]);
 const publishCheckStatusSchema = z.enum(["failed", "passed"]);
@@ -45,7 +47,7 @@ export interface PrPublishPolicyInput {
   readonly validation: { readonly status: "failed" | "passed" };
   readonly verification: { readonly decision: "not_satisfied" | "satisfied" | "uncertain" } | null;
   readonly ci: { readonly status: "blocked" | "failed" | "passed" | "pending" | "rerun_requested" } | null;
-  readonly operatorApproval: { readonly permission: "approve_auto_merge" } | null;
+  readonly operatorApproval: { readonly permission: OperatorPermission } | null;
   readonly mergePolicy: { readonly status: "failed" | "passed" } | null;
 }
 
@@ -66,13 +68,13 @@ function checksForMode(mode: PrPublishMode, input: PrPublishPolicyInput): readon
         localValidationCheck(input),
         verifierCheck(input),
         ciCheck(input),
-        operatorApprovalCheck(input),
+        operatorApprovalCheck(input, "approve_auto_merge"),
         mergePolicyCheck(input),
       ];
     case "ready":
       return [localValidationCheck(input), verifierCheck(input), ciCheck(input)];
     case "incomplete_draft":
-      return [operatorApprovalCheck(input)];
+      return [operatorApprovalCheck(input, "approve_pr_create")];
     case "draft":
     case "none":
       return [];
@@ -185,10 +187,10 @@ function ciCheck(input: PrPublishPolicyInput): PublishCheck {
   };
 }
 
-function operatorApprovalCheck(input: PrPublishPolicyInput): PublishCheck {
+function operatorApprovalCheck(input: PrPublishPolicyInput, requiredPermission: OperatorPermission): PublishCheck {
   return {
     id: "operator_approval",
-    status: input.operatorApproval?.permission === "approve_auto_merge" ? "passed" : "failed",
+    status: input.operatorApproval?.permission === requiredPermission ? "passed" : "failed",
     summary: input.operatorApproval ? "operator approval recorded" : "operator approval missing",
   };
 }
