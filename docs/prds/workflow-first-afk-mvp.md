@@ -387,6 +387,43 @@ targeted live checks.
 - TUI is deferred from MVP. OpenTUI is recorded as the preferred future TUI candidate, but not part
   of this PRD.
 
+### ADDENDUM (D1) — Agent→artifact deposit protocol (2026-06-01)
+
+The PRD assumed roles emit typed artifacts but never said _how_ an LLM role's session output becomes a
+contract-valid artifact the executor can read back. Building the production `runRole`/`runAction`
+providers (SEAM 1, NIN-198) forces that decision. This addendum fixes it; it adds no new contracts and
+no new surface — it only makes the existing role→artifact boundary explicit. Affects NIN-198 (executor
+reachability), NIN-201/207 (verifier), NIN-204 (evidence), and the role-bearing slices.
+
+- **Role→contract map (`role.produces`).** Each role deposits exactly the contracts in its workflow
+  definition `produces` list, no more: planner → `plan.v1`; implementer → `change_summary.v1`;
+  reviewer → `review.v1`; verifier → `verification.v1`; ci_babysitter → `ci_result.v1`. Actions deposit
+  likewise: `run-validation-profile` → `validation_result.v1`; `publish-pr` → `publish_result.v1`;
+  `poll-ci` → `ci_result.v1`; `write-handoff` → `handoff.v1`; `create-worktree` deposits none.
+- **Canonical archive path.** An artifact lands at
+  `{archiveRoot}/workflow-runs/{workflowRunId}/artifacts/{artifactId}.json` as `{ contractId, data }`,
+  where `artifactId` is the contract id with the `.v1` suffix dropped (`plan.v1` → `plan`,
+  `change_summary.v1` → `change_summary`, `review.v1` → `review`, `verification.v1` → `verification`,
+  `ci_result.v1` → `ci_result`). This matches the intake convention already used for `intent.v1` →
+  `intent`. Writes go through `archive.writeWorkflowRunArtifact`, which validates via
+  `parseWorkflowRunArtifact` before persisting.
+- **Completion signal.** A role completes by depositing a parseable artifact for _every_ contract in
+  `role.produces`. The `runRole` adapter signals completion to the executor by returning a
+  `Record<contractId, data>` containing exactly `role.produces`; the executor re-validates each with
+  `parseWorkflowRunArtifact` (producer `{ type: "role", id }`) and stores it. A session that ends
+  without a contract-valid artifact for each produced id is a hard failure — the executor throws "did
+  not produce required artifact" and the run ends in a blocked handoff, never continuing on prose.
+- **Read-back and typing boundary.** The adapter reads each deposited artifact back by `artifactId`
+  (`archive.readWorkflowRunArtifact`), re-parses with `parseWorkflowRunArtifact`, and returns it keyed
+  by `contractId`. The verifier artifact is additionally shaped through `verifier.ts` (single-mode
+  build/route or `runCouncilVerifier`). The agent boundary (free-form session) and the typed boundary
+  (strict Zod contract) stay cleanly separated: the agent deposits a valid artifact; the executor
+  validates and routes it.
+- **Effect-port seam.** Production binds `runRole` to the agent harness (`RunAttemptDispatcher` /
+  `AgentRunner`) and `runAction` to real effects (`GitManager`, `GitHubPrClient`, the validation/CI
+  adapters) through injected effect ports. CI-tier tests inject hermetic fakes for those ports but keep
+  the path from the entry point through `driveWorkflowRun` real; the live tier exercises the real ports.
+
 ## Testing Decisions
 
 - Tests should validate external behavior and contracts, not private implementation details. A good
