@@ -160,7 +160,10 @@ function buildEntrypointScript(egressAllowlist: string[], options?: { unsetApiKe
     // Disable bwrap inside Docker — the container IS the sandbox.
     // Without this, Codex fails with "bwrap: No permissions to create new namespace"
     // on kernels that restrict unprivileged user namespaces.
-    'printf "\\n[features]\\nuse_linux_sandbox_bwrap = false\\n" >> "$CODEX_HOME/config.toml"',
+    // Also disable unified_exec: its PTY-backed process cannot be created under the
+    // container's --cap-drop=ALL + no-new-privileges, failing every command with
+    // "Failed to create unified exec process". Classic exec needs no PTY and works.
+    'printf "\\n[features]\\nuse_linux_sandbox_bwrap = false\\nunified_exec = false\\n" >> "$CODEX_HOME/config.toml"',
     'if [ -n "${RISOLUTO_CODEX_AUTH_JSON_B64:-}" ]; then printf "%s" "$RISOLUTO_CODEX_AUTH_JSON_B64" | base64 -d > "$CODEX_HOME/auth.json"; fi',
   );
 
