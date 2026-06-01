@@ -65,6 +65,7 @@ export interface GitPostRunPort {
     issue: Pick<Issue, "identifier" | "title" | "url">,
     branchName: string,
     summary?: string | null,
+    draft?: boolean,
   ): Promise<PrCreateResult | undefined>;
   /**
    * Force-pushes the local branch to the remote using `--force-with-lease`.

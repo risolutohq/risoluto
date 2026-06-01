@@ -188,8 +188,9 @@ export class GitManager implements GitIntegrationPort {
     issue: Pick<Issue, "identifier" | "title" | "url">,
     branchName: string,
     summary?: string | null,
+    draft?: boolean,
   ): Promise<PrCreateResult | undefined> {
-    return this.githubPrClient.createPullRequest(route, issue, branchName, summary);
+    return this.githubPrClient.createPullRequest(route, issue, branchName, summary, draft);
   }
 
   async forcePushIfBranchExists(branchName: string, workspaceDir: string): Promise<void> {

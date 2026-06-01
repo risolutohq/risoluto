@@ -20,6 +20,8 @@ export interface RunStartDispatchDeps {
   readonly workspace?: Workspace;
   /** Resolve a workflow model-profile name to a ModelSelection. Required when dispatcher is injected. */
   readonly modelForProfile?: (modelProfile: string) => ModelSelection;
+  /** The run's abort signal, threaded from the CLI so SIGINT/SIGTERM cancels the active agent session. */
+  readonly signal?: AbortSignal;
 }
 
 /** Env var that opts the production CLI into agent dispatch instead of the honest block. */
@@ -62,7 +64,7 @@ export function resolveDispatchRole(
     workspace,
     archiveRoot: path.join(dataDir, "archives"),
     modelForProfile,
-    signal: new AbortController().signal,
+    signal: deps.signal ?? new AbortController().signal,
   });
 }
 
@@ -103,10 +105,11 @@ function requireWorkspace(injected: Workspace | undefined, liveEnvOptIn: boolean
 }
 
 /**
- * Fallback model resolver: uses the `RISOLUTO_DEFAULT_MODEL` env var or the codex default model.
- * The live config pass will replace this with a config-store-aware resolver.
+ * Fallback model resolver: uses the `RISOLUTO_DEFAULT_MODEL` env var or the sandbox model. The live
+ * composition injects a config-driven resolver via {@link RunStartDispatchDeps.modelForProfile}, so this
+ * only fires for an injected dispatcher that omits a resolver.
  */
 function defaultModelForProfile(_modelProfile: string): ModelSelection {
-  const model = process.env.RISOLUTO_DEFAULT_MODEL ?? "gpt-5.4";
+  const model = process.env.RISOLUTO_DEFAULT_MODEL ?? "gpt-5.4-mini";
   return { model, reasoningEffort: "high", source: "default" };
 }

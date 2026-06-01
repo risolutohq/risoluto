@@ -140,7 +140,7 @@ describe("executeGitPostRun", () => {
     const result = await executeGitPostRun(gitManager, workspace, issue, repoMatch);
 
     expect(generatePrSummary).toHaveBeenCalledWith(workspace.path, repoMatch.defaultBranch);
-    expect(gitManager.createPullRequest).toHaveBeenCalledWith(repoMatch, issue, "mt-42-fix-the-bug", summary);
+    expect(gitManager.createPullRequest).toHaveBeenCalledWith(repoMatch, issue, "mt-42-fix-the-bug", summary, false);
     expect(result).toEqual({ pullRequestUrl: "https://github.com/org/repo/pull/99", summary });
   });
 
@@ -150,7 +150,13 @@ describe("executeGitPostRun", () => {
 
     const result = await executeGitPostRun(gitManager, makeWorkspace(), makeIssue(), makeRepoMatch());
 
-    expect(gitManager.createPullRequest).toHaveBeenCalledWith(makeRepoMatch(), makeIssue(), "mt-42-fix-the-bug", null);
+    expect(gitManager.createPullRequest).toHaveBeenCalledWith(
+      makeRepoMatch(),
+      makeIssue(),
+      "mt-42-fix-the-bug",
+      null,
+      false,
+    );
     expect(result).toEqual({ pullRequestUrl: "https://github.com/org/repo/pull/99", summary: null });
   });
 

@@ -111,6 +111,7 @@ export async function executeGitPostRun(
   issue: Issue,
   repoMatch: RepoMatch,
   autoMerge?: AutoMergeContext,
+  draft = false,
 ): Promise<{ pullRequestUrl: string | null; summary: string | null }> {
   const commitResult = await gitManager.commitAndPush(
     workspace.path,
@@ -131,7 +132,7 @@ export async function executeGitPostRun(
     // Intentionally swallowed — summary is best-effort
   }
 
-  const pullRequest = await gitManager.createPullRequest(repoMatch, issue, commitResult.branchName, summary);
+  const pullRequest = await gitManager.createPullRequest(repoMatch, issue, commitResult.branchName, summary, draft);
   const pullRequestUrl = pullRequest?.html_url ?? null;
 
   // ── Auto-merge policy evaluation (LEGACY, gated off — see CR-02) ─────────

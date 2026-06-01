@@ -20,6 +20,10 @@ import type { WorkflowRunWorkspacePreparer } from "../workflow-run/workspace-pre
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
 import { resolveWorkflowRunIntake, type ResolvedWorkflowRunIntake } from "./workflow-run-intake.js";
 import { resolveDispatchRole } from "./run-start-dispatch.js";
+import { composeLiveDispatch, type ComposedLiveDispatch } from "./run-start-live-dispatch.js";
+
+/** Env var that opts the production CLI into the live agent-dispatch composition (real Codex spend). */
+const LIVE_RUN_START_ENV = "RISOLUTO_LIVE_RUN_START";
 
 /**
  * Injection seam: production passes nothing, so `run start` drives the engine through the real agent
@@ -46,6 +50,8 @@ export interface RunStartCommandDeps {
   readonly budget?: WorkflowBudgetPolicy;
   readonly maxGateRetries?: number;
   readonly now?: () => string;
+  /** Run-level abort signal threaded to the dispatch seam; the CLI binds it to SIGINT/SIGTERM. */
+  readonly signal?: AbortSignal;
 }
 
 export async function startAndDriveRunCommand(argv: string[], deps: RunStartCommandDeps = {}): Promise<number> {
@@ -74,12 +80,77 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     workflowDir: resolveWorkflowDir(parsed.values["workflow-dir"]),
   });
 
-  const result = await driveAcceptedRun(dataDir, accepted, deps, parsePublishMode(parsed.values["publish-mode"]));
-  printRunOutcome(parsed.values.json, accepted.workflowRun, result);
-  return 0;
+  const controller = new AbortController();
+  const onSignal = (): void => controller.abort();
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  try {
+    const signalDeps: RunStartCommandDeps = { ...deps, signal: deps.signal ?? controller.signal };
+    const result = await driveAcceptedRun(
+      dataDir,
+      accepted,
+      signalDeps,
+      parsePublishMode(parsed.values["publish-mode"]),
+    );
+    printRunOutcome(parsed.values.json, accepted.workflowRun, result);
+    return 0;
+  } finally {
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+  }
 }
 
 async function driveAcceptedRun(
+  dataDir: string,
+  accepted: ResolvedWorkflowRunIntake,
+  deps: RunStartCommandDeps,
+  publishMode: PrPublishMode | undefined,
+): Promise<DriveAcceptedWorkflowRunResult> {
+  const live = shouldComposeLiveDispatch(deps) ? await composeLiveForRun(dataDir, accepted, deps.signal) : undefined;
+  const effectiveDeps: RunStartCommandDeps = live
+    ? { ...deps, dispatcher: live.dispatcher, workspace: live.workspace, modelForProfile: live.modelForProfile }
+    : deps;
+  try {
+    const result = await driveWithDeps(dataDir, accepted, effectiveDeps, publishMode);
+    if (result.outcome === "done" && live) {
+      await publishLiveDraftPr(accepted, live);
+    }
+    return result;
+  } finally {
+    await live?.dispose();
+  }
+}
+
+function shouldComposeLiveDispatch(deps: RunStartCommandDeps): boolean {
+  return process.env[LIVE_RUN_START_ENV] === "1" && deps.dispatcher === undefined && deps.dispatchRole === undefined;
+}
+
+function composeLiveForRun(
+  dataDir: string,
+  accepted: ResolvedWorkflowRunIntake,
+  signal: AbortSignal | undefined,
+): Promise<ComposedLiveDispatch> {
+  return composeLiveDispatch({
+    dataDir,
+    workflowRunId: accepted.workflowRun.id,
+    intentTitle: accepted.intent.title,
+    intentBody: accepted.intent.body,
+    signal: signal ?? new AbortController().signal,
+  });
+}
+
+async function publishLiveDraftPr(accepted: ResolvedWorkflowRunIntake, live: ComposedLiveDispatch): Promise<void> {
+  const published = await live.publishDraftPr();
+  console.log(
+    JSON.stringify({
+      type: "workflow_run.published",
+      workflowRunId: accepted.workflowRun.id,
+      pullRequestUrl: published.pullRequestUrl,
+    }),
+  );
+}
+
+async function driveWithDeps(
   dataDir: string,
   accepted: ResolvedWorkflowRunIntake,
   deps: RunStartCommandDeps,
