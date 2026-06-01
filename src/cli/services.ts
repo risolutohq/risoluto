@@ -41,6 +41,7 @@ import { initWebhookInfrastructure, buildWebhookHandlerDeps } from "../webhook/c
 import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
 import { acceptLinearTriggeredWorkflowRun } from "../workflow-run/linear-intake.js";
 import { acceptGitHubTriggeredWorkflowRun } from "../workflow-run/tracker-intake.js";
+import { createAcceptedRunDriver } from "./accepted-run-driver.js";
 
 export { evaluateWebhookConfig } from "../webhook/composition.js";
 export type { WebhookConfig };
@@ -363,10 +364,15 @@ function parseRepoUrl(repoUrl: string | null): GithubRepoRef | null {
 // Phase 7 — HTTP layer
 // ---------------------------------------------------------------------------
 
+// `eventBus` is required (not optional): the Slack handler emits workflow_run.accepted on it after
+// intake, and the Phase 8 daemon subscriber drives the run from that event. Threading it here is the
+// only thing that makes Slack intake reach the engine — a missing bus is a silent no-op, so the
+// compiler must enforce it.
 function buildSlackWebhookDeps(
   configStore: ConfigStore,
   archiveDir: string,
   logger: RisolutoLogger,
+  eventBus: TypedEventBus<RisolutoEventMap>,
 ): SlackWebhookHandlerDeps | undefined {
   const slackIntake = configStore.getConfig().slackIntake;
   if (!slackIntake) {
@@ -381,6 +387,7 @@ function buildSlackWebhookDeps(
     now: () => new Date().toISOString(),
     id: () => `wr_${randomUUID()}`,
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
+    eventBus,
     logger: logger.child({ component: "slack-webhook" }),
   };
 }
@@ -432,7 +439,7 @@ function createHttpLayer(
           logger,
         })
       : undefined,
-    slackWebhookDeps: buildSlackWebhookDeps(configStore, archiveDir, logger),
+    slackWebhookDeps: buildSlackWebhookDeps(configStore, archiveDir, logger, eventBus),
   });
 
   return { httpServer };
@@ -503,6 +510,27 @@ export async function createServices(
     archiveDir,
     logger,
   );
+
+  // Phase 8 — Accepted-run daemon subscriber.
+  // Every intake surface emits workflow_run.accepted after recording the run and acking its caller.
+  // This subscriber drives the accepted run through the same engine `run start` uses, asynchronously
+  // (fire-and-forget), so webhook/Slack/HTTP ack windows (~3s) are never blocked.
+  //
+  // Production dispatchRole = createUnconfiguredAgentRoleDispatch() (honest block).
+  // The real agent binding (NIN-222 live, Omer-gated) wires createWorkflowRunAgentDispatch here.
+  const acceptedRunDriver = createAcceptedRunDriver({
+    archiveDir,
+    // Workflow definitions live next to the archive; the CLI default mirrors run-start-command.ts.
+    workflowDir: ".risoluto/workflows",
+    logger: logger.child({ component: "accepted-run-driver" }),
+  });
+  events.eventBus.on("workflow_run.accepted", (e) => {
+    void acceptedRunDriver
+      .drive(e.workflowRunId)
+      .catch((error: unknown) =>
+        logger.error({ workflowRunId: e.workflowRunId, error: String(error) }, "accepted-run driver error"),
+      );
+  });
 
   return {
     orchestrator: runtime.orchestrator,

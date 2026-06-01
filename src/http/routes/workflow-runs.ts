@@ -92,6 +92,12 @@ async function createWorkflowRunHandler(
       ...(parsed.data.workflowDefinitionId ? { workflowDefinitionId: parsed.data.workflowDefinitionId } : {}),
       workspaceKey: parsed.data.workspaceKey ?? "default",
     });
+    deps.eventBus?.emit("workflow_run.accepted", {
+      workflowRunId: intake.workflowRun.id,
+      source: intake.workflowRun.source,
+      title: intake.workflowRun.title,
+      workflowDefinitionId: intake.workflowRun.workflowDefinitionId,
+    });
     res.status(201).json(toStartedOutput(intake.workflowRun));
   } catch (error) {
     next(error);

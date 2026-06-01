@@ -1,5 +1,7 @@
 import type { Response } from "express";
 
+import type { TypedEventBus } from "../core/event-bus.js";
+import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { RisolutoLogger } from "../core/types.js";
 import type { ApiErrorResponse } from "../http/service-errors.js";
 import type { WebhookRequest } from "../http/webhook-types.js";
@@ -32,6 +34,7 @@ export interface SlackWebhookHandlerDeps {
   id: () => string;
   nowEpochSeconds: () => number;
   logger: RisolutoLogger;
+  eventBus?: Pick<TypedEventBus<RisolutoEventMap>, "emit">;
 }
 
 interface SlackInteractionPayload {
@@ -112,13 +115,19 @@ async function dispatchModalSubmission(
     return;
   }
   try {
-    await acceptSlackModalWorkflowRun({
+    const intake = await acceptSlackModalWorkflowRun({
       dataDir: deps.dataDir,
       archiveDir: deps.archiveDir,
       modal,
       rules: deps.rules,
       now: deps.now,
       id: deps.id,
+    });
+    deps.eventBus?.emit("workflow_run.accepted", {
+      workflowRunId: intake.workflowRun.id,
+      source: intake.workflowRun.source,
+      title: intake.workflowRun.title,
+      workflowDefinitionId: intake.workflowRun.workflowDefinitionId,
     });
     res.status(200).json({ response_action: "clear" });
   } catch (error) {

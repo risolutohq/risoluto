@@ -201,12 +201,51 @@ async function maybeAcceptGitHubTriggeredWorkflowRun(
     return;
   }
 
-  await deps.acceptGitHubTriggeredWorkflowRun({
+  const result = await deps.acceptGitHubTriggeredWorkflowRun({
     deliveryKind: "webhook",
     deliveryId,
     action,
     issue,
   });
+  emitGitHubWorkflowRunAccepted(deps, result);
+}
+
+function emitGitHubWorkflowRunAccepted(deps: GitHubWebhookHandlerDeps, result: unknown): void {
+  if (!deps.eventBus || !isAcceptedWorkflowRunResult(result)) {
+    return;
+  }
+  deps.eventBus.emit("workflow_run.accepted", {
+    workflowRunId: result.workflowRun.id,
+    source: result.workflowRun.source,
+    title: result.workflowRun.title,
+    workflowDefinitionId: result.workflowRun.workflowDefinitionId,
+  });
+}
+
+function isAcceptedWorkflowRunResult(result: unknown): result is {
+  workflowRun: {
+    id: string;
+    source: "api" | "cli" | "github" | "linear" | "slack";
+    title: string;
+    workflowDefinitionId: string;
+  };
+} {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+  const workflowRun = (result as { workflowRun?: unknown }).workflowRun;
+  if (!workflowRun || typeof workflowRun !== "object") {
+    return false;
+  }
+  const record = workflowRun as Record<string, unknown>;
+  const validSources = new Set(["api", "cli", "github", "linear", "slack"]);
+  return (
+    typeof record.id === "string" &&
+    typeof record.source === "string" &&
+    validSources.has(record.source) &&
+    typeof record.title === "string" &&
+    typeof record.workflowDefinitionId === "string"
+  );
 }
 
 function toGitHubTriggeredWorkflowRunIssue(

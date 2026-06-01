@@ -55,7 +55,8 @@ const mockCreateDispatcher = vi.hoisted(() => vi.fn().mockReturnValue({ fake: "a
 
 const mockTypedEventBus = vi.hoisted(() =>
   vi.fn().mockImplementation(function () {
-    return { fake: "eventBus" };
+    // `on`/`emit` are stubbed so the Phase 8 accepted-run subscriber (services.ts) can register here.
+    return { fake: "eventBus", on: vi.fn(), emit: vi.fn() };
   }),
 );
 
