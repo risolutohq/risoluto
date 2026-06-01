@@ -213,6 +213,9 @@ describe("verifier role decision routing (NIN-207 Part B)", () => {
     );
 
     const runId = (await archive.listWorkflowRuns())[0]?.id ?? "";
+    // not_satisfied routes to retry_implementation, but this workflow has no implementer role to retry,
+    // so the executor honestly degrades the retry to a block (NIN-201). The implementer-retry loop itself
+    // is covered in tests/workflow-run/executor.test.ts against a planner→implementer→reviewer→verifier flow.
     await expect(archive.loadWorkflowRun(runId)).resolves.toMatchObject({ status: "blocked" });
     // The publish-pr action must not have run (no publish_result artifact).
     await expect(

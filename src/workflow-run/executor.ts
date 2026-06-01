@@ -76,31 +76,31 @@ export async function executeWorkflowDefinition(
   const orderedRoles = orderRoles(input.definition.roles);
   let currentStateId: string | undefined;
   let gateRetryAttempts = 0;
+  let verifierRetryAttempts = 0;
 
   await recordWorkflowRunStatus(input, "running");
   await executeConfiguredWorkflowActions({ ...input, ...state, phase: "before_roles" });
-  for (const [index, role] of orderedRoles.entries()) {
+  let index = 0;
+  while (index < orderedRoles.length) {
+    const role = orderedRoles[index];
     if (appendBudgetEvent(state.events, input.budget, role.id, input.workflowRunId)) {
       return finishWorkflowExecution(input, "blocked", state);
     }
-    currentStateId = await fireHooksForNewState(input, state.artifacts, state.events, role, currentStateId);
-    assertRequiredArtifacts(role, state.artifacts, input.definition.roles);
-    rememberState(state.statesVisited, role.stateId);
-    const produced = await input.runRole({
-      workflowRunId: input.workflowRunId,
-      role,
-      artifacts: pickArtifacts(state.artifacts, role.consumes),
-    });
-    storeProducedArtifacts(state.artifacts, role, produced);
-    state.roleExecutions.push(role.id);
+    currentStateId = await runOrderedRole(input, state, role, currentStateId);
     if (role.id === "planner" && plannerBlocked(state.artifacts["plan.v1"])) {
       return finishWorkflowExecution(input, "blocked", state);
     }
     if (role.produces.includes("verification.v1")) {
-      const retryBudgetRemaining = (input.maxGateRetries ?? DEFAULT_GATE_RETRY_LIMIT) - gateRetryAttempts;
-      const verifierRoute = routeVerifierResult(state.artifacts, retryBudgetRemaining);
-      if (verifierRoute !== "continue_to_publish") {
+      const retryBudgetRemaining = (input.maxGateRetries ?? DEFAULT_GATE_RETRY_LIMIT) - verifierRetryAttempts;
+      const verifierStep = resolveVerifierStep(state.artifacts, retryBudgetRemaining, orderedRoles);
+      if (verifierStep.kind === "block") {
         return finishWorkflowExecution(input, "blocked", state);
+      }
+      if (verifierStep.kind === "retry") {
+        verifierRetryAttempts += 1;
+        currentStateId = undefined;
+        index = verifierStep.index;
+        continue;
       }
     }
     if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
@@ -111,10 +111,34 @@ export async function executeWorkflowDefinition(
         return finishWorkflowExecution(input, "blocked", state);
       }
     }
+    index += 1;
   }
 
   await executeConfiguredWorkflowActions({ ...input, ...state, phase: "after_roles" });
   return finishWorkflowExecution(input, "done", state);
+}
+
+/**
+ * Fire state-entry hooks, assert required inputs, dispatch one role session, and store its produced
+ * artifacts. Returns the (possibly new) current state id so the caller can track state transitions.
+ */
+async function runOrderedRole(
+  input: ExecuteWorkflowDefinitionInput,
+  state: WorkflowExecutionState,
+  role: ResolvedWorkflowRole,
+  currentStateId: string | undefined,
+): Promise<string | undefined> {
+  const nextStateId = await fireHooksForNewState(input, state.artifacts, state.events, role, currentStateId);
+  assertRequiredArtifacts(role, state.artifacts, input.definition.roles);
+  rememberState(state.statesVisited, role.stateId);
+  const produced = await input.runRole({
+    workflowRunId: input.workflowRunId,
+    role,
+    artifacts: pickArtifacts(state.artifacts, role.consumes),
+  });
+  storeProducedArtifacts(state.artifacts, role, produced);
+  state.roleExecutions.push(role.id);
+  return nextStateId;
 }
 
 async function finishWorkflowExecution(
@@ -226,6 +250,43 @@ function routeVerifierResult(artifacts: Readonly<Record<string, unknown>>, retry
     return routeSingleVerifierDecision({ decision: "uncertain", retryBudgetRemaining }).action;
   }
   return routeSingleVerifierDecision({ decision, retryBudgetRemaining }).action;
+}
+
+type VerifierStep =
+  | { readonly kind: "continue" }
+  | { readonly kind: "retry"; readonly index: number }
+  | { readonly kind: "block" };
+
+/**
+ * Map the verifier's decision to the next executor move. `continue_to_publish` advances the run;
+ * `retry_implementation` (verifier `not_satisfied` with retry budget remaining) loops back to the start of
+ * the implementer's state so implementation → review → verification re-run under the surviving budget;
+ * every other route blocks. A workflow with no implementer role has nothing to retry, so a retry route
+ * degrades to a block rather than spinning.
+ */
+function resolveVerifierStep(
+  artifacts: Readonly<Record<string, unknown>>,
+  retryBudgetRemaining: number,
+  orderedRoles: readonly ResolvedWorkflowRole[],
+): VerifierStep {
+  const action = routeVerifierResult(artifacts, retryBudgetRemaining);
+  if (action === "continue_to_publish") {
+    return { kind: "continue" };
+  }
+  if (action === "retry_implementation") {
+    const retryIndex = implementerStateStartIndex(orderedRoles);
+    return retryIndex >= 0 ? { kind: "retry", index: retryIndex } : { kind: "block" };
+  }
+  return { kind: "block" };
+}
+
+/** Index of the first role in the implementer's state, or -1 when the workflow has no implementer to retry. */
+function implementerStateStartIndex(orderedRoles: readonly ResolvedWorkflowRole[]): number {
+  const implementer = orderedRoles.find((role) => role.id === "implementer");
+  if (!implementer) {
+    return -1;
+  }
+  return orderedRoles.findIndex((role) => role.stateId === implementer.stateId);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

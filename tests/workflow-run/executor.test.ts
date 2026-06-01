@@ -66,6 +66,39 @@ function intentArtifact() {
   };
 }
 
+// planner → implementer → reviewer → verifier (verifier in its own `verify` state, produces verification.v1).
+function createVerifierDefinition(): ResolvedWorkflowDefinition {
+  const base = createDefinition();
+  return {
+    ...base,
+    states: [...base.states, { id: "verify", gates: [], hooks: [] }],
+    roles: [
+      ...base.roles,
+      {
+        id: "verifier",
+        stateId: "verify",
+        modelProfile: "verifier",
+        consumes: ["change_summary.v1", "review.v1"],
+        produces: ["verification.v1"],
+        dependsOn: ["reviewer"],
+      },
+    ],
+  };
+}
+
+function verificationArtifact(decision: string): Readonly<Record<string, unknown>> {
+  return {
+    version: 1,
+    workflowRunId,
+    createdAt,
+    mode: "single",
+    decision,
+    summary: "judgement",
+    allowedInputs: [],
+    evidenceLinks: [],
+  };
+}
+
 describe("executeWorkflowDefinition", () => {
   it("executes planner, implementer, and reviewer in DAG order over typed artifacts", async () => {
     const roleOrder: string[] = [];
@@ -443,6 +476,51 @@ describe("executeWorkflowDefinition", () => {
         reason: "cost budget exceeded before gate retry validation-passed",
       }),
     );
+  });
+
+  it("retries the implementer state on a not_satisfied verdict until the verifier is satisfied (NIN-201)", async () => {
+    const roleRuns: string[] = [];
+    let verifyCount = 0;
+
+    const result = await executeWorkflowDefinition({
+      definition: createVerifierDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async ({ role }) => {
+        roleRuns.push(role.id);
+        if (role.id === "verifier") {
+          verifyCount += 1;
+          return { "verification.v1": verificationArtifact(verifyCount >= 2 ? "satisfied" : "not_satisfied") };
+        }
+        return roleOutput(role.id);
+      },
+    });
+
+    expect(result.status).toBe("done");
+    // not_satisfied loops back to the implement state: implement → review → verify re-run, then satisfied.
+    expect(roleRuns).toEqual(["planner", "implementer", "reviewer", "verifier", "implementer", "reviewer", "verifier"]);
+  });
+
+  it("blocks once the verifier retry budget is exhausted (default one retry) (NIN-201)", async () => {
+    const roleRuns: string[] = [];
+
+    const result = await executeWorkflowDefinition({
+      definition: createVerifierDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async ({ role }) => {
+        roleRuns.push(role.id);
+        if (role.id === "verifier") {
+          return { "verification.v1": verificationArtifact("not_satisfied") };
+        }
+        return roleOutput(role.id);
+      },
+    });
+
+    expect(result.status).toBe("blocked");
+    // Default budget is one retry: verify (retry) → re-run implement→review→verify → verify (budget 0) → block.
+    expect(roleRuns.filter((id) => id === "verifier")).toHaveLength(2);
+    expect(roleRuns.filter((id) => id === "implementer")).toHaveLength(2);
   });
 });
 
