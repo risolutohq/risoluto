@@ -49,11 +49,28 @@ Review the branch against the PRD and issues, not just against TypeScript correc
 Prioritize:
 
 1. Correctness bugs in the diff.
-2. Acceptance gaps where a PRD story or Linear criterion is not actually satisfied.
-3. Invariant violations: tracker id used as run id, artifact validation skipped, PR action automated, cascade
+2. **Production reachability.** A green gate proves the modules work in isolation, not that anything runs. For
+   each capability the PRD says an operator can invoke (a CLI command, an HTTP/webhook request, a Slack
+   action), confirm the production path actually reaches the engine — the entry point dispatches to a handler
+   that is *wired*, not just exported. A load-bearing function called only from tests is an unshipped feature
+   wearing a green check. This is the gap a same-loop reviewer most reliably misses.
+3. Acceptance gaps where a PRD story or Linear criterion is not actually satisfied.
+4. Invariant violations: tracker id used as run id, artifact validation skipped, PR action automated, cascade
    residue committed, or PRD Out of Scope implemented.
-4. Test honesty: gate green but load-bearing behavior not exercised.
-5. Scope creep that should become a `discovered` Linear issue.
+5. Test honesty: gate green but load-bearing behavior not exercised — including acceptance/e2e/capstone tests
+   that hand-compose modules or stub the entry point (canned role/action/provider outputs) instead of driving
+   the real CLI/HTTP/webhook/Slack path. If the capstone wires everything by hand, it proves the pieces, not
+   the product.
+6. Scope creep that should become a `discovered` Linear issue.
+
+For lens 2, the cheapest high-signal probe: pick the load-bearing symbols (the engine entry, each adapter's
+intake function, each handler) and grep for **non-test** callers, e.g.
+`rg -n "executeWorkflowDefinition" src --glob '!*.test.ts'`. Zero production callers, or callers that exist
+only in `tests/`, is a HIGH reachability finding. Cross-check parity across sibling adapters — if Linear is
+wired and GitHub is not, the asymmetry is the bug.
+
+For API, workflow-run, storage/archive, workflow-definition, or schema findings, name the contract surface
+the conductor should re-run when practical, such as OpenAPI contracts or `pnpm run test:integration`.
 
 ### Step 3 - Emit `review-handoff.v1`
 

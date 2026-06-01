@@ -18,6 +18,14 @@ This skill is a generator, not the runner.
 - Waves are Linear project milestones sorted by `sortOrder`.
 - Runtime ready-set is live Linear `blocked-by` state; `WAVES.md` is the frozen map, not issue status.
 - Memory split: issue status in Linear, code in git, conductor process state in `~/.codex/goals/<slug>/`.
+- Final PR readiness requires a committed, clean integration branch. Review-fix code must not remain only in
+  the working tree when the goal prints the PR command.
+- A green gate is not reachability. `pnpm` build/lint/test/typecheck passing proves the modules compile and
+  their unit tests hold, not that any capability runs from a real entry point. The capstone wave's NOTES
+  evidence must include at least one end-to-end run driven through a production surface (a CLI invocation, a
+  signed webhook/Slack request), not a test that hand-composes modules with stubbed role/action/provider
+  outputs. Treat "all issues Done + gate green + capstone passes" as necessary, not sufficient — the
+  different-model end-review (`risoluto-review-handoff`) exists to catch features that are wired only in tests.
 - Hard stops: gate red after one repair attempt, missing credentials, ADR/product conflict, destructive or
   dependency change needing approval, merge conflict requiring ownership judgment, budget exhausted.
 - The goal prints `gh pr create`; it does not run it.

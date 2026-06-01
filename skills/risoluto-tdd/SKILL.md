@@ -1,6 +1,6 @@
 ---
 name: risoluto-tdd
-description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or implies test-driven implementation of a specific Linear ticket in the Risoluto pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref — that may belong to the global tdd skill. Takes a `<ticket-ref>`, fetches the issue + linked PRD, refuses unless upstream blocked-by tickets are Done, works in an isolated git worktree, claims the ticket, runs the red-green-refactor loop from this skill's bundled companion files, then on PR-ready back-comments the ticket and prints (never runs) `gh pr create`. Phase 4.2 of `docs/research-to-shipping-pipeline.md`.
+description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or implies test-driven implementation of a specific Linear ticket in the Risoluto pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref — that may belong to the global tdd skill. Takes a `<ticket-ref>`, fetches the issue + linked PRD, refuses unless upstream blocked-by tickets are Done, works in an isolated git worktree, claims the ticket, runs the red-green-refactor loop from this skill's bundled companion files, then on PR-ready back-comments the ticket, ticks each acceptance criterion it can prove, and prints (never runs) `gh pr create`. Phase 4.2 of `docs/research-to-shipping-pipeline.md`.
 ---
 
 # risoluto-tdd
@@ -21,6 +21,7 @@ Given a `<ticket-ref>` (e.g. `RSL-123`):
 6. On PR open:
    - Back-comments the Linear ticket with the PR URL.
    - Applies the `from:prd-<slug>` label to the PR (so Phase 4.3's post-merge workflow can find it).
+   - Reconciles the issue's acceptance criteria: ticks each box the slice actually proved (citing the test or entry point that closes it) and leaves any deferred or unmet criterion unchecked with a one-line reason.
 
 ## Hard preconditions
 
@@ -95,6 +96,8 @@ Key constraints from the PRD:
 - Use the project's domain glossary so test names match Risoluto's vocabulary
 - Respect ADRs in the area being touched
 - Tests go in the project's existing test tiers (`vitest.config.ts` for unit, `vitest.integration.config.ts` for integration)
+- **When an acceptance criterion describes operator-visible behaviour — a CLI command, an HTTP/webhook request, or a Slack action does X — at least one test must drive it through that real entry point, not by calling the internal function directly with stubbed collaborators.** A test that stubs `runRole`/`runAction`/a provider proves the unit; it does not prove the operator can reach it. Stub the external boundaries (network, the LLM, the git remote), but keep the path from the entry point to your code real. If you stub the entry point itself, you have tested the stub — and the gate goes green over an unshipped feature.
+- **Wire what you build in the same slice, and prove the wiring.** A handler, adapter, or engine that is exported but never called from a production entry point still turns the gate green while shipping nothing. When your slice adds such a unit, connect it to its caller (the route, the command, the dispatch table) and add the reachability test above. An exported-but-uncalled symbol is "done" only if the PRD explicitly defers its wiring to a named later slice; otherwise it is incomplete. Check parity with sibling code — if you wire the Linear adapter, the GitHub adapter in the same slice needs the same wiring.
 
 ### Step 4.5 — File out-of-scope discoveries as their own issues
 
@@ -116,6 +119,10 @@ When implementation is complete and all tests pass:
 3. Push the branch. **Print** the `gh pr create` command for Omer to run, targeting `integration/<prd-slug>` — **do NOT execute `gh pr create`.**
 4. Apply the `from:prd-<slug>` label to the PR via `gh pr edit --add-label from:prd-<slug>` (only after Omer has opened the PR)
 5. Back-comment the Linear ticket with the PR URL (save-comment operation: `issueId` + `body`, only after the PR exists)
+6. **Reconcile the issue's acceptance criteria** (save-issue operation, editing the `description` — leave status untouched). For each line in the `## Acceptance criteria` list:
+   - Tick it (`- [ ]` → `- [x]`) **only** if a test or a production entry point added in this slice actually proves it. Append a terse proof pointer in parentheses — e.g. `- [x] A stop-on-first profile halts on the first failing command … (tests/workflow-run/validation-profile.test.ts → "stops on first failure")`.
+   - Leave it **unchecked** if the behaviour is only stubbed, exported-but-unwired, or deferred to a named later slice. Append `(deferred: <reason / later ticket>)` so the gap is explicit instead of silent.
+   - Never tick a box you cannot point at, and never tick from "the suite is green" — green proves the unit, not that the operator can reach the behaviour (see Step 4's reachability rule). Prefer leaving a box unchecked over a tick you can't defend.
 
 ## Notes for the agent
 
@@ -128,6 +135,7 @@ When implementation is complete and all tests pass:
 - **Work in a worktree, never in-place.** `risoluto-next-bundle`'s disjoint-locality reasoning only pays off if bundled slices run as parallel worktrees; implementing in the main checkout forfeits that and risks index collisions with a sibling run.
 - **Merge ticket branches into the integration branch first.** For this PRD, the reviewable branch is `integration/<prd-slug>`; ticket PRs target that branch, and Codex reviews the finished integration branch after Claude/Codex workers have merged their slices.
 - **Claiming (In Progress) is not optional and not confirmed** — it is the lock that stops two parallel runs from grabbing the same ticket. Leave the ticket In Progress at PR-open; moving it to Done is the operator's call after merge (Phase 4.3), never the skill's.
+- **Acceptance criteria are ticked from proof, not from status.** Step 5.6's PR-open reconciliation is the only place boxes get checked, and every tick must cite the test or entry point that closes it. Status never auto-ticks a box: a `Done` issue with an unchecked box is the intended signal that the slice deliberately deferred that criterion, not a bookkeeping miss. This closes the gap where a whole goal reaches `Done` with every acceptance box still empty because no step ever wrote them back.
 - **Filed discoveries vs. the Out-of-Scope boundary.** Incidental finds become `discovered` issues (Step 4.5); things the PRD deliberately excludes are surfaced to Omer, not filed.
 
 ## Companion files
