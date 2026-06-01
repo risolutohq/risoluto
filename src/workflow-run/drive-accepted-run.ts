@@ -1,7 +1,7 @@
 import type { ResolvedWorkflowDefinition } from "../workflow-definition/registry.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import type { WorkflowRunStartRecord } from "./contracts.js";
-import { writeDoneHandoff } from "./drive-done-handoff.js";
+import { budgetFromPolicy, writeDoneHandoff, writeHandoffMarkdown } from "./drive-done-handoff.js";
 import {
   createWorkflowRunEvidenceStore,
   type WorkflowRunEvidenceRecord,
@@ -109,7 +109,7 @@ async function finishDrivenRun(
     const published = input.publishOnDone ? await input.publishOnDone() : null;
     const handoff = await writeDoneHandoff(
       archive,
-      { workflowRunId: input.workflowRun.id, createdAt },
+      { workflowRunId: input.workflowRun.id, createdAt, ...(input.budget ? { budget: input.budget } : {}) },
       location,
       result,
       memoryRecord,
@@ -188,7 +188,7 @@ async function writeBlockedHandoff(
     summary: `Workflow Run ${input.workflowRun.id} blocked: ${reason}`,
     recommendedNextAction: "Resolve the blocker, then retry the run from the CLI.",
     suggestedSkills: ["risoluto-tdd"],
-    budget: { elapsedMs: 0, costUsd: 0 },
+    budget: budgetFromPolicy(input.budget),
     validation: { status: "not_run" },
     attemptMemory: [],
     output: { branchName: null, pullRequestUrl: null },
@@ -196,13 +196,15 @@ async function writeBlockedHandoff(
     artifacts: [],
     evidence: [],
   };
-  return archive.writeWorkflowRunArtifact({
+  const record = await archive.writeWorkflowRunArtifact({
     workflowRunId: input.workflowRun.id,
     contractId: "handoff.v1",
     artifactId: "handoff",
     data: handoff,
     producer: { type: "action", id: "write-handoff" },
   });
+  await writeHandoffMarkdown(archiveLocation(input), input.workflowRun.id, handoff);
+  return record;
 }
 
 async function persistExecutorEvents(

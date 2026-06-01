@@ -1,8 +1,15 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { WorkflowRunArchive, WorkflowRunArchiveLocation } from "./archive.js";
+import {
+  computeWorkflowCostUsd,
+  DEFAULT_WORKFLOW_MAX_COST_USD,
+  DEFAULT_WORKFLOW_MAX_WALL_CLOCK_MS,
+  type WorkflowBudgetPolicy,
+} from "./budget-retry.js";
 import type { WorkflowExecutorResult } from "./executor.js";
-import type { HandoffArtifact } from "./handoff-contract.js";
+import { renderHandoffMarkdown, type HandoffArtifact } from "./handoff-contract.js";
 import type { WorkflowRunAttemptMemoryRecord } from "./memory-store.js";
 
 interface EvidenceRef {
@@ -13,6 +20,7 @@ interface EvidenceRef {
 interface DoneHandoffInput {
   readonly workflowRunId: string;
   readonly createdAt: string;
+  readonly budget?: WorkflowBudgetPolicy;
 }
 
 /**
@@ -51,7 +59,7 @@ export async function writeDoneHandoff(
     summary: `Workflow Run ${workflowRunId} completed successfully.`,
     recommendedNextAction: "Review the published output and promote to production if ready.",
     suggestedSkills: ["risoluto-review-handoff"],
-    budget: { elapsedMs: 0, costUsd: 0 },
+    budget: budgetFromPolicy(handoffInput.budget),
     validation: validationRef,
     attemptMemory: [attemptMemoryEntry],
     output: { branchName: null, pullRequestUrl: publishedPullRequestUrl ?? publishResult?.pullRequestUrl ?? null },
@@ -60,13 +68,42 @@ export async function writeDoneHandoff(
     evidence: evidenceLinks,
   };
 
-  return archive.writeWorkflowRunArtifact({
+  const record = await archive.writeWorkflowRunArtifact({
     workflowRunId,
     contractId: "handoff.v1",
     artifactId: "handoff",
     data: handoff,
     producer: { type: "action", id: "write-done-handoff" },
   });
+  await writeHandoffMarkdown(location, workflowRunId, handoff);
+  return record;
+}
+
+/**
+ * Derive the handoff `budget` block from the run's budget policy: real elapsed wall-clock, measured cost
+ * from token usage (0 until the usage accumulator is wired — never faked), and the effective hard limits.
+ */
+export function budgetFromPolicy(budget: WorkflowBudgetPolicy | undefined): HandoffArtifact["budget"] {
+  if (!budget) {
+    return { elapsedMs: 0, costUsd: 0 };
+  }
+  return {
+    elapsedMs: Math.max(0, budget.nowMs() - budget.startedAtMs),
+    costUsd: computeWorkflowCostUsd(budget.usage()),
+    maxWallClockMs: budget.maxWallClockMs ?? DEFAULT_WORKFLOW_MAX_WALL_CLOCK_MS,
+    maxCostUsd: budget.maxCostUsd ?? DEFAULT_WORKFLOW_MAX_COST_USD,
+  };
+}
+
+/** Render the handoff to Markdown and persist it as `handoff.md` beside `handoff.json` (links, no raw logs). */
+export async function writeHandoffMarkdown(
+  location: WorkflowRunArchiveLocation,
+  workflowRunId: string,
+  handoff: HandoffArtifact,
+): Promise<void> {
+  const markdownPath = resolveArtifactPath(location, workflowRunId, "handoff").replace(/\.json$/, ".md");
+  await mkdir(path.dirname(markdownPath), { recursive: true });
+  await writeFile(markdownPath, renderHandoffMarkdown(handoff), "utf8");
 }
 
 function buildValidationRef(

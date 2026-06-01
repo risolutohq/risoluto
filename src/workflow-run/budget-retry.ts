@@ -52,7 +52,7 @@ export function evaluateWorkflowBudget(input: WorkflowBudgetCheckInput): Workflo
   return { status: "passed", evidence };
 }
 
-function computeWorkflowCostUsd(input: WorkflowBudgetUsageSnapshot): number {
+export function computeWorkflowCostUsd(input: WorkflowBudgetUsageSnapshot): number {
   return Object.entries(input.usageByModelProfile).reduce((totalCostUsd, [modelProfile, tokenUsage]) => {
     const price = input.modelProfilePrices[modelProfile];
     if (!price) {
