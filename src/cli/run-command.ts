@@ -3,14 +3,14 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
-import { startWorkflowRunCommand } from "./workflow-run-start-command.js";
+import { startAndDriveRunCommand } from "./run-start-command.js";
 
 export async function tryHandleRunCommand(argv: string[]): Promise<number | null> {
   if (argv[0] !== "run") {
     return null;
   }
   if (argv[1] === "start") {
-    return startWorkflowRunCommand(argv.slice(2));
+    return startAndDriveRunCommand(argv.slice(2));
   }
   if (argv[1] === "status") {
     return workflowRunStatusCommand(argv.slice(2));

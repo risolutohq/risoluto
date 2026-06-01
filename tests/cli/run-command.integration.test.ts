@@ -41,9 +41,12 @@ describe("run CLI walking skeleton", () => {
       ]),
     ).resolves.toBe(0);
 
-    const started = JSON.parse(stdout[0]) as { workflowRun: { id: string; status: string } };
+    const started = JSON.parse(stdout[0]) as { type: string; outcome: string; workflowRun: { id: string } };
     expect(started.workflowRun.id).toMatch(/^wr_/);
-    expect(started.workflowRun.status).toBe("accepted");
+    expect(started.type).toBe("workflow_run.driven");
+    // `run start` drives the engine; no agent harness is wired for the CLI yet, so it reaches an honest
+    // blocked handoff rather than a stub. Reachability is proven in run-start-reachability.integration.test.ts.
+    expect(started.outcome).toBe("blocked");
 
     await expect(main(["run", "status", started.workflowRun.id, "--data-dir", dataDir, "--json"])).resolves.toBe(0);
 
@@ -52,7 +55,7 @@ describe("run CLI walking skeleton", () => {
       type: "workflow_run.status",
       workflowRun: {
         id: started.workflowRun.id,
-        status: "accepted",
+        status: "blocked",
       },
     });
   });

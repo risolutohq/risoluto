@@ -1,0 +1,159 @@
+import type { ResolvedWorkflowDefinition } from "../workflow-definition/registry.js";
+import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
+import type { WorkflowRunStartRecord } from "./contracts.js";
+import { WorkflowExecutorError, type ExecuteWorkflowDefinitionInput, type WorkflowExecutorResult } from "./executor.js";
+import type { WorkflowExecutorEvent } from "./gate-hook-engine.js";
+import type { HandoffArtifact } from "./handoff-contract.js";
+import type { WorkflowRunIntentArtifact } from "./intake-core.js";
+import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
+import { driveWorkflowRun } from "./workflow-run-driver.js";
+
+export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocation {
+  readonly definition: ResolvedWorkflowDefinition;
+  readonly workflowRun: WorkflowRunStartRecord;
+  readonly intent: WorkflowRunIntentArtifact;
+  readonly runRole: ExecuteWorkflowDefinitionInput["runRole"];
+  readonly runAction?: ExecuteWorkflowDefinitionInput["runAction"];
+  readonly runHook?: ExecuteWorkflowDefinitionInput["runHook"];
+  readonly evaluateGate?: ExecuteWorkflowDefinitionInput["evaluateGate"];
+  readonly budget?: ExecuteWorkflowDefinitionInput["budget"];
+  readonly now?: () => string;
+}
+
+export interface DriveAcceptedWorkflowRunResult {
+  readonly outcome: "blocked" | "done";
+  readonly workflowRunId: string;
+  readonly roleExecutions: readonly string[];
+  readonly reason?: string;
+  readonly handoffArtifactId?: string;
+}
+
+/**
+ * Advance an accepted Workflow Run through the SAME engine every intake surface drives. On a clean run
+ * it returns `done`; on a planner/gate/budget block it returns `blocked`; on a role/dispatch failure it
+ * records the block and writes a real `handoff.v1` — an honest handoff, never a stubbed success.
+ */
+export async function driveAcceptedWorkflowRun(
+  input: DriveAcceptedWorkflowRunInput,
+): Promise<DriveAcceptedWorkflowRunResult> {
+  const archive = createWorkflowRunArchive(input);
+  try {
+    const result = await driveWorkflowRun({
+      ...archiveLocation(input),
+      definition: input.definition,
+      workflowRunId: input.workflowRun.id,
+      initialArtifacts: { "intent.v1": input.intent },
+      runRole: input.runRole,
+      ...(input.runAction ? { runAction: input.runAction } : {}),
+      ...(input.runHook ? { runHook: input.runHook } : {}),
+      ...(input.evaluateGate ? { evaluateGate: input.evaluateGate } : {}),
+      ...(input.budget ? { budget: input.budget } : {}),
+    });
+    return await finishDrivenRun(archive, input, result);
+  } catch (error) {
+    if (!(error instanceof WorkflowExecutorError || error instanceof WorkflowRunRoleDispatchError)) {
+      throw error;
+    }
+    return await finishFailedRun(archive, input, error.message);
+  }
+}
+
+async function finishDrivenRun(
+  archive: WorkflowRunArchive,
+  input: DriveAcceptedWorkflowRunInput,
+  result: WorkflowExecutorResult,
+): Promise<DriveAcceptedWorkflowRunResult> {
+  if (result.status === "done") {
+    return { outcome: "done", workflowRunId: input.workflowRun.id, roleExecutions: result.roleExecutions };
+  }
+  const { reason, kind } = blockedOutcome(result.events);
+  const handoff = await writeBlockedHandoff(archive, input, reason, kind);
+  return {
+    outcome: "blocked",
+    workflowRunId: input.workflowRun.id,
+    roleExecutions: result.roleExecutions,
+    reason,
+    handoffArtifactId: handoff.artifactId,
+  };
+}
+
+async function finishFailedRun(
+  archive: WorkflowRunArchive,
+  input: DriveAcceptedWorkflowRunInput,
+  reason: string,
+): Promise<DriveAcceptedWorkflowRunResult> {
+  await archive.updateWorkflowRunStatus(input.workflowRun.id, "blocked");
+  const handoff = await writeBlockedHandoff(archive, input, reason, "failed_gate");
+  return {
+    outcome: "blocked",
+    workflowRunId: input.workflowRun.id,
+    roleExecutions: [],
+    reason,
+    handoffArtifactId: handoff.artifactId,
+  };
+}
+
+function blockedOutcome(events: readonly WorkflowExecutorEvent[]): {
+  reason: string;
+  kind: "blocking_question" | "failed_gate";
+} {
+  const failedGate = [...events]
+    .reverse()
+    .find((event) => event.eventType === "validation_gate.evaluated" && event.status === "failed");
+  if (failedGate) {
+    return {
+      reason: `gate ${failedGate.gateId} failed${failedGate.reason ? `: ${failedGate.reason}` : ""}`,
+      kind: "failed_gate",
+    };
+  }
+  const budgetStop = [...events]
+    .reverse()
+    .find((event) => event.eventType === "workflow_budget.checked" && event.status === "failed");
+  if (budgetStop) {
+    return { reason: `budget exhausted${budgetStop.reason ? `: ${budgetStop.reason}` : ""}`, kind: "failed_gate" };
+  }
+  return { reason: "planner triage blocked the run before implementation budget was spent", kind: "blocking_question" };
+}
+
+async function writeBlockedHandoff(
+  archive: WorkflowRunArchive,
+  input: DriveAcceptedWorkflowRunInput,
+  reason: string,
+  kind: "blocking_question" | "failed_gate",
+): Promise<{ artifactId: string }> {
+  const createdAt = (input.now ?? defaultNow)();
+  const handoff: HandoffArtifact = {
+    version: 1,
+    workflowRunId: input.workflowRun.id,
+    createdAt,
+    outcome: "blocked",
+    summary: `Workflow Run ${input.workflowRun.id} blocked: ${reason}`,
+    recommendedNextAction: "Resolve the blocker, then retry the run from the CLI.",
+    suggestedSkills: ["risoluto-tdd"],
+    budget: { elapsedMs: 0, costUsd: 0 },
+    validation: { status: "not_run" },
+    attemptMemory: [],
+    output: { branchName: null, pullRequestUrl: null },
+    blockers: [{ kind, message: reason }],
+    artifacts: [],
+    evidence: [],
+  };
+  return archive.writeWorkflowRunArtifact({
+    workflowRunId: input.workflowRun.id,
+    contractId: "handoff.v1",
+    artifactId: "handoff",
+    data: handoff,
+    producer: { type: "action", id: "write-handoff" },
+  });
+}
+
+function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveLocation {
+  return {
+    ...(input.dataDir ? { dataDir: input.dataDir } : {}),
+    ...(input.archiveDir ? { archiveDir: input.archiveDir } : {}),
+  };
+}
+
+function defaultNow(): string {
+  return new Date().toISOString();
+}
