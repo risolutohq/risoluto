@@ -1,6 +1,7 @@
 import type { ResolvedWorkflowDefinition } from "../workflow-definition/registry.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import type { WorkflowRunStartRecord } from "./contracts.js";
+import { toWorkflowRunEventRecords } from "./executor-event-log.js";
 import { WorkflowExecutorError, type ExecuteWorkflowDefinitionInput, type WorkflowExecutorResult } from "./executor.js";
 import type { WorkflowExecutorEvent } from "./gate-hook-engine.js";
 import type { HandoffArtifact } from "./handoff-contract.js";
@@ -45,7 +46,7 @@ export async function driveAcceptedWorkflowRun(
       initialArtifacts: { "intent.v1": input.intent },
       runRole: input.runRole,
       ...(input.runAction ? { runAction: input.runAction } : {}),
-      ...(input.runHook ? { runHook: input.runHook } : {}),
+      runHook: input.runHook ?? defaultEvidenceHook,
       ...(input.evaluateGate ? { evaluateGate: input.evaluateGate } : {}),
       ...(input.budget ? { budget: input.budget } : {}),
     });
@@ -63,6 +64,7 @@ async function finishDrivenRun(
   input: DriveAcceptedWorkflowRunInput,
   result: WorkflowExecutorResult,
 ): Promise<DriveAcceptedWorkflowRunResult> {
+  await persistExecutorEvents(archive, input, result.events);
   if (result.status === "done") {
     return { outcome: "done", workflowRunId: input.workflowRun.id, roleExecutions: result.roleExecutions };
   }
@@ -146,6 +148,25 @@ async function writeBlockedHandoff(
     producer: { type: "action", id: "write-handoff" },
   });
 }
+
+async function persistExecutorEvents(
+  archive: WorkflowRunArchive,
+  input: DriveAcceptedWorkflowRunInput,
+  events: readonly WorkflowExecutorEvent[],
+): Promise<void> {
+  if (events.length === 0) {
+    return;
+  }
+  const records = toWorkflowRunEventRecords(events, {
+    source: input.workflowRun.source,
+    at: (input.now ?? defaultNow)(),
+  });
+  await archive.appendWorkflowRunEvents(input.workflowRun.id, records);
+}
+
+const defaultEvidenceHook: NonNullable<ExecuteWorkflowDefinitionInput["runHook"]> = async ({ hookId, state }) => ({
+  evidence: { hookId, stateId: state.id },
+});
 
 function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveLocation {
   return {
