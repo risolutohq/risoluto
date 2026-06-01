@@ -92,7 +92,11 @@ async function createInfrastructure(
   const metrics = createMetricsCollector();
   const observability = createObservabilityHub({ archiveDir });
   const persistence = options?.persistence ?? (await initPersistenceRuntime({ dataDir: archiveDir, logger }));
-  const { tracker, trackerToolProvider, linearClient } = createTracker(() => configStore.getConfig(), logger);
+  const { tracker, trackerToolProvider, linearClient } = createTracker(
+    () => configStore.getConfig(),
+    logger,
+    archiveDir,
+  );
   const repoRouter = createRepoRouterProvider(() => configStore.getConfig());
   const gitManager = createGitHubToolProvider(() => configStore.getConfig(), {
     env: process.env,

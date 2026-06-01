@@ -282,7 +282,7 @@ describe("createServices", () => {
       logger,
     );
 
-    expect(mockCreateTracker).toHaveBeenCalledWith(expect.any(Function), logger);
+    expect(mockCreateTracker).toHaveBeenCalledWith(expect.any(Function), logger, archiveDir);
   });
 
   it("passes the persistence attemptStore into HttpServer", async () => {

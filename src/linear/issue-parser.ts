@@ -1,6 +1,19 @@
 import { asArray, asRecord, asStringOrNull } from "../utils/type-guards.js";
 import type { Issue, IssueBlockerRef } from "../core/types.js";
 
+/**
+ * Stamp a Risoluto-owned Workflow Run id onto an issue returned by normalizeIssue.
+ * Only sets the field when a workflowRunId is provided — never overwrites with undefined.
+ * Callers must look up the mapping from the intake idempotency store; NEVER use the
+ * tracker issue id as the workflowRunId (CR-03).
+ */
+export function withWorkflowRunId(issue: Issue, workflowRunId: string | undefined): Issue {
+  if (!workflowRunId) {
+    return issue;
+  }
+  return { ...issue, workflowRunId };
+}
+
 const asString = asStringOrNull;
 
 function normalizeLabels(raw: unknown): string[] {
