@@ -7,6 +7,7 @@ import {
   type ValidationProfileCommandInput,
   type ValidationProfileCommandOutput,
 } from "./validation-profile.js";
+import type { WorkflowRunWorkspacePreparer } from "./workspace-preparer.js";
 
 /** Effect port for the validation profile's commands — the external boundary (real shell vs. test fake). */
 export type WorkflowRunValidationCommandRunner = (
@@ -19,6 +20,7 @@ export type WorkflowRunValidationCommandRunner = (
  * fabricating an artifact, so the run reaches a real blocked handoff.
  */
 export interface WorkflowRunActionEffects {
+  readonly prepareWorkspace?: WorkflowRunWorkspacePreparer;
   readonly runValidationCommand?: WorkflowRunValidationCommandRunner;
 }
 
@@ -31,6 +33,7 @@ export class WorkflowRunActionError extends Error {
 
 export interface CreateWorkflowRunActionRunnerDeps {
   readonly effects: WorkflowRunActionEffects;
+  readonly workflowDefinitionId: string;
   readonly now: () => string;
   readonly writeArtifact: (input: WriteWorkflowRunArtifactInput) => Promise<WorkflowRunArtifactReference>;
 }
@@ -46,13 +49,49 @@ export function createWorkflowRunActionRunner(
 ): (input: WorkflowActionExecutionInput) => Promise<Readonly<Record<string, unknown>>> {
   return async (input) => {
     if (input.actionId === "create-worktree") {
-      return {};
+      return createWorktreeAction(deps, input);
     }
     if (input.actionId === "run-validation-profile") {
       return runValidationAction(deps, input);
     }
     throw new WorkflowRunActionError(`action ${input.actionId} is not configured for this entry point yet`);
   };
+}
+
+async function createWorktreeAction(
+  deps: CreateWorkflowRunActionRunnerDeps,
+  input: WorkflowActionExecutionInput,
+): Promise<Readonly<Record<string, unknown>>> {
+  // No workspace is configured for this entry point yet, so worktree preparation is a no-op; the run
+  // still reaches the role chain (which blocks honestly without an agent). Once a workspace is wired,
+  // this renders the branch and prepares the worktree, failing the run on a dirty workspace.
+  if (!deps.effects.prepareWorkspace) {
+    return {};
+  }
+  try {
+    await deps.effects.prepareWorkspace({
+      workflowRunId: input.workflowRunId,
+      workflowDefinitionId: deps.workflowDefinitionId,
+      intent: extractIntentText(input.artifacts),
+      createdAt: deps.now(),
+    });
+  } catch (error) {
+    // Dirty-workspace / branch-template failures abort the run as an honest blocked handoff.
+    throw new WorkflowRunActionError(error instanceof Error ? error.message : String(error), { cause: error });
+  }
+  return {};
+}
+
+function extractIntentText(artifacts: Readonly<Record<string, unknown>>): string {
+  const intent = artifacts["intent.v1"];
+  if (isRecord(intent) && typeof intent.body === "string") {
+    return intent.body;
+  }
+  return "";
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function runValidationAction(

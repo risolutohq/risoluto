@@ -11,7 +11,11 @@ import {
 } from "./workflow-run-attempt-command.js";
 import { listWorkflowRunsCommand } from "./workflow-run-list-command.js";
 import { startWorkflowRunCommand } from "./workflow-run-start-command.js";
-import { recordWorkspaceCleanupCommand, recordWorkspaceLifecycleCommand } from "./workflow-run-workspace-command.js";
+import {
+  classifyWorkspaceRetentionCommand,
+  recordWorkspaceCleanupCommand,
+  recordWorkspaceLifecycleCommand,
+} from "./workflow-run-workspace-command.js";
 import { recordWorkerProcessCommand } from "./workflow-run-worker-process-command.js";
 import { tryHandleDoctorCommand } from "./doctor-command.js";
 import { tryHandleRunCommand } from "./run-command.js";
@@ -95,6 +99,11 @@ const workflowRunCommandHandlers: WorkflowRunCommandHandler[] = [
     expected: "workflow-run workspace cleanup record",
     matches: (argv) => argv[1] === "workspace" && argv[2] === "cleanup" && argv[3] === "record",
     handle: (argv) => recordWorkspaceCleanupCommand(argv.slice(4)),
+  },
+  {
+    expected: "workflow-run workspace retention",
+    matches: (argv) => argv[1] === "workspace" && argv[2] === "retention",
+    handle: (argv) => classifyWorkspaceRetentionCommand(argv.slice(3)),
   },
   {
     expected: "workflow-run worker-process record",

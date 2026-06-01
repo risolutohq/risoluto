@@ -13,8 +13,9 @@ import {
   type WorkflowRunValidationCommandRunner,
 } from "../workflow-run/run-action-runner.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
+import type { WorkflowRunWorkspacePreparer } from "../workflow-run/workspace-preparer.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
-import { resolveWorkflowRunIntake } from "./workflow-run-intake.js";
+import { resolveWorkflowRunIntake, type ResolvedWorkflowRunIntake } from "./workflow-run-intake.js";
 
 /**
  * Injection seam: production passes nothing, so `run start` drives the engine through the real agent
@@ -26,6 +27,7 @@ export interface RunStartCommandDeps {
   readonly dispatchRole?: WorkflowRunRoleDispatch;
   readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
   readonly runValidationCommand?: WorkflowRunValidationCommandRunner;
+  readonly prepareWorkspace?: WorkflowRunWorkspacePreparer;
   readonly budget?: WorkflowBudgetPolicy;
   readonly maxGateRetries?: number;
   readonly now?: () => string;
@@ -56,6 +58,16 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     workflowDir: resolveWorkflowDir(parsed.values["workflow-dir"]),
   });
 
+  const result = await driveAcceptedRun(dataDir, accepted, deps);
+  printRunOutcome(parsed.values.json, accepted.workflowRun, result);
+  return 0;
+}
+
+async function driveAcceptedRun(
+  dataDir: string,
+  accepted: ResolvedWorkflowRunIntake,
+  deps: RunStartCommandDeps,
+): Promise<DriveAcceptedWorkflowRunResult> {
   const archive = createWorkflowRunArchive({ dataDir });
   const nowString = deps.now ?? (() => new Date().toISOString());
   const runRole = createWorkflowRunRoleRunner({
@@ -63,11 +75,15 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     readArtifact: (input) => archive.readWorkflowRunArtifact(input),
   });
   const runAction = createWorkflowRunActionRunner({
-    effects: { ...(deps.runValidationCommand ? { runValidationCommand: deps.runValidationCommand } : {}) },
+    effects: {
+      ...(deps.prepareWorkspace ? { prepareWorkspace: deps.prepareWorkspace } : {}),
+      ...(deps.runValidationCommand ? { runValidationCommand: deps.runValidationCommand } : {}),
+    },
+    workflowDefinitionId: accepted.definition.id,
     now: nowString,
     writeArtifact: (input) => archive.writeWorkflowRunArtifact(input),
   });
-  const result = await driveAcceptedWorkflowRun({
+  return driveAcceptedWorkflowRun({
     dataDir,
     definition: accepted.definition,
     workflowRun: accepted.workflowRun,
@@ -79,9 +95,6 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     ...(deps.maxGateRetries === undefined ? {} : { maxGateRetries: deps.maxGateRetries }),
     ...(deps.now ? { now: deps.now } : {}),
   });
-
-  printRunOutcome(parsed.values.json, accepted.workflowRun, result);
-  return 0;
 }
 
 function printRunOutcome(
