@@ -1,6 +1,8 @@
 import type { WriteWorkflowRunArtifactInput } from "./archive.js";
 import type { WorkflowRunArtifactReference } from "./contracts.js";
 import type { WorkflowActionExecutionInput } from "./executor-actions.js";
+import type { OperatorPermission } from "./operator-approval-contract.js";
+import { evaluatePrPublishPolicy, type PrPublishMode, type PrPublishPolicyInput } from "./publish-policy.js";
 import {
   isValidationProfileId,
   runValidationProfile,
@@ -36,13 +38,16 @@ export interface CreateWorkflowRunActionRunnerDeps {
   readonly workflowDefinitionId: string;
   readonly now: () => string;
   readonly writeArtifact: (input: WriteWorkflowRunArtifactInput) => Promise<WorkflowRunArtifactReference>;
+  /** Operator/config-requested publish mode for `publish-pr`. Unset means the policy default (draft). */
+  readonly publishMode?: PrPublishMode;
 }
 
 /**
  * Production `runAction`: map each configured action id to its real effect and deposit the produced
  * artifact in the run archive. `create-worktree` produces no artifact; `run-validation-profile` runs the
- * real stop-on-first / collect-all profile logic over an injected command runner. Other actions are not
- * wired for this entry point yet and fail honestly.
+ * real stop-on-first / collect-all profile logic over an injected command runner; `publish-pr` applies
+ * the deterministic publish-mode policy and records `publish_result.v1`. Other actions are not wired for
+ * this entry point yet and fail honestly.
  */
 export function createWorkflowRunActionRunner(
   deps: CreateWorkflowRunActionRunnerDeps,
@@ -53,6 +58,9 @@ export function createWorkflowRunActionRunner(
     }
     if (input.actionId === "run-validation-profile") {
       return runValidationAction(deps, input);
+    }
+    if (input.actionId === "publish-pr") {
+      return publishPrAction(deps, input);
     }
     throw new WorkflowRunActionError(`action ${input.actionId} is not configured for this entry point yet`);
   };
@@ -120,4 +128,78 @@ async function runValidationAction(
     producer: { type: "action", id: input.actionId },
   });
   return { "validation_result.v1": artifact };
+}
+
+const CI_RESULT_STATUSES = ["blocked", "failed", "passed", "pending", "rerun_requested"] as const;
+type CiResultStatus = (typeof CI_RESULT_STATUSES)[number];
+const VERIFIER_DECISIONS = ["satisfied", "not_satisfied", "uncertain"] as const;
+type VerifierDecision = (typeof VERIFIER_DECISIONS)[number];
+
+/**
+ * Deterministic PR publishing-mode policy reachable from `run start`. Reads the validation / verifier /
+ * CI / operator-approval artifacts the prior roles and actions deposited, applies the requested mode
+ * (default draft), and persists the resulting `publish_result.v1`. Live PR creation is a separate slice;
+ * this action only records the policy decision.
+ */
+async function publishPrAction(
+  deps: CreateWorkflowRunActionRunnerDeps,
+  input: WorkflowActionExecutionInput,
+): Promise<Readonly<Record<string, unknown>>> {
+  const artifact = evaluatePrPublishPolicy({
+    workflowRunId: input.workflowRunId,
+    createdAt: deps.now(),
+    ...(deps.publishMode ? { requestedMode: deps.publishMode } : {}),
+    validation: { status: readValidationStatus(input.artifacts) },
+    verification: readVerification(input.artifacts),
+    ci: readCiResult(input.artifacts),
+    operatorApproval: readOperatorApproval(input.artifacts),
+    mergePolicy: null,
+  });
+  await deps.writeArtifact({
+    workflowRunId: input.workflowRunId,
+    contractId: "publish_result.v1",
+    artifactId: "publish_result",
+    data: artifact,
+    producer: { type: "action", id: input.actionId },
+  });
+  return { "publish_result.v1": artifact };
+}
+
+// Absence of an artifact is read as "not green / not present" (never fabricated as passing): ready and
+// auto-merge then refuse, while draft/none ignore these inputs entirely.
+function readValidationStatus(artifacts: Readonly<Record<string, unknown>>): "failed" | "passed" {
+  const validation = artifacts["validation_result.v1"];
+  return isRecord(validation) && validation.status === "passed" ? "passed" : "failed";
+}
+
+function readVerification(artifacts: Readonly<Record<string, unknown>>): PrPublishPolicyInput["verification"] {
+  const verification = artifacts["verification.v1"];
+  if (isRecord(verification) && isVerifierDecision(verification.decision)) {
+    return { decision: verification.decision };
+  }
+  return null;
+}
+
+function readCiResult(artifacts: Readonly<Record<string, unknown>>): PrPublishPolicyInput["ci"] {
+  const ci = artifacts["ci_result.v1"];
+  if (isRecord(ci) && isCiResultStatus(ci.status)) {
+    return { status: ci.status };
+  }
+  return null;
+}
+
+function readOperatorApproval(artifacts: Readonly<Record<string, unknown>>): PrPublishPolicyInput["operatorApproval"] {
+  const approval = artifacts["operator_approval.v1"];
+  if (isRecord(approval) && typeof approval.permission === "string") {
+    return { permission: approval.permission as OperatorPermission };
+  }
+  return null;
+}
+
+function isCiResultStatus(value: unknown): value is CiResultStatus {
+  return typeof value === "string" && (CI_RESULT_STATUSES as readonly string[]).includes(value);
+}
+
+function isVerifierDecision(value: unknown): value is VerifierDecision {
+  return typeof value === "string" && (VERIFIER_DECISIONS as readonly string[]).includes(value);
 }

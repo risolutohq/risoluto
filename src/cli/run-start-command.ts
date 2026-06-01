@@ -12,6 +12,7 @@ import {
   createWorkflowRunActionRunner,
   type WorkflowRunValidationCommandRunner,
 } from "../workflow-run/run-action-runner.js";
+import type { PrPublishMode } from "../workflow-run/publish-policy.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
 import type { WorkflowRunWorkspacePreparer } from "../workflow-run/workspace-preparer.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
@@ -44,6 +45,7 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
       "workspace-key": { type: "string" },
       "data-dir": { type: "string" },
       "workflow-dir": { type: "string" },
+      "publish-mode": { type: "string" },
       json: { type: "boolean", default: false },
     },
   });
@@ -58,7 +60,7 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     workflowDir: resolveWorkflowDir(parsed.values["workflow-dir"]),
   });
 
-  const result = await driveAcceptedRun(dataDir, accepted, deps);
+  const result = await driveAcceptedRun(dataDir, accepted, deps, parsePublishMode(parsed.values["publish-mode"]));
   printRunOutcome(parsed.values.json, accepted.workflowRun, result);
   return 0;
 }
@@ -67,6 +69,7 @@ async function driveAcceptedRun(
   dataDir: string,
   accepted: ResolvedWorkflowRunIntake,
   deps: RunStartCommandDeps,
+  publishMode: PrPublishMode | undefined,
 ): Promise<DriveAcceptedWorkflowRunResult> {
   const archive = createWorkflowRunArchive({ dataDir });
   const nowString = deps.now ?? (() => new Date().toISOString());
@@ -82,6 +85,7 @@ async function driveAcceptedRun(
     workflowDefinitionId: accepted.definition.id,
     now: nowString,
     writeArtifact: (input) => archive.writeWorkflowRunArtifact(input),
+    ...(publishMode ? { publishMode } : {}),
   });
   return driveAcceptedWorkflowRun({
     dataDir,
@@ -145,4 +149,17 @@ function requireNonEmpty(value: string | undefined, flag: string): string {
     throw new TypeError(`${flag} is required`);
   }
   return trimmed;
+}
+
+const PUBLISH_MODES = ["auto_merge", "draft", "incomplete_draft", "none", "ready"] as const;
+
+function parsePublishMode(value: string | undefined): PrPublishMode | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (!(PUBLISH_MODES as readonly string[]).includes(trimmed)) {
+    throw new TypeError(`--publish-mode must be one of ${PUBLISH_MODES.join(", ")}`);
+  }
+  return trimmed as PrPublishMode;
 }
