@@ -126,15 +126,17 @@ describe("gate and hook engine reachable from run start (NIN-200)", () => {
     );
 
     // Criteria 2 + 3: the hook fired at state entry and recorded evidence, and the gate and hook are
-    // distinct durable event records — separate code paths, separate records.
+    // distinct durable event records — separate code paths, separate records. (Budget checks fire before
+    // every role under the default budget; filter them out to assert the gate/hook record stream.)
     const events = await archive.readWorkflowRunEvents(runId);
-    expect(events.map((event) => event.eventType)).toEqual([
-      "workflow_run.accepted",
-      "workflow_hook.fired",
-      "validation_gate.evaluated",
-    ]);
-    expect(events[1]).toMatchObject({ hook: { name: "notify-operator", timing: "state_entry" } });
-    expect(events[1]?.message).toMatch(/recorded evidence/);
-    expect(events[2]).toMatchObject({ gate: { name: "verifier-satisfied", status: "failed" } });
+    const recordStream = events
+      .map((event) => event.eventType)
+      .filter((eventType) => eventType !== "workflow_budget.checked");
+    expect(recordStream).toEqual(["workflow_run.accepted", "workflow_hook.fired", "validation_gate.evaluated"]);
+    const hookEvent = events.find((event) => event.eventType === "workflow_hook.fired");
+    const gateEvent = events.find((event) => event.eventType === "validation_gate.evaluated");
+    expect(hookEvent).toMatchObject({ hook: { name: "notify-operator", timing: "state_entry" } });
+    expect(hookEvent?.message).toMatch(/recorded evidence/);
+    expect(gateEvent).toMatchObject({ gate: { name: "verifier-satisfied", status: "failed" } });
   });
 });

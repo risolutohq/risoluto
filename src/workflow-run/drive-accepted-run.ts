@@ -17,6 +17,8 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
   readonly runAction?: ExecuteWorkflowDefinitionInput["runAction"];
   readonly runHook?: ExecuteWorkflowDefinitionInput["runHook"];
   readonly evaluateGate?: ExecuteWorkflowDefinitionInput["evaluateGate"];
+  readonly retryGate?: ExecuteWorkflowDefinitionInput["retryGate"];
+  readonly maxGateRetries?: number;
   readonly budget?: ExecuteWorkflowDefinitionInput["budget"];
   readonly now?: () => string;
 }
@@ -48,6 +50,8 @@ export async function driveAcceptedWorkflowRun(
       ...(input.runAction ? { runAction: input.runAction } : {}),
       runHook: input.runHook ?? defaultEvidenceHook,
       ...(input.evaluateGate ? { evaluateGate: input.evaluateGate } : {}),
+      ...(input.retryGate ? { retryGate: input.retryGate } : {}),
+      ...(input.maxGateRetries === undefined ? {} : { maxGateRetries: input.maxGateRetries }),
       ...(input.budget ? { budget: input.budget } : {}),
     });
     return await finishDrivenRun(archive, input, result);

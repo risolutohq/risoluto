@@ -5,18 +5,24 @@ import { parseArgs } from "node:util";
 import { createUnconfiguredAgentRoleDispatch } from "../workflow-run/agent-role-dispatch.js";
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "../workflow-run/artifacts.js";
+import type { WorkflowBudgetPolicy } from "../workflow-run/budget-retry.js";
 import { driveAcceptedWorkflowRun, type DriveAcceptedWorkflowRunResult } from "../workflow-run/drive-accepted-run.js";
+import type { WorkflowGateRetryInput } from "../workflow-run/gate-retry-controller.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
 import { resolveWorkflowRunIntake } from "./workflow-run-intake.js";
 
 /**
  * Injection seam: production passes nothing, so `run start` drives the engine through the real agent
- * dispatch. Tests inject a hermetic `dispatchRole` (the external LLM boundary) while every other step —
- * arg parsing, intake, the executor, the archive — runs for real, proving operator reachability.
+ * dispatch under the default budget. Tests inject hermetic external boundaries — `dispatchRole` (the LLM
+ * session), `budget` (to force a hard-stop), `retryGate` (the gate-repair LLM) — while every other step
+ * (arg parsing, intake, the executor, the gate/retry controller, the archive) runs for real.
  */
 export interface RunStartCommandDeps {
   readonly dispatchRole?: WorkflowRunRoleDispatch;
+  readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
+  readonly budget?: WorkflowBudgetPolicy;
+  readonly maxGateRetries?: number;
   readonly now?: () => string;
 }
 
@@ -56,6 +62,9 @@ export async function startAndDriveRunCommand(argv: string[], deps: RunStartComm
     workflowRun: accepted.workflowRun,
     intent: accepted.intent,
     runRole,
+    budget: deps.budget ?? createDefaultWorkflowBudget(),
+    ...(deps.retryGate ? { retryGate: deps.retryGate } : {}),
+    ...(deps.maxGateRetries === undefined ? {} : { maxGateRetries: deps.maxGateRetries }),
     ...(deps.now ? { now: deps.now } : {}),
   });
 
@@ -82,6 +91,19 @@ function printRunOutcome(
   }
   console.log(`Started Workflow Run ${workflowRun.id}: ${workflowRun.title}`);
   console.log(`Run outcome: ${result.outcome}${result.reason ? ` (${result.reason})` : ""}`);
+}
+
+// Default budget: enforce the PRD's 120-minute / $10 hard stops live (wall-clock from the clock, cost
+// from token usage). A fresh CLI run is far under both, so this never stops a healthy run; it is the
+// always-on guard the executor checks before every step. Token usage is empty until the agent harness
+// reports it (NIN-222), so measured cost is 0 for now.
+function createDefaultWorkflowBudget(): WorkflowBudgetPolicy {
+  const startedAtMs = Date.now();
+  return {
+    startedAtMs,
+    nowMs: () => Date.now(),
+    usage: () => ({ usageByModelProfile: {}, modelProfilePrices: {} }),
+  };
 }
 
 function resolveDataDir(value: string | undefined): string {
