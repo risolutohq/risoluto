@@ -33,6 +33,11 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
   readonly maxGateRetries?: number;
   readonly budget?: ExecuteWorkflowDefinitionInput["budget"];
   readonly now?: () => string;
+  /**
+   * Run on the DONE path BEFORE the handoff is written: commit + push the agent's workspace and open a
+   * PR. Its `pullRequestUrl` is threaded into `handoff.output` and the result so callers can surface it.
+   */
+  readonly publishOnDone?: () => Promise<{ pullRequestUrl: string | null }>;
 }
 
 export interface DriveAcceptedWorkflowRunResult {
@@ -41,6 +46,7 @@ export interface DriveAcceptedWorkflowRunResult {
   readonly roleExecutions: readonly string[];
   readonly reason?: string;
   readonly handoffArtifactId?: string;
+  readonly pullRequestUrl?: string | null;
 }
 
 /**
@@ -100,6 +106,7 @@ async function finishDrivenRun(
   await persistExecutorEvents(archive, input, result.events);
   if (result.status === "done") {
     const createdAt = (input.now ?? defaultNow)();
+    const published = input.publishOnDone ? await input.publishOnDone() : null;
     const handoff = await writeDoneHandoff(
       archive,
       { workflowRunId: input.workflowRun.id, createdAt },
@@ -107,12 +114,14 @@ async function finishDrivenRun(
       result,
       memoryRecord,
       evidenceRefs,
+      published?.pullRequestUrl ?? null,
     );
     return {
       outcome: "done",
       workflowRunId: input.workflowRun.id,
       roleExecutions: result.roleExecutions,
       handoffArtifactId: handoff.artifactId,
+      ...(published ? { pullRequestUrl: published.pullRequestUrl } : {}),
     };
   }
   const { reason, kind } = blockedOutcome(result.events);

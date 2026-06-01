@@ -111,9 +111,15 @@ async function driveAcceptedRun(
     ? { ...deps, dispatcher: live.dispatcher, workspace: live.workspace, modelForProfile: live.modelForProfile }
     : deps;
   try {
-    const result = await driveWithDeps(dataDir, accepted, effectiveDeps, publishMode);
-    if (result.outcome === "done" && live) {
-      await publishLiveDraftPr(accepted, live);
+    const result = await driveWithDeps(dataDir, accepted, effectiveDeps, publishMode, live);
+    if (result.pullRequestUrl) {
+      console.log(
+        JSON.stringify({
+          type: "workflow_run.published",
+          workflowRunId: accepted.workflowRun.id,
+          pullRequestUrl: result.pullRequestUrl,
+        }),
+      );
     }
     return result;
   } finally {
@@ -139,22 +145,12 @@ function composeLiveForRun(
   });
 }
 
-async function publishLiveDraftPr(accepted: ResolvedWorkflowRunIntake, live: ComposedLiveDispatch): Promise<void> {
-  const published = await live.publishDraftPr();
-  console.log(
-    JSON.stringify({
-      type: "workflow_run.published",
-      workflowRunId: accepted.workflowRun.id,
-      pullRequestUrl: published.pullRequestUrl,
-    }),
-  );
-}
-
 async function driveWithDeps(
   dataDir: string,
   accepted: ResolvedWorkflowRunIntake,
   deps: RunStartCommandDeps,
   publishMode: PrPublishMode | undefined,
+  live: ComposedLiveDispatch | undefined,
 ): Promise<DriveAcceptedWorkflowRunResult> {
   const archive = createWorkflowRunArchive({ dataDir });
   const nowString = deps.now ?? (() => new Date().toISOString());
@@ -184,6 +180,7 @@ async function driveWithDeps(
     ...(deps.retryGate ? { retryGate: deps.retryGate } : {}),
     ...(deps.maxGateRetries === undefined ? {} : { maxGateRetries: deps.maxGateRetries }),
     ...(deps.now ? { now: deps.now } : {}),
+    ...(live ? { publishOnDone: () => live.publishDraftPr().then((p) => ({ pullRequestUrl: p.pullRequestUrl })) } : {}),
   });
 }
 

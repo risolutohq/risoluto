@@ -26,6 +26,7 @@ export async function writeDoneHandoff(
   result: WorkflowExecutorResult,
   memoryRecord: WorkflowRunAttemptMemoryRecord,
   evidenceRefs: readonly EvidenceRef[],
+  publishedPullRequestUrl?: string | null,
 ): Promise<{ artifactId: string }> {
   const { workflowRunId, createdAt } = handoffInput;
 
@@ -53,7 +54,7 @@ export async function writeDoneHandoff(
     budget: { elapsedMs: 0, costUsd: 0 },
     validation: validationRef,
     attemptMemory: [attemptMemoryEntry],
-    output: { branchName: null, pullRequestUrl: publishResult?.pullRequestUrl ?? null },
+    output: { branchName: null, pullRequestUrl: publishedPullRequestUrl ?? publishResult?.pullRequestUrl ?? null },
     blockers: [],
     artifacts: artifactRefs,
     evidence: evidenceLinks,
