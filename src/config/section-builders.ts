@@ -259,3 +259,5 @@ export function deriveServerConfig(server: Record<string, unknown>): ServiceConf
     port: asNumber(server.port, 4000),
   };
 }
+
+export { deriveSlackIntakeConfig } from "./slack-intake-section.js";

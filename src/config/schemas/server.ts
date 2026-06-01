@@ -5,6 +5,8 @@
 
 import { z } from "zod";
 
+import { OPERATOR_PERMISSIONS } from "../../workflow-run/operator-approval-contract.js";
+
 export const pollingConfigSchema = z.object({
   intervalMs: z.number().default(15000),
 });
@@ -82,6 +84,28 @@ export const stateMachineConfigSchema = z
   .object({
     stages: z.array(stateStageConfigSchema).default([]),
     transitions: z.record(z.string(), z.array(z.string())).default({}),
+  })
+  .nullable()
+  .default(null);
+
+const slackIntakeRuleSchema = z.object({
+  id: z.string().min(1),
+  workflowDefinitionId: z.string().min(1),
+  workspaceKey: z.string().min(1),
+});
+
+const slackOperatorIdentityConfigSchema = z.object({
+  id: z.string().min(1),
+  slackUserId: z.string().min(1),
+  permissions: z.array(z.enum(OPERATOR_PERMISSIONS)).default([]),
+});
+
+export const slackIntakeConfigSchema = z
+  .object({
+    signingSecret: z.string().min(1),
+    operators: z.array(slackOperatorIdentityConfigSchema).default([]),
+    allowedTeamIds: z.array(z.string()).default([]),
+    rules: z.array(slackIntakeRuleSchema).default([]),
   })
   .nullable()
   .default(null);

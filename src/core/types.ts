@@ -45,6 +45,8 @@ export type {
   StateMachineConfig,
   StateStageConfig,
   StateStageKind,
+  SlackIntakeConfig,
+  SlackOperatorIdentityConfig,
 } from "./types/config.js";
 
 export type {

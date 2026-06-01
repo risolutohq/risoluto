@@ -35,7 +35,10 @@ import type { SecretsStore } from "../secrets/store.js";
 import { createTracker } from "../tracker/factory.js";
 import { WorkspaceManager } from "../workspace/manager.js";
 import { PrMonitorService } from "../git/pr-monitor.js";
+import { randomUUID } from "node:crypto";
+
 import { initWebhookInfrastructure, buildWebhookHandlerDeps } from "../webhook/composition.js";
+import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
 import { acceptLinearTriggeredWorkflowRun } from "../workflow-run/linear-intake.js";
 import { acceptGitHubTriggeredWorkflowRun } from "../workflow-run/tracker-intake.js";
 
@@ -356,6 +359,28 @@ function parseRepoUrl(repoUrl: string | null): GithubRepoRef | null {
 // Phase 7 — HTTP layer
 // ---------------------------------------------------------------------------
 
+function buildSlackWebhookDeps(
+  configStore: ConfigStore,
+  archiveDir: string,
+  logger: RisolutoLogger,
+): SlackWebhookHandlerDeps | undefined {
+  const slackIntake = configStore.getConfig().slackIntake;
+  if (!slackIntake) {
+    return undefined;
+  }
+  return {
+    signingSecret: slackIntake.signingSecret,
+    operators: slackIntake.operators,
+    allowedSlackTeamIds: slackIntake.allowedTeamIds,
+    rules: slackIntake.rules,
+    archiveDir,
+    now: () => new Date().toISOString(),
+    id: () => `wr_${randomUUID()}`,
+    nowEpochSeconds: () => Math.floor(Date.now() / 1000),
+    logger: logger.child({ component: "slack-webhook" }),
+  };
+}
+
 function createHttpLayer(
   configStore: ConfigStore,
   overlayStore: ConfigOverlayPort,
@@ -403,6 +428,7 @@ function createHttpLayer(
           logger,
         })
       : undefined,
+    slackWebhookDeps: buildSlackWebhookDeps(configStore, archiveDir, logger),
   });
 
   return { httpServer };

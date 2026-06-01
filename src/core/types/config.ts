@@ -1,6 +1,8 @@
 import type { AgentConfig } from "../../config/schemas/agent.js";
 import type { AlertConfig, AutomationConfig, NotificationConfig, TriggerConfig } from "../notification-types.js";
 import type { CodexConfig } from "./codex.js";
+import type { OperatorPermission } from "../../workflow-run/operator-approval-contract.js";
+import type { WorkflowRunIntakeRule } from "../../workflow-run/intake-rules.js";
 
 export interface TrackerConfig {
   kind: string;
@@ -79,6 +81,19 @@ export interface StateMachineConfig {
   transitions: Record<string, string[]>;
 }
 
+export interface SlackOperatorIdentityConfig {
+  id: string;
+  slackUserId: string;
+  permissions: readonly OperatorPermission[];
+}
+
+export interface SlackIntakeConfig {
+  signingSecret: string;
+  operators: readonly SlackOperatorIdentityConfig[];
+  allowedTeamIds: readonly string[];
+  rules: readonly WorkflowRunIntakeRule[];
+}
+
 export interface ServiceConfig {
   tracker: TrackerConfig;
   notifications?: NotificationConfig;
@@ -94,4 +109,5 @@ export interface ServiceConfig {
   stateMachine?: StateMachineConfig | null;
   server: ServerConfig;
   webhook?: WebhookConfig | null;
+  slackIntake?: SlackIntakeConfig | null;
 }

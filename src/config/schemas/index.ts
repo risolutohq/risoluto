@@ -24,4 +24,5 @@ export {
   gitHubConfigSchema,
   repoConfigSchema,
   stateMachineConfigSchema,
+  slackIntakeConfigSchema,
 } from "./server.js";
