@@ -1,6 +1,7 @@
 import type { ResolvedWorkflowDefinition } from "../workflow-definition/registry.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import type { WorkflowRunStartRecord } from "./contracts.js";
+import { writeDoneHandoff } from "./drive-done-handoff.js";
 import {
   createWorkflowRunEvidenceStore,
   type WorkflowRunEvidenceRecord,
@@ -15,7 +16,7 @@ import type {
 } from "./gate-hook-engine.js";
 import type { HandoffArtifact } from "./handoff-contract.js";
 import type { WorkflowRunIntentArtifact } from "./intake-core.js";
-import { createWorkflowRunMemoryStore } from "./memory-store.js";
+import { createWorkflowRunMemoryStore, type WorkflowRunAttemptMemoryRecord } from "./memory-store.js";
 import { WorkflowRunActionError } from "./run-action-runner.js";
 import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
 import { driveWorkflowRun } from "./workflow-run-driver.js";
@@ -70,8 +71,9 @@ export async function driveAcceptedWorkflowRun(
       ...(input.maxGateRetries === undefined ? {} : { maxGateRetries: input.maxGateRetries }),
       ...(input.budget ? { budget: input.budget } : {}),
     });
-    await writeAttemptMemory(input, location, now, result.status, getEvidenceRefs());
-    return await finishDrivenRun(archive, input, result);
+    const evidenceRefs = getEvidenceRefs();
+    const memoryRecord = await writeAttemptMemory(input, location, now, result.status, evidenceRefs);
+    return await finishDrivenRun(archive, input, location, result, memoryRecord, evidenceRefs);
   } catch (error) {
     if (
       !(
@@ -90,11 +92,28 @@ export async function driveAcceptedWorkflowRun(
 async function finishDrivenRun(
   archive: WorkflowRunArchive,
   input: DriveAcceptedWorkflowRunInput,
+  location: WorkflowRunArchiveLocation,
   result: WorkflowExecutorResult,
+  memoryRecord: WorkflowRunAttemptMemoryRecord,
+  evidenceRefs: readonly EvidenceRef[],
 ): Promise<DriveAcceptedWorkflowRunResult> {
   await persistExecutorEvents(archive, input, result.events);
   if (result.status === "done") {
-    return { outcome: "done", workflowRunId: input.workflowRun.id, roleExecutions: result.roleExecutions };
+    const createdAt = (input.now ?? defaultNow)();
+    const handoff = await writeDoneHandoff(
+      archive,
+      { workflowRunId: input.workflowRun.id, createdAt },
+      location,
+      result,
+      memoryRecord,
+      evidenceRefs,
+    );
+    return {
+      outcome: "done",
+      workflowRunId: input.workflowRun.id,
+      roleExecutions: result.roleExecutions,
+      handoffArtifactId: handoff.artifactId,
+    };
   }
   const { reason, kind } = blockedOutcome(result.events);
   const handoff = await writeBlockedHandoff(archive, input, reason, kind);
@@ -229,9 +248,9 @@ async function writeAttemptMemory(
   now: () => string,
   status: "blocked" | "done",
   evidenceRefs: readonly EvidenceRef[],
-): Promise<void> {
+): Promise<WorkflowRunAttemptMemoryRecord> {
   const store = createWorkflowRunMemoryStore(location);
-  await store.writeAttemptMemory({
+  return store.writeAttemptMemory({
     workflowRunId: input.workflowRun.id,
     attemptId: "attempt-1",
     attemptNumber: 1,
