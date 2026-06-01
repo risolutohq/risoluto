@@ -1,5 +1,6 @@
 import type { ResolvedWorkflowDefinition, ResolvedWorkflowRole } from "../workflow-definition/registry.js";
 import type { WorkflowBudgetPolicy } from "./budget-retry.js";
+import { DEFAULT_GATE_RETRY_LIMIT } from "./budget-retry.js";
 import type { WorkflowRunStatus } from "./contracts.js";
 import { executeConfiguredWorkflowActions, type WorkflowActionExecutionInput } from "./executor-actions.js";
 import { evaluateStateGatesWithRetry, type WorkflowGateRetryInput } from "./gate-retry-controller.js";
@@ -22,6 +23,7 @@ import {
   stateForRole,
   storeProducedArtifacts,
 } from "./executor-roles.js";
+import { buildSingleVerifierInput, routeSingleVerifierDecision } from "./verifier.js";
 
 export { WorkflowExecutorError } from "./executor-errors.js";
 
@@ -93,6 +95,13 @@ export async function executeWorkflowDefinition(
     state.roleExecutions.push(role.id);
     if (role.id === "planner" && plannerBlocked(state.artifacts["plan.v1"])) {
       return finishWorkflowExecution(input, "blocked", state);
+    }
+    if (role.produces.includes("verification.v1")) {
+      const retryBudgetRemaining = (input.maxGateRetries ?? DEFAULT_GATE_RETRY_LIMIT) - gateRetryAttempts;
+      const verifierRoute = routeVerifierResult(state.artifacts, retryBudgetRemaining);
+      if (verifierRoute !== "continue_to_publish") {
+        return finishWorkflowExecution(input, "blocked", state);
+      }
     }
     if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
       const gateResult = await evaluateGatesAfterRole(input, role, state, gateRetryAttempts);
@@ -201,4 +210,24 @@ function rememberState(statesVisited: string[], stateId: string): void {
   if (statesVisited.at(-1) !== stateId) {
     statesVisited.push(stateId);
   }
+}
+
+/**
+ * Apply allowlist filtering + decision routing after a verifier role deposits `verification.v1`.
+ * `buildSingleVerifierInput` enforces the artifact allowlist (no implementer transcript) for what
+ * the verifier read; `routeSingleVerifierDecision` maps the resulting decision to a run action.
+ * Returns the route action — only `continue_to_publish` lets the run proceed; all others block.
+ */
+function routeVerifierResult(artifacts: Readonly<Record<string, unknown>>, retryBudgetRemaining: number): string {
+  buildSingleVerifierInput({ artifacts, evidenceLinks: [] });
+  const verification = artifacts["verification.v1"];
+  const decision = isRecord(verification) && typeof verification.decision === "string" ? verification.decision : null;
+  if (decision !== "satisfied" && decision !== "not_satisfied" && decision !== "uncertain") {
+    return routeSingleVerifierDecision({ decision: "uncertain", retryBudgetRemaining }).action;
+  }
+  return routeSingleVerifierDecision({ decision, retryBudgetRemaining }).action;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

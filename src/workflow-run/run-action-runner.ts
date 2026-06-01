@@ -10,6 +10,7 @@ import {
   type ValidationProfileCommandInput,
   type ValidationProfileCommandOutput,
 } from "./validation-profile.js";
+import { assertPublishAllowedByVerification, VerifierPolicyError } from "./verifier.js";
 import type { WorkflowRunWorkspacePreparer } from "./workspace-preparer.js";
 
 /** Effect port for the validation profile's commands — the external boundary (real shell vs. test fake). */
@@ -164,6 +165,17 @@ async function publishPrAction(
   deps: CreateWorkflowRunActionRunnerDeps,
   input: WorkflowActionExecutionInput,
 ): Promise<Readonly<Record<string, unknown>>> {
+  const effectiveMode: PrPublishMode = deps.publishMode ?? "draft";
+  if (effectiveMode === "ready" || effectiveMode === "auto_merge") {
+    try {
+      assertPublishAllowedByVerification({ artifacts: input.artifacts });
+    } catch (error) {
+      if (error instanceof VerifierPolicyError) {
+        throw new WorkflowRunActionError(error.message, { cause: error });
+      }
+      throw error;
+    }
+  }
   const artifact = evaluatePrPublishPolicy({
     workflowRunId: input.workflowRunId,
     createdAt: deps.now(),
