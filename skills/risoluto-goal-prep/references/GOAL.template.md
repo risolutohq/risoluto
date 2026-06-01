@@ -41,7 +41,7 @@ True invariants:
 - One authoritative store per fact: issue state lives in Linear, built code lives in git, process state lives
   in {{GOAL_DIR}}. Do not mirror the same fact into a second store.
 - A tracker issue identifier is an external reference, not a Workflow Run id.
-- TypeScript edits must respect the repo ceilings: 300 lines/file, complexity 15, 50 lines/function.
+- TypeScript edits must respect the repo ceiling: complexity 15 per function.
 
 Decision rule: choose the fewest useful tool and context loops that can satisfy the current issue correctly.
 If a choice would branch a wave from master, run waves as siblings, merge a red wave, weaken done_when, or

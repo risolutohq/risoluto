@@ -128,7 +128,7 @@ This is **not** a weighted score. A strong number on one axis must never outvote
 
 **Scores — ordering only, never admission.** Once a candidate has passed both gates it is **in**. Score two things, and these decide only **priority rank and how thin the first cut is**, not in/out:
 
-- **Cost & complexity** — build _plus_ permanent maintenance, against the repo's 300-line / complexity-15 ceilings.
+- **Cost & complexity** — build _plus_ permanent maintenance, against the repo's complexity-15 ceiling.
 - **Reversibility** — cheap to undo if the bet is wrong, or load-bearing once shipped?
 
 ### What counts as evidence (the N=1 rule)

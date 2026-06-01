@@ -47,13 +47,11 @@ When changes touch integration boundaries, also run the relevant focused suite: 
 
 ## Code-style ceilings (enforced by ESLint)
 
-- `max-lines`: **300** per file
 - `complexity`: **15** per function
-- `max-lines-per-function`: **50**
 
-Refactor before adding lines that would breach these — splitting is cheaper than disabling rules. Prettier config: 120-col, double quotes, 2-space indent, LF.
+Refactor before a function's branching would breach the complexity cap — splitting is cheaper than disabling the rule. Prettier config: 120-col, double quotes, 2-space indent, LF.
 
-ESLint ignores `*.mjs`, so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to these ceilings — the limits apply to `.ts` files only.
+ESLint ignores `*.mjs`, so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to this ceiling — it applies to `.ts` files only.
 
 ## Test tiers (4 vitest configs)
 
