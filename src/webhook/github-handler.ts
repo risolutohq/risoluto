@@ -7,6 +7,7 @@ import type { RisolutoLogger } from "../core/types.js";
 import type { ApiErrorResponse } from "../http/service-errors.js";
 import type { WebhookRequest } from "../http/webhook-types.js";
 import { asRecord, asStringOrNull } from "../utils/type-guards.js";
+import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 import type { VerifiedWebhookDeliveryStore } from "./delivery-workflow.js";
 import { WebhookDeliveryWorkflow } from "./delivery-workflow.js";
 import { verifyGitHubSignature } from "./signature.js";
@@ -19,6 +20,7 @@ export interface GitHubWebhookHandlerDeps {
   configStore?: ConfigStore;
   requestTargetedRefresh?: (issueId: string, issueIdentifier: string, reason: string) => void;
   stopWorkerForIssue?: (issueIdentifier: string, reason: string) => void;
+  acceptGitHubTriggeredWorkflowRun?: (input: GitHubTriggeredWorkflowRunRequest) => Promise<unknown>;
   webhookInbox?: VerifiedWebhookDeliveryStore;
   eventBus?: Pick<TypedEventBus<RisolutoEventMap>, "emit">;
   logger: RisolutoLogger;
@@ -141,6 +143,8 @@ export function handleWebhookGitHub(deps: GitHubWebhookHandlerDeps, req: Webhook
         context.config,
         context.event,
         context.action,
+        context.payload,
+        context.deliveryId,
         context.repoFullName,
         context.issueId,
         context.issueIdentifier,
@@ -148,15 +152,17 @@ export function handleWebhookGitHub(deps: GitHubWebhookHandlerDeps, req: Webhook
   });
 }
 
-function processGitHubWebhook(
+async function processGitHubWebhook(
   deps: GitHubWebhookHandlerDeps,
   config: ServiceConfig | undefined,
   event: string,
   action: string,
+  payload: Record<string, unknown>,
+  deliveryId: string,
   repoFullName: string | null,
   issueId: string | null,
   issueIdentifier: string | null,
-): void {
+): Promise<void> {
   if (event !== "issues" || !SUPPORTED_GITHUB_ISSUE_ACTIONS.has(action)) {
     deps.logger.debug({ event, action }, "github webhook event ignored");
     return;
@@ -175,10 +181,103 @@ function processGitHubWebhook(
     return;
   }
 
+  await maybeAcceptGitHubTriggeredWorkflowRun(deps, action, payload, deliveryId, issueId, issueIdentifier);
   deps.requestTargetedRefresh?.(issueId, issueIdentifier, `github:${event}:${action}`);
   if (action === "closed") {
     deps.stopWorkerForIssue?.(issueIdentifier, "github webhook reported issue closed");
   }
+}
+
+async function maybeAcceptGitHubTriggeredWorkflowRun(
+  deps: GitHubWebhookHandlerDeps,
+  action: string,
+  payload: Record<string, unknown>,
+  deliveryId: string,
+  issueId: string,
+  issueIdentifier: string,
+): Promise<void> {
+  const issue = toGitHubTriggeredWorkflowRunIssue(payload, issueId, issueIdentifier);
+  if (!deps.acceptGitHubTriggeredWorkflowRun || !issue) {
+    return;
+  }
+
+  const result = await deps.acceptGitHubTriggeredWorkflowRun({
+    deliveryKind: "webhook",
+    deliveryId,
+    action,
+    issue,
+  });
+  emitGitHubWorkflowRunAccepted(deps, result);
+}
+
+function emitGitHubWorkflowRunAccepted(deps: GitHubWebhookHandlerDeps, result: unknown): void {
+  if (!deps.eventBus || !isAcceptedWorkflowRunResult(result)) {
+    return;
+  }
+  deps.eventBus.emit("workflow_run.accepted", {
+    workflowRunId: result.workflowRun.id,
+    source: result.workflowRun.source,
+    title: result.workflowRun.title,
+    workflowDefinitionId: result.workflowRun.workflowDefinitionId,
+  });
+}
+
+function isAcceptedWorkflowRunResult(result: unknown): result is {
+  workflowRun: {
+    id: string;
+    source: "api" | "cli" | "github" | "linear" | "slack";
+    title: string;
+    workflowDefinitionId: string;
+  };
+} {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+  const workflowRun = (result as { workflowRun?: unknown }).workflowRun;
+  if (!workflowRun || typeof workflowRun !== "object") {
+    return false;
+  }
+  const record = workflowRun as Record<string, unknown>;
+  const validSources = new Set(["api", "cli", "github", "linear", "slack"]);
+  return (
+    typeof record.id === "string" &&
+    typeof record.source === "string" &&
+    validSources.has(record.source) &&
+    typeof record.title === "string" &&
+    typeof record.workflowDefinitionId === "string"
+  );
+}
+
+function toGitHubTriggeredWorkflowRunIssue(
+  payload: Record<string, unknown>,
+  issueId: string,
+  issueIdentifier: string,
+): GitHubTriggeredWorkflowRunRequest["issue"] | null {
+  const issue = asRecord(payload.issue);
+  const title = asStringOrNull(issue.title);
+  if (!title) {
+    return null;
+  }
+
+  return {
+    id: issueId,
+    identifier: issueIdentifier,
+    title,
+    url: asStringOrNull(issue.html_url),
+    description: asStringOrNull(issue.body),
+    labels: extractGitHubLabelNames(issue),
+    state: asStringOrNull(issue.state),
+  };
+}
+
+function extractGitHubLabelNames(issue: Record<string, unknown>): readonly string[] {
+  const labels = issue.labels;
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+  return labels
+    .map((label) => asStringOrNull(asRecord(label).name))
+    .filter((label): label is string => typeof label === "string" && label.length > 0);
 }
 
 export { verifyGitHubSignature };

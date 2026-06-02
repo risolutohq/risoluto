@@ -18,6 +18,7 @@ import type { TemplateStorePort } from "../prompt/port.js";
 import type { SecretsPort } from "../secrets/port.js";
 import type { TrackerPort } from "../tracker/port.js";
 import type { WebhookHandlerDeps } from "../webhook/linear-handler.js";
+import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
 import type { WorkspacePort } from "../workspace/port.js";
 
 export interface HttpRouteDeps {
@@ -42,6 +43,7 @@ export interface HttpRouteDeps {
   auditLogger?: AuditLoggerPort;
   archiveDir?: string;
   webhookHandlerDeps?: WebhookHandlerDeps;
+  slackWebhookDeps?: SlackWebhookHandlerDeps;
   metrics?: MetricsCollector;
   observability?: ObservabilityHub;
   workspaceManager?: Pick<WorkspacePort, "withLock">;

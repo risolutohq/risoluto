@@ -10,6 +10,7 @@ import { validateBody } from "../validation.js";
 import type { WebhookRequest } from "../webhook-types.js";
 import { handleWebhookLinear, type WebhookHandlerDeps } from "../../webhook/linear-handler.js";
 import { handleWebhookGitHub, type GitHubWebhookHandlerDeps } from "../../webhook/github-handler.js";
+import { handleWebhookSlack } from "../../webhook/slack-handler.js";
 
 export function registerWebhookRoutes(app: Express, deps: HttpRouteDeps): void {
   const triggerLimiter = rateLimit({
@@ -38,13 +39,6 @@ export function registerWebhookRoutes(app: Express, deps: HttpRouteDeps): void {
       methodNotAllowed(res, ["POST"]);
     });
 
-  if (!deps.webhookHandlerDeps) {
-    deps.logger.debug(
-      "webhook_url not configured — /webhooks/linear and /webhooks/github are not registered (orchestrator will use polling)",
-    );
-    return;
-  }
-
   const webhookLimiter = rateLimit({
     windowMs: 60_000,
     limit: 600,
@@ -57,11 +51,36 @@ export function registerWebhookRoutes(app: Express, deps: HttpRouteDeps): void {
     legacyHeaders: false,
   });
 
+  if (deps.slackWebhookDeps) {
+    const slackWebhookDeps = deps.slackWebhookDeps;
+    app
+      .route("/webhooks/slack")
+      .post(webhookLimiter, (req, res) => {
+        handleWebhookSlack(slackWebhookDeps, req as WebhookRequest, res).catch((error: unknown) => {
+          slackWebhookDeps.logger.error({ error: String(error) }, "slack webhook handler crashed");
+          if (!res.headersSent) {
+            res.status(500).json({ error: { code: "slack_handler_error", message: "internal error" } });
+          }
+        });
+      })
+      .all((_req, res) => {
+        methodNotAllowed(res, ["POST"]);
+      });
+  }
+
+  if (!deps.webhookHandlerDeps) {
+    deps.logger.debug(
+      "webhook_url not configured — /webhooks/linear and /webhooks/github are not registered (orchestrator will use polling)",
+    );
+    return;
+  }
+
   const webhookDeps: WebhookHandlerDeps = deps.webhookHandlerDeps;
   const githubWebhookDeps: GitHubWebhookHandlerDeps = {
     configStore: deps.configStore,
     requestTargetedRefresh: deps.orchestrator.requestTargetedRefresh.bind(deps.orchestrator),
     stopWorkerForIssue: deps.orchestrator.stopWorkerForIssue.bind(deps.orchestrator),
+    acceptGitHubTriggeredWorkflowRun: webhookDeps.acceptGitHubTriggeredWorkflowRun,
     webhookInbox: webhookDeps.webhookInbox,
     eventBus: webhookDeps.eventBus,
     logger: webhookDeps.logger,

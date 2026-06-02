@@ -329,7 +329,8 @@ targeted live checks.
   until PR merged/closed; blocked and cancelled worktrees are retained until resolved or expired.
 - PR modes are none, draft, ready, incomplete_draft, and auto_merge. Draft is the default. Incomplete
   draft requires operator approval and leaves the run blocked.
-- Ready PR requires local validation green and verifier satisfied. Auto-merge requires local
+- Ready PR requires local validation green, verifier satisfied, and remote CI green (CI babysitter
+  required for ready and auto-merge modes; see user story 52). Auto-merge requires local
   validation green, PR creation, remote CI green, post-publish verifier satisfied, Slack approval by
   an operator with auto-merge permission, and merge policy satisfaction.
 - A CI/CD adapter contract is required, with GitHub Actions as the first implementation. Provider
@@ -385,6 +386,43 @@ targeted live checks.
 - `risoluto doctor` is required. It is read-only by default and supports `--live` for write tests.
 - TUI is deferred from MVP. OpenTUI is recorded as the preferred future TUI candidate, but not part
   of this PRD.
+
+### ADDENDUM (D1) — Agent→artifact deposit protocol (2026-06-01)
+
+The PRD assumed roles emit typed artifacts but never said _how_ an LLM role's session output becomes a
+contract-valid artifact the executor can read back. Building the production `runRole`/`runAction`
+providers (SEAM 1, NIN-198) forces that decision. This addendum fixes it; it adds no new contracts and
+no new surface — it only makes the existing role→artifact boundary explicit. Affects NIN-198 (executor
+reachability), NIN-201/207 (verifier), NIN-204 (evidence), and the role-bearing slices.
+
+- **Role→contract map (`role.produces`).** Each role deposits exactly the contracts in its workflow
+  definition `produces` list, no more: planner → `plan.v1`; implementer → `change_summary.v1`;
+  reviewer → `review.v1`; verifier → `verification.v1`; ci_babysitter → `ci_result.v1`. Actions deposit
+  likewise: `run-validation-profile` → `validation_result.v1`; `publish-pr` → `publish_result.v1`;
+  `poll-ci` → `ci_result.v1`; `write-handoff` → `handoff.v1`; `create-worktree` deposits none.
+- **Canonical archive path.** An artifact lands at
+  `{archiveRoot}/workflow-runs/{workflowRunId}/artifacts/{artifactId}.json` as `{ contractId, data }`,
+  where `artifactId` is the contract id with the `.v1` suffix dropped (`plan.v1` → `plan`,
+  `change_summary.v1` → `change_summary`, `review.v1` → `review`, `verification.v1` → `verification`,
+  `ci_result.v1` → `ci_result`). This matches the intake convention already used for `intent.v1` →
+  `intent`. Writes go through `archive.writeWorkflowRunArtifact`, which validates via
+  `parseWorkflowRunArtifact` before persisting.
+- **Completion signal.** A role completes by depositing a parseable artifact for _every_ contract in
+  `role.produces`. The `runRole` adapter signals completion to the executor by returning a
+  `Record<contractId, data>` containing exactly `role.produces`; the executor re-validates each with
+  `parseWorkflowRunArtifact` (producer `{ type: "role", id }`) and stores it. A session that ends
+  without a contract-valid artifact for each produced id is a hard failure — the executor throws "did
+  not produce required artifact" and the run ends in a blocked handoff, never continuing on prose.
+- **Read-back and typing boundary.** The adapter reads each deposited artifact back by `artifactId`
+  (`archive.readWorkflowRunArtifact`), re-parses with `parseWorkflowRunArtifact`, and returns it keyed
+  by `contractId`. The verifier artifact is additionally shaped through `verifier.ts` (single-mode
+  build/route or `runCouncilVerifier`). The agent boundary (free-form session) and the typed boundary
+  (strict Zod contract) stay cleanly separated: the agent deposits a valid artifact; the executor
+  validates and routes it.
+- **Effect-port seam.** Production binds `runRole` to the agent harness (`RunAttemptDispatcher` /
+  `AgentRunner`) and `runAction` to real effects (`GitManager`, `GitHubPrClient`, the validation/CI
+  adapters) through injected effect ports. CI-tier tests inject hermetic fakes for those ports but keep
+  the path from the entry point through `driveWorkflowRun` real; the live tier exercises the real ports.
 
 ## Testing Decisions
 

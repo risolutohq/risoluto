@@ -97,7 +97,9 @@ function buildRunningStateCounts(runningEntries: Map<string, RunningEntry>): Map
 
 function workflowRunReferenceFromIssue(issue: Issue): WorkflowRunReference {
   return {
-    id: issue.id,
+    // The Workflow Run is identified by its Risoluto-owned wr_UUID, never the tracker issue id (CR-03);
+    // fall back to the tracker id only for legacy issues that have no wr_UUID yet.
+    id: issue.workflowRunId ?? issue.id,
     identifier: issue.identifier,
     title: issue.title,
     description: issue.description,

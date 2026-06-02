@@ -33,7 +33,7 @@ export interface RisolutoEventMap {
   /** A Workflow Run was accepted as the durable execution primitive. */
   "workflow_run.accepted": {
     workflowRunId: string;
-    source: "cli" | "linear";
+    source: "api" | "cli" | "github" | "linear" | "slack";
     title: string;
     workflowDefinitionId: string;
   };

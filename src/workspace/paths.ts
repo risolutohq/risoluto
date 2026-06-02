@@ -28,8 +28,15 @@ export interface ResolvedWorkspacePath {
   workspacePath: string;
 }
 
-export function resolveWorkspacePath(workspaceRoot: string, issueIdentifier: string): ResolvedWorkspacePath {
-  const workspaceKey = sanitizeIdentifier(issueIdentifier);
+export function resolveWorkspacePath(
+  workspaceRoot: string,
+  issueIdentifier: string,
+  workflowRunId?: string,
+): ResolvedWorkspacePath {
+  const baseKey = sanitizeIdentifier(issueIdentifier);
+  // When a Workflow Run id is supplied, key the workspace on it so retries of the same issue get isolated
+  // worktrees instead of reusing the prior one. Without it, fall back to the legacy issue-keyed behavior.
+  const workspaceKey = workflowRunId ? `${baseKey}_${sanitizeIdentifier(workflowRunId)}` : baseKey;
   const workspacePath = path.resolve(workspaceRoot, workspaceKey);
   if (!isWithinRoot(workspaceRoot, workspacePath)) {
     throw new Error(`workspace path escaped root: ${workspacePath}`);

@@ -12,6 +12,9 @@ import { SqliteWebhookInbox } from "../../src/persistence/sqlite/webhook-inbox.j
 import { initPersistenceRuntime, type PersistenceRuntime } from "../../src/persistence/sqlite/runtime.js";
 import type { ServiceConfig, WebhookConfig } from "../../src/core/types.js";
 import { createMockLogger } from "../helpers.js";
+import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
+import { acceptWorkflowRunIntake } from "../../src/workflow-run/intake-core.js";
+import { DEFAULT_WORKFLOW_DEFINITION_ID, type WorkflowRunStartRecord } from "../../src/workflow-run/contracts.js";
 
 const tempDirs: string[] = [];
 
@@ -126,6 +129,25 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
+async function pollForStatusChange(
+  archive: ReturnType<typeof createWorkflowRunArchive>,
+  workflowRunId: string,
+  fromStatus: string,
+  timeoutMs: number,
+): Promise<WorkflowRunStartRecord> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const run = await archive.loadWorkflowRun(workflowRunId);
+    if (run.status !== fromStatus) {
+      return run;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`Workflow Run ${workflowRunId} still "${fromStatus}" after ${timeoutMs}ms`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 describe("createServices integration", () => {
   it("builds the real service graph with webhook mode disabled", async () => {
     const archiveDir = await createTempDir();
@@ -213,4 +235,57 @@ describe("createServices integration", () => {
       result.persistence.close();
     }
   });
+
+  // Proves the Phase 8 daemon subscriber (the keystone of review finding #1) is real production
+  // wiring, not test-local theater: it emits workflow_run.accepted on the bus createServices returns
+  // and asserts the accepted run is actually driven to a real blocked handoff through the same engine
+  // `run start` uses. Deleting the subscriber inside createServices makes this test time out.
+  it("daemon subscriber drives an accepted run to a real blocked handoff", async () => {
+    const archiveDir = await createTempDir();
+    const logger = createMockLogger();
+    const result = await createServices(
+      createConfigStore(createServiceConfig(archiveDir)),
+      createOverlayStore(),
+      createSecretsStore(),
+      archiveDir,
+      logger,
+    );
+
+    try {
+      // Record a real accepted run, exactly as every intake surface does before it emits.
+      const intake = await acceptWorkflowRunIntake({
+        archiveDir,
+        source: "api",
+        mode: "start",
+        title: "subscriber drive proof",
+        body: "prove the production daemon subscriber drives an accepted run",
+        externalObject: null,
+        rules: [],
+        workflowDefinitionId: DEFAULT_WORKFLOW_DEFINITION_ID,
+        workspaceKey: "default",
+      });
+      const workflowRunId = intake.workflowRun.id;
+
+      const archive = createWorkflowRunArchive({ archiveDir });
+      expect((await archive.loadWorkflowRun(workflowRunId)).status).toBe("accepted");
+
+      // Fire the SAME event the intake surfaces emit; it must reach the production subscriber.
+      result.eventBus.emit("workflow_run.accepted", {
+        workflowRunId,
+        source: intake.workflowRun.source,
+        title: intake.workflowRun.title,
+        workflowDefinitionId: intake.workflowRun.workflowDefinitionId,
+      });
+
+      // The driver runs fire-and-forget through the real single-operator-afk-coder workflow; with the
+      // honest-block default dispatch the planner role blocks, producing a real handoff.v1.
+      const driven = await pollForStatusChange(archive, workflowRunId, "accepted", 15000);
+      expect(driven.status).toBe("blocked");
+
+      const handoff = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "handoff" });
+      expect(handoff.data).toMatchObject({ version: 1, outcome: "blocked" });
+    } finally {
+      result.persistence.close();
+    }
+  }, 30000);
 });

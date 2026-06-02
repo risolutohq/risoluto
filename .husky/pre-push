@@ -64,6 +64,33 @@ if [ "${FULL_CHECK:-0}" = "1" ]; then
   exit 0
 fi
 
+# ── Path gate: skip build/test/typecheck when nothing gate-relevant changed ──
+# Docs/skills/markdown-only pushes cannot affect build, tests, or types, so the
+# heavy gate is pure wait for them. Anything touching code, config, tests, or
+# deps still runs it. New remote branches always run it (can't cheaply diff).
+# Force the full run with FULL_CHECK=1 (handled above).
+need_gate=false
+changed_files=""
+while read local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$z40" ] && continue
+  if [ "$remote_sha" = "$z40" ]; then
+    need_gate=true
+    break
+  fi
+  changed_files="$changed_files
+$(git diff --name-only "$remote_sha" "$local_sha")"
+done < "$refs_file"
+
+if [ "$need_gate" = false ] && printf '%s\n' "$changed_files" | grep -Eq '^(src/|tests/|scripts/|package\.json|pnpm-lock\.yaml|tsconfig.*\.json|vitest\..*\.ts|.*\.config\.(ts|js|cjs|mjs))'; then
+  need_gate=true
+fi
+
+if [ "$need_gate" = false ]; then
+  echo "📄 No code/config/test/deps changes in this push — skipping build/test/typecheck."
+  echo "   (PRD drift check already ran; use FULL_CHECK=1 to force the full suite.)"
+  exit 0
+fi
+
 # ── Fast 80/20 gate (default) ────────────────────────────────────────
 echo "🔨 Building..."
 pnpm run build

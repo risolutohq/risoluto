@@ -4,6 +4,7 @@ import type { RisolutoLogger, WebhookConfig } from "../core/types.js";
 import type { PersistenceRuntime } from "../persistence/sqlite/runtime.js";
 import type { SecretsStore } from "../secrets/store.js";
 import type { LinearTriggeredWorkflowRunRequest } from "../workflow-run/linear-intake.js";
+import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 import { DefaultWebhookHealthTracker, type WebhookHealthTracker } from "./health-tracker.js";
 import type { WebhookHandlerDeps } from "./linear-handler.js";
 import type { WebhookPort, WebhookPortSnapshot } from "./port.js";
@@ -45,6 +46,7 @@ export function createWebhookService(input: {
   eventBus: TypedEventBus<RisolutoEventMap>;
   secretsStore: Pick<SecretsStore, "get" | "set" | "delete">;
   acceptLinearTriggeredWorkflowRun?: (input: LinearTriggeredWorkflowRunRequest) => Promise<unknown>;
+  acceptGitHubTriggeredWorkflowRun?: (input: GitHubTriggeredWorkflowRunRequest) => Promise<unknown>;
   logger: RisolutoLogger;
 }): WebhookService {
   const webhookConfig = input.webhookConfig;
@@ -100,6 +102,7 @@ export function createWebhookService(input: {
           orchestrator.stopWorkerForIssue(issueIdentifier, reason),
         recordVerifiedDelivery: (eventType: string) => webhookHealthTracker?.recordVerifiedDelivery(eventType),
         acceptLinearTriggeredWorkflowRun: input.acceptLinearTriggeredWorkflowRun,
+        acceptGitHubTriggeredWorkflowRun: input.acceptGitHubTriggeredWorkflowRun,
         webhookInbox,
         eventBus: input.eventBus,
         logger: logger.child({ component: "webhook-handler" }),

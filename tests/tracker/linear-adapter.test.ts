@@ -79,6 +79,31 @@ describe("LinearTrackerAdapter", () => {
       expect(client.fetchCandidateIssues).toHaveBeenCalledOnce();
       expect(result).toBe(issues);
     });
+
+    it("stamps workflowRunId from lookup onto returned issues when lookup is provided", async () => {
+      const issue = createMockIssue({ id: "lin-id-1" });
+      vi.mocked(client.fetchCandidateIssues).mockResolvedValue([issue]);
+      const lookup = vi.fn().mockResolvedValue("wr_uuid-1");
+      const enrichingAdapter = new LinearTrackerAdapter(client, undefined, lookup);
+
+      const result = await enrichingAdapter.fetchCandidateIssues();
+
+      expect(lookup).toHaveBeenCalledWith("lin-id-1");
+      expect(result[0].workflowRunId).toBe("wr_uuid-1");
+      // Ensure we never copy the tracker issue id as workflowRunId (CR-03 guard)
+      expect(result[0].workflowRunId).not.toBe(issue.id);
+    });
+
+    it("leaves workflowRunId absent when lookup returns undefined (no mapping yet)", async () => {
+      const issue = createMockIssue({ id: "lin-id-2" });
+      vi.mocked(client.fetchCandidateIssues).mockResolvedValue([issue]);
+      const lookup = vi.fn().mockResolvedValue(undefined);
+      const enrichingAdapter = new LinearTrackerAdapter(client, undefined, lookup);
+
+      const result = await enrichingAdapter.fetchCandidateIssues();
+
+      expect(result[0].workflowRunId).toBeUndefined();
+    });
   });
 
   describe("fetchIssueStatesByIds", () => {

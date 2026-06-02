@@ -1,24 +1,22 @@
-import {
-  createWorkflowRunRecord,
-  DEFAULT_WORKFLOW_DEFINITION_ID,
-  toStartedOutput,
-  writeWorkflowRunRecord,
-  type WorkflowRunStartedOutput,
-} from "./artifacts.js";
+import { DEFAULT_WORKFLOW_DEFINITION_ID, toStartedOutput, type WorkflowRunStartedOutput } from "./artifacts.js";
+import { acceptTrackerIssueWorkflowRun } from "./tracker-intake.js";
 
 export interface LinearTriggeredWorkflowRunIssue {
-  id: string;
-  identifier: string;
-  title: string;
-  url?: string | null;
-  description?: string | null;
+  readonly id: string;
+  readonly identifier: string;
+  readonly title: string;
+  readonly url?: string | null;
+  readonly description?: string | null;
+  readonly labels?: readonly string[];
+  readonly state?: string | null;
+  readonly comments?: readonly string[];
 }
 
 export interface LinearTriggeredWorkflowRunRequest {
-  action: string;
-  deliveryId?: string | null;
-  issue: LinearTriggeredWorkflowRunIssue;
-  workflowDefinitionId?: string;
+  readonly action: string;
+  readonly deliveryId?: string | null;
+  readonly issue: LinearTriggeredWorkflowRunIssue;
+  readonly workflowDefinitionId?: string;
 }
 
 export async function acceptLinearTriggeredWorkflowRun(
@@ -27,26 +25,21 @@ export async function acceptLinearTriggeredWorkflowRun(
     archiveDir?: string;
     now?: () => string;
     id?: () => string;
+    attemptId?: () => string;
   } & LinearTriggeredWorkflowRunRequest,
 ): Promise<WorkflowRunStartedOutput> {
-  const workflowRun = createWorkflowRunRecord({
+  const intake = await acceptTrackerIssueWorkflowRun({
     dataDir: input.dataDir,
     archiveDir: input.archiveDir,
-    source: "linear",
-    title: `${input.issue.identifier}: ${input.issue.title}`,
-    intent: input.issue.description?.trim() || input.issue.title,
+    provider: "linear",
+    deliveryKind: "webhook",
+    action: input.action,
+    deliveryId: input.deliveryId ?? null,
+    issue: input.issue,
     workflowDefinitionId: input.workflowDefinitionId ?? DEFAULT_WORKFLOW_DEFINITION_ID,
     now: input.now,
     id: input.id,
-    trigger: {
-      type: "linear_issue",
-      issueId: input.issue.id,
-      issueIdentifier: input.issue.identifier,
-      issueUrl: input.issue.url ?? null,
-      action: input.action,
-      deliveryId: input.deliveryId ?? null,
-    },
+    attemptId: input.attemptId,
   });
-  await writeWorkflowRunRecord(workflowRun);
-  return toStartedOutput(workflowRun);
+  return toStartedOutput(intake.workflowRun);
 }

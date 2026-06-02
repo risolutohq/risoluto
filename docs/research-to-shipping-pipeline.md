@@ -297,20 +297,24 @@ source_count: <int>
 ## Back-half AFK conductor
 
 Phase 4.0 starts after `/risoluto-to-issues <slug>` has created Linear issues and build-wave milestones.
-`/risoluto-goal <slug>` renders the launch package into `~/.codex/goals/<slug>/` from git + Linear:
+`/risoluto-goal-prep <slug>` renders a runner-agnostic launch package into `~/.risoluto/goals/<slug>/` from git + Linear:
 
 - `WAVES.md` freezes Linear milestones as the wave map.
-- `GOAL.md` is the goal-forge block prompt for the deterministic cascade.
+- `GOAL.md` is the runner-neutral conductor prompt (goal-forge block shape) for the deterministic cascade.
 - `CONTROL.md`, `PLAN.md`, `ATTEMPTS.md`, and `NOTES.md` are the conductor's process state.
 
-The generated goal uses one `integration/<slug>` branch. Each wave branches from the current integration
-tip, issue worktrees branch from the active wave, and merges flow issue -> wave -> integration. Waves are
-not parallel siblings off master.
+The same package runs three ways: **Codex** goal-forge (`/goal`); **`/risoluto-goal-run`**, the
+Claude-native runner that drives the cascade via the Workflow tool (waves sequential, ready issues within a
+wave built in parallel in isolated worktrees, journaled + resumable); or a plain **Claude Code** session that
+follows `GOAL.md` sequentially. They are not identical engines (Codex is a durable goal loop; the Workflow
+runner adds parallel fan-out and resume; the plain session is the simplest single-threaded path). The generated goal uses one
+`integration/<slug>` branch. Each wave branches from the current integration tip, issue worktrees branch from
+the active wave, and merges flow issue -> wave -> integration. Waves are not parallel siblings off master.
 
 Phase 4.4 is `/risoluto-review-handoff <slug>`: a different model reviews `integration/<slug>` against the
-PRD and Linear issues, writes `review-handoff.v1` to `~/.codex/goals/<slug>/REVIEW.md`, and comments the
-summary in Linear. Codex then resumes the `/goal`, fixes findings, re-runs `/v1-check`, and prints the PR
-command. Skills do not run `gh pr create`.
+PRD and Linear issues, writes `review-handoff.v1` to `~/.risoluto/goals/<slug>/REVIEW.md`, and comments the
+summary in Linear. The conductor (Codex or Claude Code) then resumes the `/goal`, fixes findings, re-runs
+`/v1-check`, and prints the PR command. Skills do not run `gh pr create`.
 
 ## Invariants & gotchas
 
@@ -353,18 +357,19 @@ Confirmed in code; not yet fixed:
 Pipeline skills live in `skills/risoluto-*/` and are symlinked into `.claude/skills/` and
 `.agents/skills/`:
 
-| Skill                     | Mode / role                                                                                                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `risoluto-researcher`     | Mode A step 1 — deep-analyzes a source; writes `research/targets/<slug>/README.md`.                                                                         |
-| `risoluto-grill`          | Mode A step 3 — the critic; grill-loops surviving candidates; founder decides in/out per candidate.                                                         |
-| `risoluto-ingest`         | Mode B — the reborn synthesizer; builds `research/wiki/` + emits gap-grounded idea rows.                                                                    |
-| `risoluto-to-prd`         | Back-half — reads a `next` roadmap row + its linked research; writes PRD + Linear project.                                                                  |
-| `risoluto-to-issues`      | Back-half — slices a PRD into flat Linear issues with blocked-by edges.                                                                                     |
-| `risoluto-tdd`            | Back-half — red-green-refactor against a Linear ticket; prints `gh pr create`.                                                                              |
-| `risoluto-next-bundle`    | Back-half scheduler — filters Linear issues to the ready-set + emits conflict-free bundles for parallel worktrees.                                          |
-| `risoluto-goal`           | Back-half AFK conductor generator (Phase 4.0) — derives waves from a PRD's Linear milestones; writes a Codex `/goal` package into `~/.codex/goals/<slug>/`. |
-| `risoluto-review-handoff` | Back-half end-review (Phase 4.4) — a different model reviews `integration/<slug>`; emits `review-handoff.v1` for the Codex `/goal` loop to ingest and fix.  |
-| `risoluto-vault`          | Obsidian vault helper; unaffected by pipeline changes.                                                                                                      |
+| Skill                     | Mode / role                                                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `risoluto-researcher`     | Mode A step 1 — deep-analyzes a source; writes `research/targets/<slug>/README.md`.                                                                                                                                                   |
+| `risoluto-grill`          | Mode A step 3 — the critic; grill-loops surviving candidates; founder decides in/out per candidate.                                                                                                                                   |
+| `risoluto-ingest`         | Mode B — the reborn synthesizer; builds `research/wiki/` + emits gap-grounded idea rows.                                                                                                                                              |
+| `risoluto-to-prd`         | Back-half — reads a `next` roadmap row + its linked research; writes PRD + Linear project.                                                                                                                                            |
+| `risoluto-to-issues`      | Back-half — slices a PRD into flat Linear issues with blocked-by edges.                                                                                                                                                               |
+| `risoluto-tdd`            | Back-half — red-green-refactor against a Linear ticket; prints `gh pr create`.                                                                                                                                                        |
+| `risoluto-next-bundle`    | Back-half scheduler — filters Linear issues to the ready-set + emits conflict-free bundles for parallel worktrees.                                                                                                                    |
+| `risoluto-goal-prep`      | Back-half AFK conductor generator (Phase 4.0) — derives waves from a PRD's Linear milestones; writes a runner-agnostic `/goal` package (Codex or Claude Code) into `~/.risoluto/goals/<slug>/`.                                       |
+| `risoluto-goal-run`       | Back-half AFK conductor runner (Phase 4.0, Claude-only) — drives a goal package as a wave cascade via the Workflow tool: waves sequential, ready issues within a wave built in parallel in isolated worktrees, journaled + resumable. |
+| `risoluto-review-handoff` | Back-half end-review (Phase 4.4) — a different model reviews `integration/<slug>`; emits `review-handoff.v1` for the `/goal` conductor loop (Codex or Claude Code) to ingest and fix.                                                 |
+| `risoluto-vault`          | Obsidian vault helper; unaffected by pipeline changes.                                                                                                                                                                                |
 
 **Fork-not-upgrade.** `to-prd`, `to-issues`, and `tdd` are Linear-specific forks of the global
 `~/.claude/skills/{to-prd,to-issues,tdd}` — invoke the namespaced `/risoluto-*` variants here. The
@@ -375,8 +380,8 @@ global skills stay tracker-agnostic. `grill-me`, `grill-with-docs`, `save-to-obs
 - **General bidirectional Linear ↔ git sync.** PRD content has explicit git ↔ Linear reconciliation; the rest of the pipeline only mirrors git → Linear and PR → Linear back-comments.
 - **No GitHub Issues mirror.** Linear is the sole planning surface; public exposure deferred.
 - **Product runtime auto-pickup.** Risoluto itself still does not auto-consume tracker tickets as a shipped
-  product surface. The AFK back-half is an operator/Codex build conductor that consumes a prepared PRD's
-  Linear issues under `~/.codex/goals/<slug>/`.
+  product surface. The AFK back-half is an operator-launched build conductor (Codex or Claude Code) that
+  consumes a prepared PRD's Linear issues under `~/.risoluto/goals/<slug>/`.
 - **Pipeline as a Risoluto Workflow Definition.** This is the operator's manual build tool, not a product surface — it is not destined to run inside Risoluto.
 
 ## Reference

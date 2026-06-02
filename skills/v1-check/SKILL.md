@@ -27,12 +27,19 @@ pnpm run typecheck:coverage
 
 ## When to extend
 
-If the user's changes touched integration boundaries (anything under `src/integrations/`, `src/live/`, HTTP routes, or `src/storage/` adapters), also run the relevant focused integration suite **after** the gate passes:
+If the user's changes touched integration boundaries, also run the relevant focused integration suite
+**after** the gate passes. Integration boundaries include anything under `src/integrations/`, `src/live/`,
+HTTP routes or schemas, OpenAPI generation/contract files, workflow-run contracts/executor/archive/artifact
+behavior, workflow definitions, or `src/storage/` adapters.
 
 - `pnpm run test:integration` — default integration suite
 - `pnpm run test:integration:live` — real external APIs (needs `.env.live.local`)
 
 Ask the user before running `test:integration:live` — it makes real API calls.
+
+When `/v1-check` is being used as a final PR or goal gate, run it after the final commit as well as before
+the commit if hooks can rewrite staged files. A clean pre-commit gate is not enough if lint-staged or
+formatters mutate the committed content.
 
 ## What this skill is NOT
 

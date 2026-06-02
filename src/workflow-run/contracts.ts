@@ -1,6 +1,14 @@
 export const DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder";
 
-export type WorkflowRunSource = "cli" | "linear";
+export type WorkflowRunSource = "api" | "cli" | "github" | "linear" | "slack";
+export type WorkflowRunStatus =
+  | "accepted"
+  | "queued"
+  | "running"
+  | "waiting_for_operator"
+  | "blocked"
+  | "done"
+  | "cancelled";
 
 export interface LinearIssueWorkflowRunTrigger {
   type: "linear_issue";
@@ -11,18 +19,36 @@ export interface LinearIssueWorkflowRunTrigger {
   deliveryId: string | null;
 }
 
-export type WorkflowRunTrigger = LinearIssueWorkflowRunTrigger;
+export interface GitHubIssueWorkflowRunTrigger {
+  type: "github_issue";
+  issueId: string;
+  issueIdentifier: string;
+  issueUrl: string | null;
+  action: string;
+  deliveryId: string | null;
+  deliveryKind: "polling" | "webhook";
+}
+
+export type WorkflowRunTrigger = GitHubIssueWorkflowRunTrigger | LinearIssueWorkflowRunTrigger;
 
 export interface WorkflowRunStartRecord {
   id: string;
   source: WorkflowRunSource;
-  status: "accepted";
+  status: WorkflowRunStatus;
   title: string;
   intent: string;
   workflowDefinitionId: string;
+  workspaceKey?: string;
+  resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   createdAt: string;
   artifactDir: string;
   trigger?: WorkflowRunTrigger;
+}
+
+export interface WorkflowRunResolvedDefinitionConfig {
+  workflowDefinitionId: string;
+  validationProfile: string;
+  modelProfiles: Record<string, string>;
 }
 
 export interface WorkflowRunStartedOutput {

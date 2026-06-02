@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/git/pr-summary-generator.js", () => ({
   generatePrSummary: vi.fn(),
@@ -111,6 +111,12 @@ describe("executeGitPostRun", () => {
     vi.clearAllMocks();
     vi.mocked(generatePrSummary).mockResolvedValue(null);
     vi.mocked(evaluateMergePolicy).mockReturnValue({ allowed: true });
+    // The legacy auto-merge path is gated off by default (CR-02); enable it to exercise the legacy behavior.
+    process.env.RISOLUTO_LEGACY_AUTO_MERGE = "enabled";
+  });
+
+  afterEach(() => {
+    delete process.env.RISOLUTO_LEGACY_AUTO_MERGE;
   });
 
   it("returns null pullRequestUrl when nothing was pushed and skips summary generation", async () => {
@@ -134,7 +140,7 @@ describe("executeGitPostRun", () => {
     const result = await executeGitPostRun(gitManager, workspace, issue, repoMatch);
 
     expect(generatePrSummary).toHaveBeenCalledWith(workspace.path, repoMatch.defaultBranch);
-    expect(gitManager.createPullRequest).toHaveBeenCalledWith(repoMatch, issue, "mt-42-fix-the-bug", summary);
+    expect(gitManager.createPullRequest).toHaveBeenCalledWith(repoMatch, issue, "mt-42-fix-the-bug", summary, false);
     expect(result).toEqual({ pullRequestUrl: "https://github.com/org/repo/pull/99", summary });
   });
 
@@ -144,7 +150,13 @@ describe("executeGitPostRun", () => {
 
     const result = await executeGitPostRun(gitManager, makeWorkspace(), makeIssue(), makeRepoMatch());
 
-    expect(gitManager.createPullRequest).toHaveBeenCalledWith(makeRepoMatch(), makeIssue(), "mt-42-fix-the-bug", null);
+    expect(gitManager.createPullRequest).toHaveBeenCalledWith(
+      makeRepoMatch(),
+      makeIssue(),
+      "mt-42-fix-the-bug",
+      null,
+      false,
+    );
     expect(result).toEqual({ pullRequestUrl: "https://github.com/org/repo/pull/99", summary: null });
   });
 
@@ -178,6 +190,27 @@ describe("executeGitPostRun", () => {
         merge_method: "squash",
       },
       "auto-merge requested",
+    );
+  });
+
+  it("does not request legacy auto-merge when the gate flag is unset (CR-02 guardrail)", async () => {
+    delete process.env.RISOLUTO_LEGACY_AUTO_MERGE;
+    const issue = makeIssue({ labels: ["ready"] });
+    const autoMerge = makeAutoMerge();
+    const gitManager = makeGitManager({
+      pushed: true,
+      prUrl: "https://github.com/org/repo/pull/99",
+      changedFiles: ["src/a.ts"],
+      diffStats: { additions: 1, deletions: 0 },
+    });
+
+    await executeGitPostRun(gitManager, makeWorkspace(), issue, makeRepoMatch(), autoMerge);
+
+    expect(autoMerge.client.requestAutoMerge).not.toHaveBeenCalled();
+    expect(evaluateMergePolicy).not.toHaveBeenCalled();
+    expect(autoMerge.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ issue_identifier: issue.identifier }),
+      expect.stringContaining("gated off"),
     );
   });
 

@@ -15,13 +15,14 @@ import {
   validateWebhookPayload,
 } from "../http/webhook-types.js";
 import type { LinearTriggeredWorkflowRunRequest } from "../workflow-run/linear-intake.js";
+import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 
 const REPLAY_WINDOW_MS = 60_000;
 
 interface WorkflowRunAcceptedResult {
   workflowRun: {
     id: string;
-    source: "cli" | "linear";
+    source: "api" | "cli" | "github" | "linear" | "slack";
     title: string;
     workflowDefinitionId: string;
   };
@@ -35,6 +36,7 @@ export interface WebhookHandlerDeps {
   stopWorkerForIssue?: (issueIdentifier: string, reason: string) => void;
   recordVerifiedDelivery: (eventType: string) => void;
   acceptLinearTriggeredWorkflowRun?: (input: LinearTriggeredWorkflowRunRequest) => Promise<unknown>;
+  acceptGitHubTriggeredWorkflowRun?: (input: GitHubTriggeredWorkflowRunRequest) => Promise<unknown>;
   webhookInbox?: VerifiedWebhookDeliveryStore;
   eventBus?: Pick<TypedEventBus<RisolutoEventMap>, "emit">;
   logger: RisolutoLogger;
@@ -255,9 +257,11 @@ function isWorkflowRunAcceptedResult(result: unknown): result is WorkflowRunAcce
     return false;
   }
   const record = workflowRun as Record<string, unknown>;
+  const validSources = new Set(["api", "cli", "github", "linear", "slack"]);
   return (
     typeof record.id === "string" &&
-    (record.source === "cli" || record.source === "linear") &&
+    typeof record.source === "string" &&
+    validSources.has(record.source) &&
     typeof record.title === "string" &&
     typeof record.workflowDefinitionId === "string"
   );

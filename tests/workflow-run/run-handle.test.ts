@@ -125,11 +125,18 @@ describe("openWorkflowRun", () => {
 
   it("writes an artifact and records a completed role execution", async () => {
     const { dataDir, runId, run } = await openSeededRun();
+    const plan = {
+      version: 1,
+      workflowRunId: runId,
+      createdAt: "2026-05-26T18:00:00.000Z",
+      summary: "Focused cache patch.",
+      steps: [{ id: "step-1", title: "Patch cache invalidation", status: "ready", dependsOn: [] }],
+    };
 
     const completed = await run.recordRoleExecution({
       role: "planner",
-      artifactContractId: "implementation_plan.v1",
-      artifactData: { summary: "Focused cache patch.", risk: "low" },
+      artifactContractId: "plan.v1",
+      artifactData: plan,
     });
 
     expect(completed).toMatchObject({
@@ -138,7 +145,7 @@ describe("openWorkflowRun", () => {
         workflowRunId: runId,
         role: "planner",
         status: "completed",
-        artifact: { contractId: "implementation_plan.v1" },
+        artifact: { contractId: "plan.v1" },
       },
     });
     await expect(
@@ -147,11 +154,23 @@ describe("openWorkflowRun", () => {
         artifactId: completed.roleExecution.artifact.artifactId,
       }),
     ).resolves.toEqual({
-      contractId: "implementation_plan.v1",
-      data: { summary: "Focused cache patch.", risk: "low" },
+      contractId: "plan.v1",
+      data: plan,
     });
     const events = await readEvents(dataDir, runId);
     expect(events[1]).toMatchObject({ eventType: "role_execution.completed", role: "planner" });
+  });
+
+  it("rejects malformed role output with the producing role in the error", async () => {
+    const { run } = await openSeededRun();
+
+    await expect(
+      run.recordRoleExecution({
+        role: "planner",
+        artifactContractId: "plan.v1",
+        artifactData: { version: 1 },
+      }),
+    ).rejects.toThrow(/planner produced invalid artifact plan\.v1/);
   });
 
   it("records gate, transition, and hook as three ordered events", async () => {

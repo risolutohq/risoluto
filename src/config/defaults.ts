@@ -22,6 +22,9 @@ export const DEFAULT_CONFIG_SECTIONS: Record<string, Record<string, unknown>> = 
     root: "../risoluto-workspaces",
     strategy: "directory",
     branch_prefix: "risoluto/",
+    branch_template: "risoluto/{workflow}/{date}-{short-intent}-{run-id}",
+    dirty_policy: "reject",
+    worktree_retention_days: 7,
   },
 
   hooks: {

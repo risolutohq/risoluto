@@ -6,6 +6,7 @@ import type { OrchestratorPort } from "../orchestrator/port.js";
 import type { SecretsStore } from "../secrets/store.js";
 import type { createTracker } from "../tracker/factory.js";
 import type { LinearTriggeredWorkflowRunRequest } from "../workflow-run/linear-intake.js";
+import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 import type { WebhookHandlerDeps } from "./linear-handler.js";
 import { createWebhookRuntime, evaluateWebhookConfig, type WebhookRuntime } from "./runtime.js";
 
@@ -31,6 +32,7 @@ export function initWebhookInfrastructure(input: {
   eventBus: TypedEventBus<RisolutoEventMap>;
   secretsStore: SecretsStore;
   acceptLinearTriggeredWorkflowRun?: (input: LinearTriggeredWorkflowRunRequest) => Promise<unknown>;
+  acceptGitHubTriggeredWorkflowRun?: (input: GitHubTriggeredWorkflowRunRequest) => Promise<unknown>;
   logger: RisolutoLogger;
 }): WebhookInfrastructure {
   return createWebhookRuntime({
@@ -40,6 +42,7 @@ export function initWebhookInfrastructure(input: {
     eventBus: input.eventBus,
     secretsStore: input.secretsStore,
     acceptLinearTriggeredWorkflowRun: input.acceptLinearTriggeredWorkflowRun,
+    acceptGitHubTriggeredWorkflowRun: input.acceptGitHubTriggeredWorkflowRun,
     logger: input.logger,
   });
 }

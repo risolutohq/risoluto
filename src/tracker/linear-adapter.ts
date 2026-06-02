@@ -1,5 +1,6 @@
 import type { Issue, RisolutoLogger } from "../core/types.js";
 import { LinearClientError, type LinearClient } from "../linear/client.js";
+import { withWorkflowRunId } from "../linear/issue-parser.js";
 import type {
   TrackerIssueCreateInput,
   TrackerIssueCreateResult,
@@ -18,22 +19,35 @@ import type {
 } from "./port.js";
 import { toErrorString } from "../utils/type-guards.js";
 
+/**
+ * Optionally enrich a fetched Issue with its Risoluto-owned Workflow Run id.
+ * When provided, called once per issue with the Linear issue id; the returned
+ * string (if non-null) is stamped onto the issue via withWorkflowRunId.
+ * NEVER pass the tracker issue id as the result — only the wr_UUID from the
+ * intake idempotency store satisfies CR-03.
+ */
+export type WorkflowRunIdLookup = (linearIssueId: string) => Promise<string | undefined>;
+
 export class LinearTrackerAdapter implements TrackerPort {
   constructor(
     private readonly client: LinearClient,
     private readonly logger?: Pick<RisolutoLogger, "warn">,
+    private readonly lookupWorkflowRunId?: WorkflowRunIdLookup,
   ) {}
 
-  fetchCandidateIssues(): Promise<Issue[]> {
-    return this.client.fetchCandidateIssues();
+  async fetchCandidateIssues(): Promise<Issue[]> {
+    const issues = await this.client.fetchCandidateIssues();
+    return this.enrichIssues(issues);
   }
 
-  fetchIssueStatesByIds(ids: string[]): Promise<Issue[]> {
-    return this.client.fetchIssueStatesByIds(ids);
+  async fetchIssueStatesByIds(ids: string[]): Promise<Issue[]> {
+    const issues = await this.client.fetchIssueStatesByIds(ids);
+    return this.enrichIssues(issues);
   }
 
-  fetchIssuesByStates(states: string[]): Promise<Issue[]> {
-    return this.client.fetchIssuesByStates(states);
+  async fetchIssuesByStates(states: string[]): Promise<Issue[]> {
+    const issues = await this.client.fetchIssuesByStates(states);
+    return this.enrichIssues(issues);
   }
 
   resolveStateId(stateName: string): Promise<string | null> {
@@ -101,6 +115,15 @@ export class LinearTrackerAdapter implements TrackerPort {
           ...(await this.client.ensureRisolutoLabel()),
         }));
     }
+  }
+
+  private async enrichIssues(issues: Issue[]): Promise<Issue[]> {
+    if (!this.lookupWorkflowRunId) {
+      return issues;
+    }
+    return Promise.all(
+      issues.map(async (issue) => withWorkflowRunId(issue, await this.lookupWorkflowRunId!(issue.id))),
+    );
   }
 
   private async listProjects(): Promise<TrackerProvisionListProjectsResult> {

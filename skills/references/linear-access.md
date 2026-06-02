@@ -157,7 +157,7 @@ query ByLabel($label: String!) {
 ### List project milestones + issues (wave derivation)
 
 Waves are project milestones. Pull them sorted, each with its issues and `blocked-by` edges — this is the
-query `risoluto-goal` freezes into `WAVES.md`:
+query `risoluto-goal-prep` freezes into `WAVES.md`:
 
 Resolve the project UUID from the PRD `linear_project` URL first. The URL segment after `/project/` is
 Linear's `slugId`:

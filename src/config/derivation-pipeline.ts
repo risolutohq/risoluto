@@ -5,6 +5,7 @@ import {
   deriveCodexConfig,
   derivePollingConfig,
   deriveServerConfig,
+  deriveSlackIntakeConfig,
   deriveTrackerConfig,
   deriveWebhookConfig,
   deriveWorkspaceConfig,
@@ -40,6 +41,7 @@ interface ConfigDerivationInput {
   stateMachine: Record<string, unknown>;
   server: Record<string, unknown>;
   webhook: Record<string, unknown>;
+  slackIntake: Record<string, unknown>;
 }
 
 function createDerivationInput(mergedConfig: Record<string, unknown>): ConfigDerivationInput {
@@ -60,6 +62,7 @@ function createDerivationInput(mergedConfig: Record<string, unknown>): ConfigDer
     stateMachine: asRecord(root.state_machine),
     server: asRecord(root.server),
     webhook: asRecord(root.webhook),
+    slackIntake: asRecord(root.slack_intake ?? root.slackIntake),
   };
 }
 
@@ -84,5 +87,6 @@ export function deriveServiceConfig(workflow: WorkflowDefinition, options?: Deri
     stateMachine: normalizeStateMachine(input.stateMachine),
     server: deriveServerConfig(input.server),
     webhook: deriveWebhookConfig(input.webhook, secretResolver),
+    slackIntake: deriveSlackIntakeConfig(input.slackIntake, secretResolver),
   };
 }

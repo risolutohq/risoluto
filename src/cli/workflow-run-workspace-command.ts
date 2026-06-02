@@ -3,6 +3,11 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { openWorkflowRun } from "../workflow-run/artifacts.js";
+import {
+  classifyWorkflowRunWorktreeRetention,
+  type WorkflowRunWorkspaceTerminalStatus,
+  type WorktreePullRequestState,
+} from "../workflow-run/workspace-lifecycle.js";
 
 export async function recordWorkspaceLifecycleCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -72,8 +77,63 @@ export async function recordWorkspaceCleanupCommand(argv: string[]): Promise<num
   return 0;
 }
 
+export async function classifyWorkspaceRetentionCommand(argv: string[]): Promise<number> {
+  const parsed = parseArgs({
+    args: argv,
+    allowPositionals: false,
+    options: {
+      "finished-at": { type: "string" },
+      now: { type: "string" },
+      "retention-days": { type: "string" },
+      "pr-state": { type: "string" },
+      "run-status": { type: "string" },
+      json: { type: "boolean", default: false },
+    },
+  });
+
+  const decision = classifyWorkflowRunWorktreeRetention({
+    finishedAt: requireNonEmpty(parsed.values["finished-at"], "--finished-at"),
+    now: requireNonEmpty(parsed.values.now, "--now"),
+    retentionDays: parseRetentionDays(parsed.values["retention-days"]),
+    pullRequestState: parsePullRequestState(requireNonEmpty(parsed.values["pr-state"], "--pr-state")),
+    runStatus: parseRunStatus(requireNonEmpty(parsed.values["run-status"], "--run-status")),
+  });
+
+  if (parsed.values.json) {
+    console.log(JSON.stringify({ type: "workflow_run.workspace_retention_classified", decision }));
+  } else {
+    console.log(`Worktree retention: ${decision.action} (${decision.reason})`);
+  }
+  return 0;
+}
+
 function resolveDataDir(value: string | undefined): string {
   return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
+}
+
+function parseRetentionDays(value: string | undefined): number {
+  if (value === undefined || value.trim() === "") {
+    return 7;
+  }
+  const days = Number.parseInt(value, 10);
+  if (!Number.isInteger(days) || days < 0) {
+    throw new TypeError("--retention-days must be a non-negative integer");
+  }
+  return days;
+}
+
+function parsePullRequestState(value: string): WorktreePullRequestState {
+  if (value === "none" || value === "open" || value === "merged" || value === "closed") {
+    return value;
+  }
+  throw new TypeError("--pr-state must be none, open, merged, or closed");
+}
+
+function parseRunStatus(value: string): WorkflowRunWorkspaceTerminalStatus {
+  if (value === "done" || value === "blocked" || value === "cancelled" || value === "failed") {
+    return value;
+  }
+  throw new TypeError("--run-status must be done, blocked, cancelled, or failed");
 }
 
 function requireNonEmpty(value: string | undefined, flag: string): string {

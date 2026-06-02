@@ -10,16 +10,20 @@ import {
   startRunAttemptCommand,
 } from "./workflow-run-attempt-command.js";
 import { listWorkflowRunsCommand } from "./workflow-run-list-command.js";
-import { recordWorkspaceCleanupCommand, recordWorkspaceLifecycleCommand } from "./workflow-run-workspace-command.js";
-import { recordWorkerProcessCommand } from "./workflow-run-worker-process-command.js";
+import { startWorkflowRunCommand } from "./workflow-run-start-command.js";
 import {
-  createWorkflowRunRecord,
-  DEFAULT_WORKFLOW_DEFINITION_ID,
+  classifyWorkspaceRetentionCommand,
+  recordWorkspaceCleanupCommand,
+  recordWorkspaceLifecycleCommand,
+} from "./workflow-run-workspace-command.js";
+import { recordWorkerProcessCommand } from "./workflow-run-worker-process-command.js";
+import { tryHandleDoctorCommand } from "./doctor-command.js";
+import { tryHandleRunCommand } from "./run-command.js";
+import { tryHandleWorkflowCommand } from "./workflow-command.js";
+import {
   openWorkflowRun,
   readWorkflowRunEvents,
   toEventAppendedOutput,
-  toStartedOutput,
-  writeWorkflowRunRecord,
   type WorkflowRunGateReference,
   type WorkflowRunHookReference,
 } from "../workflow-run/artifacts.js";
@@ -34,7 +38,7 @@ const workflowRunCommandHandlers: WorkflowRunCommandHandler[] = [
   {
     expected: "workflow-run start",
     matches: (argv) => argv[1] === "start",
-    handle: (argv) => startWorkflowRun(argv.slice(2)),
+    handle: (argv) => startWorkflowRunCommand(argv.slice(2)),
   },
   {
     expected: "workflow-run list",
@@ -97,6 +101,11 @@ const workflowRunCommandHandlers: WorkflowRunCommandHandler[] = [
     handle: (argv) => recordWorkspaceCleanupCommand(argv.slice(4)),
   },
   {
+    expected: "workflow-run workspace retention",
+    matches: (argv) => argv[1] === "workspace" && argv[2] === "retention",
+    handle: (argv) => classifyWorkspaceRetentionCommand(argv.slice(3)),
+  },
+  {
     expected: "workflow-run worker-process record",
     matches: (argv) => argv[1] === "worker-process" && argv[2] === "record",
     handle: (argv) => recordWorkerProcessCommand(argv.slice(3)),
@@ -104,6 +113,21 @@ const workflowRunCommandHandlers: WorkflowRunCommandHandler[] = [
 ];
 
 export async function tryHandleWorkflowRunCommand(argv: string[]): Promise<number | null> {
+  const doctorCommandExitCode = await tryHandleDoctorCommand(argv);
+  if (doctorCommandExitCode !== null) {
+    return doctorCommandExitCode;
+  }
+
+  const runCommandExitCode = await tryHandleRunCommand(argv);
+  if (runCommandExitCode !== null) {
+    return runCommandExitCode;
+  }
+
+  const workflowCommandExitCode = await tryHandleWorkflowCommand(argv);
+  if (workflowCommandExitCode !== null) {
+    return workflowCommandExitCode;
+  }
+
   if (argv[0] !== "workflow-run") {
     return null;
   }
@@ -114,34 +138,6 @@ export async function tryHandleWorkflowRunCommand(argv: string[]): Promise<numbe
   }
 
   throw new TypeError(`unsupported workflow-run command. Expected: ${formatExpectedWorkflowRunCommands()}`);
-}
-
-async function startWorkflowRun(argv: string[]): Promise<number> {
-  const parsed = parseArgs({
-    args: argv,
-    allowPositionals: false,
-    options: {
-      title: { type: "string" },
-      intent: { type: "string" },
-      "workflow-definition": { type: "string" },
-      "data-dir": { type: "string" },
-      json: { type: "boolean", default: false },
-    },
-  });
-
-  const title = requireNonEmpty(parsed.values.title, "--title");
-  const intent = requireNonEmpty(parsed.values.intent, "--intent");
-  const workflowDefinitionId = parsed.values["workflow-definition"]?.trim() || DEFAULT_WORKFLOW_DEFINITION_ID;
-  const dataDir = resolveDataDir(parsed.values["data-dir"]);
-  const workflowRun = createWorkflowRunRecord({ dataDir, title, intent, workflowDefinitionId, source: "cli" });
-
-  await writeWorkflowRunRecord(workflowRun);
-  if (parsed.values.json) {
-    console.log(JSON.stringify(toStartedOutput(workflowRun)));
-  } else {
-    console.log(`Started Workflow Run ${workflowRun.id}: ${workflowRun.title}`);
-  }
-  return 0;
 }
 
 async function appendWorkflowRunEventCommand(argv: string[]): Promise<number> {

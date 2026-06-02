@@ -3,6 +3,7 @@ import type {
   WorkflowRunEventAppendedOutput,
   WorkflowRunEventRecord,
   WorkflowRunEventsListedOutput,
+  WorkflowRunResolvedDefinitionConfig,
   WorkflowRunSource,
   WorkflowRunStartedOutput,
   WorkflowRunStartRecord,
@@ -13,6 +14,7 @@ export { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 export { openWorkflowRun } from "./run-handle.js";
 export type { WorkflowRun } from "./run-handle.js";
 export type {
+  GitHubIssueWorkflowRunTrigger,
   LinearIssueWorkflowRunTrigger,
   WorkflowRunArtifactReference,
   WorkflowRunAttemptReference,
@@ -22,8 +24,10 @@ export type {
   WorkflowRunGateReference,
   WorkflowRunHookReference,
   WorkflowRunRepoReference,
+  WorkflowRunResolvedDefinitionConfig,
   WorkflowRunRoleExecutionCompletedOutput,
   WorkflowRunSource,
+  WorkflowRunStatus,
   WorkflowRunStartedOutput,
   WorkflowRunStartRecord,
   WorkflowRunTransitionRecord,
@@ -41,6 +45,8 @@ export function createWorkflowRunRecord(input: {
   intent: string;
   source: WorkflowRunSource;
   workflowDefinitionId?: string;
+  workspaceKey?: string;
+  resolvedWorkflowDefinition?: WorkflowRunResolvedDefinitionConfig;
   trigger?: WorkflowRunTrigger;
   now?: () => string;
   id?: () => string;

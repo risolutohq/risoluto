@@ -115,6 +115,7 @@ export class GitHubPrClient implements GithubApiToolClient {
     issue: Pick<Issue, "identifier" | "title" | "url">,
     branchName: string,
     summary?: string | null,
+    draft?: boolean,
   ): Promise<PrCreateResult | undefined> {
     const owner = route.githubOwner ?? parseGithubRepo(route.repoUrl)?.owner;
     const repo = route.githubRepo ?? parseGithubRepo(route.repoUrl)?.repo;
@@ -129,6 +130,7 @@ export class GitHubPrClient implements GithubApiToolClient {
       head: branchName,
       base: route.defaultBranch,
       body: prBody,
+      draft: Boolean(draft),
     });
     try {
       const created = await this.githubRequest(`/repos/${owner}/${repo}/pulls`, { method: "POST", body }, tokenEnvName);

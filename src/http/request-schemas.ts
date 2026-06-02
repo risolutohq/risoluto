@@ -72,6 +72,17 @@ export const templateOverrideSchema = z
 
 export type TemplateOverrideBody = z.infer<typeof templateOverrideSchema>;
 
+export const createWorkflowRunSchema = z
+  .object({
+    title: z.string().min(1),
+    intent: z.string().min(1),
+    workflowDefinitionId: z.string().min(1).optional(),
+    workspaceKey: z.string().min(1).optional(),
+  })
+  .strict();
+
+export type CreateWorkflowRunBody = z.infer<typeof createWorkflowRunSchema>;
+
 export const triggerSchema = z
   .object({
     action: z.enum(["create_issue", "re_poll", "refresh_issue"]),

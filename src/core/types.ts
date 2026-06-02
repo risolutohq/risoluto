@@ -39,11 +39,14 @@ export type {
   PollingConfig,
   WebhookConfig,
   WorkspaceConfig,
+  WorkspaceDirtyPolicy,
   WorkspaceStrategy,
   ServerConfig,
   StateMachineConfig,
   StateStageConfig,
   StateStageKind,
+  SlackIntakeConfig,
+  SlackOperatorIdentityConfig,
 } from "./types/config.js";
 
 export type {

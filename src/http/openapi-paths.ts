@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 
-import { modelUpdateSchema, transitionSchema, triggerSchema } from "./request-schemas.js";
+import { createWorkflowRunSchema, modelUpdateSchema, transitionSchema, triggerSchema } from "./request-schemas.js";
 import {
   abortResponseSchema,
   alertHistoryListResponseSchema,
@@ -47,6 +47,7 @@ import {
   workflowRunDetailResponseSchema,
   workflowRunAttemptsListResponseSchema,
   workflowRunEventsListResponseSchema,
+  workflowRunStartedResponseSchema,
   workflowRunsListResponseSchema,
   workspaceInventoryResponseSchema,
 } from "./response-schemas.js";
@@ -316,6 +317,23 @@ function workflowRunsListPath(): PathItem {
       security: protectedReadSecurity,
       responses: {
         ...protectedReadResponses("Workflow Run list projection", toSchema(workflowRunsListResponseSchema)),
+        "503": errorResponse("Workflow Run archive not configured"),
+      },
+    },
+    post: {
+      tags: ["Workflow Runs"],
+      summary: "Start a Workflow Run",
+      operationId: "createWorkflowRun",
+      security: protectedReadSecurity,
+      requestBody: {
+        required: true,
+        content: jsonContent(toSchema(createWorkflowRunSchema)),
+      },
+      responses: {
+        "201": jsonResponse("Workflow Run started", toSchema(workflowRunStartedResponseSchema)),
+        "400": errorResponse("Validation error"),
+        "401": errorResponse("Valid write token required"),
+        "403": errorResponse("Remote write access is not configured"),
         "503": errorResponse("Workflow Run archive not configured"),
       },
     },
