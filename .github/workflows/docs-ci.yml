@@ -1,0 +1,32 @@
+name: Docs CI
+
+on:
+  pull_request:
+    paths:
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/**/*.md"
+      - ".github/workflows/docs-ci.yml"
+      - ".markdownlint.json"
+      - ".mlc_config.json"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Markdown lint
+        run: npx --yes markdownlint-cli2@0.22.1 "README.md" "CONTRIBUTING.md" "docs/**/*.md"
+      - name: Link check (README + CONTRIBUTING, blocking)
+        run: |
+          npx --yes markdown-link-check@3.14.2 --config .mlc_config.json README.md
+          npx --yes markdown-link-check@3.14.2 --config .mlc_config.json CONTRIBUTING.md
+      - name: Link check (docs/, advisory)
+        continue-on-error: true
+        run: find docs -name '*.md' -print0 | xargs -0 -I{} npx --yes markdown-link-check@3.14.2 --config .mlc_config.json "{}"

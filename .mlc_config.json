@@ -1,0 +1,8 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^http://localhost" },
+    { "pattern": "^https://img.shields.io" },
+    { "pattern": "^https://github.com/risolutohq/risoluto/actions" }
+  ],
+  "aliveStatusCodes": [200, 206]
+}
