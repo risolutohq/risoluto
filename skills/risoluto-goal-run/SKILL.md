@@ -1,6 +1,6 @@
 ---
 name: risoluto-goal-run
-description: Claude-native AFK conductor — RUNS a goal package (rendered by /risoluto-goal-prep) as a wave cascade using the Workflow tool; auto-renders the package if missing, so /risoluto-goal-run <slug> works on its own. Use for /risoluto-goal-run <slug>, "run the goal in Claude", "drive the waves", "conduct the build", or executing a prepared ~/.risoluto/goals/<slug>/ package without Codex. Waves run sequentially; independent ready issues within a wave are built in parallel in isolated git worktrees and merged up to integration/<slug>; the run is journaled and resumable. Invoking this skill is the explicit opt-in to multi-agent orchestration. The conductor never opens a PR — it prints gh pr create. Sibling of the Codex /goal launch; both consume the same package.
+description: Claude-native AFK conductor — RUNS a goal package (rendered by /risoluto-goal-prep) as a wave cascade using the Workflow tool; requires a package already rendered by /risoluto-goal-prep (this runner does not render). Use for /risoluto-goal-run <slug>, "run the goal in Claude", "drive the waves", "conduct the build", or executing a prepared ~/.risoluto/goals/<slug>/ package without Codex. Waves run sequentially; independent ready issues within a wave are built in parallel in isolated git worktrees and merged up to integration/<slug>; the run is journaled and resumable. Invoking this skill is the explicit opt-in to multi-agent orchestration. The conductor never opens a PR — it prints gh pr create. Sibling of the Codex /goal launch; both consume the same package.
 ---
 
 # risoluto-goal-run
@@ -11,8 +11,9 @@ Claude Code using the **`Workflow` tool** for deterministic control flow + paral
 
 This is strictly better than the "paste `GOAL.md` into a plain Claude session" fallback: independent
 issues within a wave build **in parallel** (each in its own worktree), and the run is **journaled and
-resumable**. It auto-renders the package on demand (Step 0) and then runs it, so `/risoluto-goal-run <slug>`
-is enough on its own — `/risoluto-goal-prep` stays available to generate or inspect the package separately.
+resumable**. It consumes a package **already rendered by `/risoluto-goal-prep`** — run that first. This
+runner never renders: rendering is `/risoluto-goal-prep`'s sole job, so the conductor's resume state
+(`PLAN.md` / `ATTEMPTS.md` / `NOTES.md`) is never wiped by a mid-run re-render.
 
 The package at `~/.risoluto/goals/<slug>/` stays the single source of truth. This skill does not
 re-plan it; it faithfully executes `WAVES.md` under the constraints in `GOAL.md`.
@@ -46,32 +47,35 @@ re-plan it; it faithfully executes `WAVES.md` under the constraints in `GOAL.md`
 
 Stop and report the exact failure if any check fails.
 
-| Check               | Verification                                                                          | Failure path                                                   |
-| ------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Repo root           | `test -f package.json && test -f .gitmodules`                                         | Run from the Risoluto checkout.                                |
-| Package renderable  | `docs/prds/<slug>.md` has `linear_project`, and `from:prd-<slug>` Linear issues exist | Run `/risoluto-to-prd` + `/risoluto-to-issues <slug>` first.   |
-| Clean base          | `git status --short` is clean (or only expected files)                                | Commit/stash first — a dirty base contaminates the cascade.    |
-| Linear reachable    | `LINEAR_API_KEY` GraphQL probe succeeds, or Linear MCP is available                   | Surface the error; do not retry auth.                          |
-| Claude Code runtime | the `Workflow` tool is available in this session                                      | This skill is Claude-only; use the Codex `/goal` path instead. |
+| Check               | Verification                                                          | Failure path                                                          |
+| ------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Repo root           | `test -f package.json && test -f .gitmodules`                         | Run from the Risoluto checkout.                                       |
+| Package present     | `~/.risoluto/goals/<slug>/GOAL.md` and `WAVES.md` exist               | Run `/risoluto-goal-prep <slug>` first (this runner does not render). |
+| Package fresh       | `WAVES.md` issue set matches the live `from:prd-<slug>` Linear issues | Re-run `/risoluto-goal-prep <slug>` to re-freeze the wave map.        |
+| Clean base          | `git status --short` is clean (or only expected files)                | Commit/stash first — a dirty base contaminates the cascade.           |
+| Linear reachable    | `LINEAR_API_KEY` GraphQL probe succeeds, or Linear MCP is available   | Surface the error; do not retry auth.                                 |
+| Claude Code runtime | the `Workflow` tool is available in this session                      | This skill is Claude-only; use the Codex `/goal` path instead.        |
 
 Launch from a **clean checkout of the base branch** (usually `master`), not from an unrelated feature
 worktree — the cascade creates `integration/<slug>` and the wave/issue branches beneath it.
 
 ## Pipeline
 
-### Step 0 — Ensure the package (auto-render)
+### Step 0 — Require a fresh package (this runner does not render)
 
-This runner is self-sufficient — it renders the package itself, so a separate `/risoluto-goal-prep` call is
-optional. If `~/.risoluto/goals/<slug>/GOAL.md` is missing, or you want a fresh plan after milestone/issue
-changes, render it with the shared generator:
+Rendering belongs to `/risoluto-goal-prep` alone. This runner **consumes** the package; it never renders it,
+because a re-render (`render.mjs --force`) wipes `PLAN.md` / `ATTEMPTS.md` / `NOTES.md` and would destroy the
+conductor's resume state mid-run. So:
 
-```bash
-node skills/risoluto-goal-prep/scripts/render.mjs <slug> --force
-```
+1. If `~/.risoluto/goals/<slug>/GOAL.md` or `WAVES.md` is missing → **stop** and tell the operator to run
+   `/risoluto-goal-prep <slug>` first.
+2. Confirm the package is **fresh**: list the live `from:prd-<slug>` Linear issues and check the set matches
+   `WAVES.md`. If issues were added or removed, or milestones changed since the package was rendered →
+   **stop** and tell the operator to re-run `/risoluto-goal-prep <slug>` to re-freeze the wave map. Never
+   re-render here.
 
-(That is exactly what `/risoluto-goal-prep` runs — the runner calls the generator as a library.) To inspect
-or hand-tune the frozen plan before building, run `/risoluto-goal-prep <slug>` and review `WAVES.md` first;
-otherwise this step makes `/risoluto-goal-run <slug>` enough on its own.
+Inspecting `WAVES.md` before launching an autonomous multi-agent build is the point — `/risoluto-goal-prep`
+is where you produce and hand-tune that frozen plan.
 
 ### Step 1 — Assemble `args` from the package + live Linear
 

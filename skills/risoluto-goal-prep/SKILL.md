@@ -11,7 +11,9 @@ wave, uses one cascade integration branch, stops for a different-model end-revie
 findings and prints the PR command.
 
 This skill is a generator, not the runner. The package is runner-neutral; pick Codex or Claude Code at
-launch time.
+launch time. **Rendering is this skill's sole job** — `/risoluto-goal-run` consumes the rendered package and
+never re-renders it (a re-render would wipe the conductor's `PLAN.md` / `ATTEMPTS.md` / `NOTES.md` resume
+state mid-run), so re-freezing the wave map after milestone/issue changes is always done here.
 
 ## Contract
 
