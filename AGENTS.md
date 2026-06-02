@@ -78,6 +78,5 @@ Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks`
 - `@docs/roadmap.md` — the single ordered plan of what's next
 - `@docs/research-to-shipping-pipeline.md` — the planning pipeline: stage-by-stage how-to, file contracts, and ownership (decisions in `docs/adr/0001-foundation.md` §7, decisions.md row #29)
 - `@skills/risoluto-features/SKILL.md` — two-repo spine updater (consumes `research/`)
-- `@FILETREE.md` — per-file purpose index; read before `ls` / `grep` to locate code
 
 (The `@path` prefix is Claude Code's inline-import syntax; other tools should read these as regular file references.)
