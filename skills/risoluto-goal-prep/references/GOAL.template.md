@@ -1,9 +1,10 @@
 <!--
-  GOAL.template.md - constant Codex /goal prompt for a Risoluto wave-cascade build.
-  Rendered by /risoluto-goal. Substitute every {{TOKEN}} and drop this comment.
-  Shape follows ~/.codex/skills/goal-forge/references/goal_prompt_blocks.md.
-  Prompt style follows OpenAI prompt guidance: outcome-first, explicit context budget,
-  validation loops, and minimal process narration outside true invariants.
+  GOAL.template.md - constant, runner-agnostic conductor prompt for a Risoluto wave-cascade build.
+  Rendered by /risoluto-goal-prep. Substitute every {{TOKEN}} and drop this comment.
+  Block shape follows ~/.codex/skills/goal-forge/references/goal_prompt_blocks.md, but the prompt is
+  runner-neutral: it executes under Codex goal-forge `/goal` or directly in Claude Code.
+  Prompt style is outcome-first: explicit context budget, validation loops, and minimal process
+  narration outside true invariants.
 -->
 
 <goal>
@@ -36,7 +37,7 @@ True invariants:
 - PRD "Out of Scope" is binding. If real adjacent work appears, create a Linear issue labelled `discovered`
   and leave the code untouched for this run.
 - PR action is print-only: produce `gh pr create ...`; do not execute it.
-- Config action is report-only: do not edit ~/.codex/config.toml.
+- Config action is report-only: do not edit the runner's config (e.g. ~/.codex/config.toml under Codex).
 - One authoritative store per fact: issue state lives in Linear, built code lives in git, process state lives
   in {{GOAL_DIR}}. Do not mirror the same fact into a second store.
 - A tracker issue identifier is an external reference, not a Workflow Run id.

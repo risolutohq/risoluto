@@ -1,20 +1,21 @@
 <!--
   SPEC.template.md - human-readable source brief for the rendered Risoluto /goal package.
-  Rendered by /risoluto-goal alongside GOAL.md. GOAL.md is the compiled goal-forge block form.
+  Rendered by /risoluto-goal-prep alongside GOAL.md. GOAL.md is the runner-agnostic conductor prompt
+  (goal-forge block shape; runnable by Codex /goal or Claude Code).
 -->
 
 # SPEC - {{SLUG}} autonomous wave-cascade build
 
 ## Goal
 
-Implement the {{SLUG}} PRD end to end as a bounded Codex `/goal`: {{ISSUE_COUNT}} Linear issues across
+Implement the {{SLUG}} PRD end to end as a bounded conductor run (Codex `/goal` or Claude Code): {{ISSUE_COUNT}} Linear issues across
 {{WAVE_COUNT}} Linear milestone waves, merged through {{INTEGRATION_BRANCH}}, gate green, review HIGH
 cleared, and PR command printed.
 
 ## Non-goals
 
 - The conductor does not create the GitHub PR or merge to master.
-- The conductor does not edit `~/.codex/config.toml`.
+- The conductor does not edit the runner's config (e.g. `~/.codex/config.toml`).
 - The conductor does not implement work outside {{PRD_PATH}}. Adjacent findings become `discovered` Linear
   issues.
 - The goal package is process state outside git; it is not a repo documentation surface.

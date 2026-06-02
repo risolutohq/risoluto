@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * risoluto-goal: render a Codex /goal package from one PRD and its Linear waves.
+ * risoluto-goal-prep: render a runner-agnostic /goal package from one PRD and its Linear waves.
  *
  * Usage:
- *   node skills/risoluto-goal/scripts/render.mjs <slug> [--force]
+ *   node skills/risoluto-goal-prep/scripts/render.mjs <slug> [--force]
  *
- * Writes ~/.codex/goals/<slug>/{GOAL.md,SPEC.md,WAVES.md,CONTROL.md,PLAN.md,ATTEMPTS.md,NOTES.md}.
- * Uses LINEAR_API_KEY + GraphQL for the portable Codex path.
+ * Writes ~/.risoluto/goals/<slug>/{GOAL.md,SPEC.md,WAVES.md,CONTROL.md,PLAN.md,ATTEMPTS.md,NOTES.md}.
+ * Uses LINEAR_API_KEY + GraphQL. The package runs under Codex goal-forge `/goal` or Claude Code.
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -19,11 +19,11 @@ const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const REPO_ROOT = path.resolve(SKILL_DIR, "..", "..");
 const PRDS_DIR = path.join(REPO_ROOT, "docs", "prds");
 const RESEARCH_DIR = path.join(REPO_ROOT, "research");
-const GOAL_ROOT = path.join(os.homedir(), ".codex", "goals");
+const GOAL_ROOT = path.join(os.homedir(), ".risoluto", "goals");
 const LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql";
 
 function fail(message) {
-  console.error(`risoluto-goal: ${message}`);
+  console.error(`risoluto-goal-prep: ${message}`);
   process.exit(1);
 }
 
@@ -301,7 +301,7 @@ require_approval_for:
 latest_nudge: ""
 
 Notes:
-- Edit this file to steer the running /goal without rewriting GOAL.md.
+- Edit this file to steer the running conductor without rewriting GOAL.md.
 - The conductor rereads this file before each wave change, gate retry, and review handoff.
 - This file can narrow scope or pause work; it cannot weaken done_when, /v1-check, or HIGH review blocking.
 `;
@@ -314,7 +314,7 @@ function renderPlan(slug, waves) {
 current_state: package generated
 current_wave: ${firstWave}
 current_issue: none
-next_step: launch /goal with GOAL.md, then create integration/${slug} if needed
+next_step: launch the conductor (Codex /goal or Claude Code) with GOAL.md, then create integration/${slug} if needed
 
 ## Position
 
@@ -339,8 +339,8 @@ function renderNotes(slug, waves, generatedAt) {
   const issueCount = waves.reduce((total, wave) => total + wave.issues.length, 0);
   return `# NOTES - ${slug}
 
-- ${generatedAt}: Generated the /goal package from Linear milestones (${waves.length} waves, ${issueCount} issues).
-- WAVES.md is frozen for deterministic execution. Re-run /risoluto-goal ${slug} to refresh after milestone changes.
+- ${generatedAt}: Generated the conductor package from Linear milestones (${waves.length} waves, ${issueCount} issues).
+- WAVES.md is frozen for deterministic execution. Re-run /risoluto-goal-prep ${slug} to refresh after milestone changes.
 - Issue status lives in Linear, code state lives in git, and process state lives in this goal folder.
 `;
 }
@@ -388,12 +388,13 @@ async function main() {
   const written = writePackage(slug, prd, project, waves, force);
   console.error(
     [
-      `risoluto-goal: rendered ${slug}`,
+      `risoluto-goal-prep: rendered ${slug}`,
       `  goal_dir : ${written.goalDir}`,
       `  waves    : ${waves.length}`,
       `  issues   : ${written.issueCount}`,
       `  project  : ${project.url}`,
-      "  launch   : codex -> /goal -> paste GOAL.md",
+      `  launch (codex)  : cd ${REPO_ROOT} && codex -> /goal -> paste ${written.goalDir}/GOAL.md`,
+      `  launch (claude) : cd ${REPO_ROOT} && claude -> "run the conductor goal in ${written.goalDir}/GOAL.md"`,
     ].join("\n"),
   );
 }

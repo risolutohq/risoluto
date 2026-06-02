@@ -1,15 +1,17 @@
 ---
-name: risoluto-goal
-description: Generate a launchable Codex /goal package for a Risoluto PRD. Use for /risoluto-goal <slug>, "make the AFK goal", "generate the conductor goal", or preparing a PRD for autonomous implementation. Derives waves from the PRD Linear project's milestones, writes ~/.codex/goals/<slug>/{GOAL.md,SPEC.md,WAVES.md,CONTROL.md,PLAN.md,ATTEMPTS.md,NOTES.md}, reports Codex config readiness, and prints the launch steps. Does not run /goal, edit ~/.codex/config.toml, create PRs, or modify goal-forge.
+name: risoluto-goal-prep
+description: Generate a launchable, runner-agnostic /goal package for a Risoluto PRD — runs under Codex goal-forge or Claude Code. Use for /risoluto-goal-prep <slug>, "make the AFK goal", "generate the conductor goal", or preparing a PRD for autonomous implementation. Derives waves from the PRD Linear project's milestones, writes ~/.risoluto/goals/<slug>/{GOAL.md,SPEC.md,WAVES.md,CONTROL.md,PLAN.md,ATTEMPTS.md,NOTES.md}, reports runner readiness (Codex config when launching under Codex), and prints launch steps for both runners. Does not run the conductor, edit runner config, create PRs, or modify goal-forge.
 ---
 
-# risoluto-goal
+# risoluto-goal-prep
 
-Generate the durable control package for a Risoluto AFK build. The generated `/goal` makes Codex both
-conductor and implementer: it drains Linear issues wave by wave, uses one cascade integration branch, stops
-for a different-model end-review, then fixes review findings and prints the PR command.
+Generate the durable control package for a Risoluto AFK build. The generated `/goal` makes the conductor
+agent (Codex goal-forge or Claude Code) both conductor and implementer: it drains Linear issues wave by
+wave, uses one cascade integration branch, stops for a different-model end-review, then fixes review
+findings and prints the PR command.
 
-This skill is a generator, not the runner.
+This skill is a generator, not the runner. The package is runner-neutral; pick Codex or Claude Code at
+launch time.
 
 ## Contract
 
@@ -17,7 +19,7 @@ This skill is a generator, not the runner.
   -> wave -> integration. The next wave starts from the current integration tip.
 - Waves are Linear project milestones sorted by `sortOrder`.
 - Runtime ready-set is live Linear `blocked-by` state; `WAVES.md` is the frozen map, not issue status.
-- Memory split: issue status in Linear, code in git, conductor process state in `~/.codex/goals/<slug>/`.
+- Memory split: issue status in Linear, code in git, conductor process state in `~/.risoluto/goals/<slug>/`.
 - Final PR readiness requires a committed, clean integration branch. Review-fix code must not remain only in
   the working tree when the goal prints the PR command.
 - A green gate is not reachability. `pnpm` build/lint/test/typecheck passing proves the modules compile and
@@ -29,14 +31,21 @@ This skill is a generator, not the runner.
 - Hard stops: gate red after one repair attempt, missing credentials, ADR/product conflict, destructive or
   dependency change needing approval, merge conflict requiring ownership judgment, budget exhausted.
 - The goal prints `gh pr create`; it does not run it.
-- This skill reports Codex config gaps; it does not edit `~/.codex/config.toml`.
+- When launching under Codex, this skill reports goal-forge config gaps; it never edits runner config (`~/.codex/config.toml`). Under Claude Code there is no such config to report.
 
-## Goal-forge Integration
+## Runners
 
-`references/GOAL.template.md` is the precompiled goal-forge block contract. It follows
-`~/.codex/skills/goal-forge/references/goal_prompt_blocks.md` and embeds the constant cascade workflow in
-`<workflow>`. Do not modify goal-forge for Risoluto behavior. If the prompt contract changes, edit this
-skill's templates and re-render the package.
+The package is runner-neutral. The same `GOAL.md` launches two ways:
+
+- **Codex (goal-forge):** `references/GOAL.template.md` follows the goal-forge block contract
+  (`~/.codex/skills/goal-forge/references/goal_prompt_blocks.md`) and embeds the constant cascade workflow in
+  `<workflow>`. Do not modify goal-forge for Risoluto behavior. If the prompt contract changes, edit this
+  skill's templates and re-render the package.
+- **Claude Code:** open Claude Code in the repo and hand it `GOAL.md` — Claude reads the same blocks and
+  drives the cascade directly, resuming long runs from the working-memory files. No goal-forge dependency.
+
+The runners are not identical engines: Codex `/goal` is a durable goal loop; Claude Code drives the package
+through its main loop plus auto-compaction, with PLAN.md/ATTEMPTS.md/NOTES.md as the resume state.
 
 ## Preconditions
 
@@ -61,14 +70,14 @@ Default team is `Ninetech`; do not ask.
 Run the deterministic renderer:
 
 ```bash
-node skills/risoluto-goal/scripts/render.mjs <slug>
+node skills/risoluto-goal-prep/scripts/render.mjs <slug>
 ```
 
-If `~/.codex/goals/<slug>/` already contains a draft package and Omer wants a refresh, rerun with
+If `~/.risoluto/goals/<slug>/` already contains a draft package and Omer wants a refresh, rerun with
 `--force`:
 
 ```bash
-node skills/risoluto-goal/scripts/render.mjs <slug> --force
+node skills/risoluto-goal-prep/scripts/render.mjs <slug> --force
 ```
 
 The script:
@@ -86,7 +95,7 @@ Read the generated summary and spot-check:
 
 - `WAVES.md` wave count and issue count match Linear.
 - Wave order follows milestone `sortOrder`.
-- `GOAL.md` contains goal-forge blocks and the cascade in `<workflow>`.
+- `GOAL.md` contains the conductor blocks (goal-forge shape) and the cascade in `<workflow>`.
 - `CONTROL.md` contains only the live knobs: `paused`, `primary_priority`, `max_runtime_per_step`,
   `require_approval_for`, and `latest_nudge`.
 
@@ -100,9 +109,9 @@ For `workflow-first-afk-mvp`, the expected waves are:
 
 This list is a fixture for checking the current PRD only; the generator must derive future PRDs from Linear.
 
-### Step 3 - Report Codex config readiness
+### Step 3 - Report runner readiness
 
-Run the goal-forge config checker from the repo root:
+**If launching under Codex (goal-forge):** run the config checker from the repo root:
 
 ```bash
 python3 ~/.codex/skills/goal-forge/scripts/inspect_codex_config.py --project-path .
@@ -118,15 +127,31 @@ Report gaps, especially:
 
 Do not edit config unless Omer explicitly asks.
 
+**If launching under Claude Code:** there is no goal-forge config to check. Confirm instead that the worktree
+is clean, `LINEAR_API_KEY` is exported in the session, and the `risoluto-tdd` / `v1-check` /
+`risoluto-review-handoff` skills are available. Claude resumes long runs from the package's
+PLAN.md/ATTEMPTS.md/NOTES.md rather than a durable goal engine, so expect to nudge it across a session restart.
+
 ### Step 4 - Print launch steps
 
-Print the exact launch sequence; do not run `/goal` yourself:
+Print the launch sequence for the runner Omer picks; do not launch the conductor yourself.
+
+Codex (goal-forge):
 
 ```bash
 cd /home/oruc/Desktop/workspace/risoluto
 codex
 /goal
-# paste ~/.codex/goals/<slug>/GOAL.md
+# paste ~/.risoluto/goals/<slug>/GOAL.md
+```
+
+Claude Code:
+
+```bash
+cd /home/oruc/Desktop/workspace/risoluto
+claude
+# then: Execute the conductor goal in ~/.risoluto/goals/<slug>/GOAL.md —
+#       follow its <workflow> and resume from PLAN.md / ATTEMPTS.md / NOTES.md.
 ```
 
 ## Output
@@ -135,13 +160,13 @@ End with:
 
 - generated package path;
 - waves/issues count;
-- config readiness summary;
-- launch command;
+- runner-readiness summary;
+- launch commands (Codex and Claude Code);
 - any blocker.
 
 ## Companion Files
 
-- `references/GOAL.template.md` - compiled goal-forge block prompt.
+- `references/GOAL.template.md` - runner-agnostic conductor prompt (goal-forge block shape).
 - `references/SPEC.template.md` - human-readable source brief.
 - `scripts/render.mjs` - deterministic renderer.
 - `../references/linear-access.md` - portable Linear GraphQL operations.

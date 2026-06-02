@@ -1,11 +1,11 @@
 ---
 name: risoluto-review-handoff
-description: Produce the end-review artifact for a Risoluto AFK goal. Use for /risoluto-review-handoff <slug> after integration/<slug> has all waves merged. A different model reviews integration/<slug> against docs/prds/<slug>.md and the Linear issues, then writes review-handoff.v1 to ~/.codex/goals/<slug>/REVIEW.md and a Linear comment. The skill never edits code, fixes findings, opens PRs, or changes the goal package except REVIEW.md.
+description: Produce the end-review artifact for a Risoluto AFK goal. Use for /risoluto-review-handoff <slug> after integration/<slug> has all waves merged. A different model reviews integration/<slug> against docs/prds/<slug>.md and the Linear issues, then writes review-handoff.v1 to ~/.risoluto/goals/<slug>/REVIEW.md and a Linear comment. The skill never edits code, fixes findings, opens PRs, or changes the goal package except REVIEW.md.
 ---
 
 # risoluto-review-handoff
 
-Package the final review that the Codex `/goal` conductor will ingest. The reviewer is deliberately not the
+Package the final review that the `/goal` conductor (Codex or Claude Code) will ingest. The reviewer is deliberately not the
 same loop that implemented the branch. The output is a structured `review-handoff.v1` artifact, not prose
 advice.
 
@@ -20,15 +20,16 @@ Stop and report the exact failure if any check fails.
 | Repo root                 | `test -f package.json && test -f .gitmodules`                              | Tell Omer to run from the Risoluto checkout. |
 | Slug provided             | `<slug>` argument exists                                                   | Ask for the PRD slug.                        |
 | PRD exists                | `docs/prds/<slug>.md` exists                                               | Run `/risoluto-to-prd <slug>` first.         |
-| Goal folder exists        | `~/.codex/goals/<slug>/GOAL.md` exists                                     | Run `/risoluto-goal <slug>` first.           |
+| Goal folder exists        | `~/.risoluto/goals/<slug>/GOAL.md` exists                                  | Run `/risoluto-goal-prep <slug>` first.      |
 | Integration branch exists | `git rev-parse --verify integration/<slug>` or `origin/integration/<slug>` | Nothing is ready to review.                  |
 | Linear reachable          | `LINEAR_API_KEY` GraphQL probe succeeds, or Linear MCP is available        | Surface the error; do not retry auth.        |
 
 ## Review Model Rule
 
-Use a different model/reviewer from the Codex `/goal` implementer. Preferred path: run this skill from Claude
-Code or another non-Codex reviewer. If only the implementing Codex loop is available, stop and ask Omer for a
-different-model review surface; do not self-review and call it the end gate.
+Use a different model/reviewer from the `/goal` implementer. The point is a fresh model, not a specific
+vendor: if the cascade ran in Codex, review from Claude Code; if it ran in Claude Code, review from Codex (or
+another model). If only the implementing loop is available, stop and ask Omer for a different-model review
+surface; do not self-review and call it the end gate.
 
 ## Pipeline
 
@@ -38,9 +39,9 @@ Collect:
 
 - diff: `git fetch origin` then `git diff origin/master...integration/<slug>`;
 - PRD: `docs/prds/<slug>.md`, especially User Stories, Implementation Decisions, Testing Decisions, Out of Scope;
-- wave map: `~/.codex/goals/<slug>/WAVES.md`;
+- wave map: `~/.risoluto/goals/<slug>/WAVES.md`;
 - Linear issues labelled `from:prd-<slug>` with descriptions, states, and acceptance criteria;
-- latest gate evidence from `~/.codex/goals/<slug>/NOTES.md`.
+- latest gate evidence from `~/.risoluto/goals/<slug>/NOTES.md`.
 
 Review the branch against the PRD and issues, not just against TypeScript correctness.
 
@@ -52,7 +53,7 @@ Prioritize:
 2. **Production reachability.** A green gate proves the modules work in isolation, not that anything runs. For
    each capability the PRD says an operator can invoke (a CLI command, an HTTP/webhook request, a Slack
    action), confirm the production path actually reaches the engine — the entry point dispatches to a handler
-   that is *wired*, not just exported. A load-bearing function called only from tests is an unshipped feature
+   that is _wired_, not just exported. A load-bearing function called only from tests is an unshipped feature
    wearing a green check. This is the gap a same-loop reviewer most reliably misses.
 3. Acceptance gaps where a PRD story or Linear criterion is not actually satisfied.
 4. Invariant violations: tracker id used as run id, artifact validation skipped, PR action automated, cascade
@@ -74,7 +75,7 @@ the conductor should re-run when practical, such as OpenAPI contracts or `pnpm r
 
 ### Step 3 - Emit `review-handoff.v1`
 
-Write `~/.codex/goals/<slug>/REVIEW.md` using `references/review-handoff.v1.md`:
+Write `~/.risoluto/goals/<slug>/REVIEW.md` using `references/review-handoff.v1.md`:
 
 - human-readable summary first;
 - fenced `json` block with `contract: "review-handoff.v1"`;
@@ -99,11 +100,12 @@ exists, comment on the first `from:prd-<slug>` issue and include the goal folder
 Do not fix findings. Print:
 
 ```text
-Review handoff written to ~/.codex/goals/<slug>/REVIEW.md. Resume the Codex /goal; HIGH findings block the PR command.
+Review handoff written to ~/.risoluto/goals/<slug>/REVIEW.md. Resume the /goal conductor; HIGH findings block the PR command.
 ```
 
 ## Companion Files
 
 - `references/review-handoff.v1.md` - artifact contract and example.
 - `../references/linear-access.md` - GraphQL comment and issue queries.
-- `skills/risoluto-goal/` - conductor that consumes REVIEW.md.
+- `skills/risoluto-goal-prep/` - generates the package the review belongs to.
+- `skills/risoluto-goal-run/` - the Claude runner that resumes and consumes REVIEW.md.
