@@ -21,6 +21,8 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { loadLiveEnvFile } from "../src/config/live-preflight-config.js";
 import {
   diffSections,
   fetchProjectPrdMirror,
@@ -159,6 +161,26 @@ async function checkPrdDrift(apiKey: string, relPath: string): Promise<DriftResu
   };
 }
 
+/**
+ * Populate LINEAR_* from `.env.live.local` (the repo's canonical secrets file) before the key gate, so
+ * `pnpm prd:drift-check` works from the file regardless of shell exports — file values win, matching
+ * `loadLiveDispatchEnv`. A missing file (e.g. CI, where LINEAR_API_KEY is a secret env var) is a no-op.
+ */
+async function loadLinearEnvFromFile(): Promise<void> {
+  let fileEnv: NodeJS.ProcessEnv;
+  try {
+    fileEnv = await loadLiveEnvFile(path.join(REPO_ROOT, ".env.live.local"));
+  } catch {
+    return;
+  }
+  for (const key of ["LINEAR_API_KEY", "LINEAR_API_ENDPOINT"] as const) {
+    const value = fileEnv[key];
+    if (value) {
+      process.env[key] = value;
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const useAll = process.argv.includes("--all");
   const allCandidates = useAll ? getAllPrdFiles() : getChangedPrdsFromRefs(readPushRefsFromStdin());
@@ -174,6 +196,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  await loadLinearEnvFromFile();
   const apiKey = requireApiKey();
   process.stderr.write(`📋 Checking ${changedPrds.length} PRD file(s) for drift...\n`);
 
