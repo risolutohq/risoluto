@@ -15,7 +15,10 @@ concurrency:
 jobs:
   prd-post-merge:
     name: Flip PRD status + back-comment Linear
-    if: github.event.pull_request.merged == true
+    # Only fire when a PRD's work reaches the default branch. Per-ticket PRs carry the
+    # from:prd-<slug> label too and merge into integration/<slug>; without this guard they
+    # would flip the PRD to shipped prematurely on every ticket merge.
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
