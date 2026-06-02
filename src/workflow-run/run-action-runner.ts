@@ -82,6 +82,11 @@ export function createWorkflowRunActionRunner(
     if (input.actionId === "poll-ci") {
       return pollCiAction(deps, input);
     }
+    if (input.actionId === "write-handoff") {
+      // The real handoff.v1 is written by driveAcceptedWorkflowRun's finish step
+      // (writeDoneHandoff / writeBlockedHandoff); the workflow action is symbolic, so this is a no-op.
+      return {};
+    }
     throw new WorkflowRunActionError(`action ${input.actionId} is not configured for this entry point yet`);
   };
 }
