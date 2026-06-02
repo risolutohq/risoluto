@@ -116,8 +116,21 @@ export function parsePrdContent(content: string): { frontmatter: PrdFrontmatter;
   };
 }
 
+/**
+ * Fold inline emphasis markers Linear canonicalizes on storage (e.g. `_x_` -> `*x*`, and it repositions
+ * `**` around inline code). Drift is about content, not emphasis flavor, so strip emphasis delimiters:
+ * all `*` (leading bullets are already `-` by this point) and word-bounded `_` (intra-word underscores
+ * in identifiers like `change_summary` are preserved). Backticks are kept — Linear round-trips them.
+ */
+function foldInlineEmphasis(line: string): string {
+  return line
+    .replace(/\*/g, "")
+    .replace(/(?<![A-Za-z0-9])_+(?=[A-Za-z0-9])/g, "")
+    .replace(/(?<=[A-Za-z0-9])_+(?![A-Za-z0-9])/g, "");
+}
+
 function normalizeMarkdownLine(line: string, inOrderedList: boolean): { line: string; inOrderedList: boolean } {
-  const bulletNormalized = line.replace(/^(\s*)[*-](\s+)/, "$1-$2");
+  const bulletNormalized = foldInlineEmphasis(line.replace(/^(\s*)[*-](\s+)/, "$1-$2"));
   const orderedMatch = /^ {0,3}(\d+\.\s.*)$/.exec(bulletNormalized);
   if (orderedMatch) {
     return { line: orderedMatch[1], inOrderedList: true };
