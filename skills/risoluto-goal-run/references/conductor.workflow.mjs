@@ -2,7 +2,9 @@ export const meta = {
   name: "risoluto-goal-run",
   description:
     "Drive a Risoluto goal package as a wave cascade — waves sequential, ready issues within a wave built in parallel in isolated worktrees, merged up to the integration branch. The script orchestrates; agents do all git/impl/merge.",
-  phases: [{ title: "Cascade", detail: "per-wave: parallel issue builds -> serial merge -> wave gate -> integration merge" }],
+  phases: [
+    { title: "Cascade", detail: "per-wave: parallel issue builds -> serial merge -> wave gate -> integration merge" },
+  ],
 };
 
 // args (assembled by the /risoluto-goal-run skill from WAVES.md + live Linear):
@@ -66,6 +68,22 @@ function readyIn(wave, remaining, doneIds) {
   return remaining.filter((i) => i.blockedBy.every((b) => doneIds.has(b) || !inWave.has(b)));
 }
 
+// Always journal a wave blocker — best-effort, never throws. A null gate/build agent return
+// (budget or context exhaustion) must not swallow the reason the cascade stopped; the returned
+// summary still carries blockedReason even if PLAN.md could not be written.
+async function recordBlocker(waveNumber, reason) {
+  try {
+    await agent(
+      `Record a blocker in ${goalDir}/PLAN.md: ${slug} wave ${waveNumber} did not complete. Reason: ${reason}. Append the exact evidence to ${goalDir}/ATTEMPTS.md. Make no code changes.`,
+      { label: `blocker:w${waveNumber}`, phase: "Cascade", agentType: "general-purpose" },
+    );
+  } catch (err) {
+    log(
+      `Wave ${waveNumber} blocker could not be journaled to PLAN.md (${err instanceof Error ? err.message : String(err)}); reason: ${reason}`,
+    );
+  }
+}
+
 const results = [];
 
 for (const wave of waves) {
@@ -99,19 +117,20 @@ for (const wave of waves) {
     }
 
     const builds = await parallel(
-      ready.map((iss) => () =>
-        agent(
-          [
-            `You are the issue-build agent for ${iss.id} (${iss.title}) in ${slug} wave ${wave.number}.`,
-            gitRules,
-            "Steps:",
-            `1. Create a worktree: git -C ${repoRoot} worktree add ${repoRoot}/.agent-worktrees/${slug}-${iss.id} -b ${iss.branch} ${wave.branch}. Symlink node_modules in.`,
-            `2. Implement ${iss.id} against its Linear acceptance criteria + linked PRD. Use /risoluto-tdd ${iss.id} as the local method if available; otherwise follow the same red -> green -> refactor shape directly. Stay scoped to this issue.`,
-            `3. Run the focused acceptance check for the slice; commit on ${iss.branch} with a conventional message (CI=true). Do NOT open a PR. Do NOT mark Linear Done (the merge agent does that after merge).`,
-            `Return {issueId:"${iss.id}", branch:"${iss.branch}", status:"green" or "failed", evidence}. If you cannot make the slice pass, return status:"failed" with the failure evidence — do not widen scope.`,
-          ].join("\n"),
-          { schema: BUILD_SCHEMA, label: `build:${iss.id}`, phase: "Cascade", agentType: "general-purpose" },
-        ).then((r) => r || { issueId: iss.id, status: "failed", evidence: "agent returned null (skipped)" }),
+      ready.map(
+        (iss) => () =>
+          agent(
+            [
+              `You are the issue-build agent for ${iss.id} (${iss.title}) in ${slug} wave ${wave.number}.`,
+              gitRules,
+              "Steps:",
+              `1. Create a worktree: git -C ${repoRoot} worktree add ${repoRoot}/.agent-worktrees/${slug}-${iss.id} -b ${iss.branch} ${wave.branch}. Symlink node_modules in.`,
+              `2. Implement ${iss.id} against its Linear acceptance criteria + linked PRD. Use /risoluto-tdd ${iss.id} as the local method if available; otherwise follow the same red -> green -> refactor shape directly. Stay scoped to this issue.`,
+              `3. Run the focused acceptance check for the slice; commit on ${iss.branch} with a conventional message (CI=true). Do NOT open a PR. Do NOT mark Linear Done (the merge agent does that after merge).`,
+              `Return {issueId:"${iss.id}", branch:"${iss.branch}", status:"green" or "failed", evidence}. If you cannot make the slice pass, return status:"failed" with the failure evidence — do not widen scope.`,
+            ].join("\n"),
+            { schema: BUILD_SCHEMA, label: `build:${iss.id}`, phase: "Cascade", agentType: "general-purpose" },
+          ).then((r) => r || { issueId: iss.id, status: "failed", evidence: "agent returned null (skipped)" }),
       ),
     );
 
@@ -139,11 +158,9 @@ for (const wave of waves) {
 
   if (blockedWave && remaining.length > 0) {
     const unmerged = remaining.map((i) => i.id);
-    await agent(
-      `Record a blocker in ${goalDir}/PLAN.md: ${slug} wave ${wave.number} stalled with unmerged issues ${unmerged.join(", ")}. Append the exact evidence to ${goalDir}/ATTEMPTS.md. Make no code changes.`,
-      { label: `blocker:w${wave.number}`, phase: "Cascade", agentType: "general-purpose" },
-    );
-    results.push({ wave: wave.number, blocked: true, unmerged });
+    const reason = `wave stalled with unmerged issues ${unmerged.join(", ")}`;
+    await recordBlocker(wave.number, reason);
+    results.push({ wave: wave.number, blocked: true, unmerged, blockedReason: reason });
     break;
   }
 
@@ -160,13 +177,29 @@ for (const wave of waves) {
   );
 
   const merged = Boolean(gate && gate.green && gate.mergedToIntegration);
-  results.push({ wave: wave.number, green: Boolean(gate && gate.green), merged });
-  if (!merged) break;
+  if (!merged) {
+    const reason = !gate
+      ? "wave-gate agent returned null (budget/context exhaustion or skip) — no gate verdict was recorded by the agent"
+      : !gate.green
+        ? `wave gate red after one repair: ${gate.note || "no note"}`
+        : `wave gate green but not merged to ${integrationBranch}: ${gate.note || "no note"}`;
+    await recordBlocker(wave.number, reason);
+    results.push({ wave: wave.number, green: Boolean(gate && gate.green), merged: false, blockedReason: reason });
+    break;
+  }
+  results.push({ wave: wave.number, green: true, merged: true });
 }
 
 const wavesMerged = results.filter((r) => r.merged).length;
 const allWavesMerged = wavesMerged === waves.length;
-log(`Cascade finished: ${wavesMerged}/${waves.length} waves merged into ${integrationBranch}.`);
+const blocked = results.find((r) => r.blocked || r.blockedReason || r.merged === false);
+log(
+  allWavesMerged
+    ? `Cascade finished: all ${wavesMerged}/${waves.length} waves merged into ${integrationBranch}.`
+    : `Cascade halted at wave ${blocked ? blocked.wave : "?"} (${wavesMerged}/${waves.length} merged): ${
+        blocked ? blocked.blockedReason || blocked.reason || "see PLAN.md" : "unknown reason"
+      }.`,
+);
 
 return {
   slug,
@@ -174,5 +207,6 @@ return {
   waves: results,
   wavesMerged,
   allWavesMerged,
+  blocked: blocked ? { wave: blocked.wave, reason: blocked.blockedReason || blocked.reason || "see PLAN.md" } : null,
   readyForReview: allWavesMerged,
 };
