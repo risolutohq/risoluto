@@ -38,6 +38,24 @@ Given a `<ticket-ref>` (e.g. `RSL-123`):
 
 ## Pipeline
 
+### Step 0 — Reconcile a prior run (re-run only)
+
+`/risoluto-tdd <ticket-ref>` is **not idempotent**: a partial earlier run can leave a worktree at
+`.agent-worktrees/<ticket-ref-lower>/`, a `feat/<ticket-ref-lower>-<slug>` branch, and the ticket set
+In Progress. Detect that state first and reconcile, instead of hard-failing half-way at `git worktree add`:
+
+1. **Worktree exists** (`git worktree list` shows `.agent-worktrees/<ticket-ref-lower>`) → resume it; `cd`
+   in and continue the red→green loop. Do **not** create a second worktree.
+2. **Branch exists, no worktree** (`git rev-parse --verify feat/<ticket-ref-lower>-<slug>`) → re-add a
+   worktree onto the existing branch (`git worktree add <path> feat/<ticket-ref-lower>-<slug>`); do not
+   create a new branch.
+3. **Ticket In Progress, no branch/worktree** → a claim succeeded but setup failed; re-run setup cleanly
+   (the claim is idempotent).
+4. **A PR already exists for the branch** → this slice is past TDD; run `/risoluto-pre-pr` or merge, not
+   `/risoluto-tdd` again. Stop and say so.
+
+Only when none hold is this a fresh run — proceed to Step 1.
+
 ### Step 1 — Fetch the Linear issue
 
 Fetch the issue (get-issue operation) with the ticket ref. Extract:
@@ -134,7 +152,7 @@ When implementation is complete and all tests pass:
 - **PRD Out of Scope is a hard boundary.** If the issue's acceptance criteria seem to require something the PRD explicitly scopes out, surface the conflict to Omer rather than implementing it.
 - **Work in a worktree, never in-place.** `risoluto-next-bundle`'s disjoint-locality reasoning only pays off if bundled slices run as parallel worktrees; implementing in the main checkout forfeits that and risks index collisions with a sibling run.
 - **Merge ticket branches into the integration branch first.** For this PRD, the reviewable branch is `integration/<prd-slug>`; ticket PRs target that branch, and Codex reviews the finished integration branch after Claude/Codex workers have merged their slices.
-- **Claiming (In Progress) is not optional and not confirmed** — it is the lock that stops two parallel runs from grabbing the same ticket. Leave the ticket In Progress at PR-open; moving it to Done is the operator's call after merge (Phase 4.3), never the skill's.
+- **Claiming (In Progress) is not optional and not confirmed** — it is the lock that stops two parallel runs from grabbing the same ticket. Leave the ticket In Progress at PR-open. **Who marks Done:** whoever merges the branch — the AFK conductor's merge agent in the cascade path, or the operator / `/risoluto-sync` in the manual path — always from a merged branch + proof, **never this skill** and never from a green suite. (`goal-run`'s merge agent and `/risoluto-sync` are the two Done-writers; this is the resolution of the apparent "who marks Done" overlap.)
 - **Acceptance criteria are ticked from proof, not from status.** Step 5.6's PR-open reconciliation is the only place boxes get checked, and every tick must cite the test or entry point that closes it. Status never auto-ticks a box: a `Done` issue with an unchecked box is the intended signal that the slice deliberately deferred that criterion, not a bookkeeping miss. This closes the gap where a whole goal reaches `Done` with every acceptance box still empty because no step ever wrote them back.
 - **Filed discoveries vs. the Out-of-Scope boundary.** Incidental finds become `discovered` issues (Step 4.5); things the PRD deliberately excludes are surfaced to Omer, not filed.
 - **Hand off to Stage 3.5 before the PR opens.** After this skill prints `gh pr create`, the operator may run `/risoluto-pre-pr` — the advisory review/cleanup pass (`/code-review` → `/simplify` → mandatory `/v1-check`) — on the branch before opening the PR. It is advisory and writes no Linear state, so the label, back-comment, and acceptance-criteria reconciliation in Step 5 remain this skill's job after the PR exists.
