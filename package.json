@@ -31,6 +31,7 @@
     "validate:research": "tsx scripts/validate-research.ts",
     "prd:drift-check": "tsx scripts/prd-drift-check.ts",
     "prd:reconcile": "tsx scripts/prd-reconcile.ts",
+    "slug:check": "node scripts/slug-consistency-check.mjs",
     "test:all": "pnpm test && pnpm run test:integration",
     "test:docker": "vitest run tests/integration/docker-lifecycle.test.ts",
     "test:load": "vitest run --config vitest.load.config.ts",

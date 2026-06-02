@@ -35,6 +35,8 @@ done < "$refs_file"
 if [ "$all_deletes" = false ]; then
   echo "📋 Checking PRD drift..."
   pnpm run prd:drift-check < "$refs_file"
+  echo "🔑 Checking slug consistency..."
+  pnpm run slug:check
 fi
 
 # ── Skip on branch deletes ───────────────────────────────────────────
