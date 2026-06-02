@@ -36,6 +36,7 @@ import { createTracker } from "../tracker/factory.js";
 import { WorkspaceManager } from "../workspace/manager.js";
 import { PrMonitorService } from "../git/pr-monitor.js";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import { initWebhookInfrastructure, buildWebhookHandlerDeps } from "../webhook/composition.js";
 import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
@@ -521,7 +522,8 @@ export async function createServices(
   const acceptedRunDriver = createAcceptedRunDriver({
     archiveDir,
     // Workflow definitions live next to the archive; the CLI default mirrors run-start-command.ts.
-    workflowDir: ".risoluto/workflows",
+    // Resolve to an absolute path so daemon-driven runs work regardless of the server process CWD.
+    workflowDir: path.resolve(".risoluto", "workflows"),
     logger: logger.child({ component: "accepted-run-driver" }),
   });
   events.eventBus.on("workflow_run.accepted", (e) => {

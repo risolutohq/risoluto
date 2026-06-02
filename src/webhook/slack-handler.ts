@@ -67,6 +67,10 @@ export async function handleWebhookSlack(
     sendError(res, 401, "slack_replay_rejected", "Slack request timestamp outside the replay window");
     return;
   }
+  if (!verifySlackSignature(rawBody, signature, deps.signingSecret, timestamp)) {
+    sendError(res, 401, "slack_signature_invalid", "Slack signature verification failed");
+    return;
+  }
 
   const payload = parseSlackInteractionPayload(rawBody);
   if (!payload) {
@@ -105,10 +109,6 @@ async function dispatchModalSubmission(
   request: VerifiedSlackRequest,
   res: Response,
 ): Promise<void> {
-  if (!verifySlackSignature(request.rawBody, request.signature, deps.signingSecret, request.timestamp)) {
-    sendError(res, 401, "slack_signature_invalid", "Slack signature verification failed");
-    return;
-  }
   const modal = toSlackModalSubmission(request.payload);
   if (!modal) {
     sendError(res, 400, "slack_modal_invalid", "Slack modal submission is missing required metadata");
