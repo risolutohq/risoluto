@@ -51,7 +51,10 @@ function splitFrontmatter(raw) {
   if (!raw.startsWith("---")) throw new Error("missing YAML frontmatter");
   const end = raw.indexOf("\n---", 3);
   if (end === -1) throw new Error("unterminated YAML frontmatter");
-  return { fm: parseYaml(raw.slice(3, end).replace(/^\r?\n/, "")) ?? {}, body: raw.slice(end + 4).replace(/^\r?\n/, "") };
+  return {
+    fm: parseYaml(raw.slice(3, end).replace(/^\r?\n/, "")) ?? {},
+    body: raw.slice(end + 4).replace(/^\r?\n/, ""),
+  };
 }
 
 function renderFrontmatter(fm, body) {
@@ -118,6 +121,19 @@ const COMMENT_CREATE_MUTATION = `
   }
 `;
 
+const LIST_COMMENTS_QUERY = `
+  query IssueComments($issueId: String!) {
+    issue(id: $issueId) {
+      comments {
+        nodes {
+          id
+          body
+        }
+      }
+    }
+  }
+`;
+
 async function findIssuesWithLabel(slug) {
   const labelName = `from:prd-${slug}`;
 
@@ -140,13 +156,22 @@ async function findIssuesWithLabel(slug) {
   return issues;
 }
 
-async function commentOnIssue(issueId, comment) {
+async function commentOnIssue(issueId, comment, marker) {
+  // Idempotency: commentCreate has no native dedup, so a re-triggered workflow (force-push,
+  // manual re-run) would duplicate the back-comment. Skip if a comment carrying this marker
+  // already exists on the issue.
+  const existing = await linearGraphQL(LIST_COMMENTS_QUERY, { issueId });
+  const nodes = existing?.issue?.comments?.nodes ?? [];
+  if (nodes.some((c) => typeof c.body === "string" && c.body.includes(marker))) {
+    return { skipped: true };
+  }
+
   const data = await linearGraphQL(COMMENT_CREATE_MUTATION, { issueId, body: comment });
   const success = data?.commentCreate?.success ?? false;
   if (!success) {
     throw new Error(`commentCreate returned success=false for issue ${issueId}`);
   }
-  return data.commentCreate.comment?.id;
+  return { skipped: false, id: data.commentCreate.comment?.id };
 }
 
 function flipPrdStatus(slug) {
@@ -208,16 +233,23 @@ async function main() {
 
   // Step 1: Find Linear issues and post comments (hits LINEAR_API_KEY guard before any disk write)
   const issues = await findIssuesWithLabel(args.slug);
-  const commentBody = `Merged in PR #${args.prNumber}: ${args.prUrl} (commit: ${args.mergeCommit})`;
+  const commentMarker = `<!-- risoluto:merged:PR-${args.prNumber} -->`;
+  const commentBody = `${commentMarker}\nMerged in PR #${args.prNumber}: ${args.prUrl} (commit: ${args.mergeCommit})`;
 
   let commented = 0;
+  let skipped = 0;
   let commentErrors = 0;
 
   for (const issue of issues) {
     try {
-      const commentId = await commentOnIssue(issue.id, commentBody);
-      log(`  commented on ${issue.identifier} (${issue.title}) — comment ${commentId}`);
-      commented += 1;
+      const result = await commentOnIssue(issue.id, commentBody, commentMarker);
+      if (result.skipped) {
+        log(`  ${issue.identifier} already carries the PR #${args.prNumber} merge comment — skipping`);
+        skipped += 1;
+      } else {
+        log(`  commented on ${issue.identifier} (${issue.title}) — comment ${result.id}`);
+        commented += 1;
+      }
     } catch (error) {
       log(`  failed to comment on ${issue.identifier}: ${error instanceof Error ? error.message : String(error)}`);
       commentErrors += 1;
@@ -242,7 +274,7 @@ async function main() {
   log("summary:");
   log(`  PRD status: ${previousStatus} → shipped (${changed ? "changed" : "already shipped"})`);
   log(`  roadmap row: ${roadmapChanged ? "flipped → shipped" : "unchanged (missing or already shipped)"}`);
-  log(`  Linear issues commented: ${commented}/${issues.length}`);
+  log(`  Linear issues commented: ${commented}/${issues.length}${skipped ? ` (${skipped} already present)` : ""}`);
   log("  ACTION REQUIRED: run /risoluto-features to refresh research/RISOLUTO_FEATURES.md");
 }
 
