@@ -37,6 +37,51 @@ describe("handleLinearGraphqlToolCall", () => {
     });
   });
 
+  it("rejects mutation operations and never calls the client (NIN-248)", async () => {
+    const runGraphQL = vi.fn();
+    const client = { runGraphQL } as unknown as LinearClient;
+
+    const response = await handleLinearGraphqlToolCall(client, {
+      query: 'mutation Kill { issueDelete(id: "x") { success } }',
+    });
+
+    expect(response.success).toBe(false);
+    expect(JSON.parse(response.contentItems[0].text)).toEqual({
+      error: "linear_graphql only permits read-only query operations (mutation/subscription rejected)",
+    });
+    expect(runGraphQL).not.toHaveBeenCalled();
+  });
+
+  it("rejects subscription operations and never calls the client (NIN-248)", async () => {
+    const runGraphQL = vi.fn();
+    const client = { runGraphQL } as unknown as LinearClient;
+
+    const response = await handleLinearGraphqlToolCall(client, {
+      query: "subscription Watch { issues { id } }",
+    });
+
+    expect(response.success).toBe(false);
+    expect(JSON.parse(response.contentItems[0].text)).toEqual({
+      error: "linear_graphql only permits read-only query operations (mutation/subscription rejected)",
+    });
+    expect(runGraphQL).not.toHaveBeenCalled();
+  });
+
+  it("rejects queries that select secret-bearing fields (NIN-248)", async () => {
+    const runGraphQL = vi.fn();
+    const client = { runGraphQL } as unknown as LinearClient;
+
+    const response = await handleLinearGraphqlToolCall(client, {
+      query: "query Leak { webhooks { nodes { secret } } }",
+    });
+
+    expect(response.success).toBe(false);
+    expect(JSON.parse(response.contentItems[0].text)).toEqual({
+      error: "linear_graphql rejects secret-bearing fields (e.g. webhook secret, tokens)",
+    });
+    expect(runGraphQL).not.toHaveBeenCalled();
+  });
+
   it("returns success=false when the GraphQL payload contains top-level errors", async () => {
     const client = {
       runGraphQL: vi.fn(async () => ({ data: null, errors: [{ message: "boom" }] })),

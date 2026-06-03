@@ -34,6 +34,21 @@ function countOperations(query: string): number {
   return count;
 }
 
+// Only read-only `query` operations are permitted, and selections may not name a
+// secret-bearing field (e.g. Linear's Webhook.secret), so the agent tool cannot
+// mutate state or exfiltrate credentials (NIN-248).
+const MUTATING_OPERATION = /\b(mutation|subscription)\b/i;
+const SECRET_BEARING_FIELD = /\b(secret|apiKey|api_key|accessToken|refreshToken|password)\b/i;
+
+function assertReadOnlyQuery(query: string): void {
+  if (MUTATING_OPERATION.test(query)) {
+    throw new Error("linear_graphql only permits read-only query operations (mutation/subscription rejected)");
+  }
+  if (SECRET_BEARING_FIELD.test(query)) {
+    throw new Error("linear_graphql rejects secret-bearing fields (e.g. webhook secret, tokens)");
+  }
+}
+
 export async function handleLinearGraphqlToolCall(client: LinearClient, args: unknown): Promise<ToolCallResult> {
   try {
     const input = extractInput(args);
@@ -42,6 +57,7 @@ export async function handleLinearGraphqlToolCall(client: LinearClient, args: un
     if (operationCount !== 1) {
       throw new Error("linear_graphql requires exactly one operation");
     }
+    assertReadOnlyQuery(input.query);
 
     const response = await client.runGraphQL(input.query, input.variables);
     if (Array.isArray(response.errors) && response.errors.length > 0) {
