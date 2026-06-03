@@ -97,11 +97,12 @@ function makeDeps(overrides: Partial<SetupApiDeps> = {}): SetupApiDeps {
 
 describe("handlePostMasterKey — real filesystem", () => {
   it("writes master.key to archiveDir and initializes the secrets store", async () => {
-    // Start with an uninitialized store so handlePostMasterKey can proceed
-    const freshStore = new SecretsStore(tmpDir, buildSilentLogger());
+    // Use a clean dir with no pre-existing secrets.enc (beforeEach initializes one in tmpDir)
+    const freshDir = path.join(tmpDir, "fresh");
+    const freshStore = new SecretsStore(freshDir, buildSilentLogger());
     await freshStore.startDeferred();
 
-    const deps = makeDeps({ secretsStore: freshStore });
+    const deps = makeDeps({ secretsStore: freshStore, archiveDir: freshDir });
     const handler = handlePostMasterKey(deps);
     const res = makeRes();
 
@@ -111,7 +112,7 @@ describe("handlePostMasterKey — real filesystem", () => {
     expect((res._body as { key: string }).key).toBe("my-integration-key-12345");
 
     // Verify the file was written to the real filesystem
-    const keyPath = path.join(tmpDir, "master.key");
+    const keyPath = path.join(freshDir, "master.key");
     const written = await readFile(keyPath, "utf8");
     expect(written).toBe("my-integration-key-12345");
 
@@ -120,10 +121,11 @@ describe("handlePostMasterKey — real filesystem", () => {
   });
 
   it("generates a random key and writes it when no key is provided in body", async () => {
-    const freshStore = new SecretsStore(tmpDir, buildSilentLogger());
+    const freshDir = path.join(tmpDir, "fresh");
+    const freshStore = new SecretsStore(freshDir, buildSilentLogger());
     await freshStore.startDeferred();
 
-    const deps = makeDeps({ secretsStore: freshStore });
+    const deps = makeDeps({ secretsStore: freshStore, archiveDir: freshDir });
     const handler = handlePostMasterKey(deps);
     const res = makeRes();
 
@@ -134,7 +136,7 @@ describe("handlePostMasterKey — real filesystem", () => {
     // randomBytes(32).toString("hex") produces a 64-char hex string
     expect(generatedKey).toMatch(/^[a-f0-9]{64}$/u);
 
-    const keyPath = path.join(tmpDir, "master.key");
+    const keyPath = path.join(freshDir, "master.key");
     const written = await readFile(keyPath, "utf8");
     expect(written).toBe(generatedKey);
   });
@@ -152,16 +154,18 @@ describe("handlePostMasterKey — real filesystem", () => {
   });
 
   it("writes the master.key file with mode 0o600", async () => {
-    const freshStore = new SecretsStore(tmpDir, buildSilentLogger());
+    const freshDir = path.join(tmpDir, "fresh");
+    const freshStore = new SecretsStore(freshDir, buildSilentLogger());
     await freshStore.startDeferred();
 
-    const deps = makeDeps({ secretsStore: freshStore });
+    const deps = makeDeps({ secretsStore: freshStore, archiveDir: freshDir });
     const handler = handlePostMasterKey(deps);
     const res = makeRes();
 
     await handler({ body: { key: "perm-test-key" } } as Request, res as unknown as Response);
 
-    const keyPath = path.join(tmpDir, "master.key");
+    expect(res._status).toBe(200);
+    const keyPath = path.join(freshDir, "master.key");
     const fileStat = await stat(keyPath);
     // Check that group/other bits are cleared — file mode 0o100600 on Linux
     expect(fileStat.mode & 0o777).toBe(0o600);
