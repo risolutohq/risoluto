@@ -316,6 +316,30 @@ describe("fetchCodexModels", () => {
     });
   });
 
+  describe("per-key cache isolation", () => {
+    it("does not serve key-a cache to key-b caller", async () => {
+      const child1 = makeFakeChild();
+      const child2 = makeFakeChild();
+      mockSpawn.mockReturnValueOnce(child1).mockReturnValueOnce(child2);
+
+      const fetchFn = await freshFetchCodexModels();
+
+      // Populate cache for key-a
+      const p1 = fetchFn("key-a");
+      child1.stdout.push(rpcResponse(SAMPLE_MODELS) + "\n");
+      await p1;
+
+      // Call with key-b — must spawn a new process, not return the key-a cache
+      const keyBModels = [{ id: "gpt-b", displayName: "GPT-B", hidden: false, isDefault: true }];
+      const p2 = fetchFn("key-b");
+      child2.stdout.push(rpcResponse(keyBModels) + "\n");
+      const result = await p2;
+
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+      expect(result).toEqual([{ id: "gpt-b", displayName: "GPT-B", isDefault: true }]);
+    });
+  });
+
   describe("non-JSON lines", () => {
     it("ignores non-JSON stdout lines and waits for valid RPC response", async () => {
       const child = makeFakeChild();

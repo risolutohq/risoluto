@@ -22,13 +22,21 @@ export function handlePostPkceAuthStart(deps: SetupApiDeps | SetupService) {
 export function handleGetPkceAuthStatus(deps: SetupApiDeps | SetupService) {
   const service = resolveSetupService(deps);
   return async (_req: Request, res: Response) => {
-    res.json(await service.getPkceAuthStatus());
+    try {
+      res.json(await service.getPkceAuthStatus());
+    } catch (error) {
+      res.status(500).json({ error: { code: "pkce_status_error", message: toErrorString(error) } });
+    }
   };
 }
 
 export function handlePostPkceAuthCancel(deps: SetupApiDeps | SetupService) {
   const service = resolveSetupService(deps);
   return async (_req: Request, res: Response) => {
-    res.json(await service.cancelPkceAuth());
+    try {
+      res.json(await service.cancelPkceAuth());
+    } catch (error) {
+      res.status(500).json({ error: { code: "pkce_cancel_error", message: toErrorString(error) } });
+    }
   };
 }
