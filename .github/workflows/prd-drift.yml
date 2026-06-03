@@ -30,3 +30,6 @@ jobs:
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
         run: pnpm run prd:drift-check -- --all
+
+      - name: Check slug consistency
+        run: pnpm run slug:check

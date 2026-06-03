@@ -136,7 +136,7 @@ When implementation is complete and all tests pass:
 2. Commit with a conventional commit message referencing the ticket.
 3. Push the branch. **Print** the `gh pr create` command for Omer to run, targeting `integration/<prd-slug>` — **do NOT execute `gh pr create`.**
 4. Apply the `from:prd-<slug>` label to the PR via `gh pr edit --add-label from:prd-<slug>` (only after Omer has opened the PR)
-5. Back-comment the Linear ticket with the PR URL (save-comment operation: `issueId` + `body`, only after the PR exists)
+5. Back-comment the Linear ticket with the PR URL (save-comment operation: `issueId` + `body`, only after the PR exists). **Make it idempotent** (the marker convention from `/risoluto-sync`): list the issue's comments first and **skip** if any already contains `<!-- risoluto:tdd:<pr-url> -->`; otherwise post the comment with that marker as its first line. This keeps a re-run (or a reconcile after a partial failure) from stacking duplicate PR comments — `save-comment` has no native dedup.
 6. **Reconcile the issue's acceptance criteria** (save-issue operation, editing the `description` — leave status untouched). For each line in the `## Acceptance criteria` list:
    - Tick it (`- [ ]` → `- [x]`) **only** if a test or a production entry point added in this slice actually proves it. Append a terse proof pointer in parentheses — e.g. `- [x] A stop-on-first profile halts on the first failing command … (tests/workflow-run/validation-profile.test.ts → "stops on first failure")`.
    - Leave it **unchecked** if the behaviour is only stubbed, exported-but-unwired, or deferred to a named later slice. Append `(deferred: <reason / later ticket>)` so the gap is explicit instead of silent.
@@ -156,6 +156,7 @@ When implementation is complete and all tests pass:
 - **Acceptance criteria are ticked from proof, not from status.** Step 5.6's PR-open reconciliation is the only place boxes get checked, and every tick must cite the test or entry point that closes it. Status never auto-ticks a box: a `Done` issue with an unchecked box is the intended signal that the slice deliberately deferred that criterion, not a bookkeeping miss. This closes the gap where a whole goal reaches `Done` with every acceptance box still empty because no step ever wrote them back.
 - **Filed discoveries vs. the Out-of-Scope boundary.** Incidental finds become `discovered` issues (Step 4.5); things the PRD deliberately excludes are surfaced to Omer, not filed.
 - **Hand off to Stage 3.5 before the PR opens.** After this skill prints `gh pr create`, the operator may run `/risoluto-pre-pr` — the advisory review/cleanup pass (`/code-review` → `/simplify` → mandatory `/v1-check`) — on the branch before opening the PR. It is advisory and writes no Linear state, so the label, back-comment, and acceptance-criteria reconciliation in Step 5 remain this skill's job after the PR exists.
+- **Cross-model acceptance check before the PR.** Step 5.6 ticks boxes with the _same_ model that wrote the code — the blind spot that shipped NIN-219/220. Run `/risoluto-verify-acceptance <ticket-ref>` (a different model checks every acceptance criterion against the diff + tests) before printing `gh pr create`; treat any `NOT_MET` as a blocker. Recommended, not gating — but the recommended default for any slice headed into an AFK merge.
 
 ## Companion files
 
@@ -163,4 +164,5 @@ When implementation is complete and all tests pass:
 - the generic global `tdd` skill — the tracker-agnostic upstream this forks from (kept generic; never edited here)
 - `skills/risoluto-to-issues/` — Phase 4.1; creates the Linear issues this skill implements
 - `skills/risoluto-to-prd/` — Phase 3.2; produces the PRD this skill references
+- `skills/risoluto-verify-acceptance/` — recommended cross-model acceptance check before `gh pr create` (a different model verifies each criterion; `NOT_MET` blocks)
 - `.github/workflows/post-merge.yml` — Phase 4.3; triggers on the `from:prd-*` label this skill applies
