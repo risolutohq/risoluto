@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import type { Issue, RunOutcome, ServiceConfig, WorkflowDefinition } from "../../src/core/types.js";
+import type { Issue, RunOutcome, ServiceConfig, WorkflowRuntimeConfig } from "../../src/core/types.js";
 import { createLogger } from "../../src/core/logger.js";
 import { ConfigStore } from "../../src/config/store.js";
 import type { TrackerPort } from "../../src/tracker/port.js";
@@ -92,7 +92,7 @@ export function createConfig(): ServiceConfig {
 }
 
 export function createConfigStore(config: ServiceConfig): ConfigStore {
-  const workflow: WorkflowDefinition = { config: {}, promptTemplate: "Prompt" };
+  const workflow: WorkflowRuntimeConfig = { config: {}, promptTemplate: "Prompt" };
   return {
     getConfig: () => config,
     getWorkflow: () => workflow,

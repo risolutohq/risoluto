@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import type { ConfigOverlayPort } from "./overlay.js";
 import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { config, promptTemplates } from "../persistence/sqlite/schema.js";
-import type { RisolutoLogger, WorkflowDefinition, ServiceConfig, ValidationError } from "../core/types.js";
+import type { RisolutoLogger, WorkflowRuntimeConfig, ServiceConfig, ValidationError } from "../core/types.js";
 import { deriveServiceConfig } from "./derivation-pipeline.js";
 import { validateDispatch } from "./validators.js";
 import { DEFAULT_PROMPT_TEMPLATE } from "./defaults.js";
@@ -75,7 +75,7 @@ function readActiveTemplate(db: RisolutoDatabase): string {
 export class DbConfigStore implements ConfigOverlayPort {
   private cachedMap: Record<string, unknown> = {};
   private cachedConfig: ServiceConfig | null = null;
-  private cachedWorkflow: WorkflowDefinition | null = null;
+  private cachedWorkflow: WorkflowRuntimeConfig | null = null;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -94,7 +94,7 @@ export class DbConfigStore implements ConfigOverlayPort {
     const configMap = readConfigMap(this.db);
     const promptTemplate = readActiveTemplate(this.db);
 
-    const workflow: WorkflowDefinition = { config: configMap, promptTemplate };
+    const workflow: WorkflowRuntimeConfig = { config: configMap, promptTemplate };
     const serviceConfig = deriveServiceConfig(workflow, {
       secretResolver: (name) => this.deps?.secretsStore?.get(name) ?? undefined,
     });
@@ -105,7 +105,7 @@ export class DbConfigStore implements ConfigOverlayPort {
     this.logger.info("config refreshed from DB");
   }
 
-  getWorkflow(): WorkflowDefinition {
+  getWorkflow(): WorkflowRuntimeConfig {
     if (!this.cachedWorkflow) throw new Error("DbConfigStore not started — call refresh() first");
     return this.cachedWorkflow;
   }
