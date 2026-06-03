@@ -72,6 +72,7 @@ Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks`
 
 ## Living context (read on demand)
 
+- `@CONTEXT.md` — the domain glossary; the single source of truth for vocabulary. Architecture is described with a separate vocabulary (Module / Interface / Seam / Depth / Adapter), not defined here.
 - `@docs/product-spine.md`, `@docs/technical-spine.md` — what v1 actually is
 - `@docs/decisions.md`, `@docs/adr/` — decisions with rationale
 - `@docs/testing-and-release.md` — test tiers, the `1.0.0` gate, and release flow

@@ -5,9 +5,9 @@
 > command — becomes a durable **Workflow Run** executed by reusable **Agent Roles** across pluggable
 > trackers, harnesses, and model providers.
 
-This is the authority document for what Risoluto **is** and the vocabulary every other doc, ADR, and
-code symbol must use. Where code names a concept differently, the code is wrong. Where this spine
-states intent the runtime has not yet reached, [`adr/0001-foundation.md`](./adr/0001-foundation.md)
+This is the authority document for what Risoluto **is** — its identity, value lens, principles, and
+scope. The shared vocabulary lives in [`CONTEXT.md`](../CONTEXT.md); every doc, ADR, and code symbol
+uses those names. Where this spine states intent the runtime has not yet reached, [`adr/0001-foundation.md`](./adr/0001-foundation.md)
 carries the honest as-built status tables — read them before trusting any "is" here as "ships today."
 
 ## What Risoluto is
@@ -51,41 +51,12 @@ is _what_ the founder disposes against.
 
 ## Canonical terms
 
-The shared glossary. Every doc, symbol, and ADR uses these names; divergent code is the thing to fix.
-
-| Term                          | Meaning                                                                                                                                                                                                                                               |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Engineering Intent**        | Raw work request from Linear, Jira, GitHub, GitLab, CLI, webhook, schedule, PRD slice, or operator command.                                                                                                                                           |
-| **Workflow Run**              | Durable execution instance; the core primitive.                                                                                                                                                                                                       |
-| **Workflow Definition**       | Reusable state-machine / graph template for executing an intent.                                                                                                                                                                                      |
-| **Workflow State**            | Where a run sits in its workflow's DAG — `classify`, `plan`, `implement`, `review`, `validate`, `publish`, `done`. Domain progress; the operational lifecycle is a separate axis (**Run Status**). Varies per definition.                             |
-| **Run Status**                | Operational lifecycle of a run, the same for every workflow — `accepted`, `queued`, `running`, `waiting_for_operator`, `blocked`, `done`, `cancelled`. Finite and workflow-agnostic; adapters project boards from this axis, not from Workflow State. |
-| **Transition**                | Explicit rule moving a run between workflow states.                                                                                                                                                                                                   |
-| **Run Attempt**               | One retry / resume / fanout pass of a Workflow Run; attempts accumulate under one run.                                                                                                                                                                |
-| **Background Agent**          | Category term for an autonomous engineering agent running outside the developer's active session.                                                                                                                                                     |
-| **AFK Agent**                 | Risoluto product term for a Background Agent configured to perform a role while the operator is away.                                                                                                                                                 |
-| **Agent Role**                | Reusable job definition — planner, implementer, reviewer, verifier, CI babysitter; historically also complexity analyst, tester, release operator.                                                                                                    |
-| **Role Execution**            | One invocation of an Agent Role inside a Workflow Run.                                                                                                                                                                                                |
-| **Worker Process**            | The actual harness / container / process executing a role.                                                                                                                                                                                            |
-| **Artifact**                  | Durable output of a Role Execution or deterministic process.                                                                                                                                                                                          |
-| **Artifact Contract**         | Typed schema + meaning of an Artifact so another role can consume it.                                                                                                                                                                                 |
-| **Validation Gate**           | Proof requirement that must pass before a transition can advance.                                                                                                                                                                                     |
-| **Verifier**                  | Agent Role that judges whether the result satisfies the original intent — not just whether checks passed. Distinct from the **Reviewer** (judges code quality) and a **Validation Gate** (machine pass/fail). Runs single or as a council.            |
-| **Hook**                      | Extension / side-effect point in the workflow.                                                                                                                                                                                                        |
-| **Tracker Adapter**           | Integration layer for Linear, GitHub Issues, GitLab, Jira, etc.                                                                                                                                                                                       |
-| **Tracker Mirror**            | An external tracker's representation of a Workflow Run.                                                                                                                                                                                               |
-| **Board Projection Contract** | Tracker board semantics exposed by an adapter.                                                                                                                                                                                                        |
-| **Operator**                  | The person running / controlling Risoluto.                                                                                                                                                                                                            |
-| **Enterprise Environment**    | Customer-owned engineering environment — its own tracker, repos, CI, secrets, policies, model gateways.                                                                                                                                               |
-| **Research Wiki**             | Connected knowledge base of captured research at `research/wiki/`, built by the `risoluto-ingest` skill; the substrate the Idea Engine mines.                                                                                                         |
-| **Idea Engine**               | Gap-grounded, cite-or-drop idea generation over the Research Wiki (Mode B of the research pipeline); emits candidate roadmap rows only when the idea cites the dots it connects.                                                                      |
-| **Candidate Feature**         | A per-source feature the `risoluto-researcher` skill extracts and dedups against the roadmap and already-shipped features (Mode A); survives dedup before entering the critic-grill.                                                                  |
-
-> **Planning surfaces, not runtime surfaces.** Research Wiki, Idea Engine, and Candidate Feature are
-> operator build-tooling concepts — parts of the research-to-shipping pipeline the operator uses to
-> decide what to build next. They are not Workflow Run primitives and do not ship as end-user product
-> features. This reflects principle #9: LLMs propose; deterministic orchestration / the founder
-> disposes. Skills may append proposed roadmap rows; the founder ranks, promotes, and kills them.
+The shared glossary lives in [`CONTEXT.md`](../CONTEXT.md) — the single source of truth for
+Risoluto's domain vocabulary. Every doc, symbol, and ADR uses those names; where code names a
+concept differently, the code is wrong. `CONTEXT.md` separates runtime terms (Workflow Run, Agent
+Role, Validation Gate, …) from build-time planning vocabulary (Research Wiki, Idea Engine, Candidate
+Feature) — the latter are operator tooling, not Workflow Run primitives, consistent with principle
+#9 (LLMs propose; the founder disposes).
 
 ## Architecture principles (non-negotiable)
 
