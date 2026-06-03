@@ -26,6 +26,7 @@ vi.mock("node:fs/promises", () => ({
 vi.mock("node:child_process", () => ({
   spawn: vi.fn().mockReturnValue({
     on: vi.fn(),
+    stdout: { on: vi.fn() },
     stderr: { on: vi.fn() },
     kill: vi.fn(),
   }),
@@ -54,6 +55,7 @@ function createWorktreeDeps(): WorkspaceManagerWorktreeDeps {
       autoCommit: vi.fn().mockResolvedValue("auto-commit-sha"),
       setupWorktree: vi.fn().mockResolvedValue({ branchName: "risoluto/NIN-1" }),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
+      pruneWorktrees: vi.fn().mockResolvedValue(undefined),
       deriveBaseCloneDir: vi.fn().mockReturnValue("/tmp/workspaces/.bare-clones/repo"),
     },
     repoRouter: {
@@ -239,6 +241,7 @@ describe("WorkspaceManager", () => {
         on: (event: string, cb: (...args: unknown[]) => void) => {
           if (event === "exit") cb(1);
         },
+        stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         kill: vi.fn(),
       } as never);
@@ -417,6 +420,20 @@ describe("WorkspaceManager", () => {
       );
     });
 
+    it("prunes stale worktree metadata after falling back to rm", async () => {
+      const config = createConfig({ strategy: "worktree" });
+      const deps = createWorktreeDeps();
+      vi.mocked(deps.gitManager.removeWorktree).mockRejectedValue(new Error("git error"));
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      statMock.mockResolvedValue({ isDirectory: () => true });
+
+      await manager.removeWorkspace("NIN-1", createIssue());
+
+      expect(rmMock).toHaveBeenCalled();
+      expect(deps.gitManager.pruneWorktrees).toHaveBeenCalledWith("/tmp/workspaces/.bare-clones/repo");
+    });
+
     it("preserves worktree cleanup when dirty-state detection itself fails", async () => {
       const config = createConfig({ strategy: "worktree" });
       const deps = createWorktreeDeps();
@@ -458,6 +475,31 @@ describe("WorkspaceManager", () => {
 
       // The sanitize function replaces non-alphanum + dash + dot + underscore with underscore
       expect(workspace.workspaceKey).toBe("FOO_BAR_123");
+    });
+  });
+
+  describe("hook stdout draining", () => {
+    it("drains hook stdout so a chatty hook cannot deadlock the child", async () => {
+      const config = createConfig({
+        hooks: { afterCreate: null, beforeRun: "echo hi", afterRun: null, beforeRemove: null, timeoutMs: 5000 },
+      });
+      const manager = new WorkspaceManager(() => config, logger);
+
+      const stdoutOn = vi.fn();
+      const { spawn } = await import("node:child_process");
+      vi.mocked(spawn).mockReturnValueOnce({
+        on: (event: string, cb: (...args: unknown[]) => void) => {
+          if (event === "exit") cb(0);
+        },
+        stdout: { on: stdoutOn },
+        stderr: { on: vi.fn() },
+        kill: vi.fn(),
+      } as never);
+
+      const workspace = { path: "/tmp/workspaces/NIN-1", workspaceKey: "NIN-1", createdNow: false };
+      await manager.runBeforeRun(workspace, "NIN-1");
+
+      expect(stdoutOn).toHaveBeenCalledWith("data", expect.any(Function));
     });
   });
 });

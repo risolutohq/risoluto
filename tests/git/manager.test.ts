@@ -232,8 +232,35 @@ describe("GitManager", () => {
       ["fetch", "origin", "--prune"],
       ["fetch", "origin", "--prune"],
       ["rev-parse", "--verify", "refs/heads/feature/nin-42"],
+      ["rev-parse", "--verify", "refs/remotes/origin/feature/nin-42"],
       ["worktree", "add", "-b", "feature/nin-42", "/tmp/worktrees/NIN-42", "main"],
     ]);
+  });
+
+  it("attaches a worktree for a branch that exists only on the remote", async () => {
+    const calls: string[][] = [];
+    const runGit: GitRunner = async (args) => {
+      calls.push(args);
+      if (args[0] === "rev-parse" && args[1] === "--git-dir") {
+        return { stdout: ".git\n", stderr: "" };
+      }
+      if (args[0] === "rev-parse" && args[1] === "--verify" && args[2] === "refs/heads/risoluto/nin-42") {
+        throw new Error("no local branch");
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    const manager = new GitManager({ runGit, env: {} });
+    const result = await manager.setupWorktree(
+      createRepoMatch(),
+      "/tmp/base/backend.git",
+      "/tmp/worktrees/NIN-42",
+      createIssue(),
+    );
+
+    expect(result).toEqual({ branchName: "risoluto/nin-42" });
+    expect(calls).toContainEqual(["rev-parse", "--verify", "refs/remotes/origin/risoluto/nin-42"]);
+    expect(calls).toContainEqual(["worktree", "add", "/tmp/worktrees/NIN-42", "risoluto/nin-42"]);
   });
 
   it("attaches an existing worktree branch", async () => {

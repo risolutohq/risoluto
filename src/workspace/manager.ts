@@ -71,6 +71,7 @@ export interface WorkspaceManagerWorktreeDeps {
       branchPrefix?: string,
     ) => Promise<{ branchName: string }>;
     removeWorktree: (baseCloneDir: string, worktreePath: string, force?: boolean) => Promise<void>;
+    pruneWorktrees: (baseCloneDir: string) => Promise<void>;
     deriveBaseCloneDir: (workspaceRoot: string, repoUrl: string) => string;
   };
   repoRouter: {
@@ -311,6 +312,7 @@ export class WorkspaceManager implements WorkspacePort {
       return protection;
     }
 
+    let baseCloneToPrune: string | null = null;
     if (issue) {
       const repoMatch = this.worktreeDeps.repoRouter.matchIssue(issue);
       if (repoMatch) {
@@ -327,11 +329,22 @@ export class WorkspaceManager implements WorkspacePort {
             },
             "git worktree remove failed; falling back to rm",
           );
+          baseCloneToPrune = baseCloneDir;
         }
       }
     }
 
     await rm(workspacePath, { recursive: true, force: true });
+    if (baseCloneToPrune) {
+      // The git worktree registration now references a deleted dir; prune it so
+      // the base clone does not accumulate stale worktree metadata (NIN-244).
+      await this.worktreeDeps.gitManager.pruneWorktrees(baseCloneToPrune).catch((error: unknown) => {
+        this.logger.warn(
+          { workspacePath, issueIdentifier, error: toErrorString(error) },
+          "git worktree prune after fallback rm failed",
+        );
+      });
+    }
     return { ...protection, removed: true };
   }
 
@@ -396,6 +409,9 @@ export class WorkspaceManager implements WorkspacePort {
         child.once("exit", () => clearTimeout(killTimer));
         reject(new Error(`hook timed out after ${timeoutMs}ms`));
       }, timeoutMs);
+
+      // Drain stdout so a chatty hook cannot fill the pipe buffer and deadlock.
+      child.stdout.on("data", () => {});
 
       let stderr = "";
       child.stderr.on("data", (chunk) => {

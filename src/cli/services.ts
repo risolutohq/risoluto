@@ -131,6 +131,7 @@ function createWorkspaceAndDispatch(
           gitManager.setupWorktree(route, baseCloneDir, worktreePath, issue, branchPrefix),
         removeWorktree: (baseCloneDir, worktreePath, force) =>
           gitManager.removeWorktree(baseCloneDir, worktreePath, force),
+        pruneWorktrees: (baseCloneDir) => gitManager.pruneWorktrees(baseCloneDir),
         deriveBaseCloneDir: (workspaceRoot, repoUrl) => gitManager.deriveBaseCloneDir(workspaceRoot, repoUrl),
       },
       repoRouter: {

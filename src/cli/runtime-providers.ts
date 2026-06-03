@@ -71,6 +71,7 @@ export function createGitHubToolProvider(
     syncWorktree: (baseCloneDir) => getManager().syncWorktree(baseCloneDir),
     removeWorktree: (baseCloneDir, worktreePath, force) =>
       getManager().removeWorktree(baseCloneDir, worktreePath, force),
+    pruneWorktrees: (baseCloneDir) => getManager().pruneWorktrees(baseCloneDir),
     deriveBaseCloneDir: (workspaceRoot, repoUrl) => getManager().deriveBaseCloneDir(workspaceRoot, repoUrl),
   };
 }

@@ -16,6 +16,7 @@ import {
   addWorktree,
   attachWorktree,
   removeWorktree as removeWorktreePrimitive,
+  pruneWorktrees as pruneWorktreesPrimitive,
   branchExists,
   deriveRepoKey,
   type WorktreeContext,
@@ -156,6 +157,11 @@ export class GitManager implements GitIntegrationPort {
   async removeWorktree(baseCloneDir: string, worktreePath: string, force = true): Promise<void> {
     const ctx = this.getWorktreeContext();
     await removeWorktreePrimitive(ctx, baseCloneDir, worktreePath, force);
+  }
+
+  async pruneWorktrees(baseCloneDir: string): Promise<void> {
+    const ctx = this.getWorktreeContext();
+    await pruneWorktreesPrimitive(ctx, baseCloneDir);
   }
 
   async cloneInto(
