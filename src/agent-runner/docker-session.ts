@@ -160,6 +160,8 @@ function buildDockerSessionObject(
   const containerName = docker.containerName;
   const cacheVolumeName = docker.cacheVolumeName;
 
+  let teardownStarted = false;
+
   // Placeholder getter — setupConnection replaces this with one that closes
   // over the real mutable fatalFailure inside the connection's request
   // handler. It runs synchronously after this factory returns and before any
@@ -177,6 +179,8 @@ function buildDockerSessionObject(
     inspectRunning: helpers.inspectRunning,
     abortHandler: () => {
       void (async () => {
+        if (teardownStarted) return;
+        teardownStarted = true;
         if (session.threadId && session.turnId) {
           const interrupted = await session.connection.interruptTurn(session.threadId, session.turnId, 3000);
           if (interrupted) {
@@ -203,6 +207,8 @@ function buildDockerSessionObject(
       }
     },
     cleanup: async (cfg: ServiceConfig, signal: AbortSignal) => {
+      if (teardownStarted) return;
+      teardownStarted = true;
       if (session.statsInterval) clearInterval(session.statsInterval);
       signal.removeEventListener("abort", session.abortHandler);
       if (!signal.aborted && cfg.codex.drainTimeoutMs > 0) {

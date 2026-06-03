@@ -10,20 +10,31 @@ export interface SelfReviewResult {
   summary: string;
 }
 
+const REVIEW_PASS_PHRASES = [
+  "no findings",
+  "looks solid",
+  "no issues found",
+  "nothing to fix",
+  "no action needed",
+  "nothing to address",
+  "all checks passed",
+  "no changes required",
+  "looks good",
+  "no problems",
+] as const;
+
+const REVIEW_FAIL_PHRASES = ["issue", "problem", "fix required", "error found"] as const;
+
 function classifyReviewSummary(summary: string): boolean | null {
   const normalized = summary.toLowerCase();
   if (normalized === "review completed") {
     return null;
   }
-  if (
-    normalized.includes("no findings") ||
-    normalized.includes("looks solid") ||
-    normalized.includes("no issues found") ||
-    normalized.includes("nothing to fix")
-  ) {
+  if (REVIEW_PASS_PHRASES.some((phrase) => normalized.includes(phrase))) {
     return true;
   }
-  if (summary.trim().length > 0) {
+  // Only treat non-empty summaries as failures when they contain explicit problem indicators.
+  if (REVIEW_FAIL_PHRASES.some((phrase) => normalized.includes(phrase))) {
     return false;
   }
   return null;
