@@ -513,6 +513,40 @@ describe("AlertEngine", () => {
     });
   });
 
+  it("delivers alerts after stop+restart (stale cooldowns cleared)", async () => {
+    const eventBus = new TypedEventBus<RisolutoEventMap>();
+    const notificationManager = {
+      notify: vi.fn().mockResolvedValue({
+        deliveredChannels: ["ops-webhook"],
+        failedChannels: [],
+        skippedDuplicate: false,
+      }),
+    };
+    const historyStore = makeHistoryStore();
+    const engine = new AlertEngine({
+      configStore: createConfigStore() as never,
+      eventBus,
+      notificationManager: notificationManager as never,
+      historyStore,
+      logger: createMockLogger(),
+    });
+
+    // First lifecycle: fire and let cooldown populate
+    engine.start();
+    eventBus.emit("worker.failed", { issueId: "issue-restart", identifier: "ENG-R1", error: "first fail" });
+    await vi.waitFor(() => {
+      expect(notificationManager.notify).toHaveBeenCalledOnce();
+    });
+
+    // Stop clears cooldowns; second lifecycle must deliver, not suppress
+    engine.stop();
+    engine.start();
+    eventBus.emit("worker.failed", { issueId: "issue-restart", identifier: "ENG-R1", error: "second fail" });
+    await vi.waitFor(() => {
+      expect(notificationManager.notify).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("extracts null attempt when payload has no attempt field", async () => {
     const eventBus = new TypedEventBus<RisolutoEventMap>();
     const notificationManager = {
