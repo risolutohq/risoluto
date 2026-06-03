@@ -128,6 +128,55 @@ describe("TypedEventBus", () => {
     expect(wildcardHandler).not.toHaveBeenCalled();
   });
 
+  // ── listener isolation + snapshot (NIN-235) ─────────────────────
+
+  it("continues delivery to later handlers when an earlier handler throws", () => {
+    const later = vi.fn();
+    bus.on("system.ping", () => {
+      throw new Error("bad subscriber");
+    });
+    bus.on("system.ping", later);
+
+    expect(() => bus.emit("system.ping", { ts: 0 })).not.toThrow();
+    expect(later).toHaveBeenCalledOnce();
+  });
+
+  it("still delivers to wildcard handlers when a channel handler throws", () => {
+    const wildcard = vi.fn();
+    bus.on("system.ping", () => {
+      throw new Error("bad subscriber");
+    });
+    bus.onAny(wildcard);
+
+    bus.emit("system.ping", { ts: 7 });
+
+    expect(wildcard).toHaveBeenCalledOnce();
+    expect(wildcard).toHaveBeenCalledWith("system.ping", { ts: 7 });
+  });
+
+  it("snapshots listeners so a handler subscribing during emit is not invoked this round", () => {
+    const added = vi.fn();
+    bus.on("system.ping", () => {
+      bus.on("system.ping", added);
+    });
+
+    bus.emit("system.ping", { ts: 1 });
+
+    expect(added).not.toHaveBeenCalled();
+  });
+
+  it("snapshots listeners so a handler unsubscribing a peer during emit still delivers to that peer this round", () => {
+    const peer = vi.fn();
+    bus.on("system.ping", () => {
+      bus.off("system.ping", peer);
+    });
+    bus.on("system.ping", peer);
+
+    bus.emit("system.ping", { ts: 1 });
+
+    expect(peer).toHaveBeenCalledOnce();
+  });
+
   // ── type safety (compile-time) ───────────────────────────────────
 
   it("enforces payload types at compile time (structural check)", () => {

@@ -11,8 +11,21 @@ export interface ToolCallResult {
   contentItems: ToolCallContentItem[];
 }
 
+/**
+ * Serializes any value to a string, never violating the `text: string` contract.
+ *
+ * `JSON.stringify` returns `undefined` for unsupported top-level values
+ * (`undefined`, functions, symbols) and throws on `bigint` or circular
+ * references; both would break the wrapper. This falls back to a placeholder
+ * string in those cases.
+ */
 function jsonText(value: unknown): string {
-  return JSON.stringify(value);
+  try {
+    const serialized = JSON.stringify(value, (_key, val) => (typeof val === "bigint" ? `${val.toString()}n` : val));
+    return serialized ?? '"[unserializable]"';
+  } catch {
+    return '"[unserializable]"';
+  }
 }
 
 export function toolCallSuccess(value: unknown): ToolCallResult {

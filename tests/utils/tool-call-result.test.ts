@@ -60,3 +60,31 @@ describe("toolCallErrorPayload", () => {
     expect(JSON.parse(result.contentItems[0].text)).toBe("simple error");
   });
 });
+
+describe("jsonText contract via toolCallSuccess (NIN-235)", () => {
+  it("returns a string (not undefined) for an undefined top-level value", () => {
+    const result = toolCallSuccess(undefined);
+    expect(typeof result.contentItems[0].text).toBe("string");
+    expect(result.contentItems[0].text.length).toBeGreaterThan(0);
+  });
+
+  it("returns a string for a function top-level value", () => {
+    const result = toolCallSuccess(() => 1);
+    expect(typeof result.contentItems[0].text).toBe("string");
+    expect(result.contentItems[0].text.length).toBeGreaterThan(0);
+  });
+
+  it("does not throw and returns a string for a bigint value", () => {
+    const result = toolCallSuccess({ big: 10n });
+    expect(typeof result.contentItems[0].text).toBe("string");
+    expect(JSON.parse(result.contentItems[0].text)).toEqual({ big: "10n" });
+  });
+
+  it("does not throw and returns a string for a circular reference", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const result = toolCallSuccess(circular);
+    expect(typeof result.contentItems[0].text).toBe("string");
+    expect(result.contentItems[0].text.length).toBeGreaterThan(0);
+  });
+});
