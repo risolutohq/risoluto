@@ -414,6 +414,28 @@ describe("handleNotification", () => {
     });
   });
 
+  describe("secret redaction in streamed buffers (NIN-246)", () => {
+    it("sanitizes a streamed command-output buffer before emitting", () => {
+      handleNotification({
+        state,
+        notification: {
+          method: "item/commandExecution/outputDelta",
+          params: { itemId: "cmd-1", delta: { text: "export OPENAI_API_KEY=sk-abcdef1234567890SECRET" } },
+        },
+        issue,
+        threadId: "thread-1",
+        turnId: "turn-1",
+        onEvent,
+      });
+
+      vi.advanceTimersByTime(80);
+
+      expect(events).toHaveLength(1);
+      expect(events[0].metadata).toMatchObject({ streaming: true });
+      expect(events[0].content).not.toContain("sk-abcdef1234567890SECRET");
+    });
+  });
+
   describe("fallback for unknown methods", () => {
     it("uses params.message when available", () => {
       handleNotification({
