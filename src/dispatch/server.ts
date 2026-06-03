@@ -15,6 +15,29 @@ import { toErrorString } from "../utils/type-guards.js";
 const logger = createLogger().child({ component: "data-plane" });
 
 /**
+ * Validate all required fields of a DispatchRequest body.
+ * Returns a human-readable error string if invalid, null if valid.
+ */
+function validateDispatchRequest(body: DispatchRequest): string | null {
+  if (!body.issue || !body.config || !body.workspace) {
+    return "missing required fields: issue, config, workspace";
+  }
+  if (typeof body.promptTemplate !== "string") {
+    return "invalid or missing field: promptTemplate must be a string";
+  }
+  if (typeof body.modelSelection !== "object" || body.modelSelection === null) {
+    return "invalid or missing field: modelSelection must be an object";
+  }
+  if (body.attempt !== null && body.attempt !== undefined && typeof body.attempt !== "number") {
+    return "invalid field: attempt must be a number or null";
+  }
+  if (typeof body.codexRuntimeConfigToml !== "string") {
+    return "invalid or missing field: codexRuntimeConfigToml must be a string";
+  }
+  return null;
+}
+
+/**
  * Create the data plane Express server.
  */
 export function createDataPlaneServer(secret: string): express.Application {
@@ -35,8 +58,9 @@ export function createDataPlaneServer(secret: string): express.Application {
     try {
       const dispatchRequest = req.body as DispatchRequest;
 
-      if (!dispatchRequest.issue || !dispatchRequest.config || !dispatchRequest.workspace) {
-        res.status(400).json({ error: "missing required fields: issue, config, workspace" });
+      const validationError = validateDispatchRequest(dispatchRequest);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
         return;
       }
 

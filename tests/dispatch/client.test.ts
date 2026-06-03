@@ -207,6 +207,58 @@ describe("DispatchClient", () => {
     });
   });
 
+  it("resolves outcome when the final SSE chunk ends with a single newline (no trailing blank line)", async () => {
+    const mockOutcome: RunOutcome = {
+      kind: "normal",
+      errorCode: null,
+      errorMessage: null,
+      threadId: "thread-1",
+      turnId: "turn-1",
+      turnCount: 1,
+    };
+
+    // Encode with a single trailing newline — no blank line — so the split on \n\n
+    // leaves the payload sitting in the tail buffer without being processed by the loop.
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: vi
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode(
+                'data: {"type":"outcome","payload":{"kind":"normal","errorCode":null,"errorMessage":null,"threadId":"thread-1","turnId":"turn-1","turnCount":1}}\n',
+              ),
+            })
+            .mockResolvedValueOnce({ done: true }),
+          releaseLock: vi.fn(),
+        }),
+      },
+    });
+
+    vi.stubGlobal("fetch", mockFetch);
+
+    const client = new DispatchClient({
+      dispatchUrl: "http://test:9100/dispatch",
+      secret: "test-secret",
+      getConfig: () => mockConfig,
+      logger: createMockLogger() as unknown as ReturnType<typeof import("../../src/core/logger.js").createLogger>,
+    });
+
+    const outcome = await client.runAttempt({
+      issue: mockIssue,
+      attempt: 1,
+      modelSelection: mockModelSelection,
+      promptTemplate: "Test prompt",
+      workspace: mockWorkspace,
+      signal: new AbortController().signal,
+      onEvent: vi.fn(),
+    });
+
+    expect(outcome).toEqual(mockOutcome);
+  });
+
   it("throws error when dispatch request fails", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
