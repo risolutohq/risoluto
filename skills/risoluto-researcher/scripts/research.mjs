@@ -46,6 +46,7 @@ function parseArgs(raw) {
     sourceType: "",
     sourceSlug: "",
     ideas: "",
+    job: "",
     title: "",
     description: "",
     bodyFile: "",
@@ -61,6 +62,7 @@ function parseArgs(raw) {
       case "--source-type": { args.sourceType = raw[++i] ?? ""; break; }
       case "--source-slug": { args.sourceSlug = raw[++i] ?? ""; break; }
       case "--ideas": { args.ideas = raw[++i] ?? ""; break; }
+      case "--job": { args.job = raw[++i] ?? ""; break; }
       case "--title": { args.title = raw[++i] ?? ""; break; }
       case "--description": { args.description = raw[++i] ?? ""; break; }
       case "--body-file": { args.bodyFile = raw[++i] ?? ""; break; }
@@ -85,6 +87,7 @@ function validateArgs(args) {
   if (!SOURCE_TYPES.has(args.sourceType)) fail(`--source-type must be one of: ${[...SOURCE_TYPES].join(", ")}, got: ${args.sourceType}`);
   if (!args.sourceSlug) fail("--source-slug is required");
   if (!SLUG_RE.test(args.sourceSlug)) fail(`--source-slug must match ${SLUG_RE}, got: ${args.sourceSlug}`);
+  if (args.job && !SLUG_RE.test(args.job)) fail(`--job must match ${SLUG_RE}, got: ${args.job}`);
 }
 
 function todayYMD() {
@@ -141,6 +144,9 @@ function buildTargetFrontmatter(args, existingSourceCount, allIdeas, sha) {
     ["slug", args.targetSlug],
     ["canonical_url", args.url],
     ["category", args.category],
+    // The AFK job this target's ideas serve. Optional; ingest's --require-job gate uses it to
+    // promote only concepts tied to a job (cite-or-drop). Omitted entirely when --job is unset.
+    ...(args.job ? [["job", args.job]] : []),
     ["last_researched_at", todayYMD()],
     ["last_researched_sha", sha],
     ["ideas", allIdeas],

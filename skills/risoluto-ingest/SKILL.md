@@ -85,7 +85,7 @@ git commit -m "chore: bump research submodule + append ingest idea rows to roadm
 
 ## Engine behavior
 
-This section describes what `ingest.mjs` does when built. It is a spec, not an implementation.
+This section documents what `scripts/ingest.mjs` does — it is the working implementation, not a future spec. Read the script for the exact behavior.
 
 ### Wiki construction
 
@@ -94,10 +94,15 @@ This section describes what `ingest.mjs` does when built. It is a spec, not an i
 3. Each concept note contains:
    - A one-paragraph summary of the theme.
    - A `## Targets` section that wikilinks every target evidencing the theme: `[[targets/<slug>]]`.
+   - A `## Evidence` section: per evidencing target, the first sentence of its README that mentions the concept (the script extracts it automatically). When no sentence mentions the concept, the script writes a `cite-or-drop` placeholder instead — that target is unproven evidence and should be cited or dropped.
    - A `## Gap` section: what none of the targets do, or what they all do poorly, or what composing two of them would enable that neither does alone.
 4. `research/wiki/home.md` is the index: a table of all concept notes with a one-line summary and target count.
 
 The wiki is rebuilt from scratch on every run (idempotent). Existing concept notes are overwritten; manually added notes outside the script's slug namespace are left untouched.
+
+#### Step 1.5 — gap-fill pass (agent)
+
+The script seeds `## Evidence` from target READMEs but leaves the summary and `## Gap` as placeholders. After running ingest, do one gap-fill pass over the changed `research/wiki/*.md`: replace each summary/gap placeholder with real prose, and resolve every `cite-or-drop` evidence placeholder by either adding the citation or removing the unproven target. A concept whose gap stays a placeholder is not a real idea — surface it rather than promote it.
 
 ### Idea generation — cite-or-drop
 
@@ -109,6 +114,7 @@ After the wiki is written, the script generates idea candidates:
    - The gap it fills: the specific thing A, B, and C all do but none do well — or what A + B compose into that neither does alone.
    - The AFK job it serves: one of the five in `docs/product-spine.md` ("The jobs Risoluto exists to serve"). An idea that deepens no operator job is a shiny object, however clever the connection.
 3. If the candidate cannot be expressed in terms of named dots, a named gap, **and** a named AFK job, it is **dropped** (cite-or-drop rule). No citation, or no job → no row.
+   - **Job enforcement at script time.** A concept inherits its AFK job from the `job:` frontmatter of the targets that evidence it (set via `/risoluto-researcher --job <afk-job>`). Run `ingest --require-job` to enforce cite-or-drop mechanically: concepts no evidencing target ties to a job are **GATED** out of the roadmap. By default (no flag) every concept is still appended, but jobless concepts are listed at the end of the run so the gap is visible — tag the target with a job, or re-run with `--require-job`, rather than letting a jobless idea slip in silently.
 4. Surviving candidates are appended to `docs/roadmap.md` as `idea`-status rows using the locked row spec:
 
    ```

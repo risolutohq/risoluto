@@ -121,18 +121,19 @@ node skills/risoluto-researcher/scripts/research.mjs \
 
 All flags:
 
-| Flag            | Required | Description                                                   |
-| --------------- | -------- | ------------------------------------------------------------- |
-| `--url`         | yes      | Canonical URL for the source/target                           |
-| `--target-slug` | yes      | Lowercase-hyphenated target identifier                        |
-| `--category`    | yes      | `peer`, `reference`, or `adjacent`                            |
-| `--source-type` | yes      | `article`, `reddit`, `x`, `repo`, `video`, `paper`, or `talk` |
-| `--source-slug` | yes      | Lowercase-hyphenated source identifier                        |
-| `--ideas`       | no       | Comma-separated idea slugs (default: empty)                   |
-| `--title`       | no       | Source file H1 title (default: derived from URL)              |
-| `--description` | no       | Target README description paragraph                           |
-| `--body-file`   | no       | Path to a file containing the source body markdown            |
-| `--dry-run`     | no       | Print what would be written, don't write anything             |
+| Flag            | Required | Description                                                                                             |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------- |
+| `--url`         | yes      | Canonical URL for the source/target                                                                     |
+| `--target-slug` | yes      | Lowercase-hyphenated target identifier                                                                  |
+| `--category`    | yes      | `peer`, `reference`, or `adjacent`                                                                      |
+| `--source-type` | yes      | `article`, `reddit`, `x`, `repo`, `video`, `paper`, or `talk`                                           |
+| `--source-slug` | yes      | Lowercase-hyphenated source identifier                                                                  |
+| `--ideas`       | no       | Comma-separated idea slugs (default: empty)                                                             |
+| `--job`         | no       | AFK job this target's ideas serve (slug); written as `job:` frontmatter, used by `ingest --require-job` |
+| `--title`       | no       | Source file H1 title (default: derived from URL)                                                        |
+| `--description` | no       | Target README description paragraph                                                                     |
+| `--body-file`   | no       | Path to a file containing the source body markdown                                                      |
+| `--dry-run`     | no       | Print what would be written, don't write anything                                                       |
 
 The script is idempotent per source: re-running with the same `--url` and `--source-slug` overwrites the source file, updates the target README derived fields (`last_researched_at`, `last_researched_sha`, `ideas` union, `source_count`), and regenerates INDEX.md. It never overwrites operator-owned target README prose sections.
 
