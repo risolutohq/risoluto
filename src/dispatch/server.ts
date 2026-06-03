@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import path from "node:path";
 
 import { bearerAuth } from "./auth.js";
@@ -37,10 +37,15 @@ function validateDispatchRequest(body: DispatchRequest): string | null {
   return null;
 }
 
+/** Express application extended with a drain handle for graceful shutdown. */
+export type DataPlaneApp = express.Application & { drain: () => void };
+
 /**
  * Create the data plane Express server.
+ * Returns a standard Express Application augmented with a `drain()` method
+ * that aborts all in-flight dispatches — call it before `server.close()`.
  */
-export function createDataPlaneServer(secret: string): express.Application {
+export function createDataPlaneServer(secret: string): DataPlaneApp {
   const app = express();
   const activeDispatches = new Map<string, AbortController>();
 
@@ -175,5 +180,19 @@ export function createDataPlaneServer(secret: string): express.Application {
     res.json({ status: "aborted" });
   });
 
-  return app;
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    logger.error({ error: toErrorString(err) }, "Unhandled server error");
+    if (!res.headersSent) {
+      res.status(500).json({ error: "internal server error" });
+    }
+  });
+
+  const drain = (): void => {
+    for (const [, controller] of activeDispatches) {
+      controller.abort();
+    }
+  };
+
+  (app as unknown as DataPlaneApp).drain = drain;
+  return app as unknown as DataPlaneApp;
 }
