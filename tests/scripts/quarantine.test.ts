@@ -21,7 +21,7 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 import { HEAL_THRESHOLD, MAX_QUARANTINED, QUARANTINE_PATH, loadEntries } from "../../scripts/quarantine-shared.js";
-import { healQuarantine } from "../../scripts/quarantine-heal.js";
+import { healQuarantine, loadTestResults } from "../../scripts/quarantine-heal.js";
 import { addEntry, listEntries, removeEntry, runCli } from "../../scripts/quarantine.js";
 
 interface EntryLike {
@@ -291,6 +291,37 @@ describe("quarantine scripts", () => {
 
       expect(loadEntries()).toEqual([]);
     });
+
+    it("drops entries that fail the type guard", () => {
+      mocks.readFileSyncMock.mockImplementation((filePath) => {
+        if (filePath === QUARANTINE_PATH) {
+          return JSON.stringify([
+            { testName: "valid", file: "tests/a.test.ts", quarantinedAt: "2026-04-01T00:00:00.000Z", passCount: 0 },
+            { testName: "missing-file-field", quarantinedAt: "2026-04-01T00:00:00.000Z", passCount: 0 },
+            null,
+            42,
+          ]);
+        }
+        throw new Error(`Unexpected read: ${filePath}`);
+      });
+
+      const entries = loadEntries();
+      expect(entries).toHaveLength(1);
+      expect(entries[0].testName).toBe("valid");
+    });
+  });
+
+  describe("loadTestResults", () => {
+    it("throws on invalid JSON instead of setting process.exitCode", () => {
+      const resultsPath = path.resolve("reports/bad-results.json");
+      mocks.readFileSyncMock.mockImplementation((filePath) => {
+        if (filePath === resultsPath) return "{bad json";
+        throw new Error(`Unexpected read: ${filePath}`);
+      });
+
+      expect(() => loadTestResults(resultsPath)).toThrow(/Error reading test results/);
+      expect(process.exitCode).not.toBe(1);
+    });
   });
 
   describe("healQuarantine", () => {
@@ -384,6 +415,51 @@ describe("quarantine scripts", () => {
       healQuarantine(resultsPath);
 
       expect(getSavedEntries(0)).toEqual([]);
+    });
+
+    it("does not write quarantine.json when nothing changed", () => {
+      const resultsPath = path.resolve("reports/vitest-results.json");
+
+      // Entry with "skipped" status — no pass or fail, passCount stays the same
+      setHealInputs([{ testName: "skipped test", file: "tests/skipped.test.ts", passCount: 0 }], resultsPath, {
+        testResults: [
+          {
+            filepath: "tests/skipped.test.ts",
+            tests: [{ name: "skipped test", status: "skipped" }],
+          },
+        ],
+      });
+      mocks.existsSyncMock.mockImplementation((filePath) =>
+        [resultsPath, path.resolve("tests/skipped.test.ts")].includes(filePath),
+      );
+      vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+      healQuarantine(resultsPath);
+
+      expect(mocks.writeFileSyncMock).not.toHaveBeenCalled();
+      expect(mocks.renameSyncMock).not.toHaveBeenCalled();
+    });
+
+    it("sets exitCode=1 and does not write when loadTestResults throws", () => {
+      const resultsPath = path.resolve("reports/bad-results.json");
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+      mocks.readFileSyncMock.mockImplementation((filePath) => {
+        if (filePath === QUARANTINE_PATH) {
+          return JSON.stringify([
+            { testName: "a test", file: "tests/a.test.ts", quarantinedAt: "2026-04-01T00:00:00.000Z", passCount: 0 },
+          ]);
+        }
+        if (filePath === resultsPath) return "{bad json";
+        throw new Error(`Unexpected read: ${filePath}`);
+      });
+      mocks.existsSyncMock.mockImplementation((filePath) => filePath === resultsPath);
+
+      healQuarantine(resultsPath);
+
+      expect(process.exitCode).toBe(1);
+      expect(mocks.writeFileSyncMock).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalled();
     });
   });
 

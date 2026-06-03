@@ -14,7 +14,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "lib": ["ES2022"],
-    "types": ["node"]
+    "types": ["node"],
+    "noEmitOnError": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
