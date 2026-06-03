@@ -23,29 +23,48 @@ export async function checkGitHubAppSandboxLifecycle(
 
   const branch = `risoluto-live-preflight-${Date.parse(generatedAt)}`;
   const resource: Record<string, string> = { repo: `${repo.owner}/${repo.name}`, branch };
+  let branchCreated = false;
+  let prCreated = false;
+  let prNumber: number | null = null;
+  let originalError: unknown = null;
   try {
     const defaultBranch = await fetchDefaultBranch(fetchImpl, token, repo);
     const baseSha = await fetchBranchSha(fetchImpl, token, repo, defaultBranch);
     await createBranch(fetchImpl, token, repo, branch, baseSha);
+    branchCreated = true;
     const markerPath = await createMarkerFile(fetchImpl, token, repo, branch, generatedAt);
     resource.markerPath = markerPath;
     const pr = await createDraftPullRequest(fetchImpl, token, repo, branch, defaultBranch);
+    prCreated = true;
+    prNumber = pr.number;
     resource.prNumber = String(pr.number);
     resource.prUrl = pr.url;
     const comment = await createPullRequestComment(fetchImpl, token, repo, pr.number);
     resource.commentId = String(comment.id);
-    await closePullRequest(fetchImpl, token, repo, pr.number);
-    await deleteBranch(fetchImpl, token, repo, branch);
-    resource.cleanup = "closed_pr_deleted_branch";
     return passed("sandbox PR lifecycle succeeded and cleaned up", resource);
   } catch (error) {
-    resource.cleanup = "kept_on_failure";
+    originalError = error;
     return {
       name: "github_app_sandbox_lifecycle",
       status: "failed",
       detail: summarizeError(error),
       resource,
     };
+  } finally {
+    try {
+      if (prCreated && prNumber !== null) {
+        await closePullRequest(fetchImpl, token, repo, prNumber);
+      }
+      if (branchCreated) {
+        await deleteBranch(fetchImpl, token, repo, branch);
+      }
+      resource.cleanup = originalError ? "cleaned_up_on_failure" : "closed_pr_deleted_branch";
+    } catch {
+      resource.cleanupError = "cleanup_failed";
+      if (!originalError) {
+        resource.cleanup = "cleanup_failed";
+      }
+    }
   }
 }
 

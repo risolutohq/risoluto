@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+const SENSITIVE_PATH_PREFIXES = ["/etc", "/proc", "/sys", "/dev", "/run", "/"];
+
+function isSensitivePath(p: string): boolean {
+  return SENSITIVE_PATH_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix + "/"));
+}
+
 /**
  * Returns extra host paths that must be mounted into the container for the
  * workspace to behave like it does on the host. This is primarily needed for
@@ -33,15 +39,15 @@ export async function resolveWorkspaceExtraMountPaths(workspacePath: string): Pr
   try {
     commonDir = (await readFile(path.join(gitDirPath, "commondir"), "utf8")).trim();
   } catch {
-    return isOutsideWorkspace(workspacePath, gitDirPath) ? [gitDirPath] : [];
+    return isOutsideWorkspace(workspacePath, gitDirPath) && !isSensitivePath(gitDirPath) ? [gitDirPath] : [];
   }
 
   if (!commonDir) {
-    return isOutsideWorkspace(workspacePath, gitDirPath) ? [gitDirPath] : [];
+    return isOutsideWorkspace(workspacePath, gitDirPath) && !isSensitivePath(gitDirPath) ? [gitDirPath] : [];
   }
 
   const commonDirPath = path.resolve(gitDirPath, commonDir);
-  return isOutsideWorkspace(workspacePath, commonDirPath) ? [commonDirPath] : [];
+  return isOutsideWorkspace(workspacePath, commonDirPath) && !isSensitivePath(commonDirPath) ? [commonDirPath] : [];
 }
 
 function isOutsideWorkspace(workspacePath: string, candidatePath: string): boolean {

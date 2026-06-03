@@ -44,4 +44,29 @@ describe("tracing middleware", () => {
     const req = {} as Parameters<typeof getRequestId>[0];
     expect(getRequestId(req)).toBe("unknown");
   });
+
+  it("rejects an oversized X-Request-ID and generates a fresh UUID instead", () => {
+    const oversized = "a".repeat(129);
+    const { req, res, headers } = createMockReqRes(oversized);
+    const next = vi.fn();
+
+    tracingMiddleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    // Should NOT echo back the oversized header
+    expect(headers[REQUEST_ID_HEADER]).not.toBe(oversized);
+    // Should be a valid UUID v4 instead
+    expect(headers[REQUEST_ID_HEADER]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it("rejects an X-Request-ID containing script injection characters", () => {
+    const malicious = "<script>alert(1)</script>";
+    const { req, res, headers } = createMockReqRes(malicious);
+    const next = vi.fn();
+
+    tracingMiddleware(req, res, next);
+
+    expect(headers[REQUEST_ID_HEADER]).not.toBe(malicious);
+    expect(headers[REQUEST_ID_HEADER]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
 });

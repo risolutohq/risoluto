@@ -168,9 +168,9 @@ export class DefaultWebhookHealthTracker implements WebhookHealthTracker {
   }
 
   private resetCooldown(): void {
-    // Only reset if a cooldown is currently running
+    // Only restart if a cooldown is currently running — delays reconnection by 60s from now
     if (this.cooldownTimer) {
-      this.clearCooldown();
+      this.startCooldown();
       this.logger.debug({}, "degraded cooldown reset by subscription check");
     }
   }
