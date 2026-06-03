@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
+import { writeWorkflowRunRecord } from "../../src/workflow-run/artifacts.js";
 
 const tempDirs: string[] = [];
 
@@ -151,6 +152,21 @@ describe("WorkflowRunArchive", () => {
       contractId: "intent.v1",
       data: intent,
     });
+  });
+
+  it("rejects writeWorkflowRunRecord when artifactDir escapes the archive root", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "Escape attempt",
+      intent: "Ensure path-traversal is rejected.",
+      source: "cli",
+      id: () => "wr_escape_test",
+      now: () => "2026-05-26T18:00:00.000Z",
+    });
+    // Forge a record with an artifactDir outside the archive root.
+    const forgedRun = { ...workflowRun, artifactDir: "/tmp/escape" };
+    await expect(writeWorkflowRunRecord(forgedRun, { dataDir })).rejects.toThrow(/artifactDir escapes archive root/);
   });
 
   it("rejects an unknown artifact contract id before storing the artifact", async () => {

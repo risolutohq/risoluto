@@ -250,10 +250,6 @@ export async function finalizeStopSignal(
     outcome: isBlocked ? "paused" : "completed",
     attempt,
   });
-  if (isBlocked) {
-    ctx.releaseIssueClaim(issue.id);
-  }
-
   const transitionedState = await writeCompletionWriteback(ctx, {
     issue,
     entry,
@@ -277,6 +273,7 @@ export async function finalizeStopSignal(
       ctx.setCompletedView(issue.identifier, { ...view, state: transitionedState });
     }
   }
+  ctx.releaseIssueClaim(issue.id);
 }
 
 function emitWorkflowRunCompleted(

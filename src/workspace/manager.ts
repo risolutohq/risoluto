@@ -200,21 +200,40 @@ export class WorkspaceManager implements WorkspacePort {
     const worktreeExists = await pathIsDirectory(workspacePath);
     const createdNow = !worktreeExists;
 
-    if (createdNow) {
-      await this.worktreeDeps.gitManager.setupWorktree(
-        repoMatch,
-        baseCloneDir,
-        workspacePath,
-        issue,
-        config.workspace.branchPrefix,
-      );
-    }
+    try {
+      if (createdNow) {
+        await this.worktreeDeps.gitManager.setupWorktree(
+          repoMatch,
+          baseCloneDir,
+          workspacePath,
+          issue,
+          config.workspace.branchPrefix,
+        );
+      }
 
-    const workspace = { path: workspacePath, workspaceKey, createdNow, gitBaseDir: baseCloneDir };
-    if (createdNow) {
-      await this.runHook(config.workspace.hooks.afterCreate, workspace, issueIdentifier, workspaceKey);
+      const workspace = { path: workspacePath, workspaceKey, createdNow, gitBaseDir: baseCloneDir };
+      if (createdNow) {
+        await this.runHook(config.workspace.hooks.afterCreate, workspace, issueIdentifier, workspaceKey);
+      }
+      return workspace;
+    } catch (error) {
+      if (createdNow) {
+        try {
+          await this.worktreeDeps.gitManager.removeWorktree(baseCloneDir, workspacePath, true);
+        } catch (removeError) {
+          this.logger.warn(
+            {
+              workspacePath,
+              issueIdentifier,
+              error: toErrorString(removeError),
+            },
+            "worktree rollback via git failed; falling back to rm",
+          );
+          await rm(workspacePath, { recursive: true, force: true });
+        }
+      }
+      throw error;
     }
-    return workspace;
   }
 
   private async removeDirectoryWorkspace(

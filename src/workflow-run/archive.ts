@@ -106,7 +106,7 @@ function createWorkflowRunRecordInArchive(
   };
 }
 
-export async function storeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Promise<void> {
+async function storeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Promise<void> {
   await mkdir(workflowRun.artifactDir, { recursive: true });
   await writeFile(metadataPathForRunDir(workflowRun.artifactDir), `${JSON.stringify(workflowRun, null, 2)}\n`, "utf8");
   await writeFile(

@@ -158,7 +158,7 @@ async function createNewWorkflowRunIntake(
     workflowRunId: workflowRun.id,
     ruleId: resolved.rule?.id ?? null,
   });
-  await writeWorkflowRunRecord(workflowRun);
+  await writeWorkflowRunRecord(workflowRun, input);
   await archive.writeWorkflowRunArtifact({
     workflowRunId: workflowRun.id,
     artifactId: "intent",

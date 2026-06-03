@@ -45,6 +45,18 @@ const ROLE_GUIDANCE: ReadonlyMap<string, string> = new Map([
   ["ci_babysitter", "Watch the remote CI run and classify any failures."],
 ]);
 
+const PROMPT_INJECTION_PREFIXES = ["System:", "IGNORE", "Assistant:", "USER:", "HUMAN:"];
+const MAX_INTENT_TITLE_LENGTH = 200;
+const MAX_INTENT_BODY_LENGTH = 2000;
+
+function sanitizeIntentField(value: string, maxLength: number): string {
+  const trimmed = value.trim().slice(0, maxLength);
+  return trimmed
+    .split("\n")
+    .filter((line) => !PROMPT_INJECTION_PREFIXES.some((prefix) => line.trimStart().startsWith(prefix)))
+    .join("\n");
+}
+
 /**
  * Build the prompt that drives one agent role session and instructs the agent to deposit each
  * `role.produces` artifact per the D1 protocol: a JSON file at the canonical archive path whose contents are
@@ -52,13 +64,17 @@ const ROLE_GUIDANCE: ReadonlyMap<string, string> = new Map([
  * container, so files the agent writes there are visible to the host and read back by the role runner.
  */
 export function buildAgentRolePrompt(input: BuildAgentRolePromptInput): string {
+  const sanitizedTitle = sanitizeIntentField(input.intentTitle, MAX_INTENT_TITLE_LENGTH);
+  const sanitizedBody = sanitizeIntentField(input.intentBody, MAX_INTENT_BODY_LENGTH);
   const lines: string[] = [
     `You are the "${input.role.id}" role in an autonomous software workflow run.`,
     ROLE_GUIDANCE.get(input.role.id) ?? `Perform the ${input.role.id} role.`,
     "",
     `Workflow Run id: ${input.workflowRunId}`,
-    `Intent — ${input.intentTitle}`,
-    input.intentBody,
+    "--- USER INTENT (untrusted) ---",
+    `Title: ${sanitizedTitle}`,
+    sanitizedBody,
+    "--- END USER INTENT ---",
     "",
     "When your work is complete, deposit each required artifact as a JSON file at EXACTLY the given path.",
     'Each file MUST contain: { "contractId": "<id>", "data": <DATA> }',

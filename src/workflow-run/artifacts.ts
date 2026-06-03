@@ -1,4 +1,6 @@
-import { createWorkflowRunArchive, storeWorkflowRunRecord } from "./archive.js";
+import path from "node:path";
+
+import { createWorkflowRunArchive } from "./archive.js";
 import type {
   WorkflowRunEventAppendedOutput,
   WorkflowRunEventRecord,
@@ -54,8 +56,23 @@ export function createWorkflowRunRecord(input: {
   return createWorkflowRunArchive(input).createWorkflowRunRecord(input);
 }
 
-export async function writeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Promise<void> {
-  await storeWorkflowRunRecord(workflowRun);
+export async function writeWorkflowRunRecord(
+  workflowRun: WorkflowRunStartRecord,
+  location: { dataDir?: string; archiveDir?: string },
+): Promise<void> {
+  const archive = createWorkflowRunArchive(location);
+  const archiveRoot = location.archiveDir ?? (location.dataDir ? path.join(location.dataDir, "archives") : null);
+  if (!archiveRoot) {
+    throw new TypeError("dataDir or archiveDir is required for writeWorkflowRunRecord");
+  }
+  const expectedRoot = path.resolve(archiveRoot);
+  const artifactDir = path.resolve(workflowRun.artifactDir);
+  if (!artifactDir.startsWith(expectedRoot + path.sep) && artifactDir !== expectedRoot) {
+    throw new TypeError(
+      `artifactDir escapes archive root: ${JSON.stringify(workflowRun.artifactDir)} is not under ${JSON.stringify(archiveRoot)}`,
+    );
+  }
+  await archive.storeWorkflowRun(workflowRun);
 }
 
 export async function readWorkflowRunEvents(input: {
