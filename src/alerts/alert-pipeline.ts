@@ -4,6 +4,7 @@ import type { AlertRuleConfig, NotificationDeliverySummary, RisolutoLogger } fro
 import type { ConfigStore } from "../config/store.js";
 import type { NotificationManager } from "../notification/manager.js";
 import { toErrorString } from "../utils/type-guards.js";
+import { sanitizeContent } from "../core/content-sanitizer.js";
 
 type EventPayload = RisolutoEventMap[keyof RisolutoEventMap];
 
@@ -135,8 +136,22 @@ function buildNotificationEvent(rule: AlertRuleConfig, eventType: string, payloa
     metadata: {
       eventType,
       ruleName: rule.name,
-      payload,
+      summary: buildAlertSummary(payload),
     },
+  };
+}
+
+/**
+ * Allowlisted, redacted per-event summary for alert notifications — replaces the
+ * raw event payload so secrets in error/message/context are never embedded
+ * verbatim in the persisted/sent notification metadata (NIN-247).
+ */
+function buildAlertSummary(payload: EventPayload): Record<string, string | null> {
+  return {
+    issueIdentifier: extractString(payload, ["identifier", "issueIdentifier"]),
+    issueId: extractString(payload, ["issueId"]),
+    status: extractString(payload, ["status"]),
+    error: sanitizeContent(extractString(payload, ["error", "message"])),
   };
 }
 

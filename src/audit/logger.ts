@@ -12,10 +12,33 @@ import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { configHistory } from "../persistence/sqlite/schema.js";
 import type { AuditLoggerPort } from "./port.js";
 import type { AuditEntry, AuditQueryOptions, AuditRecord } from "./types.js";
+import { redactSensitiveValue, sanitizeContent } from "../core/content-sanitizer.js";
 
 export type { AuditEntry, AuditQueryOptions, AuditRecord };
 
 const REDACTED = "[REDACTED]";
+
+// Audit values are fully redacted when their key/path names a secret-like field,
+// and otherwise scanned for embedded secret patterns, so no config mutation
+// persists a webhook URL, token, API key, or $SECRET-resolved value verbatim
+// (NIN-247).
+const SENSITIVE_AUDIT_KEY = /secret|token|password|credential|authorization|api[_-]?key|webhook/i;
+
+function redactAuditValue(key: string, path: string | null, value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (SENSITIVE_AUDIT_KEY.test(key) || (path !== null && SENSITIVE_AUDIT_KEY.test(path))) {
+    return REDACTED;
+  }
+  // Preserve the stored value's shape (audit values are usually serialized
+  // config) while redacting any secret-bearing sub-value.
+  try {
+    return JSON.stringify(redactSensitiveValue(JSON.parse(value)));
+  } catch {
+    return sanitizeContent(value, { maxLength: 100_000 });
+  }
+}
 
 interface WhereResult {
   where: string;
@@ -90,8 +113,8 @@ export class AuditLogger implements AuditLoggerPort {
         key: entry.key,
         path,
         operation: entry.operation,
-        previousValue: isSecret ? REDACTED : (entry.previousValue ?? null),
-        newValue: isSecret ? REDACTED : (entry.newValue ?? null),
+        previousValue: isSecret ? REDACTED : redactAuditValue(entry.key, path, entry.previousValue ?? null),
+        newValue: isSecret ? REDACTED : redactAuditValue(entry.key, path, entry.newValue ?? null),
         actor,
         requestId: entry.requestId ?? null,
         timestamp,

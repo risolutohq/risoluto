@@ -46,6 +46,19 @@ describe("AuditLogger", () => {
     expect(entries[0].newValue).toBe("new body");
   });
 
+  it("redacts a config mutation whose key names a secret (NIN-247)", () => {
+    audit.logConfigChange("tracker.api_key", null, "sk-supersecret123");
+    const entries = audit.query();
+    expect(entries[0].newValue).toBe("[REDACTED]");
+  });
+
+  it("redacts a secret embedded in a config value while preserving JSON shape (NIN-247)", () => {
+    audit.logConfigChange("codex.provider", null, '{"token":"sk-supersecret123","wireApi":"responses"}');
+    const entries = audit.query();
+    expect(entries[0].newValue).not.toContain("sk-supersecret123");
+    expect(entries[0].newValue).toContain("responses");
+  });
+
   it("filters by tableName", () => {
     audit.logConfigChange("tracker", null, "{}");
     audit.logSecretChange("KEY", "set");

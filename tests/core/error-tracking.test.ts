@@ -64,6 +64,25 @@ describe("error-tracking", () => {
     );
   });
 
+  it("redacts secrets in exception message, breadcrumbs, and context (NIN-247)", () => {
+    process.env.SENTRY_DSN = "https://abc123@sentry.io/1";
+    const logger = createMockLogger();
+    initErrorTracking(logger);
+
+    const tracker = getErrorTracker();
+    tracker.addBreadcrumb("auth token=sk-breadcrumbsecret", "auth");
+    tracker.setContext("session", { apiKey: "sk-contextsecret" });
+    tracker.captureException(new Error("failed with token=sk-messagesecret"), {
+      headers: { authorization: "Bearer sk-ctxsecret" },
+    });
+
+    const payload = JSON.stringify((logger.error as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(payload).not.toContain("sk-breadcrumbsecret");
+    expect(payload).not.toContain("sk-contextsecret");
+    expect(payload).not.toContain("sk-messagesecret");
+    expect(payload).not.toContain("sk-ctxsecret");
+  });
+
   it("flushes breadcrumbs", async () => {
     process.env.SENTRY_DSN = "https://abc123@sentry.io/1";
     const logger = createMockLogger();

@@ -68,6 +68,36 @@ describe("AlertPipeline", () => {
     ]);
   });
 
+  it("emits a redacted allowlisted summary instead of the raw event payload (NIN-247)", async () => {
+    const notificationManager = {
+      notify: vi.fn().mockResolvedValue({
+        deliveredChannels: ["ops-webhook"],
+        failedChannels: [],
+        skippedDuplicate: false,
+      }),
+    };
+    const pipeline = new AlertPipeline({
+      configStore: createConfigStore() as never,
+      notificationManager: notificationManager as never,
+      historyStore: makeHistoryStore(),
+      logger: createMockLogger(),
+    });
+
+    await pipeline.processEvent("worker.failed", {
+      issueId: "issue-1",
+      identifier: "ENG-1",
+      error: "crashed with token=sk-alertsecret123",
+      apiKey: "sk-extrasecret",
+    });
+
+    const notification = notificationManager.notify.mock.calls[0][0];
+    expect(notification.metadata).not.toHaveProperty("payload");
+    expect(notification.metadata.summary).toBeDefined();
+    const serialized = JSON.stringify(notification.metadata);
+    expect(serialized).not.toContain("sk-alertsecret123");
+    expect(serialized).not.toContain("sk-extrasecret");
+  });
+
   it("suppresses repeated alerts inside the cooldown window", async () => {
     const notificationManager = {
       notify: vi.fn().mockResolvedValue({
