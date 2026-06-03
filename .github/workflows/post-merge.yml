@@ -37,16 +37,16 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         if: steps.prd-label.outputs.skip != 'true'
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
         if: steps.prd-label.outputs.skip != 'true'
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         if: steps.prd-label.outputs.skip != 'true'
         with:
           node-version: 22
@@ -54,16 +54,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
         if: steps.prd-label.outputs.skip != 'true'
-
-      - name: Flip PRD status and back-comment Linear
-        if: steps.prd-label.outputs.skip != 'true'
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          PRD_SLUG: ${{ steps.prd-label.outputs.slug }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
-        run: node scripts/post-merge-prd.mjs "$PRD_SLUG" --pr-url "$PR_URL" --pr-number "$PR_NUMBER" --merge-commit "$MERGE_COMMIT"
 
       - name: Commit PRD status change
         if: steps.prd-label.outputs.skip != 'true'
@@ -76,4 +66,15 @@ jobs:
           git add "docs/prds/$PRD_SLUG.md"
           git diff --cached --quiet || git commit -m "chore: flip $PRD_SLUG PRD status to shipped"
           # Pushes directly to master — assumes the bot push is not blocked by PR-review branch protection.
-          git push
+          # Must succeed before the Linear update to avoid split state (file not committed but Linear shows shipped).
+          git push || { echo "::error::git push failed — aborting before Linear update to prevent split state"; exit 1; }
+
+      - name: Flip PRD status and back-comment Linear
+        if: steps.prd-label.outputs.skip != 'true'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          PRD_SLUG: ${{ steps.prd-label.outputs.slug }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+        run: node scripts/post-merge-prd.mjs "$PRD_SLUG" --pr-url "$PR_URL" --pr-number "$PR_NUMBER" --merge-commit "$MERGE_COMMIT"
