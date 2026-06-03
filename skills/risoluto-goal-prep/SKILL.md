@@ -75,12 +75,19 @@ Run the deterministic renderer:
 node skills/risoluto-goal-prep/scripts/render.mjs <slug>
 ```
 
-If `~/.risoluto/goals/<slug>/` already contains a draft package and Omer wants a refresh, rerun with
-`--force`:
+If `~/.risoluto/goals/<slug>/` already contains a package, choose the refresh mode deliberately:
 
 ```bash
-node skills/risoluto-goal-prep/scripts/render.mjs <slug> --force
+node skills/risoluto-goal-prep/scripts/render.mjs <slug> --force   # regenerate artifacts, KEEP resume state
+node skills/risoluto-goal-prep/scripts/render.mjs <slug> --reset   # wipe everything, including resume state
 ```
+
+- `--force` regenerates the derived artifacts (`GOAL.md`, `SPEC.md`, `WAVES.md`, `CONTROL.md`) but
+  **preserves** the cascade resume state (`PLAN.md`, `ATTEMPTS.md`, `NOTES.md`), so a paused
+  `/risoluto-goal-run` cascade can still resume. Use this for a routine re-render of a slug that may be
+  mid-flight.
+- `--reset` wipes the whole package and regenerates all seven files from scratch. Use this only when you
+  want to discard an existing run's progress. It prints a stderr warning naming the resume files it removed.
 
 The script:
 
@@ -89,7 +96,7 @@ The script:
 - fetches project milestones and issues through `LINEAR_API_KEY` + GraphQL;
 - writes `WAVES.md`, `SPEC.md`, `GOAL.md`, `CONTROL.md`, `PLAN.md`, `ATTEMPTS.md`, and `NOTES.md`;
 - falls back to one unmilestoned wave only if the project has no milestones;
-- refuses to silently overwrite an existing package unless `--force` is passed.
+- refuses to silently overwrite an existing package unless `--force` or `--reset` is passed.
 
 ### Step 2 - Inspect the result
 
