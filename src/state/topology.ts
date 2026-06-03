@@ -1,5 +1,5 @@
 import type { ServiceConfig, StateStageKind } from "../core/types.js";
-import { StateMachine } from "./machine.js";
+import { StateMachine, normalizeState, uniqueStates } from "./machine.js";
 
 export { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "./machine.js";
 
@@ -21,21 +21,11 @@ interface WorkflowStateTopology {
 }
 
 export function normalizeWorkflowStateKey(state: string): string {
-  return state.trim().toLowerCase();
+  return normalizeState(state);
 }
 
 export function normalizeWorkflowStateList(states: string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-  for (const state of states) {
-    const next = normalizeWorkflowStateKey(state);
-    if (!next || seen.has(next)) {
-      continue;
-    }
-    seen.add(next);
-    normalized.push(next);
-  }
-  return normalized;
+  return uniqueStates(states);
 }
 
 export function isTerminalWorkflowState(state: string, config: ServiceConfig): boolean {

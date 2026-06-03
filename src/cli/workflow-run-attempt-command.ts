@@ -1,9 +1,8 @@
-import { homedir } from "node:os";
-import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { openWorkflowRun, type WorkflowRunAttemptReference } from "../workflow-run/artifacts.js";
 import { listWorkflowRunAttempts } from "../workflow-run/run-attempt-projection.js";
+import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
 
 export async function startRunAttemptCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -149,18 +148,6 @@ export async function listRunAttemptsCommand(argv: string[]): Promise<number> {
     console.log(`Listed ${listed.runAttempts.length} Run Attempts for ${listed.workflowRun.id}`);
   }
   return 0;
-}
-
-function resolveDataDir(value: string | undefined): string {
-  return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
-}
-
-function requireNonEmpty(value: string | undefined, flag: string): string {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    throw new TypeError(`${flag} is required`);
-  }
-  return trimmed;
 }
 
 function parseAttemptNumber(value: string): number {
