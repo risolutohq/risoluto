@@ -1,5 +1,7 @@
 # Interface Design
 
+> **Headless-loop adaptation (`risoluto-architecture-loop`).** This file was written for the interactive founder tool; the loop is headless and self-grills (no human mid-run). Remap the three steps: **Step 1 (Frame)** — write the problem-space framing into the candidate sub-issue body as context, don't pause to present it; **Step 2 (Spawn)** — run as written, the parallel design briefs are self-contained; **Step 3 (Present & compare)** — collapse present + compare + recommend into one design-decision block appended to the sub-issue body, pick the strongest design (or a hybrid) and record the rationale without waiting for a human read. The rubric below is otherwise authoritative; read "the user" as "the loop" throughout.
+
 When the user wants to explore alternative interfaces for a chosen deepening candidate, use this parallel sub-agent pattern. Based on "Design It Twice" (Ousterhout) — your first idea is unlikely to be the best.
 
 Uses the vocabulary in [LANGUAGE.md](LANGUAGE.md) — **module**, **interface**, **seam**, **adapter**, **leverage**.

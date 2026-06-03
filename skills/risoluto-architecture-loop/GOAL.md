@@ -60,7 +60,7 @@ Discovery commands when needed: `git submodule status research`, `git status --s
 - Subagent / model-review findings are evidence, not authority — verify against the actual
   diff and source before acting.
 - Never `--no-verify`, never add to `quarantine.json` silently, never force-push / rewrite history.
-- No repo-local runtime scratch markdown (PLAN/ATTEMPTS/NOTES/CONTROL). Run-level memory
+- No repo-local runtime scratch markdown (PLAN/ATTEMPTS/NOTES/CONTROL/DISCOVERY). Run-level memory
   lives inside the Linear run issue.
 </constraints>
 
