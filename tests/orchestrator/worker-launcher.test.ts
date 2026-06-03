@@ -82,6 +82,7 @@ function makeLaunchWorkerHarness() {
       },
       logger: {
         warn: vi.fn(),
+        error: vi.fn(),
       },
       resolveTemplate: vi.fn().mockResolvedValue("Run {{ workflowRun.identifier }}"),
     },
@@ -251,6 +252,22 @@ describe("launchWorker", () => {
       expect(runAttempt).not.toHaveBeenCalled();
       expect(ctx.runningEntries.has("workflow-run-1")).toBe(false);
       expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("workflow-run-1");
+    });
+  });
+
+  // settlement robustness (NIN-240): a rejecting worker-promise settlement must
+  // never leave an unhandled rejection and must always resolve the entry lifecycle.
+  describe("settlement robustness (NIN-240)", () => {
+    it("resolves the entry lifecycle and logs when settlement rejects", async () => {
+      const { ctx, issue } = makeLaunchWorkerHarness();
+      ctx.handleWorkerPromise = vi.fn(() => Promise.reject(new Error("settlement boom")));
+
+      await expect(launchWorker(ctx, issue, 1)).resolves.toBeUndefined();
+
+      const entry = ctx.runningEntries.get("workflow-run-1");
+      expect(entry).toBeDefined();
+      await expect(entry!.promise).resolves.toBeUndefined();
+      expect(ctx.deps.logger.error).toHaveBeenCalled();
     });
   });
 });

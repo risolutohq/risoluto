@@ -212,4 +212,82 @@ describe("runStartupRecovery", () => {
       }),
     );
   });
+
+  it("supersedes older running attempts for the same issue and marks them failed (NIN-240)", async () => {
+    const workspace = await createTempDir();
+    await mkdir(workspace, { recursive: true });
+    const older = createAttempt({
+      attemptId: "attempt-old",
+      startedAt: "2026-04-03T09:00:00.000Z",
+      workspacePath: workspace,
+    });
+    const newer = createAttempt({
+      attemptId: "attempt-new",
+      startedAt: "2026-04-03T10:00:00.000Z",
+      workspacePath: workspace,
+    });
+    const attemptStore = createAttemptStore([older, newer]);
+    const launchWorker = vi.fn().mockResolvedValue(undefined);
+
+    const report = await runStartupRecovery({
+      attemptStore,
+      tracker: {
+        fetchIssueStatesByIds: vi.fn().mockResolvedValue([createIssue()]),
+      },
+      workspaceManager: {
+        removeWorkspace: vi.fn().mockResolvedValue(undefined),
+      },
+      getConfig: createConfig,
+      launchWorker,
+      logger: { info: vi.fn(), warn: vi.fn() },
+      inspectWorkspaceContainers: vi.fn().mockResolvedValue([]),
+    });
+
+    expect(launchWorker).toHaveBeenCalledTimes(1);
+    expect(report.resumed).toEqual(["attempt-new"]);
+    expect(report.cleanedUp).toContain("attempt-old");
+    expect(attemptStore.updateAttempt).toHaveBeenCalledWith(
+      "attempt-old",
+      expect.objectContaining({
+        status: "failed",
+        errorCode: "recovery_superseded",
+      }),
+    );
+  });
+
+  it("continues cleaning remaining containers when one removal fails (NIN-240)", async () => {
+    const workspace = await createTempDir();
+    await mkdir(workspace, { recursive: true });
+    const attempt = createAttempt({ workspacePath: workspace });
+    const attemptStore = createAttemptStore([attempt]);
+    const removeContainer = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValue(undefined);
+
+    const report = await runStartupRecovery({
+      attemptStore,
+      tracker: {
+        fetchIssueStatesByIds: vi.fn().mockResolvedValue([createIssue({ state: "Done" })]),
+      },
+      workspaceManager: {
+        removeWorkspace: vi.fn().mockResolvedValue(undefined),
+        removeWorkspaceWithResult: vi.fn().mockResolvedValue({
+          removed: true,
+          preserved: false,
+          hadUncommittedChanges: false,
+          autoCommitAttempted: false,
+          autoCommitSha: null,
+          autoCommitError: null,
+        }),
+      },
+      getConfig: createConfig,
+      launchWorker: vi.fn().mockResolvedValue(undefined),
+      logger: { info: vi.fn(), warn: vi.fn() },
+      inspectWorkspaceContainers: vi.fn().mockResolvedValue([{ name: "c1" }, { name: "c2" }] as never),
+      removeContainer,
+    });
+
+    expect(removeContainer).toHaveBeenCalledTimes(2);
+    expect(removeContainer).toHaveBeenCalledWith("c1");
+    expect(removeContainer).toHaveBeenCalledWith("c2");
+    expect(report.cleanedUp).toContain(attempt.attemptId);
+  });
 });

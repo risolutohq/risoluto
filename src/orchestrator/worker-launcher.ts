@@ -567,16 +567,29 @@ export async function launchWorker(
       }
       const workerPromise = ctx.handleWorkerPromise(promise, issue, workspace, entry, attempt);
       promiseHandedOff = true;
-      // Resolve the deferred entry.promise once the worker promise settles
-      // and the terminal checkpoint write has been kicked off. Both errors
-      // are swallowed — checkpoint failure must not block cleanup, and the
-      // deferred is signal-only (no rejection path).
-      workerPromise.finally(() => {
-        writeCheckpoint(ctx, entry, "terminal_completion").catch(() => {
-          /* intentionally ignored */
-        });
-        built.resolveLifecycle();
-      });
+      // Resolve the deferred entry.promise once the worker promise settles and
+      // the terminal checkpoint write has been kicked off. A rejecting
+      // workerPromise is logged rather than left unhandled, and the deferred is
+      // ALWAYS resolved (in finally) so shutdown can never hang on it even when
+      // settlement or checkpointing throws.
+      void (async () => {
+        try {
+          await workerPromise;
+        } catch (error) {
+          ctx.deps.logger.error(
+            { issueId: issue.id, issueIdentifier: issue.identifier, error: toErrorString(error) },
+            "worker promise rejected during settlement",
+          );
+        } finally {
+          try {
+            void writeCheckpoint(ctx, entry, "terminal_completion").catch(() => {
+              /* intentionally ignored */
+            });
+          } finally {
+            built.resolveLifecycle();
+          }
+        }
+      })();
     });
   } catch (error) {
     if (!promiseHandedOff) {

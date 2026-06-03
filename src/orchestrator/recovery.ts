@@ -33,18 +33,32 @@ interface RecoveryContext {
   removeContainer?: (name: string) => Promise<void>;
 }
 
-function latestRunningAttempts(attempts: AttemptRecord[]): AttemptRecord[] {
+/**
+ * Partitions running attempts into the newest-per-issue `primary` attempts and
+ * the older `superseded` duplicates. Every running attempt is accounted for so
+ * none are silently left in the `running` state after recovery.
+ */
+function partitionRunningAttempts(attempts: AttemptRecord[]): {
+  primary: AttemptRecord[];
+  superseded: AttemptRecord[];
+} {
   const latestByIssue = new Map<string, AttemptRecord>();
+  const superseded: AttemptRecord[] = [];
   for (const attempt of attempts) {
     if (attempt.status !== "running") {
       continue;
     }
     const existing = latestByIssue.get(attempt.issueId);
-    if (!existing || attempt.startedAt > existing.startedAt) {
+    if (!existing) {
       latestByIssue.set(attempt.issueId, attempt);
+    } else if (attempt.startedAt > existing.startedAt) {
+      latestByIssue.set(attempt.issueId, attempt);
+      superseded.push(existing);
+    } else {
+      superseded.push(attempt);
     }
   }
-  return [...latestByIssue.values()];
+  return { primary: [...latestByIssue.values()], superseded };
 }
 
 function recoveryModelSelection(attempt: AttemptRecord): ModelSelection {
@@ -175,8 +189,19 @@ async function cleanupContainers(
   containers: Array<{ name: string; running: boolean }>,
 ): Promise<void> {
   const cleanupContainer = ctx.removeContainer ?? removeContainer;
+  const failures: Array<{ name: string; error: string }> = [];
   for (const container of containers) {
-    await cleanupContainer(container.name);
+    try {
+      await cleanupContainer(container.name);
+    } catch (error) {
+      failures.push({ name: container.name, error: toErrorString(error) });
+    }
+  }
+  if (failures.length > 0) {
+    ctx.logger.warn(
+      { failures },
+      "recovery container cleanup encountered failures; continued with remaining containers",
+    );
   }
 }
 
@@ -376,25 +401,71 @@ async function processAttempt(
   report.results.push(result);
 }
 
+/**
+ * Marks an older duplicate running attempt as failed so it is not left stuck in
+ * the `running` state after a newer attempt for the same issue is recovered.
+ */
+async function supersedeAttempt(
+  ctx: RecoveryContext,
+  attempt: AttemptRecord,
+  report: RecoveryReport,
+  dryRun: boolean,
+): Promise<void> {
+  if (dryRun) {
+    recordReportOutcome(report, attempt.attemptId, "cleanup");
+    return;
+  }
+  try {
+    await ctx.attemptStore.updateAttempt(attempt.attemptId, {
+      status: "failed",
+      endedAt: new Date().toISOString(),
+      errorCode: "recovery_superseded",
+      errorMessage: "Superseded by a newer running attempt during startup recovery",
+    });
+    await appendRecoveryEvent(
+      ctx.attemptStore,
+      attempt,
+      "attempt_recovery_superseded",
+      "Stale running attempt superseded by a newer attempt during recovery",
+      {
+        action: "cleanup",
+        reason: "superseded by newer running attempt",
+        status: "failed",
+      },
+    );
+    recordReportOutcome(report, attempt.attemptId, "cleanup");
+  } catch (error) {
+    report.errors.push({
+      attemptId: attempt.attemptId,
+      issueIdentifier: attempt.issueIdentifier,
+      error: toErrorString(error),
+    });
+  }
+}
+
 export async function runStartupRecovery(
   ctx: RecoveryContext,
   options?: { dryRun?: boolean },
 ): Promise<RecoveryReport> {
   const startedAtMs = Date.now();
   const dryRun = options?.dryRun ?? false;
-  const runningAttempts = latestRunningAttempts(ctx.attemptStore.getAllAttempts());
-  if (runningAttempts.length === 0) {
+  const { primary, superseded } = partitionRunningAttempts(ctx.attemptStore.getAllAttempts());
+  if (primary.length === 0 && superseded.length === 0) {
     return buildRecoveryReport(0, dryRun, startedAtMs);
   }
 
   const issues = await ctx.tracker.fetchIssueStatesByIds([
-    ...new Set(runningAttempts.map((attempt) => attempt.issueId)),
+    ...new Set([...primary, ...superseded].map((attempt) => attempt.issueId)),
   ]);
   const issuesById = new Map(issues.map((issue) => [issue.id, issue]));
-  const report = buildRecoveryReport(runningAttempts.length, dryRun, startedAtMs);
+  const report = buildRecoveryReport(primary.length + superseded.length, dryRun, startedAtMs);
 
-  for (const attempt of runningAttempts) {
+  for (const attempt of primary) {
     await processAttempt(ctx, attempt, issuesById, report, dryRun);
+  }
+
+  for (const attempt of superseded) {
+    await supersedeAttempt(ctx, attempt, report, dryRun);
   }
 
   report.durationMs = Date.now() - startedAtMs;

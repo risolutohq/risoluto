@@ -36,6 +36,11 @@ import { toErrorString } from "../utils/type-guards.js";
 import { createMetricsCollector, type MetricsCollector } from "../observability/metrics.js";
 import type { ObservabilityHealthStatus } from "../observability/health.js";
 
+// Upper bound on how long stop() waits for in-flight workers to settle after
+// being aborted. A worker that ignores its abort signal cannot hang shutdown
+// past this deadline; remaining entries are force-cleared.
+const SHUTDOWN_TIMEOUT_MS = 30_000;
+
 export class Orchestrator implements OrchestratorPort {
   private readonly _state: OrchestratorState;
   private readonly runtimeCoordinator: RunLifecycleCoordinator;
@@ -120,37 +125,59 @@ export class Orchestrator implements OrchestratorPort {
       reason: "orchestrator started",
     });
     this.watchdog.start();
-    this.lastRecoveryReport = await runStartupRecovery({
-      attemptStore: this.deps.attemptStore,
-      tracker: this.deps.tracker,
-      workspaceManager: this.deps.workspaceManager,
-      getConfig: () => this.deps.configStore.getConfig(),
-      launchWorker: (issue, attempt, options) => this._ctx.launchWorker(issue, attempt, options),
-      logger: this.deps.logger,
-    });
-    await this.runtimeCoordinator.cleanupTerminalWorkspaces();
-    seedCompletedClaims({
-      claimedIssueIds: this._state.claimedIssueIds,
-      completedViews: this._state.completedViews,
-      markDirty: () => this.markStateDirty(),
-      deps: { attemptStore: this.deps.attemptStore, logger: this.deps.logger },
-    });
-    const configRows = this.deps.issueConfigStore.loadAll();
-    for (const row of configRows) {
-      if (row.model !== null) {
-        this._state.issueModelOverrides.set(row.identifier, {
-          model: row.model,
-          reasoningEffort: (row.reasoningEffort as ReasoningEffort) ?? undefined,
-        });
+    try {
+      this.lastRecoveryReport = await runStartupRecovery({
+        attemptStore: this.deps.attemptStore,
+        tracker: this.deps.tracker,
+        workspaceManager: this.deps.workspaceManager,
+        getConfig: () => this.deps.configStore.getConfig(),
+        launchWorker: (issue, attempt, options) => this._ctx.launchWorker(issue, attempt, options),
+        logger: this.deps.logger,
+      });
+      await this.runtimeCoordinator.cleanupTerminalWorkspaces();
+      seedCompletedClaims({
+        claimedIssueIds: this._state.claimedIssueIds,
+        completedViews: this._state.completedViews,
+        markDirty: () => this.markStateDirty(),
+        deps: { attemptStore: this.deps.attemptStore, logger: this.deps.logger },
+      });
+      const configRows = this.deps.issueConfigStore.loadAll();
+      for (const row of configRows) {
+        if (row.model !== null) {
+          this._state.issueModelOverrides.set(row.identifier, {
+            model: row.model,
+            reasoningEffort: (row.reasoningEffort as ReasoningEffort) ?? undefined,
+          });
+        }
+        if (row.templateId !== null) {
+          this._state.issueTemplateOverrides.set(row.identifier, row.templateId);
+        }
       }
-      if (row.templateId !== null) {
-        this._state.issueTemplateOverrides.set(row.identifier, row.templateId);
+      if (configRows.length > 0) {
+        this.markStateDirty();
       }
-    }
-    if (configRows.length > 0) {
+      this.scheduleTick(0);
+    } catch (error) {
+      // Startup failed partway through: roll back so no half-started instance
+      // is left with the watchdog running and running=true.
+      this.watchdog.stop();
+      if (this.nextTickTimer) {
+        clearTimeout(this.nextTickTimer);
+        this.nextTickTimer = null;
+      }
+      for (const retry of this._state.retryEntries.values()) {
+        if (retry.timer) clearTimeout(retry.timer);
+      }
+      this._state.retryEntries.clear();
+      this._state.running = false;
       this.markStateDirty();
+      this.deps.observability?.getComponent("orchestrator").setHealth({
+        surface: "orchestrator",
+        status: "error",
+        reason: "orchestrator startup failed",
+      });
+      throw error;
     }
-    this.scheduleTick(0);
   }
 
   async stop(): Promise<void> {
@@ -179,7 +206,26 @@ export class Orchestrator implements OrchestratorPort {
     }
     const workers = [...this._state.runningEntries.values()];
     for (const worker of workers) worker.abortController.abort("shutdown");
-    await Promise.allSettled(workers.map((w) => w.promise));
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    const timedOut = Symbol("shutdown-timeout");
+    const timeoutPromise = new Promise<typeof timedOut>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve(timedOut), SHUTDOWN_TIMEOUT_MS);
+    });
+    try {
+      const settled = Promise.allSettled(workers.map((w) => w.promise)).then(() => "settled" as const);
+      const outcome = await Promise.race([settled, timeoutPromise]);
+      if (outcome === timedOut) {
+        const stuck = workers.filter((w) => this._state.runningEntries.has(w.issue.id)).map((w) => w.issue.identifier);
+        this.deps.logger.warn(
+          { stuckWorkers: stuck, timeoutMs: SHUTDOWN_TIMEOUT_MS },
+          "shutdown timed out waiting for workers; force-cleaning remaining entries",
+        );
+        this._state.runningEntries.clear();
+        this.markStateDirty();
+      }
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
   }
 
   async executeCommand(command: RefreshCommand): Promise<RefreshCommandResult>;
