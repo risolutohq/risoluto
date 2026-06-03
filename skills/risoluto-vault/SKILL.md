@@ -5,7 +5,7 @@ description: 'Configure the `research/` submodule as a scoped Obsidian vault for
 
 # risoluto-vault
 
-Scope-aware Obsidian vault configurator for the `research/` submodule. Phase 1.2 of the planning-pipeline roadmap.
+Scope-aware Obsidian vault configurator for the `research/` submodule. Setup stage of the pipeline (docs/research-to-shipping-pipeline.md).
 
 ## What this skill produces
 
@@ -198,7 +198,7 @@ The `dataview/*` files land in `research/views/` (renamed conceptually, byte-ide
 
 ## Why this skill exists separate from `risoluto-researcher`
 
-The researcher (Phase 1.3) emits files conformant to these templates. If the researcher and the vault config diverge — schema change here, no template bump there — every captured source breaks `pnpm validate:research`. Putting the templates in one skill, owned by the same contract that owns `app.json`'s link discipline, keeps that surface narrow. Bump templates here; the researcher reads the same `research/templates/` folder at runtime.
+The researcher (Stage A1) emits files conformant to these templates. If the researcher and the vault config diverge — schema change here, no template bump there — every captured source breaks `pnpm validate:research`. Putting the templates in one skill, owned by the same contract that owns `app.json`'s link discipline, keeps that surface narrow. Bump templates here, and keep the researcher's `buildTargetBody` / `buildSourceBody` string builders in lockstep — the researcher embeds this schema in self-contained builders rather than reading `research/templates/` at runtime, so the two must be changed together.
 
 ## Updating the canonical set
 

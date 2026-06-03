@@ -8,7 +8,26 @@
  * yt-dlp each emit a different JSON shape, so there is nothing to share there.
  */
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 const SLUGIFY_RE = /[^a-z0-9-]/g;
+
+/**
+ * True when `metaUrl` belongs to the module Node launched as the process entry point —
+ * the run-only-when-invoked-directly guard, robust to symlinked invocation.
+ *
+ * Skills are reached via `.claude/skills/risoluto-researcher/...`, a symlink to the real
+ * `skills/risoluto-researcher/...`. `import.meta.url` resolves that link while
+ * `process.argv[1]` keeps the `.claude/...` path, so a raw `===` compare never matches and
+ * `main()` silently never runs. Resolving argv[1] through `realpathSync` first makes both
+ * sides the canonical path, so the guard fires on either invocation path.
+ * @param {string} metaUrl - the caller's `import.meta.url`
+ * @returns {boolean}
+ */
+export function isMainEntry(metaUrl) {
+  return realpathSync(process.argv[1]) === fileURLToPath(metaUrl);
+}
 
 /**
  * Lowercase, slug-safe: non-`[a-z0-9-]` runs become dashes, edges trimmed.

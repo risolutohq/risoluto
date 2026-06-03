@@ -55,6 +55,10 @@ Launch the `/goal` itself on `claude-opus-4-8`. Discovery `Explore` subagents ru
 
 ## Phase 0 — Preflight (GO/NO-GO) (SPEC §5)
 
+> **Not the `risoluto-preflight` skill.** This Phase 0 is the architecture-loop's own
+> repo/model-auth wiring check. The `/risoluto-preflight` skill is the separate interactive
+> roadblocker interview that gates a PRD-based AFK build — different checks, different trigger.
+
 Run **before any Linear write or code edit**. Block on the first failure — never start the loop on a
 broken precondition.
 

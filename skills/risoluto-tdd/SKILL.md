@@ -1,11 +1,11 @@
 ---
 name: risoluto-tdd
-description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or implies test-driven implementation of a specific Linear ticket in the Risoluto pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref — that may belong to the global tdd skill. Takes a `<ticket-ref>`, fetches the issue + linked PRD, refuses unless upstream blocked-by tickets are Done, works in an isolated git worktree, claims the ticket, runs the red-green-refactor loop from this skill's bundled companion files, then on PR-ready back-comments the ticket, ticks each acceptance criterion it can prove, and prints (never runs) `gh pr create`. Phase 4.2 of `docs/research-to-shipping-pipeline.md`.
+description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of the global tdd skill. Use when Omer says `/risoluto-tdd` or implies test-driven implementation of a specific Linear ticket in the Risoluto pipeline (e.g. "implement ticket RSL-123", "TDD this issue"). Do NOT trigger on bare `/tdd` without a ticket ref — that may belong to the global tdd skill. Takes a `<ticket-ref>`, fetches the issue + linked PRD, refuses unless upstream blocked-by tickets are Done, works in an isolated git worktree, claims the ticket, runs the red-green-refactor loop from this skill's bundled companion files, then on PR-ready back-comments the ticket, ticks each acceptance criterion it can prove, and prints (never runs) `gh pr create`. Stage 3 of `docs/research-to-shipping-pipeline.md`.
 ---
 
 # risoluto-tdd
 
-Linear-aware TDD for the Risoluto planning pipeline. Phase 4.2. Forked from the generic global `tdd` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the bundled TDD companion files live here.
+Linear-aware TDD for the Risoluto pipeline. Stage 3. Forked from the generic global `tdd` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the bundled TDD companion files live here.
 
 > **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `get_issue`, `save_issue`, `save_comment`, `create_issue_label`, `list_teams`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
 
@@ -20,7 +20,7 @@ Given a `<ticket-ref>` (e.g. `RSL-123`):
 5. Runs the TDD red-green-refactor loop (see [tests.md](tests.md), [mocking.md](mocking.md), [deep-modules.md](deep-modules.md), [interface-design.md](interface-design.md), [refactoring.md](refactoring.md)) guided by the issue's acceptance criteria and the PRD's implementation decisions. Out-of-scope work found mid-implementation is filed as its own Linear issue, not fixed inline.
 6. On PR open:
    - Back-comments the Linear ticket with the PR URL.
-   - Applies the `from:prd-<slug>` label to the PR (so Phase 4.3's post-merge workflow can find it).
+   - Applies the `from:prd-<slug>` label to the PR (so Stage 4's post-merge workflow can find it).
    - Reconciles the issue's acceptance criteria: ticks each box the slice actually proved (citing the test or entry point that closes it) and leaves any deferred or unmet criterion unchecked with a one-line reason.
 
 ## Hard preconditions
@@ -146,7 +146,7 @@ When implementation is complete and all tests pass:
 
 - **Default to the `Ninetech` Linear team without asking.** Only one team exists.
 - **Linear errors are operator concerns.** Surface verbatim, stop, do not retry.
-- **The `from:prd-<slug>` label on the PR is load-bearing.** Phase 4.3's post-merge workflow triggers on it. Always apply it.
+- **The `from:prd-<slug>` label on the PR is load-bearing.** Stage 4's post-merge workflow triggers on it. Always apply it.
 - **Do not skip the blocked-by validation.** The dependency graph exists for a reason — implementing out of order produces integration failures.
 - **The TDD companion files in this directory are authoritative** for test philosophy and patterns. They mirror the generic global `tdd` skill — the TDD philosophy doesn't change, only the Linear integration is added.
 - **PRD Out of Scope is a hard boundary.** If the issue's acceptance criteria seem to require something the PRD explicitly scopes out, surface the conflict to Omer rather than implementing it.
@@ -156,13 +156,13 @@ When implementation is complete and all tests pass:
 - **Acceptance criteria are ticked from proof, not from status.** Step 5.6's PR-open reconciliation is the only place boxes get checked, and every tick must cite the test or entry point that closes it. Status never auto-ticks a box: a `Done` issue with an unchecked box is the intended signal that the slice deliberately deferred that criterion, not a bookkeeping miss. This closes the gap where a whole goal reaches `Done` with every acceptance box still empty because no step ever wrote them back.
 - **Filed discoveries vs. the Out-of-Scope boundary.** Incidental finds become `discovered` issues (Step 4.5); things the PRD deliberately excludes are surfaced to Omer, not filed.
 - **Hand off to Stage 3.5 before the PR opens.** After this skill prints `gh pr create`, the operator may run `/risoluto-pre-pr` — the advisory review/cleanup pass (`/code-review` → `/simplify` → mandatory `/v1-check`) — on the branch before opening the PR. It is advisory and writes no Linear state, so the label, back-comment, and acceptance-criteria reconciliation in Step 5 remain this skill's job after the PR exists.
-- **Cross-model acceptance check before the PR.** Step 5.6 ticks boxes with the _same_ model that wrote the code — the blind spot that shipped NIN-219/220. Run `/risoluto-verify-acceptance <ticket-ref>` (a different model checks every acceptance criterion against the diff + tests) before printing `gh pr create`; treat any `NOT_MET` as a blocker. Recommended, not gating — but the recommended default for any slice headed into an AFK merge.
+- **Cross-model acceptance check before merge.** Step 5.6 ticks boxes with the _same_ model that wrote the code — the blind spot that shipped NIN-219/220. Run `/risoluto-verify-acceptance <ticket-ref>` (a different model checks every acceptance criterion against the diff + tests) as Stage 3.6 — after the advisory `/risoluto-pre-pr` pass (Stage 3.5) and before the slice is merged; treat any `NOT_MET` as a blocker. Recommended, not gating — but the recommended default for any slice headed into an AFK merge.
 
 ## Companion files
 
-- `docs/research-to-shipping-pipeline.md` — Phase 4.2 spec
+- `docs/research-to-shipping-pipeline.md` — Stage 3 spec
 - the generic global `tdd` skill — the tracker-agnostic upstream this forks from (kept generic; never edited here)
-- `skills/risoluto-to-issues/` — Phase 4.1; creates the Linear issues this skill implements
-- `skills/risoluto-to-prd/` — Phase 3.2; produces the PRD this skill references
+- `skills/risoluto-to-issues/` — Stage 2; creates the Linear issues this skill implements
+- `skills/risoluto-to-prd/` — Stage 1; produces the PRD this skill references
 - `skills/risoluto-verify-acceptance/` — recommended cross-model acceptance check before `gh pr create` (a different model verifies each criterion; `NOT_MET` blocks)
-- `.github/workflows/post-merge.yml` — Phase 4.3; triggers on the `from:prd-*` label this skill applies
+- `.github/workflows/post-merge.yml` — Stage 4; triggers on the `from:prd-*` label this skill applies

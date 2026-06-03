@@ -32,7 +32,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { slugify, classifyDiscovery, suggestSlug } from "./capture-lib.mjs";
+import { slugify, classifyDiscovery, suggestSlug, isMainEntry } from "./capture-lib.mjs";
 
 // Re-exported so this script's fixture tests keep a stable import surface.
 export { slugify, classifyDiscovery, suggestSlug };
@@ -241,7 +241,7 @@ function checkPreconditions(args) {
     fail("research/ submodule is not initialised — run `git submodule update --init research`");
   }
   if (!existsSync(path.join(RESEARCH_DIR, ".schemas"))) {
-    fail("research/.schemas/ missing — Phase 1.1 schemas are not present");
+    fail("research/.schemas/ missing — frontmatter schemas are not present");
   }
   if (!args.post && !args.fromJson) fail("usage: reddit-capture.mjs --post <url-or-id>");
   if (!args.fromJson) {
@@ -378,6 +378,6 @@ function main() {
   if (!args.dryRun) console.error("reddit-capture: run `pnpm validate:research` to verify the corpus.");
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMainEntry(import.meta.url)) {
   main();
 }

@@ -2,7 +2,7 @@
 /**
  * risoluto-to-prd: print the context bundle + mode (create | sync).
  *
- * Phase 3.2 of docs/research-to-shipping-pipeline.md. Read-only.
+ * Stage 1 of docs/research-to-shipping-pipeline.md. Read-only.
  * Reads the roadmap row for <slug> and decides mode:
  *   - docs/prds/<slug>.md does NOT exist  → mode: "create"
  *   - docs/prds/<slug>.md exists          → mode: "sync"

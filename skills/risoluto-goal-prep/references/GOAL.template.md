@@ -19,7 +19,7 @@ answer prints the exact `gh pr create` command without running it. Code changes 
 <context>
 Start with the minimum evidence needed to begin: AGENTS.md, {{PRD_PATH}}, {{GOAL_DIR}}WAVES.md,
 {{GOAL_DIR}}CONTROL.md,
-docs/product-spine.md, docs/technical-spine.md, and docs/research-to-shipping-pipeline.md Phase 4.
+docs/product-spine.md, docs/technical-spine.md, and docs/research-to-shipping-pipeline.md (the AFK conductor).
 Read Linear issue details on demand from {{LINEAR_PROJECT_URL}}. Repo root: {{REPO_ROOT}}.
 
 Context budget: before coding a wave, read its WAVES.md section and only the PRD sections that constrain it:

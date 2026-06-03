@@ -2,7 +2,7 @@
 /**
  * risoluto-researcher: capture a URL (+ optional paste) into `research/targets/<slug>/`.
  *
- * Phase 1.3 of docs/research-to-shipping-pipeline.md. Creates folder-shaped target
+ * Stage A1 of docs/research-to-shipping-pipeline.md. Creates folder-shaped target
  * READMEs, source files with pipeline-valid frontmatter, and regenerates
  * `research/INDEX.md` on every run. Idempotent per source — re-runs update
  * derived fields without clobbering operator-owned prose sections.
@@ -375,7 +375,7 @@ async function main() {
     fail("research/ submodule is not initialised — run `git submodule update --init research`");
   }
   if (!existsSync(path.join(RESEARCH_DIR, ".schemas"))) {
-    fail("research/.schemas/ missing — Phase 1.1 schemas are not present");
+    fail("research/.schemas/ missing — frontmatter schemas are not present");
   }
 
   const capturedAt = todayYMD();

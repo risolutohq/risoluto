@@ -64,8 +64,9 @@ worktree — the cascade creates `integration/<slug>` and the wave/issue branche
 ### Step 0 — Require a fresh package (this runner does not render)
 
 Rendering belongs to `/risoluto-goal-prep` alone. This runner **consumes** the package; it never renders it,
-because a re-render (`render.mjs --force`) wipes `PLAN.md` / `ATTEMPTS.md` / `NOTES.md` and would destroy the
-conductor's resume state mid-run. So:
+because a re-render with `render.mjs --reset` wipes `PLAN.md` / `ATTEMPTS.md` / `NOTES.md` and would destroy the
+conductor's resume state mid-run. (`--force` regenerates the derived artifacts but **preserves** those resume
+files; `--reset` is the destructive one.) So:
 
 1. If `~/.risoluto/goals/<slug>/GOAL.md` or `WAVES.md` is missing → **stop** and tell the operator to run
    `/risoluto-goal-prep <slug>` first.
@@ -164,7 +165,7 @@ the integration branch + final commit, the printed `gh pr create` command, and a
 ## Companion Files
 
 - `references/conductor.workflow.mjs` — the bundled `Workflow` script this skill launches.
-- `skills/risoluto-goal-prep/` — the generator that produces the package (Phase 4.0).
-- `skills/risoluto-review-handoff/` — the different-model end-review (Phase 4.4).
+- `skills/risoluto-goal-prep/` — the generator that produces the package (the AFK conductor generator).
+- `skills/risoluto-review-handoff/` — the different-model end-review (the AFK end-review).
 - `skills/risoluto-tdd/` — the per-issue red-green-refactor method the build agents use.
 - `docs/research-to-shipping-pipeline.md` — the pipeline this runs the back-half of.

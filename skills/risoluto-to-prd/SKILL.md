@@ -5,7 +5,7 @@ description: 'Risoluto-repo PRD skill; invoke as /risoluto-to-prd, not the gener
 
 # risoluto-to-prd
 
-Roadmap-row-to-PRD-to-Linear sharpener for the Risoluto planning pipeline. Phase 3.2 of the planning-pipeline roadmap. **Fork of `~/.claude/skills/to-prd/`** — keep the global skill generic, never edit it. Linear-specific behaviour and the docs/prds/ layout live here.
+Roadmap-row-to-PRD-to-Linear sharpener for the Risoluto planning pipeline. Stage 1 of the pipeline. **Fork of `~/.claude/skills/to-prd/`** — keep the global skill generic, never edit it. Linear-specific behaviour and the docs/prds/ layout live here.
 
 ## What this skill produces
 
@@ -172,7 +172,7 @@ The script bumps `synced_at` in `docs/prds/<slug>.md`'s frontmatter (body untouc
 
 ## PRD body template
 
-The PRD body (everything below frontmatter) follows this structure. Use the **exact** section headings — Phase 3.3's drift hook does a literal diff against the Linear Project content.
+The PRD body (everything below frontmatter) follows this structure. Use the **exact** section headings — Stage 1.3's drift hook (`pnpm prd:drift-check`) does a literal diff against the Linear Project content.
 
 ```markdown
 ## Problem Statement
@@ -226,14 +226,14 @@ shape, not file path.]
 - **Linear API errors are operator concerns, not skill bugs.** If Linear GraphQL returns an auth or provider error, surface it verbatim to Omer and stop.
 - **The PRD body in git is canon.** Linear's `content` is a generated mirror. If Omer asks "is the Linear edit kept or the git edit?", the answer is always git.
 - **`pipeline/<slug>-prd` branch namespace** is reserved for this skill. If it already exists locally on a re-run of CREATE, the write script refuses — delete the stale branch first.
-- **The skill IS the sync path.** There is no `pnpm prd:reconcile` for the git→Linear direction — that's this skill in SYNC mode. Phase 3.3 adds `pnpm prd:reconcile` for the other direction (adopt the Linear edit into git).
+- **The skill IS the sync path.** There is no `pnpm prd:reconcile` for the git→Linear direction — that's this skill in SYNC mode. Stage 1.3 adds `pnpm prd:reconcile` for the other direction (adopt the Linear edit into git).
 - **Idempotency:** re-running CREATE mode when `docs/prds/<slug>.md` already exists is an error. The write script refuses; tell Omer to use SYNC mode.
 - **Contract-first, behavioural acceptance.** Every User Story must imply a _verifiable behaviour_ — a falsifiable assertion a test could check ("a run that fails at step 3 replays from 3, not 0"), not an adjective ("improve reliability"). `/risoluto-to-issues` turns these into the red-test acceptance criteria per slice, so a story with no nameable behaviour produces an un-runnable ticket. Do not restate the global gate (build / lint / test / typecheck / coverage) — every merge enforces it. If the roadmap row's intent is too fuzzy to state a verifiable behaviour, sharpen it before writing the PRD.
 - **Skills propose; the founder disposes.** This skill only touches rows the founder has already promoted to `next`. It does not reorder, create, or delete roadmap rows.
 
 ## Companion files
 
-- `docs/research-to-shipping-pipeline.md` — Phase 3.2 spec and the broader pipeline.
+- `docs/research-to-shipping-pipeline.md` — Stage 1 spec and the broader pipeline.
 - `docs/roadmap.md` — the single plan surface; the slug here is the join key for everything.
 - `scripts/roadmap.mjs` — shared helper for roadmap table read/edit; always import it, never reimplement.
 - `~/.claude/skills/to-prd/` — the generic upstream skill this forks from. Do not edit it.

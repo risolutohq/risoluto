@@ -42,7 +42,7 @@ Ingest is always full-corpus: every run reads every `research/targets/**/README.
 node skills/risoluto-ingest/scripts/ingest.mjs
 ```
 
-The script (`ingest.mjs`) is built in Phase 2. Its intended behavior is described below under [Engine behavior](#engine-behavior). It is non-interactive and writes directly; no `--dry-run` gate is needed because appended roadmap rows are at status `idea` and require founder action before they can advance.
+The script (`ingest.mjs`) is the Mode B engine (Stage B1). Its intended behavior is described below under [Engine behavior](#engine-behavior). It is non-interactive and writes directly; no `--dry-run` gate is needed because appended roadmap rows are at status `idea` and require founder action before they can advance.
 
 ### Step 2 — Review wiki output
 

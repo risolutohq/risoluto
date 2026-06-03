@@ -34,13 +34,18 @@ Risoluto's value to an operator running agents AFK reduces to **five jobs**. Eve
 candidate is held against this lens: name which job it deepens. A candidate that maps to none of
 these is a shiny object, not a roadmap item — the mapping failure is itself the signal to drop it.
 
-| Job                            | What it means for an AFK operator                                |
-| ------------------------------ | ---------------------------------------------------------------- |
-| **Observability & trust**      | Knowing what the agents did while away, without having to watch. |
-| **Failure recovery**           | Detecting, isolating, and resuming after a run or role fails.    |
-| **Cost control**               | Bounding token, compute, and time spend on unattended runs.      |
-| **Coordination & parallelism** | Many agents / runs progressing without colliding.                |
-| **Review & handoff on return** | Surfacing exactly what needs the operator when they come back.   |
+| Job                            | Slug                       | What it means for an AFK operator                                |
+| ------------------------------ | -------------------------- | ---------------------------------------------------------------- |
+| **Observability & trust**      | `observability-trust`      | Knowing what the agents did while away, without having to watch. |
+| **Failure recovery**           | `failure-recovery`         | Detecting, isolating, and resuming after a run or role fails.    |
+| **Cost control**               | `cost-control`             | Bounding token, compute, and time spend on unattended runs.      |
+| **Coordination & parallelism** | `coordination-parallelism` | Many agents / runs progressing without colliding.                |
+| **Review & handoff on return** | `review-handoff`           | Surfacing exactly what needs the operator when they come back.   |
+
+The **`Slug`** column is canonical: it is the machine identifier the research skills gate on — the
+researcher tags each candidate `[job:<slug>]`, grill's Gate 1 admits only candidates that name one,
+and ingest's `--require-job` enforces it. These five slugs are the closed set; nothing else is a
+valid job. Keep this table in lockstep with any `--job` handling in the skills.
 
 This lens is the **value** axis; the architecture principles below are the **fit** axis. A
 candidate must satisfy both — serve a real job _and_ compose with the primitives — before it earns a

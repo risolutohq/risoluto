@@ -1,11 +1,11 @@
 ---
 name: risoluto-to-issues
-description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill and must not be conflated with this one). Fork of the global skill; this one is Linear-specific. Phase 4.1 of docs/research-to-shipping-pipeline.md.'
+description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<slug>.md` into flat Linear Issues labelled `from:prd-<slug>` in the project''s Linear workspace. Use when Omer says /risoluto-to-issues, "break <slug> into issues", "create tickets from the <slug> PRD", or any variation that implies turning a Risoluto PRD into Linear Issues. Primary trigger is /risoluto-to-issues (not /to-issues — that is the generic global skill and must not be conflated with this one). Fork of the global skill; this one is Linear-specific. Stage 2 of docs/research-to-shipping-pipeline.md.'
 ---
 
 # risoluto-to-issues
 
-PRD-to-Linear-Issues breaker for the Risoluto planning pipeline. Phase 4.1 of the planning-pipeline roadmap. Forked from the generic global `to-issues` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the flat-issue-with-blocked-by layout live here.
+PRD-to-Linear-Issues breaker for the Risoluto planning pipeline. Stage 2 of the pipeline. Forked from the generic global `to-issues` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the flat-issue-with-blocked-by layout live here.
 
 > **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `list_issues`, `save_issue`, `list_issue_labels`, `create_issue_label`, `save_milestone`, native attachment/link operation, `list_teams`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
 
@@ -179,7 +179,7 @@ PRD: [docs/prds/<slug>.md](https://github.com/risolutohq/risoluto/blob/<default-
 
 - **Default to the `Ninetech` Linear team without asking.** Only one team exists.
 - **Linear errors are operator concerns.** Surface verbatim, stop, do not retry.
-- **The `from:prd-<slug>` label is load-bearing.** Phase 4.2's TDD skill uses it to find the linked PRD, and Phase 4.3's post-merge workflow uses it to trigger automation. Always apply it.
+- **The `from:prd-<slug>` label is load-bearing.** Stage 3's TDD skill uses it to find the linked PRD, and Stage 4's post-merge workflow uses it to trigger automation. Always apply it.
 - **`bundle:<category>` is derived from the PRD/roadmap**, not from a deleted backlog file. The preload script checks for an explicit `**Category:**` line in the PRD body first; if absent it infers from the first word of the roadmap Item cell. If neither yields a value, omit the `bundle:` label and note it to Omer.
 - **Acceptance criteria are the red-test spec — gate on it.** Each criterion must be a falsifiable behavioural assertion the future `/risoluto-tdd` run can turn into a failing test (e.g. "a Workflow Run failing at step 3 replays from 3, not 0"). **Refuse to emit any issue that cannot name at least one such assertion** — a slice with no falsifiable behaviour is not ready to start; sharpen it with Omer first. Do **not** restate the global gate (build / lint / test / typecheck / coverage) as acceptance — every merge enforces it already, so it is noise. The failing test is the definition of done; there is no separate DoD field.
 - **Non-deterministic slice extraction is intentional.** The operator reviews and approves — the skill doesn't claim to produce the "correct" graph, just a reasonable starting point.
@@ -193,7 +193,7 @@ PRD: [docs/prds/<slug>.md](https://github.com/risolutohq/risoluto/blob/<default-
 
 ## Companion files
 
-- `docs/research-to-shipping-pipeline.md` — Phase 4.1 spec
+- `docs/research-to-shipping-pipeline.md` — Stage 2 spec
 - the generic global `to-issues` skill — the tracker-agnostic upstream this forks from
-- `skills/risoluto-to-prd/` — Phase 3.2; produces the PRD this skill consumes
-- `skills/risoluto-tdd/` — Phase 4.2; picks up individual issues created by this skill
+- `skills/risoluto-to-prd/` — Stage 1; produces the PRD this skill consumes
+- `skills/risoluto-tdd/` — Stage 3; picks up individual issues created by this skill

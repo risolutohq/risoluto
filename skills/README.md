@@ -72,3 +72,10 @@ One canonical body per skill, symlinked into both `.claude/skills/` and `.agents
   the submodule — commit and push the submodule **before** the parent records the new pointer.
 - **Skills propose; the founder disposes** (architecture principle #9). The roadmap — not the
   research vault — is the single source of "what's next."
+- **Skills outside this pipeline.** `risoluto-architecture-loop` is a headless, PRD-less
+  architecture-deepening loop — no roadmap row, no PRD, no `from:prd-<slug>` label — so it sits
+  outside the research→shipping funnel and is intentionally not indexed in the tables above. It reuses
+  the shared discipline (integration branch, print-only `gh pr create`, cross-model review) for a
+  different job. Note its internal `Phase 0 — Preflight` is **not** the `risoluto-preflight` skill:
+  the loop's Phase 0 checks repo/model-auth wiring, while `/risoluto-preflight` is the interactive
+  roadblocker interview before an AFK build.

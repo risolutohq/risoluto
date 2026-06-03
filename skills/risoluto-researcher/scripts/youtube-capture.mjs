@@ -32,7 +32,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { slugify, classifyDiscovery, suggestSlug } from "./capture-lib.mjs";
+import { slugify, classifyDiscovery, suggestSlug, isMainEntry } from "./capture-lib.mjs";
 
 export { slugify, classifyDiscovery, suggestSlug };
 
@@ -288,7 +288,7 @@ function checkPreconditions(args) {
     fail("research/ submodule is not initialised — run `git submodule update --init research`");
   }
   if (!existsSync(path.join(RESEARCH_DIR, ".schemas"))) {
-    fail("research/.schemas/ missing — Phase 1.1 schemas are not present");
+    fail("research/.schemas/ missing — frontmatter schemas are not present");
   }
   if (!args.video && !args.fromJson) fail("usage: youtube-capture.mjs --video <url-or-id>");
   if (!args.fromJson) {
@@ -424,9 +424,10 @@ function main() {
   checkPreconditions(args);
 
   const info = loadInfo(args);
-  // YouTube ids are case-sensitive, but research.mjs slugs must be lowercase. Lowercase only
-  // the filename slug; the true-case id stays in the canonical url and every yt-dlp call.
-  const slug = `video-${videoIdFromInput(info.id).toLowerCase()}`;
+  // YouTube ids are case-sensitive and may contain `_`, but research.mjs slugs must match
+  // /^[a-z0-9][a-z0-9-]*$/. slugify lowercases and dashes any offending char; the true-case
+  // id stays in the canonical url and every yt-dlp call.
+  const slug = `video-${slugify(videoIdFromInput(info.id))}`;
   const targetSlug = args.targetSlug || slugify(info.channel || info.uploader || info.channel_id) || "youtube";
 
   const sourcePath = path.join(TARGETS_DIR, targetSlug, "sources", `${slug}.md`);
@@ -453,6 +454,6 @@ function main() {
   if (!args.dryRun) console.error("youtube-capture: run `pnpm validate:research` to verify the corpus.");
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMainEntry(import.meta.url)) {
   main();
 }

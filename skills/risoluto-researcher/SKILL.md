@@ -5,7 +5,7 @@ description: 'Mode A of the Risoluto research-to-shipping pipeline. Use when Ome
 
 # risoluto-researcher
 
-Mode A capture + dedup for the Risoluto research vault. Phase 1.3 / Mode A of the planning pipeline (`docs/research-to-shipping-pipeline.md`).
+Mode A capture + dedup for the Risoluto research vault. Stage A1 / Mode A of the pipeline (`docs/research-to-shipping-pipeline.md`).
 
 ## What this skill produces
 
@@ -24,7 +24,7 @@ And regenerates:
 research/INDEX.md                      # flat list of every captured target
 ```
 
-Every file emitted conforms to the frontmatter schemas in `research/.schemas/` (Phase 1.1). The researcher builds its output with self-contained string builders, so it does **not** depend on the vault's Templater templates at runtime — those shape files you create by hand in Obsidian (see the closing note). The researcher never modifies operator-owned sections of target READMEs (see ownership table) — it only writes on first creation and updates derived fields on re-runs.
+Every file emitted conforms to the frontmatter schemas in `research/.schemas/`. The researcher builds its output with self-contained string builders, so it does **not** depend on the vault's Templater templates at runtime — those shape files you create by hand in Obsidian (see the closing note). The researcher never modifies operator-owned sections of target READMEs (see ownership table) — it only writes on first creation and updates derived fields on re-runs.
 
 The target README is the Mode A artifact that feeds the critic: `## Candidate features` surfaces deduped candidates for `/risoluto-grill` triage; `## Leech takeaways` records borrowable patterns independent of feature decisions.
 
@@ -34,11 +34,11 @@ For GitHub repo URLs, the researcher also performs a shallow clone to `/tmp/rese
 
 These three gates are exactly what `research.mjs` enforces — stop and report if any fail:
 
-| Check                        | Command                                           | If it fails                                                              |
-| ---------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------ |
-| Run from repo root           | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                     |
-| `research/` initialised      | `git submodule status research` starts with space | Tell Omer to `git submodule update --init research` or `/init-research`. |
-| `research/.schemas/` present | `test -d research/.schemas`                       | Tell Omer to check that Phase 1.1 schemas are committed and pushed.      |
+| Check                        | Command                                           | If it fails                                                                                  |
+| ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Run from repo root           | `test -f package.json && test -f .gitmodules`     | Tell Omer to `cd` into the `risoluto` checkout root.                                         |
+| `research/` initialised      | `git submodule status research` starts with space | Tell Omer to `git submodule update --init research` or `/init-research`.                     |
+| `research/.schemas/` present | `test -d research/.schemas`                       | Tell Omer to check that the research/.schemas/ frontmatter schemas are committed and pushed. |
 
 These checks are deliberately **not** global gates:
 
@@ -86,6 +86,16 @@ Some source types earn a deep, content-verified capture instead of the shallow S
 | `article`       | [`references/webpage-capture.md`](references/webpage-capture.md) | `browser-harness` (Chrome on the CDP port) |
 | `paper`, `talk` | — (fall back to the Step 2 shallow excerpt for now)              | —                                          |
 
+**How to invoke a deep capture.** Each deep type has its own _wrapper_ script with its own operator-facing flag (below). The wrapper does the fetch + transform, then calls `research.mjs` for you — so for these types you run the **wrapper**, not `research.mjs` directly. (Step 4's `research.mjs --url` is the direct path for the shallow `paper`/`talk` types only; reaching for `--url` on a wrapper is the most common mistake — wrappers take `--video`/`--post`/`--tweet`.) Run from the repo root; the symlinked `.claude/skills/...` path works too.
+
+| `source-type` | Wrapper script                | Operator flag                                            |
+| ------------- | ----------------------------- | -------------------------------------------------------- |
+| `repo`        | `gh` + clone (see ref)        | —                                                        |
+| `x`           | `scripts/x-bookmarks.mjs`     | `--tweet <url>` (single) — or no flag for bulk bookmarks |
+| `reddit`      | `scripts/reddit-capture.mjs`  | `--post <url>`                                           |
+| `video`       | `scripts/youtube-capture.mjs` | `--video <url>`                                          |
+| `article`     | `scripts/webpage-capture.mjs` | `--url <url>`                                            |
+
 - **`repo`** — shallow clone + `gh` metadata + source-tree scan + a registry-reconciled feature inventory (count each registry, report coverage). Verify `gh auth status` exits 0; tell Omer to `gh auth login` if not.
 - **`x`** — twitter-cli capture via `scripts/x-bookmarks.mjs`: a single pasted tweet URL is turnkey (`--tweet <url>`, targets the author's handle), or bulk-import every bookmark (default, targets `x-bookmarks`). Both pull full text, all media, engagement-ranked replies, and a discovery queue of follow-on targets. Verify `twitter --help` works; tell Omer to install + authenticate if not.
 - **`reddit`** — rdt-cli capture via `scripts/reddit-capture.mjs --post <url>`: one thread, captured whole — full comment tree sorted by top, post media, references → discovery queue, written under a `r/<subreddit>` target. Reddit disabled unauthenticated `.json`, so verify `rdt --help` and that `rdt login` has stored cookies. (Bulk modes — `saved`, subreddit top-N — are planned.)
@@ -102,9 +112,9 @@ Read the source content and tag the `ideas` frontmatter array. Ideas are lowerca
 - Patterns worth tracking across multiple targets (think: what would the ingest pass cluster?)
 - Leave empty `[]` if nothing jumps out — the ingest pass will suggest tags later on thin targets
 
-### Step 4 — Run the researcher script
+### Step 4 — Run the researcher script (`research.mjs`)
 
-The agent collects all gathered information and invokes the deterministic script:
+`research.mjs` is the deterministic writer. **The Step 2b wrappers already call it for you** — so invoke it directly only for the shallow types that have no wrapper: `paper`, `talk`, or a plain `article` you are capturing without `webpage-capture.mjs`. Its source flag is `--url` (this is where `--url` belongs — the wrappers take `--video`/`--post`/`--tweet` instead). The agent collects all gathered information and invokes it:
 
 ```bash
 node skills/risoluto-researcher/scripts/research.mjs \
@@ -149,6 +159,35 @@ Read the source body (the captured content from Step 2 / 2b). For each distinct 
 - <Feature name> — <one-line description> [job: <afk-job>] [flag: TBD]
 ```
 
+**Sweep for completeness before you dedup.** First enumerate _every_ distinct feature the source names — one bullet each — before assigning any flag. Dense sources (a long talk, a feature-rich repo, a deep thread) routinely carry 8–15 distinct features; if a 40-minute talk yields only ~5, that is a signal you have collapsed distinct features into one bullet. Resist the collapse: a _code-review_ agent, a _red-team / adversarial_ agent, and a _risk-assessor / CI-shepherd_ agent are three features, not one "review agents" bullet. Treat distinct backend surfaces separately too — e.g. evals-as-a-shared-artifact, a unified observability data-agent, and an end-to-end lead-time signal are each their own candidate.
+
+Over-list here — deduplication (5.2) is where overlaps collapse _against Risoluto's roadmap and spine_, not a reason to under-list at the source; let 5.2 + `/risoluto-grill` do the culling. But a self-check is not enough: the model that drafted the list is anchored on its own framing and will re-bless the same collapse, so an independent reader runs next.
+
+**5.1b — Completeness critic (mandatory before 5.2)**
+
+Concretely, this is the failure that turned a 44-minute talk into 6 bullets and silently dropped its code-review agent, risk-assessor, evals-as-artifact, and observability data-agent. A reader with **fresh context and one adversarial instruction** has no anchor on the first pass's framing, so the omission gets a genuinely independent second look. Run one before deduping; an empty result is a valid pass.
+
+Mirror the `/risoluto-verify-acceptance` idiom — a non-anchored model via `opencode run --pure` (plugins off; the installed `oh-my-opencode-slim` agent prompts are unreliable under this build, so never `--agent`). Pass it the captured source body and your drafted candidate **names only** — withhold the `[job:]`/`[flag:]` tags so they can't bias it:
+
+```bash
+opencode run --pure --model <provider/model> --format json -f <path-to-source-body>.md "$(cat <<'PROMPT'
+You are a completeness critic. The attached file is a captured research source. Below is the list of
+candidate features another analyst already extracted from it. List ONLY distinct user-observable or
+backend-surface features the source EXPLICITLY names that are ABSENT from that list — or that the list
+collapses into one bullet when the source treats them as separate (e.g. a code-review agent, a red-team
+agent, and a risk-assessor are three features, not one). For each, quote the sentence from the source
+that proves it. Do NOT dedup against any roadmap or product — that is a later step. Do NOT rewrite the list.
+Candidate features already extracted:
+<paste your 5.1 bullet names here, one per line>
+Output a JSON array: [{ "feature": "<name>", "citation": "<quote from the source>" }]. Empty array if the list is already complete.
+PROMPT
+)"
+```
+
+`opencode models` lists `provider/model` ids — pick one **different** from the model drafting the candidates (same-model reproduces the same blind spot). If opencode is unavailable, spawn a fresh-context subagent with the same prompt: the point is an independent reader, not a specific tool. If the critic errors, surface it and fix it — **do not skip the gate**.
+
+**Reconcile, then proceed.** For every feature the critic returns, either add it as a new candidate bullet (it then flows through the rest of 5.1 and into 5.2 dedup) or write one line on why it is genuinely the same as an existing bullet. Do not start 5.2 until the critic has run and every returned item is either added or dismissed-with-reason. An empty array passes the gate — note that the critic ran clean.
+
 **5.2 — Deduplicate each candidate**
 
 For each candidate bullet, compare it against:
@@ -179,7 +218,7 @@ Update each bullet's `[flag: TBD]` with the correct flag (and the matched row sl
 
 **5.3 — Fill Leech takeaways**
 
-In `## Leech takeaways`, record what to borrow from this target even if none of its features become roadmap rows — framing, patterns, UX decisions, naming conventions. One bullet per takeaway:
+In `## Leech takeaways`, record what to borrow from this target even if none of its features become roadmap rows — framing, patterns, UX decisions, naming conventions, and reusable narrative one-liners that sharpen Risoluto's own positioning (e.g. "verification is the bottleneck", "delegate tasks, not judgment", "AI is a mirror and an amplifier"). One bullet per takeaway:
 
 ```
 - <pattern or UX decision> — <why it's worth borrowing>
@@ -282,4 +321,4 @@ pnpm validate:research
 
 ## Why this skill is separate from `risoluto-vault`
 
-The vault (Phase 1.2) configures the container — `.obsidian/`, templates, Dataview views. The researcher (Phase 1.3) fills the container — targets, sources, INDEX.md — and runs the Mode A dedup workflow that surfaces candidates to `/risoluto-grill`. Separating them keeps the vault's idempotent-apply pattern clean (it never writes content files) and lets the researcher iterate on ingestion logic without coupling to the Obsidian config surface. The vault owns `research/templates/` canonically (apply.mjs deploys them); the researcher does NOT read them at runtime — buildTargetBody and buildSourceBody are self-contained string builders.
+The vault (Setup) configures the container — `.obsidian/`, templates, Dataview views. The researcher (Stage A1) fills the container — targets, sources, INDEX.md — and runs the Mode A dedup workflow that surfaces candidates to `/risoluto-grill`. Separating them keeps the vault's idempotent-apply pattern clean (it never writes content files) and lets the researcher iterate on ingestion logic without coupling to the Obsidian config surface. The vault owns `research/templates/` canonically (apply.mjs deploys them); the researcher does NOT read them at runtime — buildTargetBody and buildSourceBody are self-contained string builders.

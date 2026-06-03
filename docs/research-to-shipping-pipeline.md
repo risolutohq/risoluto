@@ -8,66 +8,143 @@
 >
 > - decisions [#29](./decisions.md) (the pipeline) and [#30](./decisions.md) (the roadmap-centric model).
 
+## At a glance
+
+```
+        ┌──────────────────────────────────────────────────────────┐
+        │                      RESEARCH INTAKE                       │
+        │                                                            │
+        │   Mode A (per-source)          Mode B (whole corpus)       │
+        │   researcher → dedup → grill   ingest                      │
+        └───────────────────────┬──────────────────┬────────────────┘
+                                 │ idea/next        │ idea
+                                 ▼                  ▼
+                       ╔════════════════════════════════════╗
+                       ║   docs/roadmap.md   (FOUNDER-OWNED) ║
+                       ║   skills propose · founder disposes ║
+                       ╚════════════════════╤═══════════════╝
+                                            │ founder promotes a `next` row
+                                            ▼
+        ┌──────────────────────────────────────────────────────────┐
+        │                      PLANNING / BUILD                      │
+        │                                                            │
+        │   to-prd → to-issues → [preflight] → tdd → pre-pr →        │
+        │   verify-acceptance → MERGE → post-merge CI → sync         │
+        └───────────────────────┬────────────────────────────────────┘
+                                 │
+                                 ▼
+                          shipped on master
+                          Linear mirrors git
+
+   ── parallel/optional ────────────────────────────────────────────
+   next-bundle .......... read-only scheduler (groups ready issues)
+   AFK conductor ........ preflight→goal-prep→goal-run→review-handoff→sync
+   architecture-loop .... headless, PRD-less deepening (outside funnel)
+```
+
 ## Mental model
 
 ```
- MODE A — Targeted adoption          MODE B — Sense-making / innovation
-┌──────────────────────────┐        ┌──────────────────────────────────┐
-│  /risoluto-researcher    │        │  /risoluto-ingest                │
-│  research/targets/<slug> │        │  reads ALL research/targets/     │
-│  Candidate features      │        │  builds research/wiki/ (wikilinks│
-│  + Leech takeaways       │        │  targets together)               │
-│        │                 │        │  gap-grounded cite-or-drop ideas │
-│        ▼ dedup           │        │        │                         │
-│  skip|merge|supersede|new│        │        ▼ gap-grounded ideas only │
-│        │ (new only)      │        └────────┼─────────────────────────┘
-│        ▼                 │                 │
-│  /risoluto-grill         │                 │
-│  (critic loop)           │                 │
-│  founder decides in/out  │                 │
-└──────────┬───────────────┘                 │
-           │  roadmap idea rows              │  roadmap idea rows
-           └──────────────┬──────────────────┘
-                          ▼
-              ┌───────────────────────┐
-              │    docs/roadmap.md    │  ← FOUNDER-OWNED: ranks, promotes, kills
-              │    one ordered list   │    Skills only APPEND (status: idea)
-              │    slug is join key   │
-              └───────────┬───────────┘
-                          │  next row
-                          ▼  SHARED BACK-HALF — proven engine
-              ┌───────────────────────┐
-              │    /risoluto-to-prd   │  PRD in git + Linear project
-              └───────────┬───────────┘
-                          │  git is canon; drift hook blocks divergence
-                          ▼
-              ┌───────────────────────┐
-              │  /risoluto-to-issues  │  flat Linear issues, blocked-by edges
-              └───────────┬───────────┘
-                          ▼
-              ┌───────────────────────┐
-              │   /risoluto-tdd       │  red-green-refactor; prints gh pr create
-              └───────────┬───────────┘
-                          ▼  ADVISORY (not blocking)
-              ┌───────────────────────┐
-              │  /risoluto-pre-pr     │  wraps /code-review + /simplify,
-              │                       │  then a mandatory /v1-check;
-              └───────────┬───────────┘  founder applies selectively
-                          ▼
-                        merge
-                          │
-                          ▼  RECORD (post-merge automation, only on merges to master)
-              back-comment Linear issues (idempotent, marker-deduped)
-              flip PRD status → shipped; flip roadmap row → shipped
-              print "run /risoluto-features" (manual refresh — CI does NOT auto-refresh)
-              reconcile issue status/ACs via /risoluto-sync (CI does NOT flip issue status)
+RESEARCH ─────────────────────────────────────────────────────────────────────
+
+  MODE A (one source at a time)
+  ┌─────────────┐   capture     ┌──────────┐   skip|merge|     ┌──────────┐
+  │ researcher  │──────────────▶│  dedup   │──supersede|new───▶│  grill   │
+  │  (Stage A1) │  research/     │ vs spine │                   │ (Stage A3)│
+  └─────────────┘  targets/<s>/  └──────────┘                   └────┬─────┘
+        │ tags [job:<slug>]                                          │
+        │ writes research/ submodule (commit submodule→parent)       │ Gate 1:
+        ▼                                                            │ cite-or-drop,
+  research/INDEX.md regenerated                                      │ AFK job slug
+                                                                     ▼
+  MODE B (whole corpus)                                       append row:
+  ┌─────────────┐  dots+gaps   ┌────────────────┐             idea (or next,
+  │   ingest    │─────────────▶│ research/wiki/  │             interactive
+  │ (Stage B1)  │  --require-  │ + idea rows     │             grill only)
+  └─────────────┘    job       └────────────────┘                  │
+        │ inline dedup (status: dropped, fold)                      │
+        └───────────────────────────────────┬──────────────────────┘
+                                             ▼
+                          ╔══════════════════════════════════════╗
+                          ║          docs/roadmap.md              ║
+                          ║   FOUNDER-OWNED · slug join key:      ║
+                          ║   <!-- slug:<slug> -->                ║
+                          ╚══════════════════╤═══════════════════╝
+                                             │ founder marks a row `next`
+PLANNING / BUILD ───────────────────────────┼─────────────────────────────────
+                                             ▼
+  Stage 1     ┌──────────┐   docs/prds/<slug>.md  +  Linear Project (mirror)
+  to-prd      │  to-prd  │──────────────────────────────────────────────┐
+              └────┬─────┘   pushes pipeline/<slug>-prd · PRINTS gh pr    │
+                   │ Stage 1.3 drift gate: pnpm prd:drift-check           │
+                   ▼                                                      │
+  Stage 2     ┌──────────┐   flat Linear issues, label from:prd-<slug>    │
+  to-issues   │ to-issues│   tracer-bullet vertical slices · ACs =        │
+              └────┬─────┘   falsifiable assertions                       │
+                   │                                                      │
+  Stage 2.5   ┌──────────┐   GO / NO-GO roadblocker interview             │
+  preflight   │ preflight│   (env, ACs, blocked-by, test infra, scope)    │
+              └────┬─────┘                                                │
+                   ▼                                                      │
+  Stage 3     ┌──────────┐   isolated git worktree · red-green-refactor   │
+  tdd         │   tdd    │   back-comments issue · ticks ACs from proof   │
+              └────┬─────┘   PRINTS gh pr create (never runs)             │
+                   ▼                                                      │
+  Stage 3.5   ┌──────────┐   /code-review → /simplify → MANDATORY         │
+  pre-pr      │  pre-pr  │   /v1-check · advisory · writes no tracker     │
+              └────┬─────┘                                                │
+                   ▼                                                      │
+  Stage 3.6   ┌──────────┐   cross-model (opencode), different model than │
+  verify-     │  verify  │   implementer · per-AC MET/NOT_MET/UNVERIFIABLE│
+  acceptance  └────┬─────┘   any NOT_MET → BLOCK                          │
+                   ▼                                                      │
+              ┌──────────┐                                               │
+              │  MERGE   │◀───────────────────────────────────────────────┘
+              └────┬─────┘   merger writes Done from merged branch + proof
+                   ▼
+  Stage 4     ┌──────────┐   .github/workflows/post-merge.yml fires on
+  post-merge  │ post-CI  │   GitHub PR label from:prd-<slug>
+              └────┬─────┘
+                   ▼
+  Stage 4.5   ┌──────────┐   reconcile Linear→git reality · proof-only
+  sync        │   sync   │   flips merged→Done · ticks ACs · reports drift
+              └────┬─────┘   never invents Done
+                   ▼
+  Stage 5      record / shipped on master   (git canon · Linear mirrors)
+
+
+PARALLEL / OUTSIDE THE LINEAR FUNNEL ──────────────────────────────────────────
+
+  next-bundle        read-only · scans open ready issues (blocked-by Done)
+                     across all PRDs · predicts code-locality · proposes
+                     1–3 conflict-free worktree bundles · creates nothing
+
+  AFK CONDUCTOR      preflight ─▶ goal-prep ─▶ goal-run ─▶ review-handoff ─▶ sync
+  (background build)            (renders        (Claude     (different-model
+                                ~/.risoluto/     Workflow    code review →
+                                goals/<slug>/    cascade)    REVIEW.md)
+                                7 files)
+                     branch topology:
+                       integration/<slug>
+                         └─ wave/<n>-<slug>
+                              └─ per-issue worktrees ─▶ wave ─▶ integration
+                     never branches off master · PRINTS gh pr create
+
+  architecture-loop  headless · PRD-less · self-discovers shallow→deep
+                     candidates · builds via tdd method in worktrees ·
+                     cross-model gate · merges into integration/
+                     architecture-loop · intentionally unindexed
+                     (its internal "Phase 0 Preflight" ≠ risoluto-preflight)
 ```
 
 ### Principle: Skills propose; the founder disposes
 
 The roadmap is **founder-owned**. Skills (`/risoluto-ingest`, `/risoluto-grill`) may append proposed
-rows at `status: idea` — they never reorder, promote, or delete rows. A row only advances when the
-founder edits it.
+rows but never reorder, promote past `next`, or delete rows. The default append status is `idea`:
+unattended runs (`/risoluto-ingest`) always append at `idea`. The one exception is an interactive
+`/risoluto-grill` session, where the founder is in the loop and may direct a kept candidate straight
+to `next` — that is the founder disposing in real time, not the skill self-promoting. Anything beyond
+`next` (ranking, building, shipped) is always a founder edit.
 
 ## Surfaces
 
@@ -118,6 +195,12 @@ Run when studying a specific source: a repo, an X thread, a blog post, a paper.
    | `merge`     | Overlaps an existing `idea`/`next` row                            | Fold the takeaway into that row; no new row.    |
    | `supersede` | A better/newer version of an existing row                         | Mark the old row `superseded`; add the new row. |
    | `new`       | No overlap                                                        | Proceeds to critic-grill.                       |
+
+   > **Vocabulary note.** These four flags (`skip`/`merge`/`supersede`/`new`) are **Mode A only**.
+   > Mode B (`/risoluto-ingest`) dedups inline against the whole corpus and expresses outcomes through
+   > roadmap-row status (e.g. an already-shipped overlap is simply not appended, or appended then
+   > `dropped`) rather than these flags. Same intent, mode-specific grammar — don't expect the flag
+   > words in Mode B output.
 
 3. **Critic-grill** (`/risoluto-grill`) — each surviving `new` candidate runs an admission loop:
    **two gates, a router, two ordering-only scores** (full logic in the skill):
@@ -226,6 +309,11 @@ The roadmap uses exactly **6 columns**:
 - **`Item`** — short title. A row that has entered the pipeline carries its slug as a trailing HTML
   comment: `Title <!-- slug:<slug> -->`. The slug is the join key (roadmap row ↔ PRD filename ↔
   `prd.slug` frontmatter ↔ `from:prd-<slug>` Linear label).
+  - **`from:prd-<slug>` lives in two trackers.** Stage 2 (`/risoluto-to-issues`) creates it as a
+    **Linear issue label**; Stage 3 (`/risoluto-tdd`) applies the same string as a **GitHub PR label**
+    (`gh pr edit --add-label`) so Stage 4's post-merge workflow can trigger on it. Same spelling, two
+    systems — query Linear for the issue label, query GitHub for the PR label; don't expect one to see
+    the other.
 - **`Why now`** — the reason to do it now. Empty → the row cannot leave `idea`. For a `dropped` row
   this cell carries the kill reason (there is no separate Notes column).
 - **`Size`** — `S` / `M` / `L` (rough effort). Empty → the row cannot leave `idea`.
@@ -333,10 +421,11 @@ gate that clears missing env/secrets, non-falsifiable ACs, unresolved blocked-by
 scope conflicts (incl. `discovered` issues orphaned from `WAVES.md`). `goal-prep`'s "runner readiness" is a
 status print, not this gate.
 
-Phase 4.0 starts after `/risoluto-to-issues <slug>` has created Linear issues and build-wave milestones.
+The AFK conductor starts after `/risoluto-to-issues <slug>` has created Linear issues and build-wave milestones.
 `/risoluto-goal-prep <slug>` renders a runner-agnostic launch package into `~/.risoluto/goals/<slug>/` from git + Linear:
 
 - `WAVES.md` freezes Linear milestones as the wave map.
+- `SPEC.md` is the rendered PRD spec the cascade builds against.
 - `GOAL.md` is the runner-neutral conductor prompt (goal-forge block shape) for the deterministic cascade.
 - `CONTROL.md`, `PLAN.md`, `ATTEMPTS.md`, and `NOTES.md` are the conductor's process state.
 
@@ -421,9 +510,9 @@ Pipeline skills live in `skills/risoluto-*/` and are symlinked into `.claude/ski
 | `risoluto-verify-acceptance` | Back-half — per-issue cross-model (opencode) acceptance-criteria gate; MET/NOT_MET verdict, distinct from review-handoff.                                                                                                             |
 | `risoluto-next-bundle`       | Back-half scheduler — filters Linear issues to the ready-set + emits conflict-free bundles for parallel worktrees.                                                                                                                    |
 | `risoluto-preflight`         | Back-half gate (before AFK) — interactive roadblocker interview; GO/NO-GO before goal-prep/goal-run.                                                                                                                                  |
-| `risoluto-goal-prep`         | Back-half AFK conductor generator (Phase 4.0) — derives waves from a PRD's Linear milestones; writes a runner-agnostic `/goal` package (Codex or Claude Code) into `~/.risoluto/goals/<slug>/`.                                       |
-| `risoluto-goal-run`          | Back-half AFK conductor runner (Phase 4.0, Claude-only) — drives a goal package as a wave cascade via the Workflow tool: waves sequential, ready issues within a wave built in parallel in isolated worktrees, journaled + resumable. |
-| `risoluto-review-handoff`    | Back-half end-review (Phase 4.4) — a different model reviews `integration/<slug>`; emits `review-handoff.v1` for the `/goal` conductor loop (Codex or Claude Code) to ingest and fix.                                                 |
+| `risoluto-goal-prep`         | Back-half AFK conductor generator — derives waves from a PRD's Linear milestones; writes a runner-agnostic `/goal` package (Codex or Claude Code) into `~/.risoluto/goals/<slug>/`.                                                   |
+| `risoluto-goal-run`          | Back-half AFK conductor runner (Claude-only) — drives a goal package as a wave cascade via the Workflow tool: waves sequential, ready issues within a wave built in parallel in isolated worktrees, journaled + resumable.            |
+| `risoluto-review-handoff`    | Back-half AFK end-review — a different model reviews `integration/<slug>`; emits `review-handoff.v1` for the `/goal` conductor loop (Codex or Claude Code) to ingest and fix.                                                         |
 | `risoluto-sync`              | Back-half memory-layer reconciler — flips merged issues Done + ticks ACs from proof, reports Linear drift. The backstop for missed status flips.                                                                                      |
 | `risoluto-vault`             | Obsidian vault helper; unaffected by pipeline changes.                                                                                                                                                                                |
 
