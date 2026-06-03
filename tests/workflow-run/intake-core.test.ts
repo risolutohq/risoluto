@@ -13,6 +13,7 @@ import {
   type WorkflowRunIntakeRule,
   type WorkflowRunIntakeSource,
 } from "../../src/workflow-run/intake-core.js";
+import { claimExternalMapping } from "../../src/workflow-run/intake-idempotency-store.js";
 
 const tempDirs: string[] = [];
 
@@ -134,6 +135,45 @@ describe("workflow-run intake core", () => {
 
     expect(new Set([first.workflowRun.id, second.workflowRun.id]).size).toBe(1);
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
+  });
+
+  it("waits for a claimed concurrent duplicate Workflow Run to become durable", async () => {
+    const dataDir = await createTempDir();
+    const rules: WorkflowRunIntakeRule[] = [trackerRule({ id: "afk" })];
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "RIS-1: Fix flaky CI",
+      intent: "Repair the deployment workflow.",
+      source: "linear",
+      workflowDefinitionId: "single-operator-afk-coder",
+      workspaceKey: "risoluto",
+      now: () => "2026-05-31T19:00:00.000Z",
+      id: () => "wr_claimed_before_commit",
+    });
+
+    await claimExternalMapping({
+      location: { dataDir },
+      externalObject: { provider: "linear", id: "lin_issue_1", url: "https://linear.example/RIS-1" },
+      workflowRunId: workflowRun.id,
+      ruleId: "afk",
+    });
+    const commitClaimedRun = new Promise<void>((resolve, reject) => {
+      setTimeout(() => {
+        archive.storeWorkflowRun(workflowRun).then(resolve, reject);
+      }, 20);
+    });
+
+    const duplicate = await acceptLinearIssue({
+      dataDir,
+      rules,
+      deliveryId: "delivery-after-claim",
+      id: () => "wr_should_not_be_used",
+    });
+    await commitClaimedRun;
+
+    expect(duplicate.action).toBe("deduplicated");
+    expect(duplicate.workflowRun.id).toBe("wr_claimed_before_commit");
+    await expect(archive.listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
   it("deduplicates an edit that turns labels ambiguous on an already-mapped issue instead of throwing", async () => {

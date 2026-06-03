@@ -77,12 +77,23 @@ describe("handoff.v1", () => {
     expect(markdown).toContain("PR: https://github.com/risolutohq/risoluto/pull/123");
     expect(markdown).toContain("Recommended next action: rerun validation after the fix");
   });
+
+  it("accepts a null budget when no budget policy was injected", () => {
+    const artifact = createHandoffFixture({ workflowRunId: "wr_handoff_unbudgeted", budget: null });
+
+    const parsed = parseWorkflowRunArtifact({ contractId: "handoff.v1", data: artifact });
+    const markdown = renderHandoffMarkdown(artifact);
+
+    expect(parsed).toEqual(artifact);
+    expect(markdown).toContain("budget: unavailable");
+  });
 });
 
 function createHandoffFixture(input: {
   readonly workflowRunId: string;
   readonly outcome?: "blocked" | "done";
   readonly evidencePath?: string;
+  readonly budget?: HandoffArtifact["budget"];
 }): HandoffArtifact {
   const validationPath = "archives/workflow-runs/wr_handoff/artifacts/validation-result.json";
   return {
@@ -93,7 +104,10 @@ function createHandoffFixture(input: {
     summary: "Validation found one remaining failure.",
     recommendedNextAction: "rerun validation after the fix",
     suggestedSkills: ["risoluto-tdd", "v1-check"],
-    budget: { elapsedMs: 120_000, costUsd: 1.25, maxWallClockMs: 7_200_000, maxCostUsd: 10 },
+    budget:
+      input.budget === undefined
+        ? { elapsedMs: 120_000, costUsd: 1.25, maxWallClockMs: 7_200_000, maxCostUsd: 10 }
+        : input.budget,
     validation: {
       status: "failed",
       artifact: { artifactId: "validation", contractId: "validation_result.v1", path: validationPath },

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { setImmediate } from "node:timers/promises";
+import { setTimeout } from "node:timers/promises";
 
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import {
@@ -242,17 +242,17 @@ async function loadClaimedWorkflowRun(
   archive: WorkflowRunArchive,
   workflowRunId: string,
 ): Promise<WorkflowRunStartRecord> {
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  const deadlineMs = Date.now() + 1_000;
+  while (true) {
     try {
       return await archive.loadWorkflowRun(workflowRunId);
     } catch (error) {
-      if (!isErrorCode(error, "ENOENT") || attempt === 5) {
+      if (!isErrorCode(error, "ENOENT") || Date.now() >= deadlineMs) {
         throw error;
       }
-      await setImmediate();
+      await setTimeout(10);
     }
   }
-  throw new TypeError(`claimed Workflow Run was not committed: ${workflowRunId}`);
 }
 
 function nextAttemptNumber(events: readonly { readonly runAttempt?: { readonly attemptNumber?: number } }[]): number {

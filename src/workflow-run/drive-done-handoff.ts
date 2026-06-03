@@ -86,7 +86,7 @@ export async function writeDoneHandoff(
  */
 export function budgetFromPolicy(budget: WorkflowBudgetPolicy | undefined): HandoffArtifact["budget"] {
   if (!budget) {
-    return { elapsedMs: 0, costUsd: 0 };
+    return null;
   }
   return {
     elapsedMs: Math.max(0, budget.nowMs() - budget.startedAtMs),

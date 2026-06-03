@@ -77,7 +77,7 @@ export const handoffArtifactSchema = z
     summary: z.string().min(1),
     recommendedNextAction: z.string().min(1),
     suggestedSkills: z.array(z.string().min(1)).min(1),
-    budget: handoffBudgetSchema,
+    budget: handoffBudgetSchema.nullable(),
     validation: handoffValidationSchema,
     attemptMemory: z.array(handoffAttemptMemorySchema),
     output: handoffOutputSchema,
@@ -118,6 +118,9 @@ export function renderHandoffMarkdown(artifact: HandoffArtifact): string {
 }
 
 function formatBudget(budget: HandoffArtifact["budget"]): string {
+  if (!budget) {
+    return "unavailable";
+  }
   const maxWallClock = budget.maxWallClockMs === undefined ? "unbounded" : `${budget.maxWallClockMs}ms`;
   const maxCost = budget.maxCostUsd === undefined ? "unbounded" : `$${budget.maxCostUsd.toFixed(4)}`;
   return `elapsed ${budget.elapsedMs}ms, cost $${budget.costUsd.toFixed(4)}, limits ${maxWallClock} / ${maxCost}`;
