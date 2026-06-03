@@ -182,17 +182,25 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
 
   async fetchDueForRetry(): Promise<WebhookDeliveryRecord[]> {
     const now = new Date().toISOString();
-    const rows = this.db
-      .select()
-      .from(webhookInbox)
-      .where(
-        and(
-          eq(webhookInbox.status, "retry"),
-          or(isNull(webhookInbox.nextAttemptAt), lt(webhookInbox.nextAttemptAt, now)),
-        ),
-      )
-      .all();
-    return rows.map(toRecord);
+    // Atomically claim due retries: select the due 'retry' rows and flip them to
+    // 'processing' inside one transaction, so two concurrent pollers sharing the
+    // connection can never both claim the same delivery (NIN-255).
+    return this.db.transaction((tx) => {
+      const rows = tx
+        .select()
+        .from(webhookInbox)
+        .where(
+          and(
+            eq(webhookInbox.status, "retry"),
+            or(isNull(webhookInbox.nextAttemptAt), lt(webhookInbox.nextAttemptAt, now)),
+          ),
+        )
+        .all();
+      for (const row of rows) {
+        tx.update(webhookInbox).set({ status: "processing" }).where(eq(webhookInbox.deliveryId, row.deliveryId)).run();
+      }
+      return rows.map((row) => ({ ...toRecord(row), status: "processing" as const }));
+    });
   }
 
   async getStats(): Promise<WebhookInboxStats> {

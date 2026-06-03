@@ -211,15 +211,47 @@ async function writeWorkflowRunArtifactToArchive(
   return artifact;
 }
 
+// blocked / done / cancelled are terminal: a run that has reached one of them refuses
+// any further status write (NIN-255).
+const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStartRecord["status"]> = new Set(["blocked", "done", "cancelled"]);
+
+// Serializes status writes per Workflow Run so the read-check-write below is atomic; two
+// concurrent updates (e.g. a cancel racing a done) can no longer interleave (NIN-255).
+const runStatusUpdateChains = new Map<string, Promise<unknown>>();
+
+function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>): Promise<T> {
+  const prior = runStatusUpdateChains.get(workflowRunId) ?? Promise.resolve();
+  const result = prior.then(operation, operation);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  runStatusUpdateChains.set(workflowRunId, settled);
+  void settled.then(() => {
+    if (runStatusUpdateChains.get(workflowRunId) === settled) {
+      runStatusUpdateChains.delete(workflowRunId);
+    }
+  });
+  return result;
+}
+
 async function updateWorkflowRunStatusInArchive(
   archiveRoot: string,
   workflowRunId: string,
   status: WorkflowRunStartRecord["status"],
 ): Promise<WorkflowRunStartRecord> {
-  const workflowRun = await readWorkflowRunMetadataFromDir(workflowRunDir(archiveRoot, workflowRunId));
-  const updated = { ...workflowRun, status };
-  await writeFile(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`, "utf8");
-  return updated;
+  return withRunStatusLock(workflowRunId, async () => {
+    const workflowRun = await readWorkflowRunMetadataFromDir(workflowRunDir(archiveRoot, workflowRunId));
+    // Terminal states are final — refuse the write (return the run unchanged) so a
+    // concurrent done/blocked can never overwrite a cancel, and no write lands on an
+    // already-terminal run (NIN-255).
+    if (TERMINAL_RUN_STATUSES.has(workflowRun.status) && workflowRun.status !== status) {
+      return workflowRun;
+    }
+    const updated = { ...workflowRun, status };
+    await writeFile(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+    return updated;
+  });
 }
 
 async function readWorkflowRunArtifactFromArchive(

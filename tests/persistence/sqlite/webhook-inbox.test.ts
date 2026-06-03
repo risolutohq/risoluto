@@ -304,7 +304,12 @@ describe("SqliteWebhookInbox", () => {
       const due = await store.inbox.fetchDueForRetry();
       expect(due.map((delivery) => delivery.deliveryId).sort()).toEqual(["retry-null", "retry-past"]);
       expect(due.map((delivery) => delivery.attemptCount).sort((left, right) => left - right)).toEqual([1, 2]);
-      expect(due.every((delivery) => delivery.status === "retry")).toBe(true);
+      // fetchDueForRetry atomically claims the rows, so they come back as 'processing' (NIN-255).
+      expect(due.every((delivery) => delivery.status === "processing")).toBe(true);
+
+      // A second poll returns nothing — the due rows are already claimed (no double-claim).
+      const secondPoll = await store.inbox.fetchDueForRetry();
+      expect(secondPoll).toHaveLength(0);
     } finally {
       store.close();
     }
