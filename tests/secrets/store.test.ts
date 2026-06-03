@@ -90,4 +90,44 @@ describe("SecretsStore", () => {
     await restartedStore.start();
     expect(restartedStore.get("TOKEN")).toBe("value-1");
   });
+
+  it("initializeWithKey refuses to overwrite existing secrets on wrong key — regression for fnd_sig-feat-library-6005595fef-3636", async () => {
+    const dir = await createTempDir();
+    process.env.MASTER_KEY = "key-a";
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.start();
+    await store.set("TOKEN", "safe-value");
+    const originalEncryptedFile = await readFile(path.join(dir, "secrets.enc"), "utf8");
+
+    const deferredStore = new SecretsStore(dir, createLogger());
+    await deferredStore.startDeferred();
+    await expect(deferredStore.initializeWithKey("wrong-key")).rejects.toThrow("MASTER_KEY may not match");
+
+    const encryptedFileAfterFailure = await readFile(path.join(dir, "secrets.enc"), "utf8");
+    expect(encryptedFileAfterFailure).toBe(originalEncryptedFile);
+
+    process.env.MASTER_KEY = "key-a";
+    const verifyStore = new SecretsStore(dir, createLogger());
+    await verifyStore.start();
+    expect(verifyStore.get("TOKEN")).toBe("safe-value");
+  });
+
+  it("writes V2 scrypt envelope and survives restart — regression for fnd_sig-feat-library-6005595fef-6964", async () => {
+    const dir = await createTempDir();
+    process.env.MASTER_KEY = "migration-key";
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.start();
+    await store.set("API_KEY", "migrate-me");
+
+    const encryptedFile = await readFile(path.join(dir, "secrets.enc"), "utf8");
+    const envelope = JSON.parse(encryptedFile) as { kdfVersion?: number; kdfSalt?: string };
+    expect(envelope.kdfVersion).toBe(2);
+    expect(typeof envelope.kdfSalt).toBe("string");
+
+    const store2 = new SecretsStore(dir, createLogger());
+    await store2.start();
+    expect(store2.get("API_KEY")).toBe("migrate-me");
+  });
 });

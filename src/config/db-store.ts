@@ -31,13 +31,14 @@ import {
  * Read all section rows and reconstruct a flat config map that
  * looks identical to what YAML front matter would produce.
  */
-function readConfigMap(db: RisolutoDatabase): Record<string, unknown> {
+function readConfigMap(db: RisolutoDatabase, logger: RisolutoLogger): Record<string, unknown> {
   const rows = db.select().from(config).all();
   const map: Record<string, unknown> = {};
   for (const row of rows) {
     try {
       map[row.key] = JSON.parse(row.value);
     } catch {
+      logger.warn({ key: row.key }, "config section JSON parse failed — using empty fallback");
       map[row.key] = {};
     }
   }
@@ -47,7 +48,7 @@ function readConfigMap(db: RisolutoDatabase): Record<string, unknown> {
 /**
  * Read the active prompt template body from the DB.
  */
-function readActiveTemplate(db: RisolutoDatabase): string {
+function readActiveTemplate(db: RisolutoDatabase, logger: RisolutoLogger): string {
   // 1. Check system.selectedTemplateId
   const systemRow = db.select().from(config).where(eq(config.key, "system")).get();
   if (systemRow) {
@@ -55,6 +56,7 @@ function readActiveTemplate(db: RisolutoDatabase): string {
     try {
       system = JSON.parse(systemRow.value) as Record<string, unknown>;
     } catch {
+      logger.warn({ key: "system" }, "config section JSON parse failed — using empty fallback");
       system = {};
     }
     const selectedId = system.selectedTemplateId;
@@ -91,8 +93,8 @@ export class DbConfigStore implements ConfigOverlayPort {
    * and after every mutation.
    */
   refresh(): void {
-    const configMap = readConfigMap(this.db);
-    const promptTemplate = readActiveTemplate(this.db);
+    const configMap = readConfigMap(this.db, this.logger);
+    const promptTemplate = readActiveTemplate(this.db, this.logger);
 
     const workflow: WorkflowDefinition = { config: configMap, promptTemplate };
     const serviceConfig = deriveServiceConfig(workflow, {

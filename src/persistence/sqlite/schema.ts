@@ -109,6 +109,8 @@ export const encryptedSecrets = sqliteTable("encrypted_secrets", {
   iv: text("iv").notNull(),
   authTag: text("auth_tag").notNull(),
   updatedAt: text("updated_at").notNull(),
+  kdfVersion: integer("kdf_version").default(1),
+  kdfSalt: text("kdf_salt"),
 });
 
 /**

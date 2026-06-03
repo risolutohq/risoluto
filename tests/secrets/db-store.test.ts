@@ -1,6 +1,10 @@
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
+
 import { describe, expect, it, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 
 import { openDatabase, closeDatabase, type RisolutoDatabase } from "../../src/persistence/sqlite/database.js";
+import { encryptedSecrets } from "../../src/persistence/sqlite/schema.js";
 import { DbSecretsStore } from "../../src/secrets/db-store.js";
 import { createMockLogger } from "../helpers.js";
 import type { RisolutoLogger } from "../../src/core/types.js";
@@ -191,5 +195,33 @@ describe("DbSecretsStore", () => {
     const fakeStore = new DbSecretsStore(fakeDb, createMockLogger(), { masterKey: TEST_MASTER_KEY });
 
     expect(fakeStore.list()).toEqual(["ALPHA", "MIDDLE", "ZEBRA"]);
+  });
+
+  it("migrates V1 SHA-256 rows to V2 scrypt on start — regression for fnd_sig-feat-library-6005595fef-6964", async () => {
+    const v1Key = createHash("sha256").update(TEST_MASTER_KEY, "utf8").digest();
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", v1Key, iv);
+    const cipherBuf = Buffer.concat([cipher.update("legacy-value", "utf8"), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    db.insert(encryptedSecrets)
+      .values({
+        key: "LEGACY_KEY",
+        ciphertext: cipherBuf.toString("base64"),
+        iv: iv.toString("base64"),
+        authTag: authTag.toString("base64"),
+        updatedAt: new Date().toISOString(),
+        kdfVersion: 1,
+        kdfSalt: null,
+      })
+      .run();
+
+    const freshStore = new DbSecretsStore(db, createMockLogger(), { masterKey: TEST_MASTER_KEY });
+    await freshStore.start();
+
+    expect(freshStore.get("LEGACY_KEY")).toBe("legacy-value");
+
+    const row = db.select().from(encryptedSecrets).where(eq(encryptedSecrets.key, "LEGACY_KEY")).get();
+    expect(row?.kdfVersion).toBe(2);
+    expect(typeof row?.kdfSalt).toBe("string");
   });
 });
