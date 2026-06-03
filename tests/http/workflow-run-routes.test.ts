@@ -55,8 +55,8 @@ describe("Workflow Run HTTP routes", () => {
       id: () => "wr_http_list_second",
       now: () => "2026-05-25T12:01:00.000Z",
     });
-    await writeWorkflowRunRecord(firstRun);
-    await writeWorkflowRunRecord(secondRun);
+    await writeWorkflowRunRecord(firstRun, { archiveDir });
+    await writeWorkflowRunRecord(secondRun, { archiveDir });
 
     const app = express();
     registerWorkflowRunRoutes(app, {
@@ -100,7 +100,7 @@ describe("Workflow Run HTTP routes", () => {
       id: () => "wr_http_contract",
       now: () => "2026-05-25T11:55:00.000Z",
     });
-    await writeWorkflowRunRecord(workflowRun);
+    await writeWorkflowRunRecord(workflowRun, { archiveDir });
     const run = await openWorkflowRun(
       { archiveDir },
       { workflowRunId: workflowRun.id, source: "cli", now: () => "2026-05-25T11:56:00.000Z" },
@@ -148,7 +148,7 @@ describe("Workflow Run HTTP routes", () => {
       id: () => "wr_http_detail",
       now: () => "2026-05-25T12:15:00.000Z",
     });
-    await writeWorkflowRunRecord(workflowRun);
+    await writeWorkflowRunRecord(workflowRun, { archiveDir });
 
     const app = express();
     registerWorkflowRunRoutes(app, {
@@ -186,7 +186,7 @@ describe("Workflow Run HTTP routes", () => {
       id: () => "wr_http_run_attempts",
       now: () => "2026-05-25T12:30:00.000Z",
     });
-    await writeWorkflowRunRecord(workflowRun);
+    await writeWorkflowRunRecord(workflowRun, { archiveDir });
     const run = await openWorkflowRun(
       { archiveDir },
       { workflowRunId: workflowRun.id, source: "cli", now: () => "2026-05-25T12:31:00.000Z" },

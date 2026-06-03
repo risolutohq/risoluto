@@ -641,6 +641,30 @@ describe("handleWorkerOutcome - stop signal detection", () => {
     );
   });
 
+  it("releases the issue claim when stop signal is done (completed)", async () => {
+    const ctx = makeCtx();
+    const entry = makeEntry({
+      lastAgentMessageContent: "RISOLUTO_STATUS: DONE",
+    });
+    ctx.runningEntries.set("issue-1", entry);
+
+    await handleWorkerOutcome(ctx, makeOutcome({ kind: "normal" }), entry, makeIssue(), makeWorkspace(), 1);
+
+    expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("issue-1");
+  });
+
+  it("releases the issue claim when stop signal is blocked (paused)", async () => {
+    const ctx = makeCtx();
+    const entry = makeEntry({
+      lastAgentMessageContent: "RISOLUTO_STATUS: BLOCKED",
+    });
+    ctx.runningEntries.set("issue-1", entry);
+
+    await handleWorkerOutcome(ctx, makeOutcome({ kind: "normal" }), entry, makeIssue(), makeWorkspace(), 1);
+
+    expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("issue-1");
+  });
+
   it("handles case-insensitive RISOLUTO_STATUS variations", async () => {
     const ctx = makeCtx();
     const entry = makeEntry({
