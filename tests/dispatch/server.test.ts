@@ -148,6 +148,39 @@ describe("Data plane server", () => {
       expect(response.status).toBe(400);
     });
 
+    it("returns 400 when issue/config/workspace are present but promptTemplate is missing", async () => {
+      const app = createDataPlaneServer(secret);
+      const body = createDispatchRequestBody();
+      const { promptTemplate: _omitted, ...bodyWithoutPrompt } = body as Record<string, unknown>;
+      const response = await makeRequest(app, "POST", "/dispatch", {
+        body: bodyWithoutPrompt,
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it("returns 400 when modelSelection is missing", async () => {
+      const app = createDataPlaneServer(secret);
+      const body = createDispatchRequestBody();
+      const { modelSelection: _omitted, ...bodyWithoutModel } = body as Record<string, unknown>;
+      const response = await makeRequest(app, "POST", "/dispatch", {
+        body: bodyWithoutModel,
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it("returns 400 when codexRuntimeConfigToml is missing", async () => {
+      const app = createDataPlaneServer(secret);
+      const body = createDispatchRequestBody();
+      const { codexRuntimeConfigToml: _omitted, ...bodyWithoutToml } = body as Record<string, unknown>;
+      const response = await makeRequest(app, "POST", "/dispatch", {
+        body: bodyWithoutToml,
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      expect(response.status).toBe(400);
+    });
+
     it("addresses active dispatches by Workflow Run id when present", async () => {
       runAttemptMock.mockImplementationOnce(
         (input: { signal: AbortSignal }) =>
