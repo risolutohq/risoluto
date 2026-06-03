@@ -74,6 +74,47 @@ describe("AutomationScheduler", () => {
     ]);
   });
 
+  it("start is idempotent — a second start does not double-subscribe or double-schedule (NIN-264)", () => {
+    const configStore = createConfigStore([
+      {
+        name: "nightly-report",
+        schedule: "0 2 * * *",
+        mode: "report",
+        prompt: "Summarize status",
+        enabled: true,
+        repoUrl: "https://github.com/acme/app",
+      },
+    ]);
+    const subscribeSpy = vi.spyOn(configStore.api, "subscribe");
+    const cronApi = { validate: vi.fn().mockReturnValue(true), schedule: vi.fn().mockReturnValue(createTask()) };
+    const scheduler = new AutomationScheduler({
+      configStore: configStore.api,
+      runner: { run: vi.fn() } as never,
+      logger: createMockLogger(),
+      cronApi,
+    });
+
+    scheduler.start();
+    scheduler.start();
+
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    expect(cronApi.schedule).toHaveBeenCalledTimes(1);
+
+    // A single config change fires sync exactly once — no leaked duplicate subscription.
+    cronApi.schedule.mockClear();
+    configStore.setAutomations([
+      {
+        name: "nightly-report",
+        schedule: "0 3 * * *",
+        mode: "report",
+        prompt: "Summarize status",
+        enabled: true,
+        repoUrl: "https://github.com/acme/app",
+      },
+    ]);
+    expect(cronApi.schedule).toHaveBeenCalledTimes(1);
+  });
+
   it("records invalid cron expressions without destabilizing startup", () => {
     const configStore = createConfigStore([
       {

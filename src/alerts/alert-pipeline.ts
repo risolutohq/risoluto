@@ -49,12 +49,18 @@ export class AlertPipeline {
       });
       return;
     }
+    // Reserve the cooldown before sending so a concurrent duplicate is suppressed, then release it
+    // if the delivery genuinely failed — a failed notify must not suppress this rule's retry within
+    // the cooldown window (NIN-264). A manager-level dedupe (skippedDuplicate) counts as a recent
+    // delivery, so the reservation is kept in that case.
     this.recentDeliveries.set(cooldownKey, now);
-
     const notificationEvent = buildNotificationEvent(rule, eventType, payload);
     const deliverySummary = await this.options.notificationManager.notify(notificationEvent, {
       channelNames: rule.channels.length > 0 ? rule.channels : undefined,
     });
+    if (deliverySummary.deliveredChannels.length === 0 && !deliverySummary.skippedDuplicate) {
+      this.recentDeliveries.delete(cooldownKey);
+    }
     await this.recordHistory(rule, eventType, summarizeStatus(deliverySummary), payload, deliverySummary);
   }
 

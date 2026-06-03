@@ -99,6 +99,28 @@ describe("ObservabilityHub", () => {
     expect(summary.rawMetrics).toContain("risoluto_http_requests_total 1");
   });
 
+  it("redacts secret-bearing values from snapshot session metadata and trace data (NIN-264)", async () => {
+    const archiveDir = await createTempDir();
+    const hub = createObservabilityHub({ archiveDir });
+    const observer = hub.getComponent("http");
+
+    observer.recordOperation({
+      metric: "api_request",
+      outcome: "success",
+      data: { token: "sk-tracetoken456", path: "/api/v1/state" },
+    });
+    observer.setSession("req-secret", {
+      status: "completed",
+      metadata: { apiKey: "sk-supersecret123", path: "/api/v1/state" },
+    });
+
+    const serialized = JSON.stringify(observer.snapshot());
+    expect(serialized).not.toContain("sk-supersecret123");
+    expect(serialized).not.toContain("sk-tracetoken456");
+    // Non-secret fields survive the redaction pass.
+    expect(serialized).toContain("/api/v1/state");
+  });
+
   it("deduplicates snapshots by component name keeping the most recent updatedAt", async () => {
     const archiveDir = await createTempDir();
     const hub = createObservabilityHub({ archiveDir });

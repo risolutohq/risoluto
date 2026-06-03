@@ -39,10 +39,17 @@ export function recordMetricCounter(
   return next;
 }
 
+// Prometheus text format requires backslash, double-quote, and newline to be escaped inside a
+// label value; otherwise an attacker-influenced value (e.g. a route or error string) could break
+// out of the quotes and inject fake label pairs or metric lines (NIN-264).
+function escapeLabelValue(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n");
+}
+
 function labelKey(labels: Labels): string {
   return Object.entries(labels)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}="${v}"`)
+    .map(([k, v]) => `${k}="${escapeLabelValue(v)}"`)
     .join(",");
 }
 

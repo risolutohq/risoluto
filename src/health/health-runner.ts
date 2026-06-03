@@ -124,9 +124,26 @@ export class HealthRunner {
 
   private async invokeProbe(probe: HealthProbe): Promise<HealthSubprobe[]> {
     const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    // Race the probe against the deadline rather than only signalling abort: a probe that ignores
+    // its AbortSignal would otherwise hang the runner indefinitely, so the timeout is enforced here
+    // regardless of probe cooperation (NIN-264).
+    const timeout = new Promise<HealthSubprobe[]>((resolve) => {
+      timeoutHandle = setTimeout(() => {
+        controller.abort();
+        resolve([
+          {
+            name: "probe",
+            status: "down",
+            failureKind: "unreachable",
+            latencyMs: this.timeoutMs,
+            detail: `health probe timed out after ${this.timeoutMs}ms`,
+          },
+        ]);
+      }, this.timeoutMs);
+    });
     try {
-      return await probe.run({ signal: controller.signal, nowMs: this.nowMs });
+      return await Promise.race([probe.run({ signal: controller.signal, nowMs: this.nowMs }), timeout]);
     } catch (error) {
       // Probes are required not to throw — defend in depth.
       const message = toErrorString(error);

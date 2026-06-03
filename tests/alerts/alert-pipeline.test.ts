@@ -130,6 +130,40 @@ describe("AlertPipeline", () => {
     expect(statuses).toEqual(["delivered", "suppressed"]);
   });
 
+  it("does not stamp the cooldown when the notify fully fails so the retry is not suppressed (NIN-264)", async () => {
+    const notify = vi
+      .fn()
+      .mockResolvedValueOnce({
+        deliveredChannels: [],
+        failedChannels: [{ channel: "ops-webhook", error: "down" }],
+        skippedDuplicate: false,
+      })
+      .mockResolvedValueOnce({
+        deliveredChannels: ["ops-webhook"],
+        failedChannels: [],
+        skippedDuplicate: false,
+      });
+    const historyStore = makeHistoryStore();
+    const pipeline = new AlertPipeline({
+      configStore: createConfigStore() as never,
+      notificationManager: { notify } as never,
+      historyStore,
+      logger: createMockLogger(),
+    });
+
+    await pipeline.processEvent("worker.failed", { issueId: "issue-1", identifier: "ENG-1", error: "worker crashed" });
+    await pipeline.processEvent("worker.failed", {
+      issueId: "issue-1",
+      identifier: "ENG-1",
+      error: "worker crashed again",
+    });
+
+    // The first (failed) delivery did not stamp the cooldown, so the second event is retried.
+    expect(notify).toHaveBeenCalledTimes(2);
+    const statuses = (await historyStore.list()).map((record) => record.status).sort();
+    expect(statuses).toEqual(["delivered", "failed"]);
+  });
+
   it("records partial_failure when some channels fail", async () => {
     const notificationManager = {
       notify: vi.fn().mockResolvedValue({

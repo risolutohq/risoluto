@@ -71,6 +71,30 @@ describe("HealthRunner", () => {
     expect(checks.github.subprobes).toHaveLength(2);
   });
 
+  it("enforces the per-probe timeout even when a probe ignores its abort signal (NIN-264)", async () => {
+    // A probe that never resolves and never honors its AbortSignal.
+    const probe: HealthProbe = { id: "github", run: vi.fn(() => new Promise<HealthSubprobe[]>(() => undefined)) };
+    const store = memoryStore();
+    const runner = new HealthRunner({
+      probes: [probe],
+      store: store.port,
+      logger: createLogger(),
+      random: () => 0.5,
+      nowMs: () => 1000,
+      probeTimeoutMs: 5000,
+    });
+
+    const tickPromise = runner.tick();
+    await vi.advanceTimersByTimeAsync(5000);
+    await tickPromise;
+
+    const checks = runner.getChecks();
+    expect(checks.github.status).toBe("down");
+    expect(checks.github.failureKind).toBe("unreachable");
+    expect(checks.github.subprobes[0]?.detail).toContain("timed out");
+    expect(probe.run).toHaveBeenCalledTimes(1);
+  });
+
   it("does not run a probe under steady-state cadence (only every 5 ticks)", async () => {
     const probe = fakeProbe("github", () => [ok("auth")]);
     const store = memoryStore();

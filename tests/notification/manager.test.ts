@@ -95,6 +95,26 @@ describe("NotificationManager", () => {
     expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 
+  it("does not suppress a retry when the first send fully fails (NIN-264)", async () => {
+    const notify = vi.fn(async () => undefined);
+    notify.mockRejectedValueOnce(new Error("channel down"));
+    const manager = new NotificationManager({
+      channels: [createChannel("only", notify)],
+      dedupeWindowMs: 60_000,
+    });
+    const event = createEvent({ dedupeKey: "retry-key" });
+
+    const first = await manager.notify(event);
+    const second = await manager.notify(event);
+
+    expect(first.deliveredChannels).toEqual([]);
+    expect(first.failedChannels).toEqual([{ channel: "only", error: "channel down" }]);
+    // The failed send never recorded the dedupe key, so the retry is delivered rather than suppressed.
+    expect(second.skippedDuplicate).toBe(false);
+    expect(second.deliveredChannels).toEqual(["only"]);
+    expect(notify).toHaveBeenCalledTimes(2);
+  });
+
   it("supports dynamic channel registration and removal", async () => {
     const notifySpy = vi.fn(async () => undefined);
     const manager = new NotificationManager();
