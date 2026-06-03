@@ -19,6 +19,7 @@ export type WebhookInboxStatus = "received" | "processing" | "applied" | "ignore
 
 export interface WebhookDeliveryRecord {
   deliveryId: string;
+  bodyDigest: string | null;
   receivedAt: string;
   type: string;
   action: string;
@@ -43,9 +44,10 @@ export interface WebhookInboxStats {
 }
 
 export interface WebhookInboxStore {
-  /** Insert a verified delivery. Returns true if new, false if duplicate. */
+  /** Insert a verified delivery. Returns true if new, false if duplicate (by delivery id or body digest). */
   insertVerified(delivery: {
     deliveryId: string;
+    bodyDigest?: string | null;
     type: string;
     action: string;
     entityId: string | null;
@@ -97,6 +99,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
 
   async insertVerified(delivery: {
     deliveryId: string;
+    bodyDigest?: string | null;
     type: string;
     action: string;
     entityId: string | null;
@@ -111,6 +114,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
         .insert(webhookInbox)
         .values({
           deliveryId: delivery.deliveryId,
+          bodyDigest: delivery.bodyDigest ?? null,
           receivedAt: now,
           type: delivery.type,
           action: delivery.action,
@@ -260,6 +264,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
 function toRecord(row: typeof webhookInbox.$inferSelect): WebhookDeliveryRecord {
   return {
     deliveryId: row.deliveryId,
+    bodyDigest: row.bodyDigest,
     receivedAt: row.receivedAt,
     type: row.type,
     action: row.action,

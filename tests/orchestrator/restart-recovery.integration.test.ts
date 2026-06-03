@@ -248,7 +248,9 @@ describe("Restart persistence", () => {
     const afterRestart = await inbox2.getRecent();
     expect(afterRestart).toHaveLength(1);
     expect(afterRestart[0].deliveryId).toBe("persist-across-restart");
-    expect(afterRestart[0].status).toBe("received");
+    // Processing now drives the durable lifecycle to a terminal state, so the persisted delivery
+    // survives the restart as "applied" rather than stuck at "received" (NIN-262).
+    expect(afterRestart[0].status).toBe("applied");
 
     // Verify the new server can accept new webhooks to the same DB
     const ctx2 = await startTestServer({

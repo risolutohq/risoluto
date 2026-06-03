@@ -138,6 +138,53 @@ describe("SqliteWebhookInbox", () => {
     }
   });
 
+  it("dedupes a replay on the body+signature digest even under a fresh delivery id (NIN-262)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      const first = await store.inbox.insertVerified({
+        ...createDelivery({ deliveryId: "gh-delivery-1" }),
+        bodyDigest: "digest-aaa",
+      });
+      // The same signed body replayed under a NEW X-GitHub-Delivery → same digest → deduped.
+      const replay = await store.inbox.insertVerified({
+        ...createDelivery({ deliveryId: "gh-delivery-2" }),
+        bodyDigest: "digest-aaa",
+      });
+      // A genuinely different body → different digest → new.
+      const distinct = await store.inbox.insertVerified({
+        ...createDelivery({ deliveryId: "gh-delivery-3" }),
+        bodyDigest: "digest-bbb",
+      });
+
+      expect(first).toEqual({ isNew: true });
+      expect(replay).toEqual({ isNew: false });
+      expect(distinct).toEqual({ isNew: true });
+      expect(store.db.select().from(webhookInbox).all()).toHaveLength(2);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("dedupes digest-less deliveries only by delivery id (null digests are distinct) (NIN-262)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      // Two digest-less deliveries with distinct ids both insert — NULL digests don't collide.
+      const a = await store.inbox.insertVerified(createDelivery({ deliveryId: "linear-1" }));
+      const b = await store.inbox.insertVerified(createDelivery({ deliveryId: "linear-2" }));
+      const dupId = await store.inbox.insertVerified(createDelivery({ deliveryId: "linear-1" }));
+
+      expect(a).toEqual({ isNew: true });
+      expect(b).toEqual({ isNew: true });
+      expect(dupId).toEqual({ isNew: false });
+    } finally {
+      store.close();
+    }
+  });
+
   it("transitions deliveries through processing, applied, and ignored states with exact timestamps", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);

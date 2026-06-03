@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { Response } from "express";
 
 import type { ConfigStore } from "../config/store.js";
@@ -28,6 +30,7 @@ export interface GitHubWebhookHandlerDeps {
 
 interface GitHubWebhookContext {
   action: string;
+  bodyDigest: string;
   config: ServiceConfig | undefined;
   deliveryId: string;
   event: string;
@@ -41,11 +44,20 @@ function sendError(res: Response, status: number, code: string, message: string)
   res.status(status).json({ error: { code, message } } satisfies ApiErrorResponse);
 }
 
+/**
+ * SHA-256 digest of the verified raw body and signature. Replay protection dedupes on this rather
+ * than the spoofable X-GitHub-Delivery header, so a captured signed body replayed under a fresh
+ * delivery id is still recognized as a duplicate (NIN-262).
+ */
+function computeBodyDigest(rawBody: Buffer | string, signature: string): string {
+  return createHash("sha256").update(rawBody).update("\n").update(signature).digest("hex");
+}
+
 function validateGitHubWebhookRequest(
   deps: GitHubWebhookHandlerDeps,
   req: WebhookRequest,
   res: Response,
-): { config: ServiceConfig | undefined; event: string } | null {
+): { config: ServiceConfig | undefined; event: string; bodyDigest: string } | null {
   const config = deps.configStore?.getConfig();
   const secret = config?.triggers?.githubSecret ?? null;
   if (!secret) {
@@ -87,12 +99,12 @@ function validateGitHubWebhookRequest(
     return null;
   }
 
-  return { config, event };
+  return { config, event, bodyDigest: computeBodyDigest(req.rawBody, signature) };
 }
 
 function buildGitHubWebhookContext(
   req: WebhookRequest,
-  validated: { config: ServiceConfig | undefined; event: string },
+  validated: { config: ServiceConfig | undefined; event: string; bodyDigest: string },
 ): GitHubWebhookContext {
   const payload = asRecord(req.body);
   const action = asStringOrNull(payload.action) ?? "unknown";
@@ -106,6 +118,7 @@ function buildGitHubWebhookContext(
 
   return {
     action,
+    bodyDigest: validated.bodyDigest,
     config: validated.config,
     deliveryId: req.get("x-github-delivery")?.trim() ?? "",
     event: validated.event,
@@ -127,6 +140,7 @@ export function handleWebhookGitHub(deps: GitHubWebhookHandlerDeps, req: Webhook
   workflow.respondAccepted(res, {
     delivery: {
       deliveryId: context.deliveryId,
+      bodyDigest: context.bodyDigest,
       type: context.event,
       action: context.action,
       entityId: context.issueId,

@@ -126,6 +126,7 @@ const CREATE_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS webhook_inbox (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     delivery_id       TEXT NOT NULL UNIQUE,
+    body_digest       TEXT,
     received_at       TEXT NOT NULL,
     type              TEXT NOT NULL,
     action            TEXT NOT NULL,
@@ -145,6 +146,9 @@ const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_webhook_inbox_status ON webhook_inbox(status);
   CREATE INDEX IF NOT EXISTS idx_webhook_inbox_issue_id ON webhook_inbox(issue_id);
   CREATE INDEX IF NOT EXISTS idx_webhook_inbox_next_attempt ON webhook_inbox(next_attempt_at);
+  -- Replay dedupe on the verified body+signature digest. SQLite treats NULLs as distinct, so
+  -- providers without a digest are unaffected while duplicate digests collide (NIN-262).
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_inbox_body_digest ON webhook_inbox(body_digest);
 
   CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER PRIMARY KEY,
@@ -577,6 +581,19 @@ function applyV11Migration(sqlite: SqliteDb): void {
 }
 
 /**
+ * v12 migration: add `body_digest` to `webhook_inbox` with a unique index so replay protection
+ * dedupes on the verified body+signature digest rather than the spoofable provider delivery id.
+ * SQLite treats NULLs as distinct, so existing rows and digest-less providers are unaffected.
+ * Fresh installs already have the column + index from CREATE_TABLES_SQL (NIN-262).
+ */
+function applyV12Migration(sqlite: SqliteDb): void {
+  if (hasSchemaVersion(sqlite, 12)) return;
+  addColumnIfAbsent(sqlite, "webhook_inbox", "body_digest", "TEXT");
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_inbox_body_digest ON webhook_inbox(body_digest)");
+  bumpSchemaVersion(sqlite, 12);
+}
+
+/**
  * Opens (or creates) a SQLite database at the given path,
  * enables WAL journal mode, and ensures the schema tables exist.
  *
@@ -610,6 +627,7 @@ export function openDatabase(dbPath: string): RisolutoDatabase {
     applyV9Migration(sqlite);
     applyV10Migration(sqlite);
     applyV11Migration(sqlite);
+    applyV12Migration(sqlite);
   } catch (error) {
     // Release the file handle / WAL locks if schema creation or a migration throws,
     // so a failed open never leaks the raw better-sqlite3 connection (NIN-254).
