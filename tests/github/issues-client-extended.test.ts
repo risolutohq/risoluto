@@ -265,7 +265,7 @@ describe("GitHubIssuesClient (extended coverage)", () => {
       else process.env.GITHUB_TOKEN = saved;
     });
 
-    it("uses empty string token when no config and no env var", async () => {
+    it("throws GitHubIssuesClientError when no token is configured and GITHUB_TOKEN env var is absent", async () => {
       const saved = process.env.GITHUB_TOKEN;
       delete process.env.GITHUB_TOKEN;
 
@@ -273,11 +273,15 @@ describe("GitHubIssuesClient (extended coverage)", () => {
         () => ({ tracker: { owner: "acme", repo: "widgets", endpoint: "" } }) as never,
         createMockLogger(),
       );
-      fetchMock.mockResolvedValueOnce(createJsonResponse(200, []));
-      await client.fetchOpenIssues();
 
-      const headers = (fetchMock.mock.calls[0] as [string, RequestInit])[1].headers as Record<string, string>;
-      expect(headers.Authorization).toBe("Bearer ");
+      try {
+        await client.fetchOpenIssues();
+        expect.unreachable("should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(GitHubIssuesClientError);
+        expect((error as GitHubIssuesClientError).cause).toBeInstanceOf(Error);
+        expect(((error as GitHubIssuesClientError).cause as Error).message).toContain("GitHub token is not configured");
+      }
 
       if (saved !== undefined) process.env.GITHUB_TOKEN = saved;
     });

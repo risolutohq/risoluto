@@ -92,7 +92,11 @@ export class GitHubIssuesClient {
 
   private getToken(): string {
     const config = this.getConfig();
-    return config.github?.token ?? process.env.GITHUB_TOKEN ?? "";
+    const token = config.github?.token ?? process.env.GITHUB_TOKEN;
+    if (!token) {
+      throw new Error("GitHub token is not configured: set config.github.token or GITHUB_TOKEN env var");
+    }
+    return token;
   }
 
   private getApiBaseUrl(): string {
