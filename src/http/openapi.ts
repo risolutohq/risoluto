@@ -60,5 +60,5 @@ export function getOpenApiSpec(): Record<string, unknown> {
       ...buildCodexPaths(),
     },
   };
-  return cachedSpec;
+  return { ...cachedSpec };
 }

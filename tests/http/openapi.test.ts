@@ -182,6 +182,15 @@ describe("getOpenApiSpec", () => {
     const serialized = JSON.stringify(spec);
     expect(() => JSON.parse(serialized)).not.toThrow();
   });
+
+  it("returns a fresh copy that is not affected by caller mutations", () => {
+    const spec1 = getOpenApiSpec();
+    const pathsBefore = Object.keys(spec1.paths as object).length;
+    (spec1 as Record<string, unknown>)["injected"] = true;
+    const spec2 = getOpenApiSpec();
+    expect((spec2 as Record<string, unknown>)["injected"]).toBeUndefined();
+    expect(Object.keys(spec2.paths as object).length).toBe(pathsBefore);
+  });
 });
 
 describe("getSwaggerHtml", () => {
