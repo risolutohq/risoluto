@@ -84,6 +84,25 @@ describe("quarantine scripts", () => {
     vi.restoreAllMocks();
   });
 
+  describe("saveEntries (atomic write)", () => {
+    it("writes to a .tmp path and renames atomically", () => {
+      const filePath = path.join("tests", "scripts", "sample.test.ts");
+      const resolvedFilePath = path.resolve(filePath);
+      vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+      setQuarantineEntries([]);
+      mocks.existsSyncMock.mockImplementation((candidatePath) => candidatePath === resolvedFilePath);
+
+      addEntry("atomic test", filePath);
+
+      // First write must target the .tmp path, not QUARANTINE_PATH directly
+      const writeCall = mocks.writeFileSyncMock.mock.calls[0];
+      expect(writeCall[0]).toBe(QUARANTINE_PATH + ".tmp");
+      // rename must follow, moving .tmp -> QUARANTINE_PATH
+      expect(mocks.renameSyncMock).toHaveBeenCalledWith(QUARANTINE_PATH + ".tmp", QUARANTINE_PATH);
+    });
+  });
+
   describe("addEntry", () => {
     it("adds a new quarantine entry", () => {
       const filePath = path.join("tests", "scripts", "sample.test.ts");

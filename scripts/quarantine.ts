@@ -10,7 +10,7 @@
  * The quarantine has a hard cap of 5 entries to prevent overuse.
  */
 
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -24,7 +24,9 @@ import {
 } from "./quarantine-shared.js";
 
 function saveEntries(entries: QuarantineEntry[]): void {
-  writeFileSync(QUARANTINE_PATH, JSON.stringify(entries, null, 2) + "\n", "utf-8");
+  const tmpPath = QUARANTINE_PATH + ".tmp";
+  writeFileSync(tmpPath, JSON.stringify(entries, null, 2) + "\n", "utf-8");
+  renameSync(tmpPath, QUARANTINE_PATH);
 }
 
 function normalizeFilePath(file: string): string {
