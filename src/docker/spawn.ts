@@ -35,6 +35,25 @@ interface DockerRunResult {
   cacheVolumeName: string;
 }
 
+/**
+ * Split the configured codex command into argv tokens. The tokens are handed to the
+ * container as positional parameters and executed with `exec "$@"`, so shell metacharacters
+ * are never re-parsed by a shell. The command is treated as a space-separated argv —
+ * shell quoting is intentionally unsupported (NIN-259).
+ */
+function parseCodexCommandArgv(command: string): string[] {
+  const argv = command.split(/\s+/).filter((token) => token.length > 0);
+  if (argv.length === 0) {
+    throw new Error("codex command must contain at least one argument");
+  }
+  for (const token of argv) {
+    if ([...token].some((char) => char.charCodeAt(0) < 0x20)) {
+      throw new Error("codex command contains a control character");
+    }
+  }
+  return argv;
+}
+
 function collectMounts(input: DockerRunInput): Array<[string, string, string?]> {
   const { workspacePath, archiveDir, extraMountPaths = [], pathRegistry, gitBaseDir } = input;
   const translate = (mountPath: string) => pathRegistry?.translate(mountPath) ?? mountPath;
@@ -67,14 +86,7 @@ function buildMountArgs(args: string[], input: DockerRunInput, cacheVolumeName: 
 }
 
 function buildEnvArgs(args: string[], input: DockerRunInput): void {
-  const {
-    sandboxConfig,
-    runtimeConfigToml,
-    runtimeAuthJsonBase64 = null,
-    command,
-    requiredEnv = [],
-    workspacePath,
-  } = input;
+  const { sandboxConfig, runtimeConfigToml, runtimeAuthJsonBase64 = null, requiredEnv = [], workspacePath } = input;
   const trustedProjectConfig = `${runtimeConfigToml}\n[projects.${JSON.stringify(workspacePath)}]\ntrust_level = "trusted"\n`;
   args.push(
     "-e",
@@ -87,7 +99,6 @@ function buildEnvArgs(args: string[], input: DockerRunInput): void {
   if (runtimeAuthJsonBase64) {
     args.push("-e", `RISOLUTO_CODEX_AUTH_JSON_B64=${runtimeAuthJsonBase64}`);
   }
-  args.push("-e", `RISOLUTO_CODEX_COMMAND=${command}`);
 
   const envNames = new Set([...sandboxConfig.envPassthrough, ...requiredEnv]);
   for (const envName of envNames) {
@@ -174,7 +185,10 @@ function buildEntrypointScript(egressAllowlist: string[], options?: { unsetApiKe
     steps.push("unset OPENAI_API_KEY 2>/dev/null || true");
   }
 
-  steps.push('echo "risoluto:container_ready"', 'exec bash -lc "$RISOLUTO_CODEX_COMMAND"');
+  // Exec the codex command from the positional parameters ($@) rather than re-parsing a
+  // shell string, so metacharacters in the configured command are never interpolated by a
+  // shell. buildDockerRunArgs passes the validated argv after this script (NIN-259).
+  steps.push('echo "risoluto:container_ready"', 'exec "$@"');
 
   return steps.join("; ");
 }
@@ -182,6 +196,7 @@ function buildEntrypointScript(egressAllowlist: string[], options?: { unsetApiKe
 export function buildDockerRunArgs(input: DockerRunInput): DockerRunResult {
   const { sandboxConfig, runId, workspacePath } = input;
   assertValidDockerImageRef(sandboxConfig.image);
+  const commandArgv = parseCodexCommandArgv(input.command);
   const containerName = `risoluto-${runId}`;
   const cacheVolumeName = `risoluto-cache-${runId}`;
   const uid = os.userInfo().uid;
@@ -226,6 +241,10 @@ export function buildDockerRunArgs(input: DockerRunInput): DockerRunResult {
     buildEntrypointScript(egressAllowlist, {
       unsetApiKey: Boolean(input.runtimeAuthJsonBase64),
     }),
+    // $0 placeholder for the entrypoint shell, followed by the codex command as argv ($1..),
+    // which `exec "$@"` runs without shell re-parsing.
+    "risoluto-codex-entry",
+    ...commandArgv,
   );
 
   return { program: "docker", args, containerName, cacheVolumeName };

@@ -485,6 +485,22 @@ describe("DockerSession.cleanup", () => {
     expect(mocks.removeVolume).toHaveBeenCalledWith("risoluto-cache-MT-42-123");
   });
 
+  it("does not fail cleanup when removeVolume rejects (NIN-259)", async () => {
+    const mainChild = makeFakeChild();
+    const fakeSpawn = setupSpawnMock(mainChild);
+    const deps = makeDeps({ spawnProcess: fakeSpawn as unknown as typeof import("node:child_process").spawn });
+
+    const session = await createDockerSession(makeConfig(), makeInput(), deps, makeTurnState());
+
+    mainChild.emit("exit", 0, null);
+    mocks.removeVolume.mockRejectedValueOnce(new Error("volume in use"));
+
+    const cleanupSignal = new AbortController().signal;
+    // A Docker volume-removal failure must not reject the attempt's cleanup.
+    await expect(session.cleanup(makeConfig(), cleanupSignal)).resolves.toBeUndefined();
+    expect(mocks.removeVolume).toHaveBeenCalledWith("risoluto-cache-MT-42-123");
+  });
+
   it("removes abort signal listener during cleanup", async () => {
     const mainChild = makeFakeChild();
     const fakeSpawn = setupSpawnMock(mainChild);

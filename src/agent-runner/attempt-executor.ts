@@ -211,7 +211,12 @@ export class DefaultAttemptExecutor implements AttemptExecutor {
       return handleRunError(error, runtime, input.signal);
     } finally {
       cleanupAbortBridge();
-      await runtime.shutdown(input.signal);
+      // A shutdown failure must not override the computed outcome or skip afterRun — log it
+      // and continue so the real run result (or the caught error's outcome) is preserved,
+      // and the after_run hook always runs (NIN-259).
+      await runtime.shutdown(input.signal).catch((error) => {
+        logger.warn({ error: toErrorString(error) }, "session shutdown failed");
+      });
       await this.deps.workspaceManager.runAfterRun(input.workspace, input.issue.identifier).catch((error) => {
         logger.warn({ error: toErrorString(error) }, "after_run hook failed");
       });

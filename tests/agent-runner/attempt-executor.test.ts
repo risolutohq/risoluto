@@ -226,6 +226,45 @@ describe("DefaultAttemptExecutor", () => {
     });
   });
 
+  it("preserves the run outcome and still runs afterRun when shutdown fails (NIN-259)", async () => {
+    const order: string[] = [];
+    const workspaceManager = createWorkspaceManager(order);
+    const runtime = createRuntimeSession({
+      initialize: vi.fn(async () => {
+        order.push("initialize");
+        return { threadId: "thread-123", prompt: "rendered prompt" };
+      }),
+      execute: vi.fn(async () => {
+        order.push("execute");
+        return createNormalOutcome();
+      }),
+      shutdown: vi.fn(async () => {
+        order.push("shutdown");
+        throw new Error("docker daemon unreachable during shutdown");
+      }),
+    });
+    const sessionPort: AgentSessionPort = {
+      start: vi.fn(async () => {
+        order.push("start");
+        return runtime;
+      }),
+    };
+    const executor = new DefaultAttemptExecutor({
+      getConfig: () => createConfig(),
+      workspaceManager,
+      sessionPort,
+      logger: createMockLogger(),
+    });
+
+    const activeAttempt = await executor.launch(createInput());
+
+    // The shutdown failure must not override the real outcome...
+    await expect(activeAttempt.outcome).resolves.toEqual(createNormalOutcome());
+    // ...and afterRun must still run despite the shutdown throwing.
+    expect(order).toContain("shutdown");
+    expect(order.at(-1)).toBe("afterRun");
+  });
+
   it("aborts the bridged signal even when no abort reason is provided", async () => {
     const order: string[] = [];
     const workspaceManager = createWorkspaceManager(order);
