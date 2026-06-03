@@ -259,7 +259,17 @@ async function handleTurnLoop(
   state: AgentRunnerTurnExecutionState,
 ): Promise<RunOutcome | null> {
   if (state.turnCount >= input.config.agent.maxTurns) {
-    return null;
+    // Exhausting maxTurns means the agent never reached a stop signal — that is an
+    // unfinished run, not a success. Return an explicit failure instead of null (which
+    // would be classified as a normal exit) (NIN-257).
+    return {
+      kind: "failed",
+      errorCode: "max_turns_exceeded",
+      errorMessage: `agent exhausted the maximum of ${input.config.agent.maxTurns} turns without reaching a stop signal`,
+      threadId: state.threadId,
+      turnId: state.turnId,
+      turnCount: state.turnCount,
+    };
   }
 
   const abortOutcome = checkAbort(input, state);

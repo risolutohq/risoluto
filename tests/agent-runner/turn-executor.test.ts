@@ -213,25 +213,20 @@ describe("executeTurns", () => {
     expect(state.turnCount).toBe(0);
   });
 
-  it("enforces maxTurns limit and calls classifyExitState", async () => {
+  it("returns an explicit max_turns_exceeded failure when maxTurns is exhausted (NIN-257)", async () => {
     vi.mocked(isActiveState).mockReturnValue(true); // always active
-    vi.mocked(classifyExitState).mockResolvedValue({
-      kind: "normal",
-      errorCode: null,
-      errorMessage: null,
-      threadId: "thread-1",
-      turnId: "turn-1",
-      turnCount: 2,
-    });
 
     const input = makeInput({ maxTurns: 2 });
     const state = makeState();
+    vi.mocked(classifyExitState).mockClear();
 
     const result = await executeTurns(input, state);
 
     expect(state.turnCount).toBe(2);
-    expect(classifyExitState).toHaveBeenCalled();
-    expect(result.kind).toBe("normal");
+    // An exhausted run is a failure (not a normal exit), and classifyExitState is bypassed.
+    expect(result.kind).toBe("failed");
+    expect(result.errorCode).toBe("max_turns_exceeded");
+    expect(classifyExitState).not.toHaveBeenCalled();
   });
 
   it("returns failed outcome for turn status 'failed'", async () => {
