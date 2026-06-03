@@ -266,11 +266,12 @@ export class LinearClient {
       url: string;
       enabled: boolean;
       label: string | null;
-      secret: string | null;
       resourceTypes: string[];
       teamIds: string[];
     }>
   > {
+    // The listing never carries the signing secret — it is omitted from the query and the result so
+    // health/registration code can't accidentally leak it (NIN-263).
     const payload = await this.runGraphQL(buildWebhooksQuery());
     const nodes = asArray(asRecord(asRecord(payload.data).webhooks).nodes);
     return nodes.map((node) => {
@@ -280,7 +281,6 @@ export class LinearClient {
         url: asStringOrNull(n.url) ?? "",
         enabled: n.enabled === true,
         label: asStringOrNull(n.label),
-        secret: asStringOrNull(n.secret),
         resourceTypes: asArray(n.resourceTypes).map(String),
         teamIds: asArray(n.teamIds).map(String),
       };

@@ -1,6 +1,15 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 import { timingSafeStringEqual } from "../http/token-compare.js";
+
+/**
+ * SHA-256 digest of the verified raw body + signature. Webhook replay protection dedupes on this
+ * rather than a spoofable provider delivery id, so a captured signed body replayed under a fresh
+ * delivery id is still recognized as a duplicate (NIN-262/263).
+ */
+export function computeWebhookBodyDigest(rawBody: Buffer | string, signature: string): string {
+  return createHash("sha256").update(rawBody).update("\n").update(signature).digest("hex");
+}
 
 export function verifyLinearSignature(rawBody: Buffer, signature: string, secret: string): boolean {
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");

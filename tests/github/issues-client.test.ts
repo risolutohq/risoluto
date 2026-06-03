@@ -174,6 +174,20 @@ describe("GitHubIssuesClient", () => {
     expect(result[0].number).toBe(42);
   });
 
+  it("fetchOpenIssues drops pull-request-backed records (NIN-263)", async () => {
+    const issues = [
+      makeRawIssue({ number: 42 }),
+      makeRawIssue({ number: 99, pull_request: { url: "https://api.github.com/repos/acme/awesome/pulls/99" } }),
+    ];
+    fetchMock.mockResolvedValue(createJsonResponse(200, issues));
+
+    const client = createClient();
+    const result = await client.fetchOpenIssues();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].number).toBe(42);
+  });
+
   it("fetchOpenIssues includes labels param when provided", async () => {
     fetchMock.mockResolvedValue(createJsonResponse(200, []));
 

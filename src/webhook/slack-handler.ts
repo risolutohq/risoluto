@@ -14,7 +14,8 @@ import {
 import type { WorkflowRunIntakeRule } from "../workflow-run/intake-core.js";
 import type { OperatorPermission } from "../workflow-run/operator-approval-contract.js";
 import type { SlackOperatorIdentity } from "../workflow-run/slack-operator-approval.js";
-import { verifySlackSignature } from "./signature.js";
+import type { VerifiedWebhookDeliveryStore } from "./delivery-workflow.js";
+import { computeWebhookBodyDigest, verifySlackSignature } from "./signature.js";
 
 const SLACK_REPLAY_WINDOW_SECONDS = 300;
 
@@ -35,6 +36,7 @@ export interface SlackWebhookHandlerDeps {
   nowEpochSeconds: () => number;
   logger: RisolutoLogger;
   eventBus?: Pick<TypedEventBus<RisolutoEventMap>, "emit">;
+  webhookInbox?: VerifiedWebhookDeliveryStore;
 }
 
 interface SlackInteractionPayload {
@@ -114,6 +116,15 @@ async function dispatchModalSubmission(
     sendError(res, 400, "slack_modal_invalid", "Slack modal submission is missing required metadata");
     return;
   }
+  const dedupe = await deduplicateSlackModal(deps, request, modal);
+  if (dedupe === "unavailable") {
+    sendError(res, 503, "webhook_inbox_unavailable", "Slack webhook inbox persistence is unavailable");
+    return;
+  }
+  if (dedupe === "duplicate") {
+    res.status(200).json({ response_action: "clear" });
+    return;
+  }
   try {
     const intake = await acceptSlackModalWorkflowRun({
       dataDir: deps.dataDir,
@@ -129,11 +140,54 @@ async function dispatchModalSubmission(
       title: intake.workflowRun.title,
       workflowDefinitionId: intake.workflowRun.workflowDefinitionId,
     });
+    await deps.webhookInbox?.markApplied?.(slackModalDeliveryId(modal.viewId));
     res.status(200).json({ response_action: "clear" });
   } catch (error) {
     deps.logger.error({ error: String(error) }, "slack modal intake failed");
+    await markSlackModalForRetry(deps, modal.viewId, error);
     sendError(res, 500, "slack_intake_failed", "Slack modal intake failed");
   }
+}
+
+// Dedupe a verified Slack modal on the body+signature digest so a replayed signed submission (even
+// re-delivered under a fresh Slack view id) is recognized as a duplicate and never starts a second
+// Workflow Run (NIN-263). Returns "new" when no inbox is configured so the dedupe stays opt-in.
+async function deduplicateSlackModal(
+  deps: SlackWebhookHandlerDeps,
+  request: VerifiedSlackRequest,
+  modal: SlackModalSubmission,
+): Promise<"new" | "duplicate" | "unavailable"> {
+  if (!deps.webhookInbox) {
+    return "new";
+  }
+  try {
+    const { isNew } = await deps.webhookInbox.insertVerified({
+      deliveryId: slackModalDeliveryId(modal.viewId),
+      bodyDigest: computeWebhookBodyDigest(request.rawBody, request.signature),
+      type: "slack:view_submission",
+      action: "view_submission",
+      entityId: modal.viewId,
+      issueId: null,
+      issueIdentifier: null,
+      webhookTimestamp: request.timestamp,
+      payloadJson: null,
+    });
+    return isNew ? "new" : "duplicate";
+  } catch (error) {
+    deps.logger.error({ error: String(error) }, "slack webhook inbox insert failed");
+    return "unavailable";
+  }
+}
+
+// A modal recorded before its intake ran is moved to a retryable state on failure so the durable
+// record isn't stranded as a dedupe tombstone that would silently swallow Slack's own retry (NIN-263).
+async function markSlackModalForRetry(deps: SlackWebhookHandlerDeps, viewId: string, error: unknown): Promise<void> {
+  const nextAttemptAt = new Date(Date.now() + 60_000).toISOString();
+  await deps.webhookInbox?.markForRetry?.(slackModalDeliveryId(viewId), String(error), 1, nextAttemptAt);
+}
+
+function slackModalDeliveryId(viewId: string): string {
+  return `slack:${viewId}`;
 }
 
 async function dispatchApprovalTap(

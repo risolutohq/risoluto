@@ -39,6 +39,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { initWebhookInfrastructure, buildWebhookHandlerDeps } from "../webhook/composition.js";
+import type { VerifiedWebhookDeliveryStore } from "../webhook/delivery-workflow.js";
 import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
 import { acceptLinearTriggeredWorkflowRun } from "../workflow-run/linear-intake.js";
 import { acceptGitHubTriggeredWorkflowRun } from "../workflow-run/tracker-intake.js";
@@ -375,6 +376,7 @@ function buildSlackWebhookDeps(
   archiveDir: string,
   logger: RisolutoLogger,
   eventBus: TypedEventBus<RisolutoEventMap>,
+  webhookInbox: VerifiedWebhookDeliveryStore | undefined,
 ): SlackWebhookHandlerDeps | undefined {
   const slackIntake = configStore.getConfig().slackIntake;
   if (!slackIntake) {
@@ -391,6 +393,9 @@ function buildSlackWebhookDeps(
     nowEpochSeconds: () => Math.floor(Date.now() / 1000),
     eventBus,
     logger: logger.child({ component: "slack-webhook" }),
+    // Share the durable webhook inbox so a replayed signed Slack modal dedupes on its body/signature
+    // digest, mirroring the Linear/GitHub webhook surfaces (NIN-263).
+    webhookInbox,
   };
 }
 
@@ -441,7 +446,7 @@ function createHttpLayer(
           logger,
         })
       : undefined,
-    slackWebhookDeps: buildSlackWebhookDeps(configStore, archiveDir, logger, eventBus),
+    slackWebhookDeps: buildSlackWebhookDeps(configStore, archiveDir, logger, eventBus, webhook.webhookInbox),
   });
 
   return { httpServer };

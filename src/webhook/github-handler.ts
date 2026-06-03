@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type { Response } from "express";
 
 import type { ConfigStore } from "../config/store.js";
@@ -12,7 +10,7 @@ import { asRecord, asStringOrNull } from "../utils/type-guards.js";
 import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 import type { VerifiedWebhookDeliveryStore } from "./delivery-workflow.js";
 import { WebhookDeliveryWorkflow } from "./delivery-workflow.js";
-import { verifyGitHubSignature } from "./signature.js";
+import { computeWebhookBodyDigest, verifyGitHubSignature } from "./signature.js";
 
 const SUPPORTED_GITHUB_ISSUE_ACTIONS = new Set(["opened", "edited", "reopened", "closed", "labeled", "unlabeled"]);
 
@@ -42,15 +40,6 @@ interface GitHubWebhookContext {
 
 function sendError(res: Response, status: number, code: string, message: string): void {
   res.status(status).json({ error: { code, message } } satisfies ApiErrorResponse);
-}
-
-/**
- * SHA-256 digest of the verified raw body and signature. Replay protection dedupes on this rather
- * than the spoofable X-GitHub-Delivery header, so a captured signed body replayed under a fresh
- * delivery id is still recognized as a duplicate (NIN-262).
- */
-function computeBodyDigest(rawBody: Buffer | string, signature: string): string {
-  return createHash("sha256").update(rawBody).update("\n").update(signature).digest("hex");
 }
 
 function validateGitHubWebhookRequest(
@@ -99,7 +88,7 @@ function validateGitHubWebhookRequest(
     return null;
   }
 
-  return { config, event, bodyDigest: computeBodyDigest(req.rawBody, signature) };
+  return { config, event, bodyDigest: computeWebhookBodyDigest(req.rawBody, signature) };
 }
 
 function buildGitHubWebhookContext(

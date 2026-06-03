@@ -118,6 +118,7 @@ describe("LinearClient.listWebhooks", () => {
     const client = makeClient(fetchMock);
     const webhooks = await client.listWebhooks();
 
+    // The listing never surfaces the signing secret even when the API echoes one back (NIN-263).
     expect(webhooks).toEqual([
       {
         id: "wh-1",
@@ -126,7 +127,6 @@ describe("LinearClient.listWebhooks", () => {
         label: "Risoluto",
         teamIds: ["team-1"],
         resourceTypes: ["Issue", "Comment"],
-        secret: "sec-abc",
       },
       {
         id: "wh-2",
@@ -135,12 +135,14 @@ describe("LinearClient.listWebhooks", () => {
         label: null,
         teamIds: [],
         resourceTypes: ["Issue"],
-        secret: null,
       },
     ]);
+    expect(webhooks[0]).not.toHaveProperty("secret");
 
     const body = getRequestBody(fetchMock, 0);
     expect(body.query).toContain("RisolutoWebhooks");
+    // The query must not request the secret field — it would pull every signing secret into memory/logs.
+    expect(body.query).not.toContain("secret");
   });
 
   it("handles empty nodes array", async () => {
@@ -179,7 +181,6 @@ describe("LinearClient.listWebhooks", () => {
         label: null,
         teamIds: [],
         resourceTypes: [],
-        secret: null,
       },
     ]);
   });

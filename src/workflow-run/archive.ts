@@ -144,17 +144,21 @@ async function appendWorkflowRunEventsToRunDir(
     return [];
   }
 
-  const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
-  const sequencedEvents = events.map((event, index) => ({
-    ...event,
-    sequence: firstSequence + index,
-  }));
-  await appendFile(
-    runLogPathForRunDir(artifactDir),
-    `${sequencedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
-    "utf8",
-  );
-  return sequencedEvents;
+  // Serialize the read-then-append per run directory so two concurrent appends can't read the same
+  // next-sequence and emit duplicate sequence numbers / attempt indices (NIN-263).
+  return withSerialChain(runEventAppendChains, artifactDir, async () => {
+    const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
+    const sequencedEvents = events.map((event, index) => ({
+      ...event,
+      sequence: firstSequence + index,
+    }));
+    await appendFile(
+      runLogPathForRunDir(artifactDir),
+      `${sequencedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
+      "utf8",
+    );
+    return sequencedEvents;
+  });
 }
 
 async function appendWorkflowRunEventsToArchive(
@@ -215,25 +219,40 @@ async function writeWorkflowRunArtifactToArchive(
 // any further status write (NIN-255).
 const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStartRecord["status"]> = new Set(["blocked", "done", "cancelled"]);
 
-// Serializes status writes per Workflow Run so the read-check-write below is atomic; two
-// concurrent updates (e.g. a cancel racing a done) can no longer interleave (NIN-255).
-const runStatusUpdateChains = new Map<string, Promise<unknown>>();
-
-function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>): Promise<T> {
-  const prior = runStatusUpdateChains.get(workflowRunId) ?? Promise.resolve();
+// Serializes async operations sharing a key so their read-modify-write body runs atomically against
+// concurrent callers: per-run status writes (NIN-255) and per-run-dir event-sequence assignment
+// (NIN-263).
+function withSerialChain<T>(
+  chains: Map<string, Promise<unknown>>,
+  key: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const prior = chains.get(key) ?? Promise.resolve();
   const result = prior.then(operation, operation);
   const settled = result.then(
     () => undefined,
     () => undefined,
   );
-  runStatusUpdateChains.set(workflowRunId, settled);
+  chains.set(key, settled);
   void settled.then(() => {
-    if (runStatusUpdateChains.get(workflowRunId) === settled) {
-      runStatusUpdateChains.delete(workflowRunId);
+    if (chains.get(key) === settled) {
+      chains.delete(key);
     }
   });
   return result;
 }
+
+// Status writes are serialized per Workflow Run so a cancel racing a done can no longer
+// interleave (NIN-255).
+const runStatusUpdateChains = new Map<string, Promise<unknown>>();
+
+function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>): Promise<T> {
+  return withSerialChain(runStatusUpdateChains, workflowRunId, operation);
+}
+
+// Event appends are serialized per run directory so concurrent appends can't collide on the
+// next event sequence (NIN-263).
+const runEventAppendChains = new Map<string, Promise<unknown>>();
 
 async function updateWorkflowRunStatusInArchive(
   archiveRoot: string,

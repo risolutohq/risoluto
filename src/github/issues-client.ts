@@ -25,6 +25,11 @@ export interface RawGitHubIssue {
   html_url: string;
   created_at: string;
   updated_at: string;
+  /**
+   * Present only when the record is a pull request. The GitHub `/issues` endpoint returns PRs
+   * alongside issues, so this field is used to filter PR-backed records out (NIN-263).
+   */
+  pull_request?: unknown;
 }
 
 interface RawGitHubLabel {
@@ -170,7 +175,12 @@ export class GitHubIssuesClient {
   async fetchOpenIssues(labels?: string[]): Promise<RawGitHubIssue[]> {
     const { owner, repo } = this.getOwnerRepo();
     const labelParam = labels && labels.length > 0 ? `&labels=${encodeURIComponent(labels.join(","))}` : "";
-    return this.paginate<RawGitHubIssue>(`/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`);
+    const records = await this.paginate<RawGitHubIssue>(
+      `/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`,
+    );
+    // GitHub's /issues endpoint returns pull requests too; drop PR-backed records so they are
+    // never treated as Tracker Issues (NIN-263).
+    return records.filter((record) => record.pull_request === undefined);
   }
 
   /** Follows GitHub `Link` rel="next" pagination, accumulating every page. */
@@ -218,6 +228,24 @@ export class GitHubIssuesClient {
     await this.request<unknown>(`/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`, {
       method: "DELETE",
     });
+  }
+
+  /**
+   * Remove a label, treating a 404 (the label isn't on the issue) as a no-op. Used to clear stale
+   * state labels during a transition without first fetching the issue's current labels (NIN-263).
+   */
+  async removeLabelIfPresent(issueNumber: number, label: string): Promise<void> {
+    const { owner, repo } = this.getOwnerRepo();
+    const response = await this.send(
+      `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok && response.status !== 404) {
+      throw new GitHubIssuesClientError(
+        "github_http_error",
+        `github api request failed with status ${response.status}`,
+      );
+    }
   }
 
   async closeIssue(issueNumber: number): Promise<void> {

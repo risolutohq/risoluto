@@ -5,7 +5,7 @@ import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { RisolutoLogger } from "../core/types.js";
 import type { VerifiedWebhookDeliveryStore } from "./delivery-workflow.js";
 import { WebhookDeliveryWorkflow } from "./delivery-workflow.js";
-import { verifyLinearSignature } from "./signature.js";
+import { computeWebhookBodyDigest, verifyLinearSignature } from "./signature.js";
 import type { ApiErrorResponse } from "../http/service-errors.js";
 import type { LinearWebhookPayload, WebhookRequest } from "../http/webhook-types.js";
 import {
@@ -126,6 +126,15 @@ export function handleWebhookLinear(deps: WebhookHandlerDeps, req: WebhookReques
     sendError(res, 400, "delivery_missing", "Missing Linear delivery header");
     return;
   }
+
+  // Require durable inbox persistence before accepting a verified delivery — without it there is no
+  // durable idempotency, so a replayed signed body would re-trigger side effects (NIN-263).
+  if (!deps.webhookInbox) {
+    res.setHeader("Retry-After", "5");
+    sendError(res, 503, "webhook_inbox_unavailable", "Webhook inbox persistence is unavailable");
+    return;
+  }
+
   const action = body.action;
   const type = body.type;
   const eventType = `${type}:${action}`;
@@ -135,6 +144,9 @@ export function handleWebhookLinear(deps: WebhookHandlerDeps, req: WebhookReques
   workflow.respondAccepted(res, {
     delivery: {
       deliveryId,
+      // Dedupe on the verified body+signature digest so replaying the same signed payload under a
+      // fresh Linear-Delivery id is still recognized as a duplicate (NIN-263).
+      bodyDigest: computeWebhookBodyDigest(rawBody, signature),
       type,
       action,
       entityId: typeof body.data.id === "string" ? body.data.id : null,

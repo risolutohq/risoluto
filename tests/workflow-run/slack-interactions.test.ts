@@ -118,6 +118,8 @@ describe("Slack workflow-run interactions", () => {
       now: () => "2026-05-31T20:51:00.000Z",
     });
 
+    expect(result.type).toBe("slack_operator_response.recorded");
+    if (result.type !== "slack_operator_response.recorded") throw new Error("expected a recorded response");
     expect(result.artifact).toMatchObject({
       artifactId: `operator-response-${createHash("sha256").update("clarify-scope").digest("hex").slice(0, 16)}`,
       contractId: "operator_response.v1",
@@ -125,6 +127,31 @@ describe("Slack workflow-run interactions", () => {
     expect(parseWorkflowRunArtifact({ contractId: "operator_response.v1", data: result.response })).toEqual(
       result.response,
     );
+  });
+
+  it("accepts a per-questionId Slack response exactly once", async () => {
+    const dataDir = await createTempDir();
+    const base = {
+      dataDir,
+      workflowRunId: "wr_dup",
+      questionId: "clarify-scope",
+      operator: { id: "operator-omer", slackUserId: "U_OK" },
+      slack: { teamId: "T_OK", userId: "U_OK" },
+      now: () => "2026-05-31T20:51:00.000Z",
+    };
+
+    const first = await recordSlackOperatorResponse({ ...base, response: "first answer wins" });
+    const second = await recordSlackOperatorResponse({ ...base, response: "second answer loses" });
+
+    expect(first.type).toBe("slack_operator_response.recorded");
+    expect(second).toEqual({ type: "slack_operator_response.duplicate", questionId: "clarify-scope" });
+
+    if (first.type !== "slack_operator_response.recorded") throw new Error("expected a recorded response");
+    const stored = await createWorkflowRunArchive({ dataDir }).readWorkflowRunArtifact({
+      workflowRunId: "wr_dup",
+      artifactId: first.artifact.artifactId,
+    });
+    expect((stored.data as { response: string }).response).toBe("first answer wins");
   });
 });
 

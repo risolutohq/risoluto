@@ -93,6 +93,7 @@ function createMockClient(): GitHubIssuesClient {
     fetchIssuesByNumbers: vi.fn().mockResolvedValue([]),
     addLabel: vi.fn().mockResolvedValue(undefined),
     removeLabel: vi.fn().mockResolvedValue(undefined),
+    removeLabelIfPresent: vi.fn().mockResolvedValue(undefined),
     closeIssue: vi.fn().mockResolvedValue(undefined),
     reopenIssue: vi.fn().mockResolvedValue(undefined),
     createComment: vi.fn().mockResolvedValue(undefined),
@@ -279,6 +280,17 @@ describe("GitHubTrackerAdapter", () => {
 
       expect(ops).toContain("addLabel");
       expect(ops).toContain("reopenIssue");
+    });
+
+    it("removes the other state labels so only the new state label remains (NIN-263)", async () => {
+      await adapter.updateIssueState("7", "in-progress");
+
+      // config: activeStates ["in-progress"], terminalStates ["done"]. The new state label is added;
+      // every other state label is cleared (tolerating a 404 for a label not on the issue).
+      expect(client.addLabel).toHaveBeenCalledWith(7, "in-progress");
+      const cleared = vi.mocked(client.removeLabelIfPresent).mock.calls.map((call) => call[1]);
+      expect(cleared).toEqual(["done"]);
+      expect(cleared).not.toContain("in-progress");
     });
   });
 
