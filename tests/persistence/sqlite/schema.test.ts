@@ -326,7 +326,7 @@ describe("config table schema", () => {
 describe("encryptedSecrets table schema", () => {
   it("has all expected columns", () => {
     const cols = getColumnNames(encryptedSecrets);
-    expect(cols).toEqual(["auth_tag", "ciphertext", "iv", "key", "updated_at"].sort());
+    expect(cols).toEqual(["auth_tag", "ciphertext", "iv", "kdf_salt", "kdf_version", "key", "updated_at"].sort());
   });
 
   it("key is primary key", () => {
