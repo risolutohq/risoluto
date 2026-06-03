@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtemp, writeFile, cp, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, cp, chmod, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -229,7 +229,12 @@ export class CodexControlPlane {
       await writeFile(path.join(codexHome, "config.toml"), trustedProjectConfig);
       if (codexConfig.auth.mode === "openai_login" && codexConfig.auth.sourceHome) {
         const srcAuth = path.join(codexConfig.auth.sourceHome, "auth.json");
-        await cp(srcAuth, path.join(codexHome, "auth.json")).catch(() => {});
+        const destAuth = path.join(codexHome, "auth.json");
+        // Copy then force owner-only perms — the refreshed credential must not be
+        // group/world-readable in the per-run CODEX_HOME (NIN-251).
+        await cp(srcAuth, destAuth)
+          .then(() => chmod(destAuth, 0o600))
+          .catch(() => {});
       }
       this.codexHome = codexHome;
 

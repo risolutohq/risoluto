@@ -65,8 +65,7 @@ export class DbSecretsStore {
     if (!masterKey) {
       throw new Error("MASTER_KEY is required to initialize DbSecretsStore");
     }
-    this.masterKey = masterKey;
-    this.migrateV1Rows(masterKey);
+    this.adoptMasterKey(masterKey);
   }
 
   async startDeferred(): Promise<void> {
@@ -74,9 +73,37 @@ export class DbSecretsStore {
   }
 
   async initializeWithKey(masterKey: string): Promise<void> {
-    this.masterKey = masterKey;
-    this.migrateV1Rows(masterKey);
+    this.adoptMasterKey(masterKey);
     this.notify();
+  }
+
+  /**
+   * Adopt `masterKey` only after the existing rows prove they decrypt with it. A wrong
+   * key is rejected here instead of silently returning null from get(), so a mismatch
+   * can never masquerade as an empty / "missing secrets" store. masterKey is cleared on
+   * any failure path so a bad key never stays active (NIN-251).
+   */
+  private adoptMasterKey(masterKey: string): void {
+    this.masterKey = masterKey;
+    try {
+      this.migrateV1Rows(masterKey);
+      this.verifyRowsDecrypt(masterKey);
+    } catch (error) {
+      this.masterKey = null;
+      throw error;
+    }
+  }
+
+  private verifyRowsDecrypt(masterKey: string): void {
+    const rows = this.db.select().from(encryptedSecrets).all();
+    for (const row of rows) {
+      try {
+        const decryptKey = this.resolveRowKey(masterKey, row.kdfVersion, row.kdfSalt);
+        decryptValue(row.ciphertext, row.iv, row.authTag, decryptKey);
+      } catch (error) {
+        throw new Error("DbSecretsStore master key does not match the existing encrypted rows", { cause: error });
+      }
+    }
   }
 
   isInitialized(): boolean {

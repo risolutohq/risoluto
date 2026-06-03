@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 
@@ -140,30 +140,7 @@ export class SecretsStore implements SecretsPort {
     if (!masterKey) {
       throw new Error("MASTER_KEY is required to initialize SecretsStore");
     }
-    this.activeMasterKey = masterKey;
-    const source = await this.readEncryptedFile();
-    if (source === null) {
-      await this.persist();
-      return;
-    }
-
-    const envelope = parseEnvelope(source);
-    const decryptKey = resolveEnvelopeKey(masterKey, envelope);
-    let decrypted: string;
-    try {
-      decrypted = decrypt(envelope, decryptKey);
-    } catch (error) {
-      this.logger.error(
-        { error: toErrorString(error), secretsPath: this.secretsPath() },
-        "failed to decrypt secrets.enc — refusing to overwrite existing secret store",
-      );
-      throw new Error("failed to decrypt secrets.enc; MASTER_KEY may not match the existing archive", { cause: error });
-    }
-    this.loadCache(decrypted);
-    // If the file used the legacy V1 KDF, re-encrypt in-place with V2.
-    if ((envelope.kdfVersion ?? 1) < KDF_VERSION_CURRENT) {
-      await this.persist();
-    }
+    await this.adoptMasterKey(masterKey);
   }
 
   async startDeferred(): Promise<void> {
@@ -171,34 +148,57 @@ export class SecretsStore implements SecretsPort {
   }
 
   async initializeWithKey(masterKey: string): Promise<void> {
-    this.activeMasterKey = masterKey;
+    await this.adoptMasterKey(masterKey);
+    this.notify();
+  }
+
+  /**
+   * Validate `masterKey` against the existing archive (if any) before adopting it.
+   * activeMasterKey is assigned only after a clean decrypt and is cleared on every
+   * failure path, so a wrong key can never become active and overwrite the real
+   * secrets.enc on the next write (NIN-251).
+   */
+  private async adoptMasterKey(masterKey: string): Promise<void> {
     const source = await this.readEncryptedFile();
     if (source === null) {
-      await this.persist();
-      this.notify();
+      this.activeMasterKey = masterKey;
+      try {
+        await this.persist();
+      } catch (error) {
+        this.activeMasterKey = null;
+        throw error;
+      }
       return;
     }
 
+    // parseEnvelope / resolveEnvelopeKey may throw before any key is adopted — that is
+    // fine, activeMasterKey is still null at this point.
     const envelope = parseEnvelope(source);
     const decryptKey = resolveEnvelopeKey(masterKey, envelope);
     let decrypted: string;
     try {
       decrypted = decrypt(envelope, decryptKey);
     } catch (error) {
+      this.activeMasterKey = null;
       this.logger.error(
         { error: toErrorString(error), secretsPath: this.secretsPath() },
         "failed to decrypt secrets.enc — refusing to overwrite existing secret store",
       );
-      throw new Error("failed to decrypt secrets.enc; MASTER_KEY may not match the existing archive", {
-        cause: error,
-      });
+      throw new Error("failed to decrypt secrets.enc; MASTER_KEY may not match the existing archive", { cause: error });
     }
+
+    this.activeMasterKey = masterKey;
     this.loadCache(decrypted);
     // If the file used the legacy V1 KDF, re-encrypt in-place with V2.
     if ((envelope.kdfVersion ?? 1) < KDF_VERSION_CURRENT) {
-      await this.persist();
+      try {
+        await this.persist();
+      } catch (error) {
+        this.activeMasterKey = null;
+        this.cache.clear();
+        throw error;
+      }
     }
-    this.notify();
   }
 
   isInitialized(): boolean {
@@ -228,22 +228,43 @@ export class SecretsStore implements SecretsPort {
     if (!key.trim()) {
       throw new Error("secret key must not be empty");
     }
-    this.cache.set(key, value);
-    await this.persist();
-    await this.appendAuditEntry("set", key);
-    this.notify();
+    return this.enqueueMutation(async () => {
+      // Confirm the store is usable before touching the in-memory cache, so a write
+      // attempted before start() cannot leave a value cached that never reaches disk.
+      this.requiredMasterKey();
+      this.cache.set(key, value);
+      await this.persist();
+      await this.appendAuditEntry("set", key);
+      this.notify();
+    });
   }
 
   async delete(key: string): Promise<boolean> {
-    const existed = this.cache.delete(key);
-    if (!existed) {
-      return false;
-    }
+    return this.enqueueMutation(async () => {
+      this.requiredMasterKey();
+      const existed = this.cache.delete(key);
+      if (!existed) {
+        return false;
+      }
 
-    await this.persist();
-    await this.appendAuditEntry("delete", key);
-    this.notify();
-    return true;
+      await this.persist();
+      await this.appendAuditEntry("delete", key);
+      this.notify();
+      return true;
+    });
+  }
+
+  // Serializes set()/delete() so the key check, cache mutation, persist, and audit of
+  // one mutation complete before the next begins (NIN-251).
+  private mutationChain: Promise<unknown> = Promise.resolve();
+
+  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationChain.then(operation, operation);
+    this.mutationChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private requiredMasterKey(): string {
@@ -299,12 +320,14 @@ export class SecretsStore implements SecretsPort {
   private async writeCacheToDisk(): Promise<void> {
     const serializedSecrets = JSON.stringify(Object.fromEntries(this.cache), null, 2);
     const envelope = encrypt(serializedSecrets, this.requiredMasterKey());
+    const payload = encodeEnvelope(envelope);
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const temporaryPath = `${this.secretsPath()}.tmp-${process.pid}-${Date.now()}`;
       try {
-        await writeFile(temporaryPath, encodeEnvelope(envelope), "utf8");
+        await this.writeFileSynced(temporaryPath, payload);
         await rename(temporaryPath, this.secretsPath());
+        await this.fsyncDir();
         return;
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
@@ -314,6 +337,28 @@ export class SecretsStore implements SecretsPort {
         }
         throw error;
       }
+    }
+  }
+
+  // Write secrets.enc owner-only (0o600) and fsync the bytes before the rename, so a
+  // crash cannot leave a world-readable or half-written secret archive (NIN-251).
+  private async writeFileSynced(filePath: string, contents: string): Promise<void> {
+    const handle = await open(filePath, "w", 0o600);
+    try {
+      await handle.writeFile(contents, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  }
+
+  // fsync the containing directory so the atomic rename of secrets.enc is itself durable.
+  private async fsyncDir(): Promise<void> {
+    const handle = await open(this.baseDir, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
     }
   }
 

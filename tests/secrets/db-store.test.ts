@@ -128,21 +128,26 @@ describe("DbSecretsStore", () => {
     expect(store2.get("PERSIST_TEST")).toBe("survives");
   });
 
-  it("different master key cannot decrypt", async () => {
+  it("rejects start when the master key cannot decrypt existing rows (NIN-251)", async () => {
     await store.set("SECRET", "hidden");
 
-    const wrongLogger = createMockLogger();
-    const store2 = new DbSecretsStore(db, wrongLogger, { masterKey: "wrong-key" });
-    await store2.start();
-    expect(store2.get("SECRET")).toBeNull(); // decrypt fails, returns null
-    expect(wrongLogger.warn).toHaveBeenCalledTimes(1);
-    expect(wrongLogger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: "SECRET",
-        error: expect.any(String),
-      }),
-      "failed to decrypt secret",
-    );
+    const store2 = new DbSecretsStore(db, createMockLogger(), { masterKey: "wrong-key" });
+    // A wrong key must fail loudly on start, not masquerade as an empty/"missing" store.
+    await expect(store2.start()).rejects.toThrow(/master key does not match/i);
+    expect(store2.isInitialized()).toBe(false);
+
+    // The correct key still decrypts the untouched row.
+    const store3 = new DbSecretsStore(db, createMockLogger(), { masterKey: TEST_MASTER_KEY });
+    await store3.start();
+    expect(store3.get("SECRET")).toBe("hidden");
+  });
+
+  it("rejects initializeWithKey when the key cannot decrypt existing rows (NIN-251)", async () => {
+    await store.set("SECRET", "hidden");
+
+    const deferred = new DbSecretsStore(db, createMockLogger());
+    await expect(deferred.initializeWithKey("wrong-key")).rejects.toThrow(/master key does not match/i);
+    expect(deferred.isInitialized()).toBe(false);
   });
 
   it("handles special characters in values", async () => {
