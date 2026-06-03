@@ -79,4 +79,5 @@ If no code changed (clean review, no cleanup applied), say so and just reprint t
 - `docs/research-to-shipping-pipeline.md` — the Stage 3.5 spec
 - `/code-review`, `/simplify`, `/v1-check` — the three tools this skill orchestrates
 - `skills/risoluto-tdd/` — Stage 3 upstream; produces the branch this reviews and owns the Linear writes after the PR opens
+- `skills/risoluto-verify-acceptance/` — the cross-model companion to this same-model pass; recommended before `gh pr create` (a different model verifies each acceptance criterion; `NOT_MET` blocks)
 - `skills/risoluto-review-handoff/` — the AFK Phase 4.4 analog (a reviewer-only pass over the finished `integration/<slug>` branch)
