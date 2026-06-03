@@ -26,8 +26,21 @@ import {
 import { hasCodexAuthFile, hasRepoRoutes, readProjectSlug, readTrackerKind } from "./setup-status.js";
 import { toErrorString } from "../utils/type-guards.js";
 import { isBlockedRequestHost, isLoopbackHost } from "../utils/url-safety.js";
+import { assertValidBranchName, InvalidGitRefError } from "../git/git-validation.js";
 
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?$/u;
+
+/** Raised when a GitHub request fails authentication (bad/expired token) — surfaced
+ * distinctly from network/not-found errors so setup does not mask a bad token (NIN-253). */
+export class GitHubAuthError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "GitHubAuthError";
+  }
+}
 
 function stripTrailingSlashes(value: string): string {
   let end = value.length;
@@ -72,7 +85,21 @@ function normalizeRepoUrl(repoUrl: string | null): string | null {
 }
 
 function normalizeDefaultBranch(defaultBranch: string | null | undefined): string {
-  return trimOptionalNonEmptyString(defaultBranch) ?? "main";
+  const trimmed = trimOptionalNonEmptyString(defaultBranch);
+  if (!trimmed) {
+    return "main";
+  }
+  // A persisted defaultBranch is later used as a git ref / start point, so it must pass
+  // git ref-format rules (no leading '-', whitespace, control chars, '..') (NIN-253).
+  try {
+    assertValidBranchName(trimmed);
+  } catch (error) {
+    if (error instanceof InvalidGitRefError) {
+      throw new SetupServiceError(400, "invalid_default_branch", "defaultBranch is not a valid git branch name");
+    }
+    throw error;
+  }
+  return trimmed;
 }
 
 function normalizeIdentifierPrefix(identifierPrefix: string | null): string | null {
@@ -193,22 +220,21 @@ export async function fetchDefaultBranch(
   });
   const pathName = `/repos/${owner}/${repo}`;
 
-  if (token) {
-    try {
-      const data = await transport.request({ pathName, method: "GET", token });
-      const record = data as Record<string, unknown>;
-      if (typeof record.default_branch === "string") {
-        return record.default_branch;
-      }
-    } catch {
-      // Fall through to the unauthenticated request for public repos.
-    }
-  }
-
+  // When a token is supplied, use it and surface failures — a bad/expired token must not
+  // silently fall back to an unauthenticated request (which would mask the auth problem).
+  // The unauthenticated request is only used when no token exists at all (NIN-253).
+  const omitAuthorization = token === null;
   let data: Record<string, unknown>;
   try {
-    data = (await transport.request({ pathName, method: "GET", omitAuthorization: true })) as Record<string, unknown>;
+    data = (await transport.request({
+      pathName,
+      method: "GET",
+      ...(token ? { token } : { omitAuthorization: true }),
+    })) as Record<string, unknown>;
   } catch (error) {
+    if (error instanceof GitHubApiError && (error.status === 401 || error.status === 403) && !omitAuthorization) {
+      throw new GitHubAuthError(`GitHub authentication failed (${error.status})`, error.status);
+    }
     if (error instanceof GitHubApiError) {
       throw new Error(`GitHub API returned ${error.status}`, { cause: error });
     }
@@ -283,9 +309,17 @@ class SetupServiceImpl implements SetupPort {
   }
 
   async selectLinearProject(slugId: string): Promise<{ ok: true }> {
+    // Probe the project first (this validates it exists / is reachable), then persist
+    // the slug, then start. A failed start rolls the slug back so a broken setup is not
+    // left looking configured (NIN-253).
     await this.requireTracker().provision({ type: "select_project", slugId });
     await this.deps.configOverlayStore.set("tracker.project_slug", slugId);
-    await this.deps.orchestrator.start();
+    try {
+      await this.deps.orchestrator.start();
+    } catch {
+      await this.deps.configOverlayStore.delete("tracker.project_slug").catch(() => {});
+      throw new SetupServiceError(500, "orchestrator_start_failed", "Failed to start after selecting the project");
+    }
     this.deps.orchestrator.requestRefresh("setup");
     return { ok: true };
   }
@@ -307,25 +341,42 @@ class SetupServiceImpl implements SetupPort {
       return { valid: false };
     }
 
-    await Promise.all([
-      this.deps.secretsStore.set("OPENAI_API_KEY", key),
-      this.deps.configOverlayStore.set("codex.auth.mode", "api_key"),
-    ]);
+    // Snapshot the rollback state so a partial failure leaves neither the secret nor the
+    // codex overlay section persisted (NIN-253).
+    const priorKey = this.deps.secretsStore.get("OPENAI_API_KEY");
+    const priorCodex = this.deps.configOverlayStore.toMap().codex;
 
-    await this.deps.configOverlayStore.delete("codex.provider");
-    if (provider.baseUrl) {
-      const operations: Promise<unknown>[] = [
-        this.deps.configOverlayStore.set("codex.provider.base_url", provider.baseUrl),
-        this.deps.configOverlayStore.set("codex.provider.env_key", "OPENAI_API_KEY"),
-        this.deps.configOverlayStore.set("codex.provider.wire_api", "responses"),
-      ];
-      if (provider.name) {
-        operations.push(this.deps.configOverlayStore.set("codex.provider.name", provider.name));
+    try {
+      await this.deps.secretsStore.set("OPENAI_API_KEY", key);
+      await this.deps.configOverlayStore.set("codex.auth.mode", "api_key");
+      await this.deps.configOverlayStore.delete("codex.provider");
+      if (provider.baseUrl) {
+        await this.deps.configOverlayStore.set("codex.provider.base_url", provider.baseUrl);
+        await this.deps.configOverlayStore.set("codex.provider.env_key", "OPENAI_API_KEY");
+        await this.deps.configOverlayStore.set("codex.provider.wire_api", "responses");
+        if (provider.name) {
+          await this.deps.configOverlayStore.set("codex.provider.name", provider.name);
+        }
       }
-      await Promise.all(operations);
+    } catch {
+      await this.rollbackOpenaiKey(priorKey, priorCodex);
+      throw new SetupServiceError(500, "openai_key_save_failed", "Failed to persist the OpenAI key configuration");
     }
 
     return { valid: true };
+  }
+
+  private async rollbackOpenaiKey(priorKey: string | null, priorCodex: unknown): Promise<void> {
+    if (priorKey === null) {
+      await this.deps.secretsStore.delete("OPENAI_API_KEY").catch(() => {});
+    } else {
+      await this.deps.secretsStore.set("OPENAI_API_KEY", priorKey).catch(() => {});
+    }
+    if (priorCodex === undefined) {
+      await this.deps.configOverlayStore.delete("codex").catch(() => {});
+    } else {
+      await this.deps.configOverlayStore.set("codex", priorCodex).catch(() => {});
+    }
   }
 
   async saveCodexAuth(authJson: string): Promise<{ ok: true }> {
@@ -503,7 +554,12 @@ class SetupServiceImpl implements SetupPort {
     try {
       const defaultBranch = await fetchDefaultBranch(parsed.owner, parsed.repo, resolveToken(this.deps), fetch);
       return { defaultBranch };
-    } catch {
+    } catch (error) {
+      // A bad/expired token is surfaced distinctly; network / not-found failures are
+      // non-fatal and fall back to the default branch (NIN-253).
+      if (error instanceof GitHubAuthError) {
+        throw new SetupServiceError(401, "github_auth_failed", "GitHub token is invalid or expired");
+      }
       return { defaultBranch: DEFAULT_BRANCH_FALLBACK };
     }
   }
