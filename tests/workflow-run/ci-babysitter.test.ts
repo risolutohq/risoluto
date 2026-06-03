@@ -130,6 +130,26 @@ describe("CI babysitter", () => {
     });
   });
 
+  it("blocks with 'no checks observed' evidence when the check list is empty (NIN-260)", () => {
+    const result = evaluateCiBabysitter({
+      workflowRunId,
+      createdAt,
+      provider: "github_actions",
+      retryBudgetRemaining: 1,
+      rerunsAllowed: true,
+      checks: [],
+    });
+
+    // An empty check list must never read as "all CI passed".
+    expect(result.status).toBe("blocked");
+    expect(result.route).toBe("block_operator");
+    expect(result).toMatchObject({
+      summary: "no CI checks were observed",
+      blockedEvidence: { kind: "provider_unavailable", checkId: "no-checks-observed" },
+    });
+    expect(parseWorkflowRunArtifact({ contractId: "ci_result.v1", data: result })).toEqual(result);
+  });
+
   it("requires ci_result.v1 before ready and auto_merge publish modes can complete", () => {
     for (const requestedMode of ["ready", "auto_merge"] as const) {
       const result = evaluatePrPublishPolicy({

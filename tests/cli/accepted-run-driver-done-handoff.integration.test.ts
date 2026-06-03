@@ -93,7 +93,8 @@ function createFakeGit(): { ports: WorkflowRunWorkspaceGitPorts; createdBranches
 }
 
 // Real action effects with hermetic leaves: the REAL workspace preparer (fake git ports), a validation
-// command runner that succeeds, and a CI poller with no checks (which the babysitter classifies passed).
+// command runner that succeeds, and a CI poller returning one passing check (an empty check list is now
+// classified blocked, not passed — NIN-260).
 function buildActionEffects(): { effects: WorkflowRunActionEffects; createdBranches: string[] } {
   const { ports, createdBranches } = createFakeGit();
   const effects: WorkflowRunActionEffects = {
@@ -107,7 +108,11 @@ function buildActionEffects(): { effects: WorkflowRunActionEffects; createdBranc
       ports,
     ),
     runValidationCommand: async () => ({ exitCode: 0, stdout: "", stderr: "", durationMs: 1 }),
-    pollCi: async () => ({ checks: [], retryBudgetRemaining: 1, rerunsAllowed: false }),
+    pollCi: async () => ({
+      checks: [{ id: "build", name: "build", status: "passed", classification: "unknown" }],
+      retryBudgetRemaining: 1,
+      rerunsAllowed: false,
+    }),
   };
   return { effects, createdBranches };
 }

@@ -52,6 +52,12 @@ export interface EvaluateCiBabysitterInput {
 }
 
 export function evaluateCiBabysitter(input: EvaluateCiBabysitterInput): CiResultArtifact {
+  // An empty check list must never be read as success — a misconfigured or unavailable CI
+  // poller would otherwise fabricate "all CI checks passed". Surface it as blocked with
+  // explicit "no checks observed" evidence so an operator investigates (NIN-260).
+  if (input.checks.length === 0) {
+    return ciResultArtifactSchema.parse(noChecksObservedResult(input));
+  }
   const blockingCheck = input.checks.find(isBlockingProviderCheck);
   if (blockingCheck) {
     return ciResultArtifactSchema.parse(blockedCiResult(input, blockingCheck));
@@ -150,6 +156,25 @@ function pendingCiResult(input: EvaluateCiBabysitterInput, check: CiCheckResult)
     logSummary: null,
     checks: [...input.checks],
     blockedEvidence: null,
+  };
+}
+
+function noChecksObservedResult(input: EvaluateCiBabysitterInput): CiResultArtifact {
+  return {
+    version: 1,
+    workflowRunId: input.workflowRunId,
+    createdAt: input.createdAt,
+    provider: input.provider,
+    status: "blocked",
+    route: "block_operator",
+    summary: "no CI checks were observed",
+    logSummary: null,
+    checks: [],
+    blockedEvidence: {
+      kind: "provider_unavailable",
+      checkId: "no-checks-observed",
+      summary: "no CI checks were observed; the CI provider may be misconfigured or unavailable",
+    },
   };
 }
 
