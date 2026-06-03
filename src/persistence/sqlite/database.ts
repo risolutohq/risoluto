@@ -356,6 +356,12 @@ function applyV6Migration(sqlite: SqliteDb): void {
     existingColumns.some((column) => column.name === "pr_id") &&
     existingColumns.some((column) => column.name === "pull_number");
 
+  // Rebuild/copy/drop/rename/index/version run in one transaction so a crash mid-step
+  // can't leave the DB without the original pull_requests table (NIN-254).
+  sqlite.transaction(() => rebuildPullRequestsV6(sqlite, hasTable, hasCanonicalShape))();
+}
+
+function rebuildPullRequestsV6(sqlite: SqliteDb, hasTable: boolean, hasCanonicalShape: boolean): void {
   if (!hasTable) {
     sqlite.exec(`
       CREATE TABLE pull_requests (
@@ -580,29 +586,36 @@ function applyV11Migration(sqlite: SqliteDb): void {
 export function openDatabase(dbPath: string): RisolutoDatabase {
   const sqlite = new BetterSqlite3(dbPath);
 
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  sqlite.pragma("synchronous = NORMAL");
-  sqlite.pragma("busy_timeout = 5000");
+  try {
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.pragma("synchronous = NORMAL");
+    sqlite.pragma("busy_timeout = 5000");
 
-  sqlite.exec(CREATE_TABLES_SQL);
+    sqlite.exec(CREATE_TABLES_SQL);
 
-  // Seed schema version if not present (v3 = Phase 1 config tables).
-  const versionRow = sqlite.prepare("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").get() as
-    | { version: number }
-    | undefined;
-  if (!versionRow || versionRow.version < 3) {
-    bumpSchemaVersion(sqlite, 3);
+    // Seed schema version if not present (v3 = Phase 1 config tables).
+    const versionRow = sqlite.prepare("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").get() as
+      | { version: number }
+      | undefined;
+    if (!versionRow || versionRow.version < 3) {
+      bumpSchemaVersion(sqlite, 3);
+    }
+
+    applyV4Migration(sqlite);
+    applyV5Migration(sqlite);
+    applyV6Migration(sqlite);
+    applyV7Migration(sqlite);
+    applyV8Migration(sqlite);
+    applyV9Migration(sqlite);
+    applyV10Migration(sqlite);
+    applyV11Migration(sqlite);
+  } catch (error) {
+    // Release the file handle / WAL locks if schema creation or a migration throws,
+    // so a failed open never leaks the raw better-sqlite3 connection (NIN-254).
+    sqlite.close();
+    throw error;
   }
-
-  applyV4Migration(sqlite);
-  applyV5Migration(sqlite);
-  applyV6Migration(sqlite);
-  applyV7Migration(sqlite);
-  applyV8Migration(sqlite);
-  applyV9Migration(sqlite);
-  applyV10Migration(sqlite);
-  applyV11Migration(sqlite);
 
   return drizzle(sqlite, { schema });
 }

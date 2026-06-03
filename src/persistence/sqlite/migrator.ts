@@ -98,6 +98,24 @@ async function loadArchiveFiles(
     readEventArchive(eventsDir, eventFiles, logger),
   ]);
 
+  // An event whose attempt has no parent row (its attempt file was skipped/corrupt and it
+  // is not already in the DB) would raise a foreign-key violation and abort the entire
+  // migration. Drop those orphan events (with a warning) before the DB write phase. Events
+  // for attempts already persisted in the DB are kept — their FK is satisfied (NIN-254).
+  const existingAttemptIds = db
+    .select({ attemptId: attempts.attemptId })
+    .from(attempts)
+    .all()
+    .map((row) => row.attemptId);
+  const knownAttemptIds = new Set([...attemptRows.map((row) => row.attemptId), ...existingAttemptIds]);
+  const insertableEventRows = eventRows.filter((row) => {
+    if (knownAttemptIds.has(row.attemptId)) {
+      return true;
+    }
+    logger.warn({ attemptId: row.attemptId }, "skipping orphan event during migration: attempt record absent");
+    return false;
+  });
+
   // Stage 2: insert in a single transaction so a crash mid-migration can't
   // leave the DB partly populated. Re-running the migration is then safe:
   // attempt inserts use ON CONFLICT DO NOTHING, and the transaction
@@ -109,7 +127,7 @@ async function loadArchiveFiles(
       tx.insert(attempts).values(row).onConflictDoNothing().run();
       ac += 1;
     }
-    for (const row of eventRows) {
+    for (const row of insertableEventRows) {
       tx.insert(attemptEvents).values(row).run();
       ec += 1;
     }
@@ -162,7 +180,13 @@ async function readEventArchive(
 async function safeReaddir(dir: string): Promise<string[]> {
   try {
     return await readdir(dir);
-  } catch {
-    return Array<string>();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return Array<string>();
+    }
+    // A permission / I/O error must hard-fail. Treating it as "no archive files" would
+    // let initPersistenceRuntime mark the JSONL migration complete and silently drop
+    // real archive data (NIN-254).
+    throw error;
   }
 }

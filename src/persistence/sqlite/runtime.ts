@@ -70,26 +70,30 @@ export function seedDefaults(db: RisolutoDatabase): void {
   // empty, regardless of whether config rows already exist (e.g. upgraded DBs).
   const existingTemplates = db.select().from(promptTemplates).limit(1).all();
   if (existingTemplates.length === 0) {
-    db.insert(promptTemplates)
-      .values({
-        id: "default",
-        name: "Default",
-        body: DEFAULT_PROMPT_TEMPLATE,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing()
-      .run();
-
-    const systemRow = db.select().from(config).where(eq(config.key, "system")).get();
-    if (systemRow) {
-      const systemConfig = JSON.parse(systemRow.value) as Record<string, unknown>;
-      systemConfig.selectedTemplateId = "default";
-      db.update(config)
-        .set({ value: JSON.stringify(systemConfig), updatedAt: now })
-        .where(eq(config.key, "system"))
+    // Seed the template and patch system.selectedTemplateId in one transaction so a crash
+    // between the two can't leave the template inserted but config unpatched (NIN-254).
+    db.transaction((tx) => {
+      tx.insert(promptTemplates)
+        .values({
+          id: "default",
+          name: "Default",
+          body: DEFAULT_PROMPT_TEMPLATE,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing()
         .run();
-    }
+
+      const systemRow = tx.select().from(config).where(eq(config.key, "system")).get();
+      if (systemRow) {
+        const systemConfig = JSON.parse(systemRow.value) as Record<string, unknown>;
+        systemConfig.selectedTemplateId = "default";
+        tx.update(config)
+          .set({ value: JSON.stringify(systemConfig), updatedAt: now })
+          .where(eq(config.key, "system"))
+          .run();
+      }
+    });
   }
 }
 
@@ -107,41 +111,49 @@ export async function initPersistenceRuntime(options: PersistenceRuntimeOptions)
   const db = openDatabase(dbPath);
   logger.info({ dbPath }, "shared persistence runtime opened");
 
-  // Run JSONL → SQLite migration if the migration flag is absent.
-  const migrationFlag = db.select().from(config).where(eq(config.key, "jsonl_migration_completed")).get();
-  if (!migrationFlag) {
-    const result = await migrateFromJsonl(db, dataDir, storeLogger);
-    if (result.attemptCount > 0) {
-      storeLogger.info(
-        { attempts: result.attemptCount, events: result.eventCount },
-        "migrated JSONL archives to SQLite",
-      );
+  try {
+    // Run JSONL → SQLite migration if the migration flag is absent. A failed scan throws
+    // (see safeReaddir) so the flag below is only written after a verified scan.
+    const migrationFlag = db.select().from(config).where(eq(config.key, "jsonl_migration_completed")).get();
+    if (!migrationFlag) {
+      const result = await migrateFromJsonl(db, dataDir, storeLogger);
+      if (result.attemptCount > 0) {
+        storeLogger.info(
+          { attempts: result.attemptCount, events: result.eventCount },
+          "migrated JSONL archives to SQLite",
+        );
+      }
+      db.insert(config)
+        .values({ key: "jsonl_migration_completed", value: "true", updatedAt: new Date().toISOString() })
+        .onConflictDoNothing()
+        .run();
     }
-    db.insert(config)
-      .values({ key: "jsonl_migration_completed", value: "true", updatedAt: new Date().toISOString() })
-      .onConflictDoNothing()
-      .run();
+
+    // Seed config defaults (idempotent — only populates empty tables).
+    seedDefaults(db);
+
+    const attemptStore = new SqliteAttemptStore(db, storeLogger);
+    const costSampleStore = SqliteCostSampleStore.create(db);
+    const healthProbeStore = SqliteHealthProbeStore.create(db);
+    const operator = createOperatorPersistence(db);
+    const webhook = createWebhookPersistence(db, logger.child({ component: "webhook" }));
+
+    return {
+      db,
+      attemptStore,
+      costSampleStore,
+      healthProbeStore,
+      operator,
+      webhook,
+      close() {
+        closeDatabase(db);
+        logger.info("shared persistence runtime closed");
+      },
+    };
+  } catch (error) {
+    // A failed migration/seed must not leak the open connection or its WAL/file locks —
+    // close the handle before the error propagates to the caller (NIN-254).
+    closeDatabase(db);
+    throw error;
   }
-
-  // Seed config defaults (idempotent — only populates empty tables).
-  seedDefaults(db);
-
-  const attemptStore = new SqliteAttemptStore(db, storeLogger);
-  const costSampleStore = SqliteCostSampleStore.create(db);
-  const healthProbeStore = SqliteHealthProbeStore.create(db);
-  const operator = createOperatorPersistence(db);
-  const webhook = createWebhookPersistence(db, logger.child({ component: "webhook" }));
-
-  return {
-    db,
-    attemptStore,
-    costSampleStore,
-    healthProbeStore,
-    operator,
-    webhook,
-    close() {
-      closeDatabase(db);
-      logger.info("shared persistence runtime closed");
-    },
-  };
 }

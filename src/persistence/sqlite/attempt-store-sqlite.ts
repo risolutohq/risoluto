@@ -80,9 +80,25 @@ export class SqliteAttemptStore {
     if (!current) {
       throw new Error(`unknown attempt id: ${attemptId}`);
     }
-    const merged = { ...current, ...patch };
-    const row = attemptRecordToRow(merged);
-    this.getDb().update(attempts).set(row).where(eq(attempts.attemptId, attemptId)).run();
+    // Build the SET from only the columns the patch actually changes, instead of writing
+    // the whole row back. A full read-merge-write would clobber any unrelated field a
+    // concurrent writer changed between our read and write (NIN-254).
+    const mergedRow = attemptRecordToRow({ ...current, ...patch }) as Record<string, unknown>;
+    const currentRow = attemptRecordToRow(current) as Record<string, unknown>;
+    const changes: Record<string, unknown> = {};
+    for (const key of Object.keys(mergedRow)) {
+      if (mergedRow[key] !== currentRow[key]) {
+        changes[key] = mergedRow[key];
+      }
+    }
+    if (Object.keys(changes).length === 0) {
+      return;
+    }
+    this.getDb()
+      .update(attempts)
+      .set(changes as Partial<ReturnType<typeof attemptRecordToRow>>)
+      .where(eq(attempts.attemptId, attemptId))
+      .run();
   }
 
   async appendEvent(event: AttemptEvent): Promise<void> {
@@ -134,14 +150,28 @@ export class SqliteAttemptStore {
         .limit(1)
         .get();
 
-      // Deduplication: skip write when last checkpoint is identical on key fields.
+      // Deduplication: skip the write only when the new checkpoint is identical to the
+      // last on EVERY persisted field. Comparing the full set (incl. eventCursor, token
+      // counts, metadata, createdAt) keeps distinct recovery/evidence checkpoints that
+      // happen to share status/thread/turn (NIN-254).
       if (lastRow) {
-        const sameStatus = lastRow.status === checkpoint.status;
-        const sameThread = (lastRow.threadId ?? null) === checkpoint.threadId;
-        const sameTurn = (lastRow.turnId ?? null) === checkpoint.turnId;
-        const sameTurnCount = lastRow.turnCount === checkpoint.turnCount;
-        const sameTrigger = (lastRow.trigger ?? null) === checkpoint.trigger;
-        if (sameStatus && sameThread && sameTurn && sameTurnCount && sameTrigger) {
+        const candidate = fromAttemptCheckpointRecord({ ...checkpoint, ordinal: lastRow.ordinal });
+        const fields = [
+          "trigger",
+          "eventCursor",
+          "status",
+          "threadId",
+          "turnId",
+          "turnCount",
+          "inputTokens",
+          "outputTokens",
+          "totalTokens",
+          "metadata",
+          "createdAt",
+        ] as const;
+        const lastRecord = lastRow as Record<string, unknown>;
+        const identical = fields.every((field) => (candidate[field] ?? null) === (lastRecord[field] ?? null));
+        if (identical) {
           return;
         }
       }
