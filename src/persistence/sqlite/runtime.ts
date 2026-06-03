@@ -22,7 +22,7 @@ import { SqliteHealthProbeStore, type HealthProbeStorePort } from "./health-prob
 import { eq } from "drizzle-orm";
 
 import { migrateFromJsonl } from "./migrator.js";
-import { attempts, config, promptTemplates } from "./schema.js";
+import { config, promptTemplates } from "./schema.js";
 import { DEFAULT_CONFIG_SECTIONS, DEFAULT_PROMPT_TEMPLATE } from "../../config/defaults.js";
 
 export interface PersistenceRuntime {
@@ -107,9 +107,9 @@ export async function initPersistenceRuntime(options: PersistenceRuntimeOptions)
   const db = openDatabase(dbPath);
   logger.info({ dbPath }, "shared persistence runtime opened");
 
-  // Run JSONL → SQLite migration if the DB is fresh.
-  const existing = db.select().from(attempts).limit(1).all();
-  if (existing.length === 0) {
+  // Run JSONL → SQLite migration if the migration flag is absent.
+  const migrationFlag = db.select().from(config).where(eq(config.key, "jsonl_migration_completed")).get();
+  if (!migrationFlag) {
     const result = await migrateFromJsonl(db, dataDir, storeLogger);
     if (result.attemptCount > 0) {
       storeLogger.info(
@@ -117,6 +117,10 @@ export async function initPersistenceRuntime(options: PersistenceRuntimeOptions)
         "migrated JSONL archives to SQLite",
       );
     }
+    db.insert(config)
+      .values({ key: "jsonl_migration_completed", value: "true", updatedAt: new Date().toISOString() })
+      .onConflictDoNothing()
+      .run();
   }
 
   // Seed config defaults (idempotent — only populates empty tables).

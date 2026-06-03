@@ -69,6 +69,9 @@ export const dispatchTrackerSchema = {
 function validateTrackerConfig(config: ServiceConfig): ValidationError | null {
   const result = dispatchTrackerSchema.safeParse(config.tracker);
   if (!result.success) {
+    if (result.error.issues[0].path.length === 0) {
+      return { code: "invalid_tracker_config", message: "tracker must be an object" };
+    }
     const field = String(result.error.issues[0].path[0]);
     const trackerKind = isRecord(config.tracker) ? config.tracker.kind : undefined;
     return trackerIssueToError(field, trackerKind);
@@ -198,7 +201,7 @@ export function collectDispatchWarnings(config: ServiceConfig): ValidationError[
   for (const repo of config.repos ?? []) {
     const normalizedRepoUrl = normalizeRepoTarget(repo.repoUrl);
     const githubRepo = normalizeRepoTarget(repo.githubRepo);
-    if (!normalizedRepoUrl.includes("risoluto") && githubRepo !== "risoluto") {
+    if (!normalizedRepoUrl.endsWith("/risoluto") && githubRepo !== "risoluto") {
       continue;
     }
     warnings.push({
