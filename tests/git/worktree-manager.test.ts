@@ -13,6 +13,7 @@ import {
   syncBaseClone,
   type WorktreeContext,
 } from "../../src/git/worktree-manager.js";
+import { InvalidRepoUrlError } from "../../src/git/git-validation.js";
 import type { GitRunner } from "../../src/git/manager.js";
 
 function createContext(runGit: GitRunner): WorktreeContext {
@@ -47,8 +48,24 @@ describe("worktree-manager", () => {
 
     expect(calls).toEqual([
       ["rev-parse", "--git-dir"],
-      ["clone", "--bare", "https://github.com/acme/backend.git", "/tmp/base/backend.git"],
+      ["clone", "--bare", "--", "https://github.com/acme/backend.git", "/tmp/base/backend.git"],
     ]);
+  });
+
+  it.each(["-x", "ext::sh -c id"])("refuses to clone a base repo from a dangerous URL (%s)", async (repoUrl) => {
+    const calls: string[][] = [];
+    const runGit: GitRunner = async (args) => {
+      calls.push(args);
+      if (args[0] === "rev-parse") {
+        throw new Error("missing git dir");
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    await expect(ensureBaseClone(createContext(runGit), repoUrl, "/tmp/base/backend.git")).rejects.toThrow(
+      InvalidRepoUrlError,
+    );
+    expect(calls.some((args) => args[0] === "clone")).toBe(false);
   });
 
   it("fetches an existing base repo instead of cloning", async () => {

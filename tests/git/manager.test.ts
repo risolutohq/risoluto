@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { GitManager, type GitRunner } from "../../src/git/manager.js";
+import { InvalidGitRefError, InvalidRepoUrlError } from "../../src/git/git-validation.js";
 import type { RepoMatch } from "../../src/git/repo-router.js";
 import type { Issue } from "../../src/core/types.js";
 
@@ -61,9 +62,54 @@ describe("GitManager", () => {
 
     expect(result.branchName).toBe("risoluto/nin-42");
     expect(calls).toEqual([
-      ["clone", "--branch", "main", "--single-branch", "https://github.com/acme/backend.git", "."],
+      ["clone", "--branch", "main", "--single-branch", "--", "https://github.com/acme/backend.git", "."],
       ["checkout", "-b", "risoluto/nin-42"],
     ]);
+  });
+
+  it.each(["foo..bar", "a b", "a:b"])(
+    "rejects an invalid tracker branch name (%s) before running any git command",
+    async (branchName) => {
+      const calls: string[][] = [];
+      const runGit: GitRunner = async (args) => {
+        calls.push(args);
+        return { stdout: "", stderr: "" };
+      };
+
+      const manager = new GitManager({ runGit, env: {} });
+      await expect(manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ branchName }))).rejects.toThrow(
+        InvalidGitRefError,
+      );
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it("rejects an option-like repository URL before running any git command", async () => {
+    const calls: string[][] = [];
+    const runGit: GitRunner = async (args) => {
+      calls.push(args);
+      return { stdout: "", stderr: "" };
+    };
+
+    const manager = new GitManager({ runGit, env: {} });
+    await expect(
+      manager.cloneInto(createRepoMatch({ repoUrl: "-oProxyCommand=evil" }), "/tmp/ws", createIssue()),
+    ).rejects.toThrow(InvalidRepoUrlError);
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects a disallowed repository URL scheme before running any git command", async () => {
+    const calls: string[][] = [];
+    const runGit: GitRunner = async (args) => {
+      calls.push(args);
+      return { stdout: "", stderr: "" };
+    };
+
+    const manager = new GitManager({ runGit, env: {} });
+    await expect(
+      manager.cloneInto(createRepoMatch({ repoUrl: "ext::sh -c id" }), "/tmp/ws", createIssue()),
+    ).rejects.toThrow(InvalidRepoUrlError);
+    expect(calls).toEqual([]);
   });
 
   it("sanitizes issue identifiers into stable branch slugs", async () => {

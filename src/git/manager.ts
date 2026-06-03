@@ -8,6 +8,7 @@ import type { PrStatusResponse } from "./github-pr-client.js";
 import type { GitIntegrationPort } from "./port.js";
 import type { RepoMatch } from "./repo-router.js";
 import type { GitRunner, PrCreateResult } from "./git-types.js";
+import { assertValidBranchName, assertAllowedRepoUrl } from "./git-validation.js";
 export type { GitCommandOptions, GitRunResult, GitRunner } from "./git-types.js";
 import {
   ensureBaseClone,
@@ -45,10 +46,13 @@ function deriveBranchName(issue: Pick<Issue, "identifier" | "branchName">, branc
   // Reject tracker-supplied names starting with "-" to prevent flag injection
   // into git commands (e.g. a branchName of "--force" becomes a flag arg).
   if (provided && provided.length > 0 && !provided.startsWith("-")) {
+    assertValidBranchName(provided);
     return provided;
   }
   const slug = sanitizeBranchSegment(issue.identifier) || "issue";
-  return `${branchPrefix}${slug}`;
+  const derived = `${branchPrefix}${slug}`;
+  assertValidBranchName(derived);
+  return derived;
 }
 
 interface CloneResult {
@@ -161,7 +165,8 @@ export class GitManager implements GitIntegrationPort {
     branchPrefix?: string,
   ): Promise<CloneResult> {
     const branchName = deriveBranchName(issue, branchPrefix);
-    await this.runGit(["clone", "--branch", route.defaultBranch, "--single-branch", route.repoUrl, "."], {
+    assertAllowedRepoUrl(route.repoUrl);
+    await this.runGit(["clone", "--branch", route.defaultBranch, "--single-branch", "--", route.repoUrl, "."], {
       cwd: workspaceDir,
       env: this.env,
     });

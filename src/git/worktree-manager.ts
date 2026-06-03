@@ -8,6 +8,7 @@
 
 import type { GitRunner } from "./git-types.js";
 import type { RisolutoLogger } from "../core/types.js";
+import { assertAllowedRepoUrl } from "./git-validation.js";
 
 export interface WorktreeContext {
   runGit: GitRunner;
@@ -68,7 +69,8 @@ export async function ensureBaseClone(ctx: WorktreeContext, repoUrl: string, bas
     await ctx.runGit(["fetch", "origin", "--prune"], { cwd: baseDir, env: ctx.env });
     return;
   }
-  await ctx.runGit(["clone", "--bare", repoUrl, baseDir], { cwd: ".", env: ctx.env });
+  assertAllowedRepoUrl(repoUrl);
+  await ctx.runGit(["clone", "--bare", "--", repoUrl, baseDir], { cwd: ".", env: ctx.env });
 }
 
 /** Fetch latest refs into the bare clone. Never mutates worktrees. */
