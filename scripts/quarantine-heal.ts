@@ -54,8 +54,7 @@ export function loadTestResults(resultsPath: string): Map<string, Map<string, st
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`Error reading test results: ${message}`);
-    process.exitCode = 1;
+    throw new Error(`Error reading test results: ${message}`, { cause: error });
   }
 
   return resultMap;
@@ -102,6 +101,7 @@ function logHealingReport(
   failedReset: QuarantineEntry[],
   stillQuarantined: QuarantineEntry[],
   remaining: QuarantineEntry[],
+  changed: boolean,
 ): void {
   console.log("Quarantine healing report:");
   console.log(`  Total entries processed: ${entries.length}`);
@@ -135,12 +135,6 @@ function logHealingReport(
   }
 
   console.log(`\n  Remaining quarantined: ${remaining.length}`);
-
-  const passCountChanged = stillQuarantined.some((e) => {
-    const original = entries.find((o) => o.testName === e.testName && o.file === e.file);
-    return original !== undefined && e.passCount !== original.passCount;
-  });
-  const changed = healed.length > 0 || staleRemoved.length > 0 || failedReset.length > 0 || passCountChanged;
   console.log(changed ? "\n  quarantine.json was updated." : "\n  No changes to quarantine.json.");
 }
 
@@ -159,8 +153,12 @@ export function healQuarantine(resultsPathArg: string): void {
     return;
   }
 
-  const testResults = loadTestResults(resultsPath);
-  if (process.exitCode === 1) {
+  let testResults: Map<string, Map<string, string>>;
+  try {
+    testResults = loadTestResults(resultsPath);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
     return;
   }
 
@@ -192,8 +190,16 @@ export function healQuarantine(resultsPathArg: string): void {
     }
   }
 
-  saveEntriesAtomically(remaining);
-  logHealingReport(entries, healed, staleRemoved, failedReset, stillQuarantined, remaining);
+  const passCountChanged = stillQuarantined.some((e) => {
+    const original = entries.find((o) => o.testName === e.testName && o.file === e.file);
+    return original !== undefined && e.passCount !== original.passCount;
+  });
+  const changed = healed.length > 0 || staleRemoved.length > 0 || failedReset.length > 0 || passCountChanged;
+
+  if (changed) {
+    saveEntriesAtomically(remaining);
+  }
+  logHealingReport(entries, healed, staleRemoved, failedReset, stillQuarantined, remaining, changed);
 }
 
 export function runCli(args: string[] = process.argv.slice(2)): void {
