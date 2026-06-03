@@ -6,6 +6,7 @@ import {
   loadWorkflowDefinitionRegistry,
 } from "../workflow-definition/registry.js";
 import type { LivePreflightCheck, LivePreflightReport } from "../live/preflight.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 export type DoctorCheckStatus = "passed" | "failed" | "skipped";
 
@@ -48,7 +49,7 @@ async function checkWorkflowDefinitions(workflowDir: string): Promise<DoctorChec
     });
     return { id: "workflow_definitions", status: "passed", message: `validated ${workflowDir}` };
   } catch (error) {
-    return { id: "workflow_definitions", status: "failed", message: toErrorMessage(error) };
+    return { id: "workflow_definitions", status: "failed", message: toErrorString(error) };
   }
 }
 
@@ -60,7 +61,7 @@ async function checkEvidencePath(evidenceDir: string): Promise<DoctorCheck> {
     return {
       id: "evidence_path",
       status: "failed",
-      message: `missing or unreadable ${evidenceDir}: ${toErrorMessage(error)}`,
+      message: `missing or unreadable ${evidenceDir}: ${toErrorString(error)}`,
     };
   }
 }
@@ -108,8 +109,4 @@ function livePreflightProvider(name: LivePreflightCheck["name"]): string {
 
 function livePreflightPermission(name: LivePreflightCheck["name"]): string | null {
   return name === "github_app_sandbox_lifecycle" ? "sandbox_write" : null;
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -1,5 +1,5 @@
 import type { LivePreflightConfig } from "../config/live-preflight-config.js";
-import { asArray, asRecord, asStringOrNull } from "../utils/type-guards.js";
+import { asArray, asRecord, asStringOrNull, toErrorString } from "../utils/type-guards.js";
 import type { LivePreflightCheck, LivePreflightDeps, LivePreflightReport } from "./contracts.js";
 import { createGitHubJwt, createInstallationToken, githubHeaders, splitRepo } from "./github-app-auth.js";
 import { checkGitHubAppSandboxLifecycle } from "./github-app-sandbox-lifecycle.js";
@@ -114,7 +114,7 @@ async function checkModelProxy(config: LivePreflightConfig, fetchImpl: typeof fe
 }
 
 function summarizeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorString(error);
   return message.replace(/\s+/gu, " ").slice(0, 240) || "unknown live preflight error";
 }
 

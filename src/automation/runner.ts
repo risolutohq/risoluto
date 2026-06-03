@@ -6,6 +6,7 @@ import type { OrchestratorPort } from "../orchestrator/port.js";
 import type { AutomationStorePort } from "./port.js";
 import type { TrackerPort } from "../tracker/port.js";
 import type { AutomationRunRecord, AutomationRunTrigger } from "./types.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 interface AutomationRunnerOptions {
   orchestrator: Pick<OrchestratorPort, "getSnapshot" | "requestTargetedRefresh">;
@@ -61,7 +62,7 @@ export class AutomationRunner {
           return this.runReport(config, run);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorString(error);
       return this.finish(run, {
         status: "failed",
         output: null,

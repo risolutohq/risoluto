@@ -11,7 +11,7 @@ import type { TypedEventBus } from "../core/event-bus.js";
 import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { CodexConfig } from "../core/types/codex.js";
 import type { RisolutoLogger } from "../core/types.js";
-import { asRecord, asStringOrNull as asString } from "../utils/type-guards.js";
+import { asRecord, asStringOrNull as asString, toErrorString } from "../utils/type-guards.js";
 
 type CapabilityState = "supported" | "unsupported" | "unknown";
 
@@ -92,7 +92,7 @@ function splitCommand(command: string): { program: string; args: string[] } {
 }
 
 function methodLooksUnsupported(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorString(error);
   return (
     message.includes("unknown request method") ||
     message.includes("Method not found") ||
@@ -258,7 +258,7 @@ export class CodexControlPlane {
         this.capabilityRegistry.initializationError = null;
         await this.probeCapabilities();
       } catch (error) {
-        this.capabilityRegistry.initializationError = error instanceof Error ? error.message : String(error);
+        this.capabilityRegistry.initializationError = toErrorString(error);
         connection.close();
         this.connection = null;
         this.child = null;
@@ -283,10 +283,7 @@ export class CodexControlPlane {
         await this.request(probe.method, probe.params);
       } catch (error) {
         if (!(error instanceof CodexControlPlaneMethodUnsupportedError)) {
-          this.logger.debug(
-            { method: probe.method, error: error instanceof Error ? error.message : String(error) },
-            "codex capability probe failed",
-          );
+          this.logger.debug({ method: probe.method, error: toErrorString(error) }, "codex capability probe failed");
         }
       }
     }

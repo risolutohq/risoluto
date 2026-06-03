@@ -26,6 +26,7 @@ import {
   type WorkflowRunHookReference,
 } from "../workflow-run/artifacts.js";
 import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 interface WorkflowRunCommandHandler {
   expected: string;
@@ -270,10 +271,7 @@ function parseArtifactJson(value: string): unknown {
   try {
     return JSON.parse(value);
   } catch (error) {
-    throw new TypeError(
-      `--artifact-json must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+    throw new TypeError(`--artifact-json must be valid JSON: ${toErrorString(error)}`, { cause: error });
   }
 }
 

@@ -1,4 +1,4 @@
-import { isRecord } from "../utils/type-guards.js";
+import { isRecord, toErrorString } from "../utils/type-guards.js";
 import type { WriteWorkflowRunArtifactInput } from "./archive.js";
 import { evaluateCiBabysitter, type CiCheckResult } from "./ci-babysitter.js";
 import type { WorkflowRunArtifactReference } from "./contracts.js";
@@ -111,7 +111,7 @@ async function createWorktreeAction(
     });
   } catch (error) {
     // Dirty-workspace / branch-template failures abort the run as an honest blocked handoff.
-    throw new WorkflowRunActionError(error instanceof Error ? error.message : String(error), { cause: error });
+    throw new WorkflowRunActionError(toErrorString(error), { cause: error });
   }
   return {};
 }

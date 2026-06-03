@@ -3,6 +3,7 @@ import type { RepoMatch } from "../git/repo-router.js";
 import type { Issue, MergePolicy, RisolutoLogger, Workspace } from "../core/types.js";
 import { generatePrSummary } from "../git/pr-summary-generator.js";
 import { evaluateMergePolicy } from "../git/merge-policy.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 /**
  * Minimal interface for the auto-merge client dependency.
@@ -98,7 +99,7 @@ async function tryRequestAutoMerge(
       {
         issue_identifier: issueIdentifier,
         pull_request_url: pullRequestUrl,
-        error: mergeError instanceof Error ? mergeError.message : String(mergeError),
+        error: toErrorString(mergeError),
       },
       "requestAutoMerge failed (non-fatal — repo may not support auto-merge)",
     );
@@ -174,7 +175,7 @@ async function runGatedLegacyAutoMerge(
     autoMerge.logger.warn(
       {
         issue_identifier: issue.identifier,
-        error: policyError instanceof Error ? policyError.message : String(policyError),
+        error: toErrorString(policyError),
       },
       "auto-merge policy evaluation failed (non-fatal)",
     );

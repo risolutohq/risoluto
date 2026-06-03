@@ -13,6 +13,7 @@
 import { LinearClientError } from "../linear/errors.js";
 import type { SecretsStore } from "../secrets/store.js";
 import type { RisolutoLogger, WebhookConfig } from "../core/types.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 const SECRETS_KEY = "LINEAR_WEBHOOK_SECRET";
 
@@ -122,7 +123,7 @@ export class WebhookRegistrar {
       }
     } catch (error) {
       this.logger.warn(
-        { error: errorMessage(error) },
+        { error: toErrorString(error) },
         "could not verify webhook URL in Linear — continuing with configured secret",
       );
     }
@@ -144,7 +145,7 @@ export class WebhookRegistrar {
       webhooks = await this.linearClient.listWebhooks();
     } catch (error) {
       this.logger.warn(
-        { error: errorMessage(error) },
+        { error: toErrorString(error) },
         "could not list webhooks to verify stored secret — continuing with stored secret",
       );
       // Optimistically use the stored secret even if we can't verify
@@ -176,7 +177,7 @@ export class WebhookRegistrar {
       return true;
     } catch (error) {
       this.logger.warn(
-        { webhookId: match.id, error: errorMessage(error) },
+        { webhookId: match.id, error: toErrorString(error) },
         "failed to re-enable webhook — will auto-create a new one",
       );
       return false;
@@ -229,7 +230,7 @@ export class WebhookRegistrar {
     }
 
     this.logger.warn(
-      { error: errorMessage(error) },
+      { error: toErrorString(error) },
       "webhook registration failed — continuing with polling-only mode. " +
         "To set up webhooks manually, see the operator guide.",
     );
@@ -253,8 +254,4 @@ function isPermissionError(error: LinearClientError): boolean {
     return /unauthorized|forbidden|permission|not authorized/i.test(error.message);
   }
   return false;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

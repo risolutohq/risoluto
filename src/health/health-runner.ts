@@ -11,6 +11,7 @@ import type {
 } from "../core/types/health.js";
 import type { HealthProbeStorePort } from "../persistence/sqlite/health-probe-store.js";
 import type { HealthProbe } from "./probe-port.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 /**
  * Sliding-window state machine + adaptive cadence on top of the per-probe
@@ -93,7 +94,7 @@ export class HealthRunner {
   private isDue(id: HealthProbeId): boolean {
     const state = this.state.get(id);
     if (!state) return false;
-    if (state.lastResult === null) return true; // never run before
+    if (state.lastResult === null) return true;
     if (state.lastResult.status === "down") return true; // incident — every tick
     if (this.hasNonOkInWindow(state)) return true; // watch — every tick
     // steady-state: every 5th tick relative to the last successful run.
@@ -128,7 +129,7 @@ export class HealthRunner {
       return await probe.run({ signal: controller.signal, nowMs: this.nowMs });
     } catch (error) {
       // Probes are required not to throw — defend in depth.
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorString(error);
       this.options.logger.warn(
         { probe: probe.id, error: message },
         "health probe threw — converting to single down subprobe",
@@ -169,10 +170,7 @@ export class HealthRunner {
     try {
       this.options.store.append({ atMs: this.nowMs(), probe, subprobes });
     } catch (error) {
-      this.options.logger.warn(
-        { probe, error: error instanceof Error ? error.message : String(error) },
-        "health probe sample append failed",
-      );
+      this.options.logger.warn({ probe, error: toErrorString(error) }, "health probe sample append failed");
     }
   }
 
@@ -240,8 +238,6 @@ export class HealthRunner {
     return state.lastResult;
   }
 }
-
-// ── State + helpers ─────────────────────────────────────────────────────
 
 interface ProbeState {
   lastResult: HealthProbeResult | null;

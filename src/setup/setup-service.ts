@@ -24,6 +24,7 @@ import {
   type SetupProviderConfig,
 } from "./port.js";
 import { hasCodexAuthFile, hasRepoRoutes, readProjectSlug, readTrackerKind } from "./setup-status.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?$/u;
 
@@ -325,7 +326,7 @@ class SetupServiceImpl implements SetupPort {
     } catch (error) {
       // Clear the half-started session so getPkceAuthStatus() reports idle
       // rather than wedging on a session that never bound.
-      const detail = this.activePkceSession?.error ?? (error instanceof Error ? error.message : String(error));
+      const detail = this.activePkceSession?.error ?? toErrorString(error);
       this.activePkceSession = null;
       if (error instanceof SetupServiceError) {
         throw error;
@@ -342,7 +343,7 @@ class SetupServiceImpl implements SetupPort {
       shutdownCallbackServer(session);
       return { status: "complete" };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorString(error);
       session.error = message;
       shutdownCallbackServer(session);
       return { status: "error", error: message };
@@ -510,7 +511,7 @@ class SetupServiceImpl implements SetupPort {
     try {
       return await this.requireTracker().provision({ type: "create_project", name });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorString(error);
       if (message.includes("No teams found")) {
         throw new SetupServiceError(400, "no_teams", "No teams found in your Linear workspace");
       }

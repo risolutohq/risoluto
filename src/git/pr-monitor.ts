@@ -14,6 +14,7 @@
  */
 
 import { sortAttemptsDesc } from "../core/attempt-analytics.js";
+import { toErrorString } from "../utils/type-guards.js";
 import type { OpenPrRecord } from "../core/attempt-store-port.js";
 import type { AttemptStorePort } from "../core/attempt-store-port.js";
 import type { TypedEventBus } from "../core/event-bus.js";
@@ -119,7 +120,7 @@ export class PrMonitorService {
     try {
       openPrs = await this.store.getOpenPrs();
     } catch (error) {
-      this.logger.warn({ error: errorMessage(error) }, "pr monitor: failed to fetch open PRs");
+      this.logger.warn({ error: toErrorString(error) }, "pr monitor: failed to fetch open PRs");
       return;
     }
 
@@ -142,7 +143,7 @@ export class PrMonitorService {
       prData = await this.ghClient.getPrStatus({ owner, repo, pullNumber: pr.pullNumber });
     } catch (error) {
       this.logger.warn(
-        { url: pr.url, pullNumber: pr.pullNumber, error: errorMessage(error) },
+        { url: pr.url, pullNumber: pr.pullNumber, error: toErrorString(error) },
         "pr monitor: getPrStatus failed (skipping)",
       );
       return;
@@ -176,7 +177,7 @@ export class PrMonitorService {
         newStatus === "merged" ? (mergeCommitSha ?? undefined) : undefined,
       );
     } catch (error) {
-      this.logger.warn({ url: pr.url, newStatus, error: errorMessage(error) }, "pr monitor: updatePrStatus failed");
+      this.logger.warn({ url: pr.url, newStatus, error: toErrorString(error) }, "pr monitor: updatePrStatus failed");
       return;
     }
 
@@ -224,7 +225,7 @@ export class PrMonitorService {
         }
       } catch (error) {
         this.logger.warn(
-          { url: pr.url, error: errorMessage(error) },
+          { url: pr.url, error: toErrorString(error) },
           "pr monitor: appendCheckpoint failed (non-fatal)",
         );
       }
@@ -235,7 +236,7 @@ export class PrMonitorService {
       try {
         this.orchestrator.requestRefresh("pr_state_changed");
       } catch (error) {
-        this.logger.warn({ error: errorMessage(error) }, "pr monitor: orchestrator requestRefresh failed (non-fatal)");
+        this.logger.warn({ error: toErrorString(error) }, "pr monitor: orchestrator requestRefresh failed (non-fatal)");
       }
     }
   }
@@ -271,9 +272,4 @@ function emitEvent<K extends keyof RisolutoEventMap>(
   payload: RisolutoEventMap[K],
 ): void {
   bus.emit(channel, payload);
-}
-
-/** Extract a safe string from an unknown caught error. */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

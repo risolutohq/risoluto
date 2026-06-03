@@ -4,6 +4,7 @@ import { createCodexAdminService } from "../../codex/admin-service.js";
 import { CodexControlPlaneMethodUnsupportedError } from "../../codex/control-plane.js";
 import { methodNotAllowed } from "../route-helpers.js";
 import type { HttpRouteDeps } from "../route-types.js";
+import { toErrorString } from "../../utils/type-guards.js";
 
 function handleMissingControlPlane(res: Response): void {
   res.status(503).json({
@@ -37,7 +38,7 @@ function sendCodexError(error: unknown, res: Response): void {
   res.status(502).json({
     error: {
       code: "codex_request_failed",
-      message: error instanceof Error ? error.message : String(error),
+      message: toErrorString(error),
     },
   });
 }

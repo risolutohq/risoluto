@@ -2,6 +2,7 @@ import type { TypedEventBus } from "../core/event-bus.js";
 import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { RisolutoLogger } from "../core/types.js";
 import type { NotificationManager } from "../notification/manager.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 /**
  * Subscribes to `health.transition` events and dispatches a critical
@@ -39,10 +40,7 @@ export function attachHealthNotificationBridge(deps: HealthNotificationBridgeDep
           dedupeKey: `health:${probe}:down`,
         })
         .catch((error: unknown) => {
-          logger?.warn(
-            { probe, error: error instanceof Error ? error.message : String(error) },
-            "health-down notification failed",
-          );
+          logger?.warn({ probe, error: toErrorString(error) }, "health-down notification failed");
         });
       return;
     }
@@ -62,10 +60,7 @@ export function attachHealthNotificationBridge(deps: HealthNotificationBridgeDep
           dedupeKey: `health:${probe}:recovered`,
         })
         .catch((error: unknown) => {
-          logger?.warn(
-            { probe, error: error instanceof Error ? error.message : String(error) },
-            "health-recovery notification failed",
-          );
+          logger?.warn({ probe, error: toErrorString(error) }, "health-recovery notification failed");
         });
     }
   };

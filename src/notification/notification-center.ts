@@ -178,7 +178,7 @@ function mapSlackError(error: unknown): SlackErrorMapping {
       message: "Slack webhook did not respond in 10s. Check the URL or your network, then try again.",
     };
   }
-  const rawMessage = error instanceof Error ? error.message : toErrorString(error);
+  const rawMessage = toErrorString(error);
   const statusMatch = /failed with status (\d{3})/.exec(rawMessage);
   const upstreamStatus = statusMatch ? Number.parseInt(statusMatch[1] ?? "", 10) : null;
   if (upstreamStatus === 404) {

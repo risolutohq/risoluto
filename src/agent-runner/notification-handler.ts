@@ -115,10 +115,7 @@ function handleTokenUsageUpdated(input: NotificationInput, params: Record<string
   });
 }
 
-function handleReasoningDelta(input: NotificationInput, params: Record<string, unknown>): void {
-  const delta = asRecord(params.delta);
-  const itemId = asString(delta.id) ?? asString(params.itemId);
-  const text = asString(delta.text);
+function emitReasoning(input: NotificationInput, itemId: string | null, text: string | null): void {
   appendReasoningText(input.state, itemId, text);
   if (itemId && text) {
     scheduleStreamEmit(
@@ -138,27 +135,14 @@ function handleReasoningDelta(input: NotificationInput, params: Record<string, u
   }
 }
 
+function handleReasoningDelta(input: NotificationInput, params: Record<string, unknown>): void {
+  const delta = asRecord(params.delta);
+  emitReasoning(input, asString(delta.id) ?? asString(params.itemId), asString(delta.text));
+}
+
 function handleReasoningPartAdded(input: NotificationInput, params: Record<string, unknown>): void {
   const part = asRecord(params.part);
-  const itemId = asString(params.itemId);
-  const text = asString(part.text);
-  appendReasoningText(input.state, itemId, text);
-  if (itemId && text) {
-    scheduleStreamEmit(
-      {
-        state: input.state,
-        issue: input.issue,
-        threadId: input.threadId,
-        turnId: input.turnId,
-        buffers: input.state.reasoningDeltaBuffers,
-        itemId,
-        event: "reasoning_delta",
-        message: "Agent thinking",
-        onEvent: input.onEvent,
-      },
-      text,
-    );
-  }
+  emitReasoning(input, asString(params.itemId), asString(part.text));
 }
 
 function handleAgentMessageDelta(input: NotificationInput, params: Record<string, unknown>): void {

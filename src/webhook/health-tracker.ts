@@ -17,6 +17,7 @@ import type { TypedEventBus } from "../core/event-bus.js";
 import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { RisolutoLogger, WebhookConfig } from "../core/types.js";
 import type { WebhookHealthState, WebhookHealthStats, WebhookHealthStatus } from "./types.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 /** Duration (ms) a degraded tracker must wait after a delivery before promoting to connected. */
 const DEGRADED_COOLDOWN_MS = 60_000;
@@ -213,10 +214,7 @@ export class DefaultWebhookHealthTracker implements WebhookHealthTracker {
       }
     } catch (error) {
       // Network/auth errors — maintain current state, log and continue
-      this.logger.warn(
-        { error: error instanceof Error ? error.message : String(error) },
-        "periodic subscription check failed — state unchanged",
-      );
+      this.logger.warn({ error: toErrorString(error) }, "periodic subscription check failed — state unchanged");
     }
   }
 

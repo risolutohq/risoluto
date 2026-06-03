@@ -1,5 +1,5 @@
 import type { LivePreflightConfig } from "../config/live-preflight-config.js";
-import { asRecord, asStringOrNull } from "../utils/type-guards.js";
+import { asRecord, asStringOrNull, toErrorString } from "../utils/type-guards.js";
 import type { LivePreflightCheck, LivePreflightDeps } from "./contracts.js";
 import {
   createGitHubJwt,
@@ -238,6 +238,6 @@ function failed(detail: string): LivePreflightCheck {
 }
 
 function summarizeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorString(error);
   return message.replace(/\s+/gu, " ").slice(0, 240) || "unknown live preflight error";
 }

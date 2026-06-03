@@ -19,6 +19,7 @@ import {
   mintGithubInstallationToken,
 } from "./run-start-live-config.js";
 import { createRunStartTracker } from "./run-start-live-tracker.js";
+import { toErrorString } from "../utils/type-guards.js";
 
 /** Inputs the `run start` path supplies to compose a real dispatcher for the live sandbox run. */
 export interface ComposeLiveDispatchInput {
@@ -145,6 +146,6 @@ async function removeWorktree(
   try {
     await gitManager.removeWorktree(workspace.gitBaseDir, workspace.path, true);
   } catch (error) {
-    logger.warn({ error: error instanceof Error ? error.message : String(error) }, "live worktree cleanup failed");
+    logger.warn({ error: toErrorString(error) }, "live worktree cleanup failed");
   }
 }

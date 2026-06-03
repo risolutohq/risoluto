@@ -11,6 +11,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 import * as schema from "./schema.js";
+import { toErrorString } from "../../utils/type-guards.js";
 
 export type RisolutoDatabase = BetterSQLite3Database<typeof schema> & {
   $client: BetterSqlite3Database;
@@ -286,6 +287,15 @@ function hasSchemaVersion(sqlite: SqliteDb, version: number): boolean {
   return row !== undefined;
 }
 
+/** Add a column to a table, suppressing the idempotent "duplicate column" error on re-run. */
+function addColumnIfAbsent(sqlite: SqliteDb, table: string, column: string, columnDef: string): void {
+  try {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${columnDef}`);
+  } catch (err: unknown) {
+    if (!toErrorString(err).includes(`duplicate column name: ${column}`)) throw err;
+  }
+}
+
 /**
  * v4 migration: add `summary` column to `attempts` table.
  * Fresh installs already have the column from CREATE_TABLES_SQL.
@@ -293,12 +303,7 @@ function hasSchemaVersion(sqlite: SqliteDb, version: number): boolean {
  */
 function applyV4Migration(sqlite: SqliteDb): void {
   if (hasSchemaVersion(sqlite, 4)) return;
-  try {
-    sqlite.exec("ALTER TABLE attempts ADD COLUMN summary TEXT");
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("duplicate column name: summary")) throw err;
-  }
+  addColumnIfAbsent(sqlite, "attempts", "summary", "TEXT");
   bumpSchemaVersion(sqlite, 4);
 }
 
@@ -331,8 +336,7 @@ function applyV5Migration(sqlite: SqliteDb): void {
     `);
     sqlite.exec("CREATE INDEX idx_attempt_checkpoints_attempt_id ON attempt_checkpoints(attempt_id)");
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("already exists")) throw err;
+    if (!toErrorString(err).includes("already exists")) throw err;
   }
   bumpSchemaVersion(sqlite, 5);
 }
@@ -561,18 +565,8 @@ function applyV10Migration(sqlite: SqliteDb): void {
  */
 function applyV11Migration(sqlite: SqliteDb): void {
   if (hasSchemaVersion(sqlite, 11)) return;
-  try {
-    sqlite.exec("ALTER TABLE encrypted_secrets ADD COLUMN kdf_version INTEGER DEFAULT 1");
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("duplicate column name: kdf_version")) throw err;
-  }
-  try {
-    sqlite.exec("ALTER TABLE encrypted_secrets ADD COLUMN kdf_salt TEXT");
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("duplicate column name: kdf_salt")) throw err;
-  }
+  addColumnIfAbsent(sqlite, "encrypted_secrets", "kdf_version", "INTEGER DEFAULT 1");
+  addColumnIfAbsent(sqlite, "encrypted_secrets", "kdf_salt", "TEXT");
   bumpSchemaVersion(sqlite, 11);
 }
 
