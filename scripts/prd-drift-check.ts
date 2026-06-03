@@ -184,8 +184,9 @@ async function loadLinearEnvFromFile(): Promise<void> {
 async function main(): Promise<void> {
   const useAll = process.argv.includes("--all");
   const allCandidates = useAll ? getAllPrdFiles() : getChangedPrdsFromRefs(readPushRefsFromStdin());
-  const changedPrds = allCandidates.filter(isPrdFile);
-  const skipped = allCandidates.filter((p) => !isPrdFile(p));
+  const partitioned = allCandidates.map((p) => ({ p, isPrd: isPrdFile(p) }));
+  const changedPrds = partitioned.filter((x) => x.isPrd).map((x) => x.p);
+  const skipped = partitioned.filter((x) => !x.isPrd).map((x) => x.p);
 
   for (const skip of skipped) {
     process.stderr.write(`  ⏭️  ${skip} — skipped (no linear_project frontmatter)\n`);

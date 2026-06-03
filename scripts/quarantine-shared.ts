@@ -28,7 +28,15 @@ export function loadEntries(): QuarantineEntry[] {
     const raw = readFileSync(QUARANTINE_PATH, "utf-8");
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as QuarantineEntry[];
+    return (parsed as unknown[]).filter(
+      (e): e is QuarantineEntry =>
+        e !== null &&
+        typeof e === "object" &&
+        typeof (e as Record<string, unknown>).testName === "string" &&
+        typeof (e as Record<string, unknown>).file === "string" &&
+        typeof (e as Record<string, unknown>).quarantinedAt === "string" &&
+        typeof (e as Record<string, unknown>).passCount === "number",
+    );
   } catch {
     return [];
   }
