@@ -359,6 +359,8 @@ export function normalizeStateMachine(value: unknown): StateMachineConfig | null
  */
 const VALID_APPROVAL_POLICIES = new Set(["untrusted", "on-failure", "on-request", "never"]);
 
+const VALID_SANDBOX_POLICY_TYPES = new Set(["workspaceWrite", "dangerFullAccess"]);
+
 function defaultApprovalPolicy(): Record<string, unknown> {
   return {
     granular: {
@@ -386,7 +388,7 @@ export function normalizeTurnSandboxPolicy(value: Record<string, unknown>): { ty
   }
 
   return {
-    type: asString(value.type, "workspaceWrite"),
+    type: VALID_SANDBOX_POLICY_TYPES.has(String(value.type)) ? String(value.type) : "workspaceWrite",
     ...value,
   };
 }

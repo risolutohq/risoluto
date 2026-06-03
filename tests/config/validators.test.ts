@@ -137,7 +137,7 @@ describe("validateDispatch - tracker validation", () => {
 
     expect(validateDispatch(config, { existsSync: noFile, env: withOpenAI })).toEqual({
       code: "invalid_tracker_config",
-      message: "tracker.undefined is invalid",
+      message: "tracker must be an object",
     });
   });
 
@@ -146,7 +146,7 @@ describe("validateDispatch - tracker validation", () => {
 
     expect(validateDispatch(config, { existsSync: noFile, env: withOpenAI })).toEqual({
       code: "invalid_tracker_config",
-      message: "tracker.undefined is invalid",
+      message: "tracker must be an object",
     });
   });
 });

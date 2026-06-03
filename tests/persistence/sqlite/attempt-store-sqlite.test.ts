@@ -10,7 +10,7 @@ import type { AttemptCheckpointRecord, AttemptEvent, AttemptRecord } from "../..
 import { SqliteAttemptStore } from "../../../src/persistence/sqlite/attempt-store-sqlite.js";
 import { openDatabase, closeDatabase } from "../../../src/persistence/sqlite/database.js";
 import { initPersistenceRuntime } from "../../../src/persistence/sqlite/runtime.js";
-import { pullRequests } from "../../../src/persistence/sqlite/schema.js";
+import { config, pullRequests } from "../../../src/persistence/sqlite/schema.js";
 import { createMockLogger } from "../../helpers.js";
 
 const tempDirs: string[] = [];
@@ -776,20 +776,23 @@ describe("SqliteAttemptStore migration (via PersistenceRuntime)", () => {
     runtime.close();
   });
 
-  it("skips migration when database already has data", async () => {
+  it("skips migration when the jsonl_migration_completed flag is set", async () => {
     const archiveDir = await createTempDir();
     const attemptsDir = path.join(archiveDir, "attempts");
     await mkdir(attemptsDir, { recursive: true });
 
     await writeFile(path.join(attemptsDir, "attempt-1.json"), JSON.stringify(createAttempt()), "utf8");
 
-    // First: open DB and insert a pre-existing attempt
+    // First: open DB, insert a pre-existing attempt, and mark migration as completed
     const db = openDatabase(path.join(archiveDir, "risoluto.db"));
     const preStore = new SqliteAttemptStore(db, createLogger());
     await preStore.createAttempt(createAttempt({ attemptId: "pre-existing" }));
+    db.insert(config)
+      .values({ key: "jsonl_migration_completed", value: "true", updatedAt: new Date().toISOString() })
+      .run();
     closeDatabase(db);
 
-    // Now init runtime — migration should be skipped because DB has data
+    // Now init runtime — migration should be skipped because the flag is present
     const runtime = await initPersistenceRuntime({ dataDir: archiveDir, logger: createLogger() });
     const store = runtime.attemptStore;
 

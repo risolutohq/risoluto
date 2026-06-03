@@ -85,10 +85,19 @@ export function attemptRecordToRow(record: AttemptRecord): AttemptInsertRow {
   };
 }
 
+function parseJsonSafe(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 /** Convert a database row to an `AttemptEvent`. */
 export function rowToAttemptEvent(row: AttemptEventRow): AttemptEvent {
   const usage = buildTokenUsage(row.inputTokens, row.outputTokens, row.totalTokens);
-  const metadata = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null;
+  const metadata = parseJsonSafe(row.metadata);
   return {
     attemptId: row.attemptId,
     at: row.timestamp,
@@ -124,7 +133,7 @@ export function attemptEventToRow(event: AttemptEvent): AttemptEventInsertRow {
 /** Convert a database row to an `AttemptCheckpointRecord`. */
 export function toAttemptCheckpointRecord(row: CheckpointRow): AttemptCheckpointRecord {
   const tokenUsage = buildTokenUsage(row.inputTokens, row.outputTokens, row.totalTokens);
-  const metadata = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null;
+  const metadata = parseJsonSafe(row.metadata);
   return {
     checkpointId: row.checkpointId,
     attemptId: row.attemptId,

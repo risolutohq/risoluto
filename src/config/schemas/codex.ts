@@ -70,6 +70,8 @@ export const codexProviderSchema = z
   .nullable()
   .default(null);
 
+const VALID_SANDBOX_POLICY_TYPES = new Set(["workspaceWrite", "dangerFullAccess"]);
+
 const turnSandboxPolicySchema = z
   .record(z.string(), z.unknown())
   .default({})
@@ -83,7 +85,8 @@ const turnSandboxPolicySchema = z
       };
     }
     return {
-      type: typeof value.type === "string" ? value.type : "workspaceWrite",
+      type:
+        typeof value.type === "string" && VALID_SANDBOX_POLICY_TYPES.has(value.type) ? value.type : "workspaceWrite",
       ...value,
     };
   });
@@ -105,10 +108,10 @@ export const codexConfigSchema = z.object({
   personality: z.string().default("friendly"),
   turnSandboxPolicy: turnSandboxPolicySchema,
   selfReview: z.boolean().default(false),
-  readTimeoutMs: z.number().default(5000),
-  turnTimeoutMs: z.number().default(3600000),
-  drainTimeoutMs: z.number().default(2000),
-  startupTimeoutMs: z.number().default(30000),
+  readTimeoutMs: z.number().int().positive().default(5000),
+  turnTimeoutMs: z.number().int().positive().default(3600000),
+  drainTimeoutMs: z.number().int().positive().default(2000),
+  startupTimeoutMs: z.number().int().positive().default(30000),
   stallTimeoutMs: z.number().default(300000),
   structuredOutput: z.boolean().default(false),
   auth: codexAuthSchema.default(() => codexAuthSchema.parse({})),

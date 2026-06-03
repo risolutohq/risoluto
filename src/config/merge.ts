@@ -31,8 +31,8 @@ export function deepMerge(base: unknown, overlay: unknown): unknown {
 }
 
 /**
- * Create a deep clone of a config map using JSON serialization.
- * Note: This only works for JSON-serializable values.
+ * Create a deep clone of a config map using structuredClone.
+ * Supports all structured-cloneable values (Date, RegExp, Map, Set, etc.).
  */
 export function cloneConfigMap(value: Record<string, unknown>): Record<string, unknown> {
   return structuredClone(value) as Record<string, unknown>;
