@@ -2,7 +2,7 @@ import type { ConfigOverlayPort } from "./overlay.js";
 import { collectDispatchWarnings, validateDispatch } from "./validators.js";
 import type { SecretsStore } from "../secrets/store.js";
 import { toErrorString } from "../utils/type-guards.js";
-import type { RisolutoLogger, ValidationError, WorkflowDefinition, ServiceConfig } from "../core/types.js";
+import type { RisolutoLogger, ValidationError, WorkflowRuntimeConfig, ServiceConfig } from "../core/types.js";
 import { deriveServiceConfig } from "./derivation-pipeline.js";
 import { cloneConfigMap, deepMerge } from "./merge.js";
 
@@ -18,7 +18,7 @@ export class ConfigStore {
     private readonly deps?: {
       overlayStore?: Pick<ConfigOverlayPort, "toMap" | "subscribe">;
       secretsStore?: Pick<SecretsStore, "get" | "subscribe">;
-      workflowStore?: Pick<{ getWorkflow(): WorkflowDefinition }, "getWorkflow">;
+      workflowStore?: Pick<{ getWorkflow(): WorkflowRuntimeConfig }, "getWorkflow">;
     },
   ) {}
 

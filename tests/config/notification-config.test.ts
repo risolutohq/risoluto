@@ -7,9 +7,9 @@ import {
   normalizeNotifications,
   normalizeTriggers,
 } from "../../src/config/normalizers.js";
-import type { WorkflowDefinition } from "../../src/core/types.js";
+import type { WorkflowRuntimeConfig } from "../../src/core/types.js";
 
-function createWorkflow(config: Record<string, unknown>): WorkflowDefinition {
+function createWorkflow(config: Record<string, unknown>): WorkflowRuntimeConfig {
   return {
     config,
     promptTemplate: "Work on {{ issue.identifier }}.",

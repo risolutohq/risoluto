@@ -133,7 +133,7 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(() => freshStore.getConfig()).toThrow("DbConfigStore not started");
   });
 
-  it("getWorkflow() returns WorkflowDefinition with prompt template", () => {
+  it("getWorkflow() returns WorkflowRuntimeConfig with prompt template", () => {
     const workflow = store.getWorkflow();
     expect(workflow.config).toBeDefined();
     expect(workflow.promptTemplate).toContain("RISOLUTO_STATUS");

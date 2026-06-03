@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { deriveServiceConfig } from "../../src/config/derivation-pipeline.js";
 import { deriveTrackerConfig } from "../../src/config/section-builders.js";
-import type { WorkflowDefinition } from "../../src/core/types.js";
+import type { WorkflowRuntimeConfig } from "../../src/core/types.js";
 
-function createWorkflow(config: Record<string, unknown>): WorkflowDefinition {
+function createWorkflow(config: Record<string, unknown>): WorkflowRuntimeConfig {
   return {
     config,
     promptTemplate: "Work on the issue.",
