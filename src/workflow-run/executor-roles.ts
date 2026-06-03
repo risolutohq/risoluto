@@ -3,6 +3,7 @@ import type {
   ResolvedWorkflowRole,
   ResolvedWorkflowState,
 } from "../workflow-definition/registry.js";
+import { isRecord } from "../utils/type-guards.js";
 import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
 import { evaluateWorkflowBudget, type WorkflowBudgetPolicy } from "./budget-retry.js";
 import type { WorkflowExecutorEvent } from "./gate-hook-engine.js";
@@ -137,8 +138,4 @@ function evaluateBudgetBeforeRole(
     evidence: result.evidence,
     ...(result.reason ? { reason: result.reason } : {}),
   };
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

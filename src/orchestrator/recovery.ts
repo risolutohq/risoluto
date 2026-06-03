@@ -309,21 +309,6 @@ async function executeAssessment(
   recordReportOutcome(report, attempt.attemptId, "skip");
 }
 
-function emptyRecoveryReport(dryRun: boolean, startedAtMs: number): RecoveryReport {
-  return {
-    generatedAt: new Date().toISOString(),
-    dryRun,
-    totalScanned: 0,
-    resumed: [],
-    cleanedUp: [],
-    escalated: [],
-    skipped: [],
-    errors: [],
-    results: [],
-    durationMs: Date.now() - startedAtMs,
-  };
-}
-
 function buildRecoveryReport(totalScanned: number, dryRun: boolean, startedAtMs: number): RecoveryReport {
   return {
     generatedAt: new Date().toISOString(),
@@ -399,7 +384,7 @@ export async function runStartupRecovery(
   const dryRun = options?.dryRun ?? false;
   const runningAttempts = latestRunningAttempts(ctx.attemptStore.getAllAttempts());
   if (runningAttempts.length === 0) {
-    return emptyRecoveryReport(dryRun, startedAtMs);
+    return buildRecoveryReport(0, dryRun, startedAtMs);
   }
 
   const issues = await ctx.tracker.fetchIssueStatesByIds([

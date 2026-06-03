@@ -1,3 +1,4 @@
+import { isRecord } from "../utils/type-guards.js";
 import type { WriteWorkflowRunArtifactInput } from "./archive.js";
 import { evaluateCiBabysitter, type CiCheckResult } from "./ci-babysitter.js";
 import type { WorkflowRunArtifactReference } from "./contracts.js";
@@ -121,10 +122,6 @@ function extractIntentText(artifacts: Readonly<Record<string, unknown>>): string
     return intent.body;
   }
   return "";
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function runValidationAction(

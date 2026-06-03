@@ -1,4 +1,5 @@
 import type { ResolvedWorkflowDefinition, ResolvedWorkflowRole } from "../workflow-definition/registry.js";
+import { isRecord } from "../utils/type-guards.js";
 import type { WorkflowBudgetPolicy } from "./budget-retry.js";
 import { DEFAULT_GATE_RETRY_LIMIT } from "./budget-retry.js";
 import type { WorkflowRunStatus } from "./contracts.js";
@@ -23,7 +24,7 @@ import {
   stateForRole,
   storeProducedArtifacts,
 } from "./executor-roles.js";
-import { buildSingleVerifierInput, routeSingleVerifierDecision } from "./verifier.js";
+import { routeSingleVerifierDecision } from "./verifier.js";
 
 export { WorkflowExecutorError } from "./executor-errors.js";
 
@@ -237,13 +238,12 @@ function rememberState(statesVisited: string[], stateId: string): void {
 }
 
 /**
- * Apply allowlist filtering + decision routing after a verifier role deposits `verification.v1`.
- * `buildSingleVerifierInput` enforces the artifact allowlist (no implementer transcript) for what
- * the verifier read; `routeSingleVerifierDecision` maps the resulting decision to a run action.
+ * Read the `verification.v1` decision from the raw artifacts bag and route it via
+ * `routeSingleVerifierDecision`. Artifact-allowlist filtering for the verifier role happens
+ * in `runOrderedRole` via `pickArtifacts` before `runRole` is dispatched, not here.
  * Returns the route action — only `continue_to_publish` lets the run proceed; all others block.
  */
 function routeVerifierResult(artifacts: Readonly<Record<string, unknown>>, retryBudgetRemaining: number): string {
-  buildSingleVerifierInput({ artifacts, evidenceLinks: [] });
   const verification = artifacts["verification.v1"];
   const decision = isRecord(verification) && typeof verification.decision === "string" ? verification.decision : null;
   if (decision !== "satisfied" && decision !== "not_satisfied" && decision !== "uncertain") {
@@ -287,8 +287,4 @@ function implementerStateStartIndex(orderedRoles: readonly ResolvedWorkflowRole[
     return -1;
   }
   return orderedRoles.findIndex((role) => role.stateId === implementer.stateId);
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

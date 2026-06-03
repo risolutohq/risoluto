@@ -47,12 +47,7 @@ export async function prepareWorkspaceForLaunch(ctx: WorkspacePreparationContext
     if (config.workspace.strategy === "directory") {
       const repoMatch = ctx.deps.repoRouter?.matchIssue(issue) ?? null;
       if (repoMatch && workspace.createdNow && ctx.deps.gitManager) {
-        await ctx.deps.gitManager.cloneInto(
-          repoMatch,
-          workspace.path,
-          issue,
-          ctx.deps.configStore.getConfig().workspace.branchPrefix,
-        );
+        await ctx.deps.gitManager.cloneInto(repoMatch, workspace.path, issue, config.workspace.branchPrefix);
       }
     }
     ctx.pushEvent?.(

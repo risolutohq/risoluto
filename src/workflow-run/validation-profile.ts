@@ -1,3 +1,4 @@
+import { isRecord } from "../utils/type-guards.js";
 import { parseWorkflowRunArtifact, WorkflowRunArtifactContractError } from "./artifact-contracts.js";
 
 export type ValidationProfileId = "node-pnpm-standard" | "offline-smoke";
@@ -196,8 +197,4 @@ function isValidationResultStatus(value: unknown): value is ValidationResultStat
 
 function isValidationCheckStatus(value: unknown): value is ValidationCheckStatus {
   return value === "failed" || value === "passed";
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

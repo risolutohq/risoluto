@@ -151,13 +151,17 @@ async function createNewWorkflowRunIntake(
     const action = input.mode === "retry" ? "retried" : "deduplicated";
     return acceptExistingWorkflowRunIntake(input, externalClaim.mapping.workflowRunId, resolved, action);
   }
-  await claimDeliveryMapping({
+  const deliveryClaim = await claimDeliveryMapping({
     location: input,
     provider: input.source,
     deliveryId: input.deliveryId,
     workflowRunId: workflowRun.id,
     ruleId: resolved.rule?.id ?? null,
   });
+  if (deliveryClaim.status === "existing") {
+    const action = input.mode === "retry" ? "retried" : "deduplicated";
+    return acceptExistingWorkflowRunIntake(input, deliveryClaim.mapping.workflowRunId, resolved, action);
+  }
   await writeWorkflowRunRecord(workflowRun, input);
   await archive.writeWorkflowRunArtifact({
     workflowRunId: workflowRun.id,

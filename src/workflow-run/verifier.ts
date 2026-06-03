@@ -1,3 +1,5 @@
+import { isRecord } from "../utils/type-guards.js";
+
 export const VERIFIER_ALLOWED_ARTIFACT_IDS = [
   "intent.v1",
   "plan.v1",
@@ -172,10 +174,6 @@ export function assertPublishAllowedByVerification(input: AssertPublishAllowedBy
 
 export function isSatisfiedVerificationArtifact(value: unknown): boolean {
   return isRecord(value) && value.decision === "satisfied";
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function recordCouncilResult(councillor: CouncilVerifier, result: CouncilVerifierResult): CouncilVerifierRecord {

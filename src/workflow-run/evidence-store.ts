@@ -4,6 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 
 import { redactSensitiveValue } from "../core/content-sanitizer.js";
+import { isRecord } from "../utils/type-guards.js";
 import type { WorkflowRunArchiveLocation } from "./archive.js";
 
 const REDACTED = "[REDACTED]";
@@ -155,10 +156,6 @@ function parentRecordAtPath(content: unknown, parentPath: readonly string[]): Re
     current = current[segment];
   }
   return isRecord(current) ? current : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function resolveArchiveRoot(location: WorkflowRunArchiveLocation): string {

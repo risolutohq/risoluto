@@ -64,12 +64,12 @@ export async function claimDeliveryMapping(input: {
   readonly deliveryId?: string | null;
   readonly workflowRunId: string;
   readonly ruleId: string | null;
-}): Promise<void> {
+}): Promise<WorkflowRunIntakeClaimResult> {
   const deliveryId = input.deliveryId?.trim();
   if (!deliveryId) {
-    return;
+    return { status: "claimed" };
   }
-  await claimMapping(
+  return claimMapping(
     deliveryMappingPath(input.location, input.provider, deliveryId),
     { provider: input.provider, id: deliveryId },
     input.workflowRunId,
@@ -96,18 +96,24 @@ async function claimMapping(
 ): Promise<WorkflowRunIntakeClaimResult> {
   await mkdir(path.dirname(filePath), { recursive: true });
   const record = { provider: key.provider, externalObjectId: key.id, workflowRunId, ruleId };
-  try {
-    await writeFile(filePath, `${JSON.stringify(record, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-    return { status: "claimed" };
-  } catch (error) {
-    if (isErrorCode(error, "EEXIST")) {
-      const mapping = await readMapping(filePath);
-      if (mapping) {
-        return { status: "existing", mapping };
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await writeFile(filePath, `${JSON.stringify(record, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      return { status: "claimed" };
+    } catch (error) {
+      if (isErrorCode(error, "EEXIST")) {
+        const mapping = await readMapping(filePath);
+        if (mapping) {
+          return { status: "existing", mapping };
+        }
+        lastError = error;
+        continue;
       }
+      throw error;
     }
-    throw error;
   }
+  throw lastError;
 }
 
 function externalMappingPath(
