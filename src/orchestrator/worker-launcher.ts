@@ -164,6 +164,7 @@ type LaunchContext = {
     | "resolveTemplate"
     | "observability"
   >;
+  isRunning: () => boolean;
   runningEntries: Map<string, RunningEntry>;
   completedViews: Map<string, ReturnType<typeof issueView>>;
   detailViews: Map<string, ReturnType<typeof issueView>>;
@@ -451,6 +452,18 @@ function buildOnEventHandler(
   };
 }
 
+/**
+ * Sentinel thrown inside the workspace lock when the orchestrator has begun
+ * stopping. It signals launchWorker's own catch to clean up and return quietly
+ * rather than propagating a failure for what is an intentional shutdown race.
+ */
+class OrchestratorStoppingError extends Error {
+  constructor() {
+    super("orchestrator is stopping; launch aborted");
+    this.name = "OrchestratorStoppingError";
+  }
+}
+
 export async function launchWorker(
   ctx: LaunchContext,
   issue: Issue,
@@ -471,6 +484,17 @@ export async function launchWorker(
   // early failure, unblocking any observer (e.g. stop()) that captured the
   // entry between runningEntries.set and the worker-promise hand-off.
   let resolveLifecycle: (() => void) | undefined;
+  // Re-checked inside the workspace lock at both points where this launch would
+  // become observable to a concurrent stop(): right before the running entry is
+  // registered, and again right before runAttempt is invoked. A stop() flips
+  // isRunning() to false and then snapshots runningEntries; without these guards
+  // a launch mid-flight during stop()'s async drain could register an entry or
+  // start a worker after that snapshot, stranding an orphan worker past shutdown.
+  const ensureRunning = (): void => {
+    if (!ctx.isRunning()) {
+      throw new OrchestratorStoppingError();
+    }
+  };
   try {
     await ctx.deps.workspaceManager.withLock(sanitizeIdentifier(issue.identifier), async () => {
       const workspace = await prepareWorkspace(ctx, issue);
@@ -479,6 +503,7 @@ export async function launchWorker(
       const entry = built.entry;
       resolveLifecycle = built.resolveLifecycle;
 
+      ensureRunning();
       ctx.runningEntries.set(issue.id, entry);
       ctx.completedViews.delete(issue.identifier);
       ctx.markDirty();
@@ -531,6 +556,7 @@ export async function launchWorker(
           entry.steerTurn = steerFn;
         },
       };
+      ensureRunning();
       let promise: Promise<RunOutcome>;
       try {
         promise = ctx.deps.agentRunner.runAttempt(runAttemptInput);
@@ -558,6 +584,12 @@ export async function launchWorker(
       ctx.releaseIssueClaim(issue.id);
       ctx.markDirty();
       resolveLifecycle?.();
+    }
+    // A launch aborted because the orchestrator is stopping is not a failure:
+    // the cleanup above has already released the claim and removed any entry,
+    // so swallow the sentinel instead of surfacing it to the caller.
+    if (error instanceof OrchestratorStoppingError) {
+      return;
     }
     throw error;
   }

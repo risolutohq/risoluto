@@ -85,6 +85,7 @@ function makeLaunchWorkerHarness() {
       },
       resolveTemplate: vi.fn().mockResolvedValue("Run {{ workflowRun.identifier }}"),
     },
+    isRunning: vi.fn(() => true),
     runningEntries: new Map<string, RunningEntry>(),
     completedViews: new Map(),
     detailViews: new Map(),
@@ -225,6 +226,32 @@ describe("launchWorker", () => {
         }),
       }),
     );
+  });
+
+  // orphan-worker re-check (NIN-239): a launch racing Orchestrator.stop() must
+  // not register a running entry and must not dispatch runAttempt.
+  describe("orphan-worker re-check (NIN-239)", () => {
+    it("does not register an entry or dispatch when the orchestrator is already stopping", async () => {
+      const { ctx, issue, runAttempt } = makeLaunchWorkerHarness();
+      ctx.isRunning = vi.fn(() => false);
+
+      await expect(launchWorker(ctx, issue, 1)).resolves.toBeUndefined();
+
+      expect(ctx.runningEntries.has("workflow-run-1")).toBe(false);
+      expect(runAttempt).not.toHaveBeenCalled();
+      expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("workflow-run-1");
+    });
+
+    it("aborts before dispatch when stop() begins after the entry is registered", async () => {
+      const { ctx, issue, runAttempt } = makeLaunchWorkerHarness();
+      ctx.isRunning = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
+
+      await expect(launchWorker(ctx, issue, 1)).resolves.toBeUndefined();
+
+      expect(runAttempt).not.toHaveBeenCalled();
+      expect(ctx.runningEntries.has("workflow-run-1")).toBe(false);
+      expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("workflow-run-1");
+    });
   });
 });
 
