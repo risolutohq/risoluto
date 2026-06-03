@@ -21,8 +21,9 @@ jobs:
     steps:
       - name: Extract from:prd-* label
         id: prd-label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
-          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
           PRD_LABEL=$(echo "$LABELS" | jq -r '[.[] | select(startswith("from:prd-"))][0] // empty')
           if [ -z "$PRD_LABEL" ]; then
             echo "No from:prd-* label found — skipping"
@@ -63,10 +64,13 @@ jobs:
 
       - name: Commit PRD status change
         if: steps.prd-label.outputs.skip != 'true'
+        env:
+          PRD_SLUG: ${{ steps.prd-label.outputs.slug }}
         run: |
+          [[ "$PRD_SLUG" =~ ^[a-z0-9-]+$ ]] || { echo "Invalid slug: $PRD_SLUG"; exit 1; }
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "docs/prds/${{ steps.prd-label.outputs.slug }}.md"
-          git diff --cached --quiet || git commit -m "chore: flip ${{ steps.prd-label.outputs.slug }} PRD status to shipped"
+          git add "docs/prds/$PRD_SLUG.md"
+          git diff --cached --quiet || git commit -m "chore: flip $PRD_SLUG PRD status to shipped"
           # Pushes directly to master — assumes the bot push is not blocked by PR-review branch protection.
           git push
