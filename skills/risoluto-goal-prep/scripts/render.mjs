@@ -3,7 +3,10 @@
  * risoluto-goal-prep: render a runner-agnostic /goal package from one PRD and its Linear waves.
  *
  * Usage:
- *   node skills/risoluto-goal-prep/scripts/render.mjs <slug> [--force]
+ *   node skills/risoluto-goal-prep/scripts/render.mjs <slug> [--force] [--reset]
+ *
+ * --force regenerates the derived artifacts (GOAL/SPEC/WAVES/CONTROL) but preserves the cascade
+ * resume state (PLAN.md/ATTEMPTS.md/NOTES.md); --reset wipes everything, including resume state.
  *
  * Writes ~/.risoluto/goals/<slug>/{GOAL.md,SPEC.md,WAVES.md,CONTROL.md,PLAN.md,ATTEMPTS.md,NOTES.md}.
  * Uses LINEAR_API_KEY + GraphQL. The package runs under Codex goal-forge `/goal` or Claude Code.
@@ -22,6 +25,10 @@ const RESEARCH_DIR = path.join(REPO_ROOT, "research");
 const GOAL_ROOT = path.join(os.homedir(), ".risoluto", "goals");
 const LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql";
 
+// Cascade resume state: --force regenerates the derived artifacts but preserves these so a paused
+// run can resume; --reset wipes them too. Keep in sync with the conductor's resume files.
+const RESUME_FILES = new Set(["PLAN.md", "ATTEMPTS.md", "NOTES.md"]);
+
 function fail(message) {
   console.error(`risoluto-goal-prep: ${message}`);
   process.exit(1);
@@ -29,11 +36,11 @@ function fail(message) {
 
 function parseArgs(argv) {
   const slug = argv.find((arg) => !arg.startsWith("--"));
-  return { slug, force: argv.includes("--force") };
+  return { slug, force: argv.includes("--force"), reset: argv.includes("--reset") };
 }
 
 function assertSlug(slug) {
-  if (!slug) fail("usage: render.mjs <slug> [--force]");
+  if (!slug) fail("usage: render.mjs <slug> [--force] [--reset]");
   if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) fail(`invalid PRD slug: ${slug}`);
 }
 
@@ -269,22 +276,36 @@ function renderTemplate(templateName, tokens) {
   return rendered;
 }
 
-function prepareGoalDir(goalDir, force) {
+function prepareGoalDir(goalDir, force, reset) {
   if (!existsSync(goalDir)) {
     mkdirSync(goalDir, { recursive: true });
     return;
   }
   const existingFiles = readdirSync(goalDir).filter((name) => !name.startsWith("."));
-  if (existingFiles.length > 0 && !force) {
-    fail(`${goalDir} already exists; re-run with --force to replace the generated package`);
+  if (existingFiles.length > 0 && !force && !reset) {
+    fail(
+      `${goalDir} already exists; re-run with --force (keeps PLAN/ATTEMPTS/NOTES resume state) or --reset (wipes everything)`,
+    );
   }
   for (const name of existingFiles) {
+    if (!reset && RESUME_FILES.has(name)) continue; // --force preserves cascade resume state
     rmSync(path.join(goalDir, name), { recursive: true, force: true });
+  }
+  if (reset) {
+    console.error(`risoluto-goal-prep: --reset wiped cascade resume state (PLAN.md/ATTEMPTS.md/NOTES.md) in ${goalDir}`);
   }
 }
 
 function writeFile(goalDir, name, contents) {
   writeFileSync(path.join(goalDir, name), contents, "utf8");
+}
+
+// Resume files are written only when absent, so a --force re-render preserves an in-flight cascade's
+// PLAN/ATTEMPTS/NOTES. --reset removes them in prepareGoalDir first, so they are regenerated fresh here.
+function writeResumeFile(goalDir, name, contents) {
+  const target = path.join(goalDir, name);
+  if (existsSync(target)) return;
+  writeFileSync(target, contents, "utf8");
 }
 
 function renderControl(slug) {
@@ -345,7 +366,7 @@ function renderNotes(slug, waves, generatedAt) {
 `;
 }
 
-function writePackage(slug, prd, project, waves, force) {
+function writePackage(slug, prd, project, waves, force, reset) {
   const generatedAt = new Date().toISOString();
   const goalDir = path.join(GOAL_ROOT, slug);
   const issueCount = waves.reduce((total, wave) => total + wave.issues.length, 0);
@@ -363,19 +384,19 @@ function writePackage(slug, prd, project, waves, force) {
     GENERATED_AT: generatedAt,
   };
 
-  prepareGoalDir(goalDir, force);
+  prepareGoalDir(goalDir, force, reset);
   writeFile(goalDir, "WAVES.md", renderWaves(slug, prd, project, waves, generatedAt));
   writeFile(goalDir, "SPEC.md", renderTemplate("SPEC.template.md", tokens));
   writeFile(goalDir, "GOAL.md", renderTemplate("GOAL.template.md", tokens));
   writeFile(goalDir, "CONTROL.md", renderControl(slug));
-  writeFile(goalDir, "PLAN.md", renderPlan(slug, waves));
-  writeFile(goalDir, "ATTEMPTS.md", renderAttempts(slug));
-  writeFile(goalDir, "NOTES.md", renderNotes(slug, waves, generatedAt));
+  writeResumeFile(goalDir, "PLAN.md", renderPlan(slug, waves));
+  writeResumeFile(goalDir, "ATTEMPTS.md", renderAttempts(slug));
+  writeResumeFile(goalDir, "NOTES.md", renderNotes(slug, waves, generatedAt));
   return { goalDir, issueCount, generatedAt };
 }
 
 async function main() {
-  const { slug, force } = parseArgs(process.argv.slice(2));
+  const { slug, force, reset } = parseArgs(process.argv.slice(2));
   assertSlug(slug);
   checkRepo();
 
@@ -385,7 +406,7 @@ async function main() {
   const waves = groupIssuesIntoWaves(issueNodes);
   if (waves.length === 0) fail(`no Linear issues found for label from:prd-${slug}`);
 
-  const written = writePackage(slug, prd, project, waves, force);
+  const written = writePackage(slug, prd, project, waves, force, reset);
   console.error(
     [
       `risoluto-goal-prep: rendered ${slug}`,
