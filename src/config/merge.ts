@@ -6,6 +6,7 @@
  */
 
 import { asRecord } from "./coercion.js";
+import { isDangerousKey } from "./overlay-helpers.js";
 
 /**
  * Deep merge overlay into base.
@@ -13,6 +14,8 @@ import { asRecord } from "./coercion.js";
  * - Arrays in overlay replace arrays in base entirely
  * - Objects are merged recursively
  * - Primitives in overlay replace those in base
+ * - `__proto__`/`constructor`/`prototype` keys are dropped at every depth so an
+ *   untrusted overlay (loaded YAML or DB config) cannot pollute Object.prototype.
  */
 export function deepMerge(base: unknown, overlay: unknown): unknown {
   if (Array.isArray(overlay)) {
@@ -25,6 +28,9 @@ export function deepMerge(base: unknown, overlay: unknown): unknown {
   const overlayRecord = asRecord(overlay);
   const merged: Record<string, unknown> = { ...baseRecord };
   for (const [key, value] of Object.entries(overlayRecord)) {
+    if (isDangerousKey(key)) {
+      continue;
+    }
     merged[key] = deepMerge(baseRecord[key], value);
   }
   return merged;

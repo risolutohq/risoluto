@@ -214,30 +214,26 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(promptTemplate).not.toMatch(/finished the issue/i);
   });
 
-  it("treats invalid config JSON as an empty section during refresh", () => {
-    const trackerRow = db
-      .select()
-      .from(config)
-      .all()
-      .find((row) => row.key === "tracker");
+  it("retains the last-known-good config when a section's JSON is corrupted (NIN-252)", () => {
+    const goodTracker = store.toMap().tracker;
 
     db.update(config)
-      .set({
-        value: "{not-valid-json",
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(config.key, trackerRow?.key ?? "tracker"))
+      .set({ value: "{not-valid-json", updatedAt: new Date().toISOString() })
+      .where(eq(config.key, "tracker"))
       .run();
 
     store.refresh();
 
-    expect(store.toMap().tracker).toEqual({});
+    // Corrupt JSON must not collapse the section to {} — the previous good value stays.
+    expect(store.toMap().tracker).toEqual(goodTracker);
+    expect(store.toMap().tracker).not.toEqual({});
   });
 
-  it("logs a warning when a config section row has invalid JSON — regression for fnd_sig-feat-service-71d0bc761e-c55f", () => {
+  it("logs an error and keeps the last-known-good config when a section row has invalid JSON (NIN-252)", () => {
     const mockLogger = createMockLogger();
     const storeWithMockLogger = new DbConfigStore(db, mockLogger);
     storeWithMockLogger.refresh();
+    const goodTracker = storeWithMockLogger.toMap().tracker;
 
     db.update(config)
       .set({ value: "{not-valid-json", updatedAt: new Date().toISOString() })
@@ -246,11 +242,51 @@ describe("DbConfigStore — ConfigStore surface", () => {
 
     storeWithMockLogger.refresh();
 
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "tracker" }),
-      "config section JSON parse failed — using empty fallback",
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.stringContaining("invalid JSON") }),
+      "config refresh failed — retaining last-known-good config",
     );
-    expect(storeWithMockLogger.toMap().tracker).toEqual({});
+    expect(storeWithMockLogger.toMap().tracker).toEqual(goodTracker);
+  });
+
+  it("fails refresh on startup when config JSON is corrupt and there is no last-known-good (NIN-252)", () => {
+    db.update(config)
+      .set({ value: "{not-valid-json", updatedAt: new Date().toISOString() })
+      .where(eq(config.key, "tracker"))
+      .run();
+
+    const freshStore = new DbConfigStore(db, createMockLogger());
+    expect(() => freshStore.refresh()).toThrow(/invalid JSON/);
+  });
+
+  it("does not persist a bad overlay when derivation throws — write+refresh stay together (NIN-252)", async () => {
+    const trackerRowBefore = db
+      .select()
+      .from(config)
+      .all()
+      .find((row) => row.key === "tracker")?.value;
+
+    await expect(store.applyPatch({ tracker: { endpoint: "not-a-valid-url" } })).rejects.toThrow(/valid absolute URL/);
+
+    const trackerRowAfter = db
+      .select()
+      .from(config)
+      .all()
+      .find((row) => row.key === "tracker")?.value;
+    // The DB row is untouched — the invalid endpoint never landed.
+    expect(trackerRowAfter).toBe(trackerRowBefore);
+    expect(JSON.stringify(store.toMap().tracker)).not.toContain("not-a-valid-url");
+  });
+
+  it("rejects an out-of-range server.port and falls back to the default (NIN-252)", async () => {
+    await store.applyPatch({ server: { port: 70000 } });
+    expect(store.getConfig().server.port).toBe(4000);
+
+    await store.applyPatch({ server: { port: 0 } });
+    expect(store.getConfig().server.port).toBe(4000);
+
+    await store.applyPatch({ server: { port: 8080 } });
+    expect(store.getConfig().server.port).toBe(8080);
   });
 });
 

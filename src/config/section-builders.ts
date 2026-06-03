@@ -254,9 +254,16 @@ export function derivePollingConfig(polling: Record<string, unknown>): ServiceCo
   };
 }
 
+// A TCP port must be an integer in [1, 65535]; anything else (0, negative, float,
+// >65535, non-numeric) is rejected in favour of the default rather than trusted (NIN-252).
+function coerceTcpPort(value: unknown, fallback: number): number {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isInteger(numeric) && numeric >= 1 && numeric <= 65535 ? numeric : fallback;
+}
+
 export function deriveServerConfig(server: Record<string, unknown>): ServiceConfig["server"] {
   return {
-    port: asNumber(server.port, 4000),
+    port: coerceTcpPort(server.port, 4000),
   };
 }
 
