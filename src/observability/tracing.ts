@@ -27,7 +27,8 @@ export interface ObservabilityTraceRecord {
  * header and attached to the request object for downstream consumers.
  */
 export function tracingMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const requestId = (req.get(REQUEST_ID_HEADER) as string | undefined) || randomUUID();
+  const raw = req.get(REQUEST_ID_HEADER) as string | undefined;
+  const requestId = raw && /^[\w-]{1,128}$/.test(raw) ? raw : randomUUID();
   res.setHeader(REQUEST_ID_HEADER, requestId);
   (req as Request & { requestId: string }).requestId = requestId;
   next();

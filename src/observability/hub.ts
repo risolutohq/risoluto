@@ -211,7 +211,10 @@ export function createObservabilityHub(options: ObservabilityHubOptions = {}): O
 function dedupeSnapshots(snapshots: ComponentObservabilitySnapshot[]): ComponentObservabilitySnapshot[] {
   const merged = new Map<string, ComponentObservabilitySnapshot>();
   for (const snapshot of snapshots) {
-    merged.set(`${snapshot.component}:${snapshot.pid}`, snapshot);
+    const existing = merged.get(snapshot.component);
+    if (!existing || Date.parse(snapshot.updatedAt) > Date.parse(existing.updatedAt)) {
+      merged.set(snapshot.component, snapshot);
+    }
   }
   return [...merged.values()];
 }
