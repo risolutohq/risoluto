@@ -133,7 +133,6 @@ async function runSingleTurn(
   state: AgentRunnerTurnExecutionState,
   prompt: string,
 ): Promise<TurnResult> {
-  state.turnCount += 1;
   const workflowRun = input.runInput.workflowRun;
   const turnResult = await input.connection.request(CODEX_METHOD.TurnStart, {
     threadId: state.threadId,
@@ -153,6 +152,7 @@ async function runSingleTurn(
   if (!state.turnId) {
     throw new Error("turn/start did not return a turn identifier");
   }
+  state.turnCount += 1;
   input.setActiveTurnId(state.turnId);
 
   const completedTurn = await waitForTurnCompletion(input.turnState, {

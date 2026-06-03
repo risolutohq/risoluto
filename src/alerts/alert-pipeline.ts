@@ -37,6 +37,7 @@ export class AlertPipeline {
 
   private async evaluateRule(rule: AlertRuleConfig, eventType: string, payload: EventPayload): Promise<void> {
     const now = Date.now();
+    this.evictExpiredCooldowns(rule, now);
     const cooldownKey = buildCooldownKey(rule, eventType, payload);
     const previousDeliveryAt = this.recentDeliveries.get(cooldownKey);
     if (previousDeliveryAt !== undefined && now - previousDeliveryAt < rule.cooldownMs) {
@@ -48,7 +49,6 @@ export class AlertPipeline {
       return;
     }
     this.recentDeliveries.set(cooldownKey, now);
-    this.evictExpiredCooldowns(rule, now);
 
     const notificationEvent = buildNotificationEvent(rule, eventType, payload);
     const deliverySummary = await this.options.notificationManager.notify(notificationEvent, {

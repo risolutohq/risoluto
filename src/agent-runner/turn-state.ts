@@ -17,6 +17,8 @@ export interface TurnState {
   turnCompletionResolvers: Map<string, (payload: unknown) => void>;
   completedTurnNotifications: Map<string, unknown>;
   reviewSummaries: Map<string, string>;
+  /** Turn IDs whose waitForTurnCompletion has already timed out or been aborted. */
+  timedOutTurnIds: Set<string>;
 }
 
 export function createTurnState(): TurnState {
@@ -28,6 +30,7 @@ export function createTurnState(): TurnState {
     turnCompletionResolvers: new Map<string, (payload: unknown) => void>(),
     completedTurnNotifications: new Map<string, unknown>(),
     reviewSummaries: new Map<string, string>(),
+    timedOutTurnIds: new Set<string>(),
   };
 }
 
@@ -96,6 +99,12 @@ export function recordCompletedTurn(state: TurnState, turnId: string | null, pay
   if (!turnId) {
     return;
   }
+  // If the waiter already timed out or was aborted, discard the late notification
+  // rather than buffering it — no one will ever consume it.
+  if (state.timedOutTurnIds.has(turnId)) {
+    state.timedOutTurnIds.delete(turnId);
+    return;
+  }
   const resolver = state.turnCompletionResolvers.get(turnId);
   if (resolver) {
     resolver(payload);
@@ -134,11 +143,13 @@ export function waitForTurnCompletion(
   return new Promise((resolve, reject) => {
     const onAbort = () => {
       state.turnCompletionResolvers.delete(input.turnId);
+      state.timedOutTurnIds.add(input.turnId);
       clearTimeout(timer);
       reject(new Error("turn completion interrupted"));
     };
     const timer = setTimeout(() => {
       state.turnCompletionResolvers.delete(input.turnId);
+      state.timedOutTurnIds.add(input.turnId);
       input.signal.removeEventListener("abort", onAbort);
       reject(new Error(`timed out waiting for turn completion after ${input.timeoutMs}ms`));
     }, input.timeoutMs);

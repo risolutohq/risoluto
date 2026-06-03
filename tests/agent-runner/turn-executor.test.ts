@@ -845,7 +845,8 @@ describe("executeTurns", () => {
 
     const result = await executeTurns(input, state);
 
-    expect(outcomeForAbort).toHaveBeenCalledWith(controller.signal, "thread-1", null, 1);
+    // turnCount stays 0 because the request threw before a turnId was confirmed
+    expect(outcomeForAbort).toHaveBeenCalledWith(controller.signal, "thread-1", null, 0);
     expect(result.kind).toBe("cancelled");
     expect(result.errorCode).toBe("shutdown");
   });
@@ -991,5 +992,27 @@ describe("executeTurns", () => {
 
     expect(classifyRunError).toHaveBeenCalledWith(expect.any(Error), "thread-1", "turn-abc", 1);
     expect(result.kind).toBe("failed");
+  });
+
+  it("returns context_window_exceeded after exhausting the compaction budget", async () => {
+    vi.mocked(isActiveState).mockReturnValue(true);
+    vi.mocked(compactThread).mockResolvedValue(true);
+
+    // maxTurns=2 means compaction budget exhausts after 2 compactions
+    const input = makeInput({ maxTurns: 2 });
+    const state = makeState();
+
+    // Every turn fails with a context window error so compaction loops indefinitely
+    // until the budget guard fires.
+    vi.mocked(waitForTurnCompletion).mockResolvedValue(
+      makeCompletedTurnResponse("failed", { message: "context window exceeded" }),
+    );
+
+    const result = await executeTurns(input, state);
+
+    expect(result.kind).toBe("failed");
+    expect(result.errorCode).toBe("context_window_exceeded");
+    expect(result.errorMessage).toContain("compaction budget");
+    expect(result.errorMessage).toContain("2");
   });
 });
