@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { parse as parseYaml } from "yaml";
@@ -56,6 +56,10 @@ export const DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS: WorkflowResolutionDefaults = 
   validationProfile: "node-pnpm-standard",
 };
 
+// Workflow definitions are small declarative YAML; cap the file at 256 KiB so a symlink-swapped or
+// runaway file can't be slurped into memory before parsing (NIN-265).
+const MAX_WORKFLOW_DEFINITION_BYTES = 256 * 1024;
+
 const BUILTIN_ROLE_IDS = new Set(["planner", "implementer", "reviewer", "verifier", "ci_babysitter"]);
 const BUILTIN_GATE_IDS = new Set(["artifacts-valid", "budget-available", "validation-passed", "verifier-satisfied"]);
 const BUILTIN_HOOK_IDS = new Set(["collect-evidence", "notify-operator", "persist-artifact"]);
@@ -110,9 +114,15 @@ export async function loadWorkflowDefinitionRegistry(
   input: LoadWorkflowDefinitionRegistryInput,
 ): Promise<WorkflowDefinitionRegistry> {
   const definitions = await loadWorkflowDefinitions(input.workflowDir);
-  const resolvedDefinitions = new Map(
-    definitions.map((definition) => [definition.id, resolveWorkflowDefinition(definition, input.globalDefaults)]),
-  );
+  const resolvedDefinitions = new Map<string, ResolvedWorkflowDefinition>();
+  for (const definition of definitions) {
+    // Map.set would silently let a second file shadow the first — reject so a duplicate id can't
+    // ambiguously resolve depending on directory read order (NIN-265).
+    if (resolvedDefinitions.has(definition.id)) {
+      throw new WorkflowDefinitionRegistryError(`duplicate workflow definition id ${definition.id}`);
+    }
+    resolvedDefinitions.set(definition.id, resolveWorkflowDefinition(definition, input.globalDefaults));
+  }
   return {
     resolve: (id) => resolveRegisteredWorkflowDefinition(resolvedDefinitions, id),
   };
@@ -139,9 +149,11 @@ async function loadWorkflowDefinitions(workflowDir: string): Promise<WorkflowDef
 }
 
 async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinition> {
+  await assertSafeDefinitionFile(filePath);
   const parsed = parseYaml(await readFile(filePath, "utf8"));
   try {
     const definition = workflowDefinitionSchema.parse(parsed);
+    validateWorkflowDefinitionStructure(definition);
     validateWorkflowDefinitionReferences(definition);
     return definition;
   } catch (error) {
@@ -149,6 +161,41 @@ async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinit
       throw new WorkflowDefinitionRegistryError(formatSchemaError(filePath, error), { cause: error });
     }
     throw error;
+  }
+}
+
+// Reject anything that isn't a plain regular file (a symlink, fifo, device, or directory entry that
+// happens to end in .yaml) and anything over the size cap — before its bytes are read (NIN-265).
+async function assertSafeDefinitionFile(filePath: string): Promise<void> {
+  const stats = await lstat(filePath);
+  if (!stats.isFile()) {
+    throw new WorkflowDefinitionRegistryError(
+      `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
+    );
+  }
+  if (stats.size > MAX_WORKFLOW_DEFINITION_BYTES) {
+    throw new WorkflowDefinitionRegistryError(
+      `workflow definition ${filePath} exceeds the ${MAX_WORKFLOW_DEFINITION_BYTES} byte size cap (${stats.size} bytes)`,
+    );
+  }
+}
+
+// Structural invariants the zod schema can't express on its own: a definition must declare at least
+// one state and one role, and every state id must be unique (NIN-265).
+function validateWorkflowDefinitionStructure(definition: WorkflowDefinition): void {
+  if (definition.states.length === 0) {
+    throw new WorkflowDefinitionRegistryError(`workflow definition ${definition.id} declares no states`);
+  }
+  const stateIds = new Set<string>();
+  for (const state of definition.states) {
+    if (stateIds.has(state.id)) {
+      throw new WorkflowDefinitionRegistryError(`duplicate state id ${state.id}`);
+    }
+    stateIds.add(state.id);
+  }
+  const roleCount = definition.states.reduce((total, state) => total + state.roles.length, 0);
+  if (roleCount === 0) {
+    throw new WorkflowDefinitionRegistryError(`workflow definition ${definition.id} declares no roles`);
   }
 }
 
