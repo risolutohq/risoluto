@@ -35,7 +35,7 @@ export function createRunStartTracker(activeState: string): TrackerPort {
     updateIssueState: () => unsupported("updateIssueState"),
     createComment: () => unsupported("createComment"),
     createIssue: () => unsupported("createIssue"),
-    transitionIssue: () => Promise.resolve({ success: false }),
+    transitionIssue: () => unsupported("transitionIssue"),
     provision: (_input: TrackerProvisionInput): Promise<never> => unsupported("provision"),
   };
 }

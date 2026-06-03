@@ -109,7 +109,12 @@ export class PromptTemplateStore implements TemplateStorePort {
     // Guard: prevent deleting the currently active template.
     const systemRow = this.db.select().from(config).where(eq(config.key, "system")).get();
     if (systemRow) {
-      const system = JSON.parse(systemRow.value) as Record<string, unknown>;
+      let system: Record<string, unknown> = {};
+      try {
+        system = JSON.parse(systemRow.value) as Record<string, unknown>;
+      } catch {
+        this.logger.warn({ key: "system" }, "config section JSON parse failed — skipping active-template guard");
+      }
       if (system.selectedTemplateId === id) {
         return {
           deleted: false,

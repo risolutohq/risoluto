@@ -1,8 +1,7 @@
-import { homedir } from "node:os";
-import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { listWorkflowRuns } from "../workflow-run/list-artifacts.js";
+import { resolveDataDir } from "./cli-helpers.js";
 
 export async function listWorkflowRunsCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -22,8 +21,4 @@ export async function listWorkflowRunsCommand(argv: string[]): Promise<number> {
     console.log(`Listed ${listed.workflowRuns.length} Workflow Runs`);
   }
   return 0;
-}
-
-function resolveDataDir(value: string | undefined): string {
-  return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
 }

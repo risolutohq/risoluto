@@ -14,11 +14,11 @@ interface StateMachineConfigInput {
   terminalStates?: string[];
 }
 
-function normalizeState(value: string): string {
+export function normalizeState(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function uniqueStates(states: string[]): string[] {
+export function uniqueStates(states: string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const state of states) {
