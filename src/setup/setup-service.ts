@@ -25,6 +25,7 @@ import {
 } from "./port.js";
 import { hasCodexAuthFile, hasRepoRoutes, readProjectSlug, readTrackerKind } from "./setup-status.js";
 import { toErrorString } from "../utils/type-guards.js";
+import { isBlockedRequestHost, isLoopbackHost } from "../utils/url-safety.js";
 
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?$/u;
 
@@ -95,6 +96,39 @@ async function validateOpenaiKey(key: string, validationUrl: string): Promise<bo
     return openaiResponse.ok;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Validate a provider base URL before the API key is sent to it (SSRF / key
+ * exfiltration, NIN-245). A loopback host is the explicitly-trusted local-proxy
+ * case (the operator's own machine) and may use http or https; every other host
+ * must use https and must not be a private or link-local address. Throws
+ * SetupServiceError(400) on any violation.
+ */
+function assertSafeProviderBaseUrl(baseUrl: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new SetupServiceError(400, "invalid_provider_base_url", "provider.baseUrl is not a valid URL");
+  }
+  if (isLoopbackHost(parsed.hostname)) {
+    return;
+  }
+  if (parsed.protocol !== "https:") {
+    throw new SetupServiceError(
+      400,
+      "insecure_provider_base_url",
+      "provider.baseUrl must use https for a non-loopback host",
+    );
+  }
+  if (isBlockedRequestHost(parsed.hostname)) {
+    throw new SetupServiceError(
+      400,
+      "forbidden_provider_base_url",
+      "provider.baseUrl must not point at a private or link-local host",
+    );
   }
 }
 
@@ -263,6 +297,9 @@ class SetupServiceImpl implements SetupPort {
         "missing_provider_base_url",
         "provider.baseUrl is required when provider is configured",
       );
+    }
+    if (provider.baseUrl) {
+      assertSafeProviderBaseUrl(provider.baseUrl);
     }
 
     const valid = await validateOpenaiKey(key, getValidationUrl(provider.baseUrl));

@@ -353,6 +353,35 @@ describe("registerSetupApi", () => {
     });
   });
 
+  it("rejects a provider baseUrl on a private host before sending the key", async () => {
+    const secretsStore = createSecretsStoreMock();
+    const { baseUrl } = await startSetupApiServer({ secretsStore });
+    const response = await postJson(baseUrl, "/api/v1/setup/openai-key", {
+      key: "proxy-token",
+      provider: { name: "Internal", baseUrl: "https://10.0.0.5/v1" },
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("forbidden_provider_base_url");
+    expect(getExternalFetchMock()).not.toHaveBeenCalled();
+    expect(secretsStore.set).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-loopback http provider baseUrl before sending the key", async () => {
+    const secretsStore = createSecretsStoreMock();
+    const { baseUrl } = await startSetupApiServer({ secretsStore });
+    const response = await postJson(baseUrl, "/api/v1/setup/openai-key", {
+      key: "proxy-token",
+      provider: { name: "Remote", baseUrl: "http://proxy.example.com/v1" },
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("insecure_provider_base_url");
+    expect(getExternalFetchMock()).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid OpenAI key", async () => {
     const secretsStore = createSecretsStoreMock();
     getExternalFetchMock().mockResolvedValueOnce(textResponse(401, "unauthorized"));

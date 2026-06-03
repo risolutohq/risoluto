@@ -6,6 +6,7 @@ import { asNumber, asRecord, asString } from "../config/coercion.js";
 import { GitHubTransport } from "../github/transport.js";
 import type { OrchestratorPort } from "../orchestrator/port.js";
 import type { SecretsPort } from "../secrets/port.js";
+import { isSafeOutboundHttpsUrl } from "../utils/url-safety.js";
 
 /* ------------------------------------------------------------------ */
 /*  Response types                                                     */
@@ -221,15 +222,20 @@ export async function handleGitContext(deps: GitContextDeps, _req: Request, res:
   const repoConfigs = config?.repos ?? [];
   const snapshot = deps.orchestrator.getSnapshot();
   const token = resolveGithubToken(deps);
+  const apiBaseUrl = config?.github?.apiBaseUrl ?? "https://api.github.com";
+  // Only send the GitHub token to a safe https host; a config that points
+  // apiBaseUrl at a loopback/private/link-local or non-https host must not
+  // receive the token (SSRF / token exfiltration, NIN-245).
+  const enrichmentEnabled = token !== null && isSafeOutboundHttpsUrl(apiBaseUrl);
   const fetchOptions: GitHubFetchOptions = {
     token: token ?? "",
-    apiBaseUrl: config?.github?.apiBaseUrl ?? "https://api.github.com",
+    apiBaseUrl,
     fetchImpl: deps.fetchImpl,
   };
 
   const enrichedRepos = await Promise.all(
     repoConfigs.map((repo) =>
-      token
+      enrichmentEnabled
         ? enrichConfiguredRepo(repo, fetchOptions)
         : Promise.resolve({
             repoUrl: repo.repoUrl,
@@ -246,7 +252,7 @@ export async function handleGitContext(deps: GitContextDeps, _req: Request, res:
   const response: GitContextResponse = {
     repos: enrichedRepos,
     activeBranches: extractActiveBranches(snapshot),
-    githubAvailable: token !== null,
+    githubAvailable: enrichmentEnabled,
   };
 
   res.json(response);

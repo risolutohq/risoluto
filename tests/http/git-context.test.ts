@@ -326,6 +326,55 @@ describe("GET /api/v1/git/context", () => {
     });
   });
 
+  describe("with GitHub token but an unsafe apiBaseUrl", () => {
+    let server: http.Server;
+    let port: number;
+    const mockFetch = vi.fn();
+
+    beforeAll(async () => {
+      mockFetch.mockResolvedValue(createJsonResponse(200, {}));
+      const app = createApp({
+        orchestrator: makeOrchestrator() as never,
+        configStore: makeConfigStore(
+          [
+            {
+              repoUrl: "https://github.com/acme/app.git",
+              defaultBranch: "main",
+              identifierPrefix: "MT",
+              githubOwner: "acme",
+              githubRepo: "app",
+            },
+          ],
+          // Link-local cloud-metadata host — must never receive the token.
+          { token: "ghp_config", apiBaseUrl: "https://169.254.169.254/api" },
+        ) as never,
+        secretsStore: makeSecretsStore("ghp_test123") as never,
+        fetchImpl: mockFetch as unknown as typeof fetch,
+      });
+      await new Promise<void>((resolve) => {
+        server = app.listen(0, () => {
+          port = (server.address() as { port: number }).port;
+          resolve();
+        });
+      });
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    });
+
+    it("does not send the token and reports githubAvailable=false", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/git/context`);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.githubAvailable).toBe(false);
+      const repos = body.repos as Array<Record<string, unknown>>;
+      expect(repos[0].github).toBeUndefined();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe("with no repos configured", () => {
     let server: http.Server;
     let port: number;
