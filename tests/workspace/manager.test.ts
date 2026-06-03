@@ -189,6 +189,39 @@ describe("WorkspaceManager", () => {
       expect(workspace.createdNow).toBe(false);
       expect(deps.gitManager.setupWorktree).not.toHaveBeenCalled();
     });
+
+    it("removes newly created worktree and rethrows if afterCreate hook fails", async () => {
+      const afterCreateHook = "exit 1";
+      const config = createConfig({
+        strategy: "worktree",
+        hooks: { afterCreate: afterCreateHook, beforeRun: null, afterRun: null, beforeRemove: null, timeoutMs: 5000 },
+      });
+      const deps = createWorktreeDeps();
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      // Workspace does not exist (createdNow = true)
+      statMock.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+
+      // The hook runs via child_process.spawn — the mock returns a process that never exits,
+      // so we need spawn to call the exit handler with code 1 to simulate hook failure.
+      const { spawn } = await import("node:child_process");
+      const spawnMock = vi.mocked(spawn);
+      spawnMock.mockReturnValueOnce({
+        on: (event: string, cb: (...args: unknown[]) => void) => {
+          if (event === "exit") cb(1);
+        },
+        stderr: { on: vi.fn() },
+        kill: vi.fn(),
+      } as never);
+
+      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow();
+      // The worktree should have been removed on failure
+      expect(deps.gitManager.removeWorktree).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining("NIN-1"),
+        true,
+      );
+    });
   });
 
   describe("prepareForAttempt", () => {

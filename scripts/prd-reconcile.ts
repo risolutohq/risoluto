@@ -13,7 +13,7 @@
  *   LINEAR_API_ENDPOINT — optional, defaults to https://api.linear.app/graphql
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +38,7 @@ function isWorkingTreeClean(): boolean {
 
 function branchExists(branchName: string): boolean {
   try {
-    execSync(`git rev-parse --verify ${branchName}`, { cwd: REPO_ROOT, stdio: "ignore" });
+    execFileSync("git", ["rev-parse", "--verify", branchName], { cwd: REPO_ROOT, stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -73,10 +73,6 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
     return;
   }
 
-  // Write the updated PRD
-  await writeFile(prdPath, newContent, "utf8");
-  process.stderr.write(`📝 Updated docs/prds/${slug}.md with Linear content.\n`);
-
   // Create branch, commit, push
   const originalBranch = getCurrentBranch();
   const reconcileBranch = `pipeline/${slug}-prd-reconcile`;
@@ -93,13 +89,17 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
     process.exit(1);
   }
 
-  execSync(`git checkout -b ${reconcileBranch}`, { cwd: REPO_ROOT, stdio: "inherit" });
-  execSync(`git add docs/prds/${slug}.md`, { cwd: REPO_ROOT, stdio: "inherit" });
-  execSync(`git commit -m "docs: reconcile PRD ${slug} from Linear project content"`, {
+  // Write the updated PRD (guards passed — safe to mutate)
+  await writeFile(prdPath, newContent, "utf8");
+  process.stderr.write(`📝 Updated docs/prds/${slug}.md with Linear content.\n`);
+
+  execFileSync("git", ["checkout", "-b", reconcileBranch], { cwd: REPO_ROOT, stdio: "inherit" });
+  execFileSync("git", ["add", `docs/prds/${slug}.md`], { cwd: REPO_ROOT, stdio: "inherit" });
+  execFileSync("git", ["commit", "-m", `docs: reconcile PRD ${slug} from Linear project content`], {
     cwd: REPO_ROOT,
     stdio: "inherit",
   });
-  execSync(`git push -u origin ${reconcileBranch}`, { cwd: REPO_ROOT, stdio: "inherit" });
+  execFileSync("git", ["push", "-u", "origin", reconcileBranch], { cwd: REPO_ROOT, stdio: "inherit" });
 
   process.stderr.write(`\n✅ Branch "${reconcileBranch}" pushed.\n`);
   process.stderr.write(`   Create a PR with:\n`);
@@ -108,13 +108,18 @@ async function reconcilePrd(options: ReconcileOptions): Promise<void> {
   );
 
   // Switch back to original branch
-  execSync(`git checkout ${originalBranch}`, { cwd: REPO_ROOT, stdio: "inherit" });
+  execFileSync("git", ["checkout", originalBranch], { cwd: REPO_ROOT, stdio: "inherit" });
 }
 
 async function main(): Promise<void> {
   const slug = process.argv[2];
   if (!slug) {
     process.stderr.write("Usage: pnpm prd:reconcile <slug>\n");
+    process.exit(1);
+  }
+
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    process.stderr.write(`Error: slug must match /^[a-z0-9-]+$/, got: ${slug}\n`);
     process.exit(1);
   }
 

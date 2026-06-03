@@ -219,6 +219,11 @@ async function parseDispatchStream(
     reader.releaseLock();
   }
 
+  if (buffer.trim()) {
+    const parsed = parseSseLine(buffer, onEvent, logger);
+    if (parsed) outcome = parsed;
+  }
+
   if (!outcome) {
     throw new Error("Dispatch stream ended without outcome");
   }

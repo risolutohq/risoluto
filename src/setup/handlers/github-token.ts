@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { isRecord } from "../../utils/type-guards.js";
+import { isRecord, toErrorString } from "../../utils/type-guards.js";
 import { resolveSetupService, type SetupService } from "../setup-service.js";
 import type { SetupApiDeps } from "../port.js";
 
@@ -14,6 +14,10 @@ export function handlePostGithubToken(deps: SetupApiDeps | SetupService) {
       return;
     }
 
-    res.json(await service.saveGithubToken(token));
+    try {
+      res.json(await service.saveGithubToken(token));
+    } catch (error) {
+      res.status(500).json({ error: { code: "save_error", message: toErrorString(error) } });
+    }
   };
 }

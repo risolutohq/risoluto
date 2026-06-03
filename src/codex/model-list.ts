@@ -17,9 +17,13 @@ interface ModelListRpcResult {
   }>;
 }
 
-let cached: CodexModelEntry[] | null = null;
-let cacheExpiry = 0;
-let inflight: Promise<CodexModelEntry[]> | null = null;
+interface CacheEntry {
+  cached: CodexModelEntry[];
+  expiry: number;
+  inflight: Promise<CodexModelEntry[]> | null;
+}
+
+const cacheByKey = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const QUERY_TIMEOUT_MS = 15_000;
 
@@ -27,30 +31,36 @@ const QUERY_TIMEOUT_MS = 15_000;
  * Fetches the list of models available to Codex by spawning
  * `codex app-server` and querying `model/list` via JSON-RPC.
  *
- * Results are cached for 5 minutes. Falls back to the static
- * pricing table if the Codex binary is unavailable or errors.
+ * Results are cached per API key for 5 minutes. Falls back to the
+ * static pricing table if the Codex binary is unavailable or errors.
  */
 export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry[]> {
-  if (cached && Date.now() < cacheExpiry) {
-    return cached;
+  const cacheKey = apiKey ?? "";
+  const entry = cacheByKey.get(cacheKey);
+
+  if (entry && entry.cached.length > 0 && Date.now() < entry.expiry) {
+    return entry.cached;
   }
-  if (inflight) {
-    return inflight;
+  if (entry?.inflight) {
+    return entry.inflight;
   }
 
-  inflight = (async () => {
+  const slot: CacheEntry = { cached: [], expiry: 0, inflight: null };
+  cacheByKey.set(cacheKey, slot);
+
+  slot.inflight = (async () => {
     try {
       const result = await queryModelList(apiKey);
-      cached = result;
-      cacheExpiry = Date.now() + CACHE_TTL_MS;
+      slot.cached = result;
+      slot.expiry = Date.now() + CACHE_TTL_MS;
       return result;
     } catch {
       return getAvailableModelIds().map((id) => ({ id, displayName: id, isDefault: false }));
     } finally {
-      inflight = null;
+      slot.inflight = null;
     }
   })();
-  return inflight;
+  return slot.inflight;
 }
 
 function queryModelList(apiKey?: string): Promise<CodexModelEntry[]> {

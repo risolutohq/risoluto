@@ -94,6 +94,10 @@ const mockIssueConfigStoreCreate = vi.hoisted(() =>
 
 const mockAcceptLinearTriggeredWorkflowRun = vi.hoisted(() => vi.fn().mockResolvedValue({}));
 
+const mockCreateAcceptedRunDriver = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ drive: vi.fn().mockResolvedValue(undefined) }),
+);
+
 vi.mock("../../src/persistence/sqlite/runtime.js", () => ({
   initPersistenceRuntime: mockInitPersistenceRuntime,
 }));
@@ -151,6 +155,10 @@ vi.mock("../../src/persistence/sqlite/issue-config-store.js", () => ({
 
 vi.mock("../../src/workflow-run/linear-intake.js", () => ({
   acceptLinearTriggeredWorkflowRun: mockAcceptLinearTriggeredWorkflowRun,
+}));
+
+vi.mock("../../src/cli/accepted-run-driver.js", () => ({
+  createAcceptedRunDriver: mockCreateAcceptedRunDriver,
 }));
 
 /* ------------------------------------------------------------------ */
@@ -478,6 +486,25 @@ describe("createServices", () => {
     const orchestratorArgs = mockOrchestrator.mock.calls[0][0];
     await expect(orchestratorArgs.resolveTemplate("MT-1")).resolves.toBe("active template body");
     expect(templateGet).toHaveBeenCalledWith("active-template");
+  });
+
+  it("passes an absolute workflowDir derived from archiveDir (not from CWD)", async () => {
+    await createServices(
+      makeConfigStore() as unknown as ConfigStore,
+      makeOverlayStore() as unknown as ConfigOverlayPort,
+      makeSecretsStore() as unknown as SecretsStore,
+      archiveDir,
+      logger,
+    );
+
+    expect(mockCreateAcceptedRunDriver).toHaveBeenCalledOnce();
+    const { workflowDir } = mockCreateAcceptedRunDriver.mock.calls[0][0] as { workflowDir: string };
+    // Must be absolute and must not depend on CWD
+    expect(workflowDir.startsWith("/")).toBe(true);
+    expect(workflowDir).not.toContain(".risoluto");
+    // Must be derived from archiveDir's parent
+    const { dirname, join } = await import("node:path");
+    expect(workflowDir).toBe(join(dirname(archiveDir), "workflows"));
   });
 
   it("prefers per-issue template overrides over system.selectedTemplateId", async () => {

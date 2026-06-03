@@ -212,8 +212,8 @@ describe("worker-outcome branch invariants", () => {
     );
   });
 
-  it("DONE claim is sticky, BLOCKED releases", async () => {
-    // Test A: DONE keeps the claim
+  it("DONE releases the claim after completion writeback, BLOCKED also releases", async () => {
+    // Test A: DONE releases the claim (after writeback)
     const ctxDone = makeCtx();
     const entryDone = makeEntry({
       lastAgentMessageContent: "RISOLUTO_STATUS: DONE",
@@ -222,7 +222,7 @@ describe("worker-outcome branch invariants", () => {
 
     await handleWorkerOutcome(ctxDone, makeOutcome({ kind: "normal" }), entryDone, makeIssue(), makeWorkspace(), 1);
 
-    expect(ctxDone.releaseIssueClaim).not.toHaveBeenCalled();
+    expect(ctxDone.releaseIssueClaim).toHaveBeenCalledWith("issue-1");
 
     // Test B: BLOCKED releases the claim
     const ctxBlocked = makeCtx();

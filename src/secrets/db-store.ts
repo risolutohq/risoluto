@@ -9,7 +9,7 @@
  * consumers can swap without changes.
  */
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 
@@ -19,9 +19,17 @@ import type { RisolutoLogger } from "../core/types.js";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const IV_BYTE_LENGTH = 12;
+const KDF_SALT_BYTE_LENGTH = 16;
+const KDF_VERSION_CURRENT = 2;
 
-function deriveKey(masterKey: string): Buffer {
+/** V1 (legacy): single-pass SHA-256, no salt — read-only, migration path only. */
+function deriveKeyV1(masterKey: string): Buffer {
   return createHash("sha256").update(masterKey, "utf8").digest();
+}
+
+/** V2: scrypt with a per-row random salt — current write path. */
+function deriveKeyV2(masterKey: string, salt: Buffer): Buffer {
+  return scryptSync(masterKey, salt, 32, { N: 16384, r: 8, p: 1 });
 }
 
 function encryptValue(plaintext: string, key: Buffer): { ciphertext: string; iv: string; authTag: string } {
@@ -43,7 +51,7 @@ function decryptValue(ciphertext: string, iv: string, authTag: string, key: Buff
 }
 
 export class DbSecretsStore {
-  private encryptionKey: Buffer | null = null;
+  private masterKey: string | null = null;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -57,7 +65,8 @@ export class DbSecretsStore {
     if (!masterKey) {
       throw new Error("MASTER_KEY is required to initialize DbSecretsStore");
     }
-    this.encryptionKey = deriveKey(masterKey);
+    this.masterKey = masterKey;
+    this.migrateV1Rows(masterKey);
   }
 
   async startDeferred(): Promise<void> {
@@ -65,16 +74,17 @@ export class DbSecretsStore {
   }
 
   async initializeWithKey(masterKey: string): Promise<void> {
-    this.encryptionKey = deriveKey(masterKey);
+    this.masterKey = masterKey;
+    this.migrateV1Rows(masterKey);
     this.notify();
   }
 
   isInitialized(): boolean {
-    return this.encryptionKey !== null;
+    return this.masterKey !== null;
   }
 
   reset(): void {
-    this.encryptionKey = null;
+    this.masterKey = null;
     this.notify();
   }
 
@@ -89,11 +99,12 @@ export class DbSecretsStore {
   }
 
   get(key: string): string | null {
-    if (!this.encryptionKey) return null;
+    if (!this.masterKey) return null;
     const row = this.db.select().from(encryptedSecrets).where(eq(encryptedSecrets.key, key)).get();
     if (!row) return null;
     try {
-      return decryptValue(row.ciphertext, row.iv, row.authTag, this.encryptionKey);
+      const decryptKey = this.resolveRowKey(this.masterKey, row.kdfVersion, row.kdfSalt);
+      return decryptValue(row.ciphertext, row.iv, row.authTag, decryptKey);
     } catch (error) {
       this.logger.warn({ key, error: String(error) }, "failed to decrypt secret");
       return null;
@@ -102,19 +113,25 @@ export class DbSecretsStore {
 
   async set(key: string, value: string): Promise<void> {
     if (!key.trim()) throw new Error("secret key must not be empty");
-    const encKey = this.requiredKey();
+    const mk = this.requiredMasterKey();
+    const salt = randomBytes(KDF_SALT_BYTE_LENGTH);
+    const encKey = deriveKeyV2(mk, salt);
     const { ciphertext, iv, authTag } = encryptValue(value, encKey);
     const now = new Date().toISOString();
+    const kdfSalt = salt.toString("base64");
 
     const existing = this.db.select().from(encryptedSecrets).where(eq(encryptedSecrets.key, key)).get();
     if (existing) {
       this.db
         .update(encryptedSecrets)
-        .set({ ciphertext, iv, authTag, updatedAt: now })
+        .set({ ciphertext, iv, authTag, updatedAt: now, kdfVersion: KDF_VERSION_CURRENT, kdfSalt })
         .where(eq(encryptedSecrets.key, key))
         .run();
     } else {
-      this.db.insert(encryptedSecrets).values({ key, ciphertext, iv, authTag, updatedAt: now }).run();
+      this.db
+        .insert(encryptedSecrets)
+        .values({ key, ciphertext, iv, authTag, updatedAt: now, kdfVersion: KDF_VERSION_CURRENT, kdfSalt })
+        .run();
     }
     this.notify();
   }
@@ -127,9 +144,70 @@ export class DbSecretsStore {
     return true;
   }
 
-  private requiredKey(): Buffer {
-    if (!this.encryptionKey) throw new Error("DbSecretsStore has not been started");
-    return this.encryptionKey;
+  private requiredMasterKey(): string {
+    if (!this.masterKey) throw new Error("DbSecretsStore has not been started");
+    return this.masterKey;
+  }
+
+  /**
+   * Derive the AES key for a DB row based on its kdfVersion.
+   * V1 rows have no salt (SHA-256 path); V2 rows carry a per-row base64 salt.
+   */
+  private resolveRowKey(masterKey: string, kdfVersion: number | null, kdfSalt: string | null): Buffer {
+    const version = kdfVersion ?? 1;
+    if (version === 1) {
+      return deriveKeyV1(masterKey);
+    }
+    if (!kdfSalt) {
+      throw new Error(`kdf_version=${version} row is missing kdf_salt`);
+    }
+    return deriveKeyV2(masterKey, Buffer.from(kdfSalt, "base64"));
+  }
+
+  /**
+   * Re-encrypt all V1 rows with the V2 scrypt KDF in a single transaction.
+   * Rows that fail to decrypt with the V1 key are skipped with a warning.
+   */
+  private migrateV1Rows(masterKey: string): void {
+    const v1Key = deriveKeyV1(masterKey);
+    const v1Rows = this.db
+      .select()
+      .from(encryptedSecrets)
+      .all()
+      .filter((row) => (row.kdfVersion ?? 1) === 1);
+
+    if (v1Rows.length === 0) return;
+
+    const now = new Date().toISOString();
+    this.db.transaction((tx) => {
+      for (const row of v1Rows) {
+        let plaintext: string;
+        try {
+          plaintext = decryptValue(row.ciphertext, row.iv, row.authTag, v1Key);
+        } catch (error) {
+          this.logger.warn(
+            { key: row.key, error: String(error) },
+            "skipping V1→V2 KDF migration for row: decrypt failed",
+          );
+          continue;
+        }
+        const salt = randomBytes(KDF_SALT_BYTE_LENGTH);
+        const v2Key = deriveKeyV2(masterKey, salt);
+        const { ciphertext, iv, authTag } = encryptValue(plaintext, v2Key);
+        tx.update(encryptedSecrets)
+          .set({
+            ciphertext,
+            iv,
+            authTag,
+            updatedAt: now,
+            kdfVersion: KDF_VERSION_CURRENT,
+            kdfSalt: salt.toString("base64"),
+          })
+          .where(eq(encryptedSecrets.key, row.key))
+          .run();
+      }
+    });
+    this.logger.info({ count: v1Rows.length }, "migrated encrypted_secrets rows from KDF V1 to V2");
   }
 
   private notify(): void {

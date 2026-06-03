@@ -6,6 +6,7 @@ import { config, promptTemplates } from "../../src/persistence/sqlite/schema.js"
 import { DbConfigStore } from "../../src/config/db-store.js";
 import { seedDefaults } from "../../src/persistence/sqlite/runtime.js";
 import { createLogger } from "../../src/core/logger.js";
+import { createMockLogger } from "../helpers.js";
 
 let db: RisolutoDatabase;
 let store: DbConfigStore;
@@ -231,6 +232,25 @@ describe("DbConfigStore — ConfigStore surface", () => {
     store.refresh();
 
     expect(store.toMap().tracker).toEqual({});
+  });
+
+  it("logs a warning when a config section row has invalid JSON — regression for fnd_sig-feat-service-71d0bc761e-c55f", () => {
+    const mockLogger = createMockLogger();
+    const storeWithMockLogger = new DbConfigStore(db, mockLogger);
+    storeWithMockLogger.refresh();
+
+    db.update(config)
+      .set({ value: "{not-valid-json", updatedAt: new Date().toISOString() })
+      .where(eq(config.key, "tracker"))
+      .run();
+
+    storeWithMockLogger.refresh();
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "tracker" }),
+      "config section JSON parse failed — using empty fallback",
+    );
+    expect(storeWithMockLogger.toMap().tracker).toEqual({});
   });
 });
 

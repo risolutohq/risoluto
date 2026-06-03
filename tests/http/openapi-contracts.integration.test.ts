@@ -499,7 +499,7 @@ describe("OpenAPI Contract Tests", () => {
         id: () => "wr_openapi_contract",
         now: () => "2026-05-25T13:00:00.000Z",
       });
-      await writeWorkflowRunRecord(workflowRun);
+      await writeWorkflowRunRecord(workflowRun, { archiveDir: ctx.dataDir });
       const run = await openWorkflowRun(
         { archiveDir: ctx.dataDir },
         { workflowRunId: workflowRun.id, source: "cli", now: () => "2026-05-25T13:01:00.000Z" },

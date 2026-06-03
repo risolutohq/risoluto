@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Request, Response } from "express";
 
 import {
   createSecretsStoreMock,
@@ -10,6 +11,7 @@ import {
   startSetupApiServer,
 } from "./setup-fixtures.js";
 import { createTextResponse } from "../helpers.js";
+import { handlePostGithubToken } from "../../src/setup/handlers/github-token.js";
 
 /* ── hoisted mocks ───────────────────────────────────────────────── */
 
@@ -126,5 +128,24 @@ describe("POST /api/v1/setup/github-token", () => {
     expect(await response.json()).toEqual({
       error: { code: "missing_token", message: "token is required" },
     });
+  });
+
+  it("returns 500 with structured error when saveGithubToken rejects unexpectedly", async () => {
+    // Must include getStatus so resolveSetupService treats it as a SetupPort instance
+    const mockService = {
+      saveGithubToken: vi.fn().mockRejectedValue(new Error("unexpected disk failure")),
+      getStatus: vi.fn(),
+    };
+    const handler = handlePostGithubToken(mockService as never);
+
+    const json = vi.fn();
+    const status = vi.fn().mockReturnValue({ json });
+    const req = { body: { token: "ghp_test" } } as unknown as Request;
+    const res = { json, status } as unknown as Response;
+
+    await handler(req, res);
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith({ error: { code: "save_error", message: "unexpected disk failure" } });
   });
 });

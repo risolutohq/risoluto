@@ -53,9 +53,18 @@ export class ConfigOverlayStore implements ConfigOverlayPort {
         pollInterval: 50,
       },
     });
-    this.watcher.on("add", () => void this.reloadFromDisk("watch:add", { allowMissingFile: true }));
-    this.watcher.on("change", () => void this.reloadFromDisk("watch:change", { allowMissingFile: true }));
-    this.watcher.on("unlink", () => void this.reloadFromDisk("watch:unlink", { allowMissingFile: true }));
+    this.watcher.on(
+      "add",
+      () => void this.enqueueMutation(() => this.reloadFromDisk("watch:add", { allowMissingFile: true })),
+    );
+    this.watcher.on(
+      "change",
+      () => void this.enqueueMutation(() => this.reloadFromDisk("watch:change", { allowMissingFile: true })),
+    );
+    this.watcher.on(
+      "unlink",
+      () => void this.enqueueMutation(() => this.reloadFromDisk("watch:unlink", { allowMissingFile: true })),
+    );
   }
 
   async stop(): Promise<void> {
@@ -128,8 +137,8 @@ export class ConfigOverlayStore implements ConfigOverlayPort {
       return false;
     }
 
+    await this.persist(nextMap);
     this.overlay = structuredClone(nextMap) as Record<string, unknown>;
-    await this.persist();
     this.logger.info({ reason, overlayPath: this.overlayPath }, "config overlay updated");
     this.notify();
     return true;
@@ -141,8 +150,8 @@ export class ConfigOverlayStore implements ConfigOverlayPort {
     }
   }
 
-  private async persist(): Promise<void> {
-    const rendered = YAML.stringify(this.overlay);
+  private async persist(map: Record<string, unknown>): Promise<void> {
+    const rendered = YAML.stringify(map);
     const dir = path.dirname(this.overlayPath);
 
     for (let attempt = 0; attempt < 2; attempt++) {

@@ -82,11 +82,13 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE TABLE IF NOT EXISTS encrypted_secrets (
-    key        TEXT PRIMARY KEY,
-    ciphertext TEXT NOT NULL,
-    iv         TEXT NOT NULL,
-    auth_tag   TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    key         TEXT PRIMARY KEY,
+    ciphertext  TEXT NOT NULL,
+    iv          TEXT NOT NULL,
+    auth_tag    TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    kdf_version INTEGER DEFAULT 1,
+    kdf_salt    TEXT
   );
 
   CREATE TABLE IF NOT EXISTS prompt_templates (
@@ -553,6 +555,28 @@ function applyV10Migration(sqlite: SqliteDb): void {
 }
 
 /**
+ * v11 migration: add `kdf_version` and `kdf_salt` columns to `encrypted_secrets`
+ * to support versioned key derivation (V1 = SHA-256 legacy, V2 = scrypt).
+ * Fresh installs already have these columns from CREATE_TABLES_SQL.
+ */
+function applyV11Migration(sqlite: SqliteDb): void {
+  if (hasSchemaVersion(sqlite, 11)) return;
+  try {
+    sqlite.exec("ALTER TABLE encrypted_secrets ADD COLUMN kdf_version INTEGER DEFAULT 1");
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("duplicate column name: kdf_version")) throw err;
+  }
+  try {
+    sqlite.exec("ALTER TABLE encrypted_secrets ADD COLUMN kdf_salt TEXT");
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("duplicate column name: kdf_salt")) throw err;
+  }
+  bumpSchemaVersion(sqlite, 11);
+}
+
+/**
  * Opens (or creates) a SQLite database at the given path,
  * enables WAL journal mode, and ensures the schema tables exist.
  *
@@ -584,6 +608,7 @@ export function openDatabase(dbPath: string): RisolutoDatabase {
   applyV8Migration(sqlite);
   applyV9Migration(sqlite);
   applyV10Migration(sqlite);
+  applyV11Migration(sqlite);
 
   return drizzle(sqlite, { schema });
 }
