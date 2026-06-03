@@ -10,11 +10,15 @@ import { createMockLogger } from "../helpers.js";
 // ---------------------------------------------------------------------------
 
 const statMock = vi.fn();
+const lstatMock = vi.fn();
+const realpathMock = vi.fn();
 const mkdirMock = vi.fn<typeof import("node:fs/promises").mkdir>();
 const rmMock = vi.fn<typeof import("node:fs/promises").rm>();
 
 vi.mock("node:fs/promises", () => ({
   stat: (...args: Parameters<typeof import("node:fs/promises").stat>) => statMock(...args),
+  lstat: (...args: Parameters<typeof import("node:fs/promises").lstat>) => lstatMock(...args),
+  realpath: (...args: Parameters<typeof import("node:fs/promises").realpath>) => realpathMock(...args),
   mkdir: (...args: Parameters<typeof import("node:fs/promises").mkdir>) => mkdirMock(...args),
   rm: (...args: Parameters<typeof import("node:fs/promises").rm>) => rmMock(...args),
 }));
@@ -89,6 +93,9 @@ describe("WorkspaceManager", () => {
     vi.clearAllMocks();
     mkdirMock.mockResolvedValue(undefined as never);
     rmMock.mockResolvedValue(undefined as never);
+    // Default: workspace path is a real, non-symlink directory inside the root.
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => false, isDirectory: () => true });
+    realpathMock.mockImplementation((p: string) => Promise.resolve(p));
   });
 
   afterEach(() => {
@@ -131,6 +138,28 @@ describe("WorkspaceManager", () => {
       statMock.mockResolvedValue({ isDirectory: () => false });
 
       await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("not a directory");
+    });
+
+    it("rejects an existing workspace path that is a symlink", async () => {
+      const config = createConfig();
+      const manager = new WorkspaceManager(() => config, logger);
+
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
+
+      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("symlink");
+      expect(mkdirMock).not.toHaveBeenCalledWith(path.resolve("/tmp/workspaces", "NIN-1"), expect.anything());
+    });
+
+    it("rejects an existing workspace dir whose real path escapes the root", async () => {
+      const config = createConfig();
+      const manager = new WorkspaceManager(() => config, logger);
+
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => false, isDirectory: () => true });
+      realpathMock.mockImplementation((p: string) =>
+        Promise.resolve(p === "/tmp/workspaces" ? "/tmp/workspaces" : "/etc"),
+      );
+
+      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("outside the workspace root");
     });
   });
 
@@ -332,6 +361,26 @@ describe("WorkspaceManager", () => {
       await manager.removeWorkspace("NIN-1");
 
       // rm should not be called
+      expect(rmMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses to remove a workspace path that is a symlink", async () => {
+      const config = createConfig();
+      const deps = createWorktreeDeps();
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      statMock.mockResolvedValue({ isDirectory: () => true });
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
+
+      await expect(manager.removeWorkspace("NIN-1")).rejects.toThrow("symlink");
+      expect(rmMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses removal for an empty identifier so it cannot target the workspace root", async () => {
+      const config = createConfig();
+      const manager = new WorkspaceManager(() => config, logger);
+
+      await expect(manager.removeWorkspace("")).rejects.toThrow();
       expect(rmMock).not.toHaveBeenCalled();
     });
   });

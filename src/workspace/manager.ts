@@ -1,4 +1,4 @@
-import { rm, mkdir, stat } from "node:fs/promises";
+import { rm, mkdir, stat, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
@@ -29,6 +29,33 @@ async function pathExists(pathname: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Reject an existing workspace path that is a symlink or whose real path escapes
+ * the workspace root (NIN-243). `stat()` follows symlinks, so a pre-planted
+ * symlink at the workspace path could let hooks and cleanup operate outside the
+ * root; `lstat()` + `realpath()` close that gap. A no-op when the path does not
+ * yet exist (ENOENT) — creation is handled by the caller.
+ */
+async function assertExistingWorkspaceDirSafe(workspaceRoot: string, workspacePath: string): Promise<void> {
+  const linkInfo = await lstat(workspacePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  });
+  if (linkInfo === null) {
+    return;
+  }
+  if (linkInfo.isSymbolicLink()) {
+    throw new Error(`workspace path is a symlink and was refused: ${workspacePath}`);
+  }
+  const realRoot = await realpath(workspaceRoot);
+  const realWorkspacePath = await realpath(workspacePath);
+  if (!isWithinRoot(realRoot, realWorkspacePath)) {
+    throw new Error(`workspace path resolves outside the workspace root: ${workspacePath}`);
   }
 }
 
@@ -143,6 +170,7 @@ export class WorkspaceManager implements WorkspacePort {
 
     let createdNow = false;
     try {
+      await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
       try {
         const info = await stat(workspacePath);
         if (!info.isDirectory()) {
@@ -246,6 +274,7 @@ export class WorkspaceManager implements WorkspacePort {
     if (!(await pathIsDirectory(workspacePath))) {
       return emptyRemovalResult();
     }
+    await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
 
     await this.runBeforeRemoveHook(config, workspace, issueIdentifier, workspaceKey);
     const protection = await this.enforcePreCleanupCommit(workspace, issueIdentifier);
