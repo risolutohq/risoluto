@@ -21,7 +21,7 @@ atomic claim to its as-built reality. Read the table before you trust the prose.
 | **Not delivered** | Decided, not yet built. A target — not current behavior. Safe, as long as you know it.    |
 | **⚠ Drifted**     | Code currently does the **opposite** of the decision. Reconcile before relying on either. |
 
-Status verified against source on **2026-05-29**. If you change behavior, update
+Status verified against source on **2026-06-03**. If you change behavior, update
 the matching row in the same commit — a current table is the contract that keeps
 the next agent from building on a claim that isn't true. The **⚠ Drifted** rows
 are the reconciliation backlog; see [Where to reconcile first](#where-to-reconcile-first).
@@ -51,15 +51,15 @@ multiple Run Attempts (retry / fanout / resume).
 
 ### Implementation status
 
-| Claim                                                                        | Status        | Evidence                                                                                                                                                                                  |
-| ---------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Workflow Run is a named, durable primitive with its own records and archive  | Delivered     | `src/workflow-run/` (archive keyed on `workflowRunId`)                                                                                                                                    |
-| A run can have multiple Run Attempts                                         | Delivered     | `src/workflow-run/run-attempts.ts`; projection in `run-attempt-projection.ts`                                                                                                             |
-| Attempt reasons cover retry and resume                                       | Delivered     | enum `"initial" \| "retry" \| "resume"` (`workflow-run/contracts.ts:77`)                                                                                                                  |
-| All persistence / dispatch / scheduling / observability key off run identity | ⚠ Drifted     | SQLite tables key on `attempt_id` / `issue_id`; **no `workflow_run_id` column** (`persistence/sqlite/schema.ts:17-81`); dispatch falls back to `issue.id` (`dispatch/server.ts:55`)       |
-| Tracker items map to runs via a mapping table, not PK identity               | Partial       | Workflow Run intake now claims provider/external-object mappings before side effects (`workflow-run/intake-idempotency-store.ts`); older orchestrator paths still carry issue-id coupling |
-| Workflow Definitions are reusable templates expressed as state machines      | ⚠ Drifted     | `WorkflowDefinition = { config, promptTemplate }` — a config bag (`core/types.ts:95`). The real `StateMachine` (`state/machine.ts`) governs Linear issue states, not run flow             |
-| "Fanout" attempts                                                            | Not delivered | "fanout" is absent from the attempt-reason enum                                                                                                                                           |
+| Claim                                                                        | Status        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workflow Run is a named, durable primitive with its own records and archive  | Delivered     | `src/workflow-run/` (archive keyed on `workflowRunId`)                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| A run can have multiple Run Attempts                                         | Delivered     | `workflow-run/run-handle.ts:88-91` (interface) / `:221` (impl) define `startRunAttempt` / `completeRunAttempt` / `failRunAttempt` / `cancelRunAttempt`; projection in `run-attempt-projection.ts`                                                                                                                                                                                                                                                                                          |
+| Attempt reasons cover retry and resume                                       | Delivered     | enum `"initial" \| "retry" \| "resume"` (`workflow-run/contracts.ts:103`)                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| All persistence / dispatch / scheduling / observability key off run identity | ⚠ Drifted     | SQLite tables key on `attempt_id` / `issue_id`; **no `workflow_run_id` column** (`persistence/sqlite/schema.ts:17-81`); dispatch falls back to `issue.id` (`dispatch/server.ts:55`)                                                                                                                                                                                                                                                                                                        |
+| Tracker items map to runs via a mapping table, not PK identity               | Partial       | Workflow Run intake now claims provider/external-object mappings before side effects (`workflow-run/intake-idempotency-store.ts`); older orchestrator paths still carry issue-id coupling                                                                                                                                                                                                                                                                                                  |
+| Workflow Definitions are reusable templates expressed as state machines      | Partial       | A real `WorkflowDefinition` now exists — `z.infer<typeof workflowDefinitionSchema>` carrying `states[]` of `{ id, roles, gates, hooks }` (`workflow-definition/registry.ts:106`, schema at `:92-103`), YAML-loaded and run via `executeWorkflowDefinition` (`workflow-run/executor.ts:72`). The old `{ config, promptTemplate }` bag is now `WorkflowRuntimeConfig` (`core/types.ts:98`); the outer `StateMachine` (`state/machine.ts:129`) still models Linear issue states, not run flow |
+| "Fanout" attempts                                                            | Not delivered | "fanout" is absent from the attempt-reason enum                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### Consequences
 
@@ -99,22 +99,24 @@ by Transitions. Hooks **shall** fire at state entry / exit and at named DAG node
 
 ### Implementation status
 
-| Claim                                                     | Status        | Evidence                                                                                                                                                                                                             |
-| --------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A working state machine of named stages exists            | Partial       | `StateMachine` is real (`state/machine.ts:129`) but models **Linear issue states** (board columns), not workflow-run lifecycle                                                                                       |
-| Outer transitions are enforced                            | Delivered     | `assertTransition` / `canTransition` (`state/machine.ts:155`), `state/topology.ts:64`, `http/transition-handler.ts:21`                                                                                               |
-| Transition / gate / hook events are recorded              | Delivered     | `recordWorkflowRunTransition` writes `validation_gate.evaluated` / `workflow_transition.applied` / `workflow_hook.fired` (`workflow-run/artifacts.ts:113`)                                                           |
-| Inside each state, Role Execution is a typed DAG of roles | Not delivered | No DAG structure anywhere (no `RoleNode` / `dependsOn` / topological sort). `dag_node` is only a hook-timing string (`workflow-run/contracts.ts:87`); roles are flat named events (`role-execution-artifacts.ts:11`) |
-| Validation Gates evaluate conditions                      | ⚠ Drifted     | A gate is a label `{ name, status }` (`contracts.ts:80`); the caller passes pass/fail. No gate engine evaluates anything                                                                                             |
-| Hooks fire autonomously at entry / exit / DAG node        | ⚠ Drifted     | Hook timings are _recorded by CLI callers_ (`cli/workflow-run-command.ts:307`); nothing fires them, and `dag_node` has no DAG behind it                                                                              |
+| Claim                                                     | Status    | Evidence                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A working state machine of named stages exists            | Partial   | `StateMachine` is real (`state/machine.ts:129`) but models **Linear issue states** (board columns), not workflow-run lifecycle                                                                                                                                                                                                               |
+| Outer transitions are enforced                            | Delivered | `canTransition` (`state/machine.ts:155`) / `assertTransition` (`state/machine.ts:162`), `assertWorkflowStateTransition` (`state/topology.ts:64`), `http/transition-handler.ts:21`                                                                                                                                                            |
+| Transition / gate / hook events are recorded              | Delivered | `recordTransition` on `WorkflowRun` writes `validation_gate.evaluated` / `workflow_transition.applied` / `workflow_hook.fired` (`workflow-run/run-handle.ts:209-217`)                                                                                                                                                                        |
+| Inside each state, Role Execution is a typed DAG of roles | Partial   | `ResolvedWorkflowRole.dependsOn` (`workflow-definition/registry.ts:32`) + topological `orderRoles` (`workflow-run/executor-roles.ts:11-22`), called from `executor.ts:76`. No `RoleNode` type, and the DAG spans the whole definition rather than per-state. `dag_node` remains only a hook-timing string (`workflow-run/contracts.ts:113`)  |
+| Validation Gates evaluate conditions                      | Partial   | `evaluateBuiltInGate` (`workflow-run/gate-hook-engine.ts:135`) evaluates `artifacts-valid` / `validation-passed` / `verifier-satisfied` / `budget-available` against real conditions; the CLI also still accepts a caller-supplied pass/fail (`workflow-run-command.ts:249`). The gate label `{ name, status }` is now at `contracts.ts:106` |
+| Hooks fire autonomously at entry / exit / DAG node        | Partial   | `fireStateEntryHooks` (`workflow-run/gate-hook-engine.ts:91`) fires `state_entry` hooks autonomously during execution (`executor.ts:223`); the CLI can also supply hook timings manually (`workflow-run-command.ts:256-259`). No `state_exit` / `dag_node` fire paths exist yet                                                              |
 
 ### Consequences
 
 When the inner DAG lands, outer lifecycle stays legible to operators and tracker
 projections while inner role choreography stays expressive. **Cost:** two
-structural models to keep coherent — and today only the outer one (over issue
-states) exists; the inner role DAG is the single biggest unbuilt architectural
-claim in this document.
+structural models to keep coherent. The inner role DAG, the gate engine, and
+entry-hook firing now exist in partial form (`workflow-run/executor.ts`,
+`executor-roles.ts`, `gate-hook-engine.ts`); what remains is exit / DAG-node hook
+firing and making the definition's own state machine — not the issue-state
+`StateMachine` — the run-flow driver.
 
 ### Alternatives considered
 
@@ -149,22 +151,23 @@ artifacts.
 
 ### Implementation status
 
-| Claim                                                                     | Status    | Evidence                                                                                                                                                                             |
-| ------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Artifacts carry a `contractId` identifier                                 | Delivered | `WorkflowRunArtifactReference.contractId` (`workflow-run/contracts.ts:69`)                                                                                                           |
-| A contract is a TS type + runtime validator + meaning                     | Partial   | `workflow-run/artifact-contracts.ts` defines runtime validators for `intent.v1`, `plan.v1`, `change_summary.v1`, and `review.v1`; prose meaning still lives in the PRD / issue slice |
-| Contracts are versioned                                                   | Partial   | The upstream contract schemas require `version: 1` and are registered by `.v1` IDs (`workflow-run/artifact-contracts.ts`)                                                            |
-| A role declares the contracts it consumes (inputs) and produces (outputs) | Partial   | Workflow Definition YAML declares role consumes/produces contracts (`.risoluto/workflows/single-operator-afk-coder.yaml`); runtime role execution still records one output artifact  |
-| Validation happens at production time, not consumption time               | Delivered | `WorkflowRunArchive.writeWorkflowRunArtifact` parses data through the contract registry before writing (`workflow-run/archive.ts`)                                                   |
-| Raw harness evidence (Codex JSONL) stored separately                      | Partial   | `workflow-run/evidence-store.ts` stores raw evidence under `evidence/raw/`, separate from contract artifacts; Codex JSONL capture is not wired yet                                   |
+| Claim                                                                     | Status    | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Artifacts carry a `contractId` identifier                                 | Delivered | `WorkflowRunArtifactReference.contractId` (`workflow-run/contracts.ts:95`)                                                                                                                                                                                                                                                                                                                                                              |
+| A contract is a TS type + runtime validator + meaning                     | Partial   | `workflow-run/artifact-contracts.ts` defines runtime validators for 12 contract IDs (`WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS`, lines 33-46) — `intent.v1`, `plan.v1`, `change_summary.v1`, `review.v1`, plus `validation_result.v1`, `publish_result.v1`, `ci_result.v1`, `verification.v1`, `handoff.v1`, `operator_response.v1`, `operator_approval.v1`, `consumed_approval_nonce.v1`; prose meaning still lives in the PRD / issue slice |
+| Contracts are versioned                                                   | Partial   | The upstream contract schemas require `version: 1` and are registered by `.v1` IDs (`workflow-run/artifact-contracts.ts`)                                                                                                                                                                                                                                                                                                               |
+| A role declares the contracts it consumes (inputs) and produces (outputs) | Partial   | Workflow Definition YAML declares role consumes/produces contracts (`.risoluto/workflows/single-operator-afk-coder.yaml`); runtime role execution still records one output artifact                                                                                                                                                                                                                                                     |
+| Validation happens at production time, not consumption time               | Delivered | `WorkflowRunArchive.writeWorkflowRunArtifact` parses data through the contract registry before writing (`workflow-run/archive.ts`)                                                                                                                                                                                                                                                                                                      |
+| Raw harness evidence (Codex JSONL) stored separately                      | Partial   | `workflow-run/evidence-store.ts` stores raw evidence under `evidence/raw/`, separate from contract artifacts; Codex JSONL capture is not wired yet                                                                                                                                                                                                                                                                                      |
 
 ### Consequences
 
 When contracts carry validators, cross-role testing becomes real (synthesize a
 valid input, run the role, validate the output) and replay / Memory Builder get
-structured surfaces. **Cost:** contract drift becomes a thing to manage. Today
-the "contract" is an opaque string, so none of the testing or replay payoff
-exists yet.
+structured surfaces. **Cost:** contract drift becomes a thing to manage. Validators
+now exist for the 12 contract IDs, but the full testing / replay payoff is still
+partial: a role's consumes / produces contracts are declared in YAML while runtime
+role execution records only one output artifact (§3 table).
 
 ### Alternatives considered
 
@@ -202,7 +205,7 @@ self-contained replayable bundle (events + referenced artifacts).
 | ------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Append-only JSONL event log per run                     | Delivered     | `workflow-run/archive.ts` uses `appendFile`; never overwrites                                                                                        |
 | Attempt summaries are projected from the log            | Delivered     | `workflow-run/run-attempt-projection.ts`                                                                                                             |
-| Events carry a monotonic sequence                       | Delivered     | `archive.ts:133` computes `max(existing) + 1`                                                                                                        |
+| Events carry a monotonic sequence                       | Delivered     | `archive.ts:183` computes `Math.max(0, ...sequences) + 1` in `nextWorkflowRunEventSequenceForRunDir`                                                 |
 | Live state is a projection, not a separate write        | ⚠ Drifted     | A parallel mutable write exists: SQLite `attempts` rows are updated in place via `updateAttempt()` (`persistence/sqlite/attempt-store-sqlite.ts:78`) |
 | Events have typed (discriminated) payloads              | Partial       | `WorkflowRunEventRecord` is one wide all-optional-field bag, and `sequence` is typed optional — not a discriminated union per event type             |
 | Retention is per-Workflow-Definition with env overrides | Not delivered | Only a hardcoded 7-day window for cost samples; no per-definition retention                                                                          |
@@ -270,10 +273,12 @@ contain logic. The constraints that keep it safe:
 | `single-operator-afk-coder` exists as a YAML definition     | Delivered | `.risoluto/workflows/single-operator-afk-coder.yaml`                                                                                                                            |
 | References resolve against a typed registry (unknown fails) | Delivered | `workflow-run-start-command.ts` resolves the requested Workflow Definition before creating a run record; registry tests cover unknown role / command / missing version failures |
 
-> **Foundation warning.** This is the bulk of the runtime that does not yet exist:
-> the workflow definition today is a name string with no schema, registry, or
-> behavior behind it. An agent must not read "definitions are config-authored
-> YAML" as already built — it is the target this PRD delivers.
+> **Build note (updated 2026-06-03).** The workflow-definition subsystem is now
+> real: a strict zod schema (`workflow-definition/registry.ts`) with `states[]` of
+> `{ id, roles, gates, hooks }`, a loader / resolver / validator, and an executor
+> (`workflow-run/executor.ts`). What stays thin is the breadth of built-in
+> roles / gates / hooks and the depth of their runtime behavior (see §2) — not the
+> authoring surface, which exists and is exercised by `single-operator-afk-coder`.
 
 ### Consequences
 
@@ -319,16 +324,16 @@ plane by default. Raw evidence locality **shall be** policy-controlled.
 
 ### Implementation status
 
-| Claim                                                      | Status        | Evidence                                                                                                                                                    |
-| ---------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A dispatcher seam separates the planes                     | Delivered     | `RunAttemptDispatcher` (`dispatch/types.ts:21`); `AgentRunner` (local) + `DispatchClient` (remote)                                                          |
-| A network-shaped contract (HTTP + SSE) exists              | Delivered     | `dispatch/client.ts:113` (`fetch` + `text/event-stream`); `dispatch/entrypoint.ts` (Express server)                                                         |
-| Control plane owns CLI + HTTP operator surfaces            | Delivered     | `cli/`, `http/server.ts` (full route + OpenAPI surface)                                                                                                     |
-| The interface is network-shaped by default, not in-process | ⚠ Drifted     | `DISPATCH_MODE` defaults to `"local"` → in-process call (`dispatch/factory.ts:34`, `orchestrator/worker-launcher.ts:534`). Default deployment is a monolith |
-| Secrets resolve in the execution plane by default          | ⚠ Drifted     | `SecretsStore` is a control-plane singleton; resolved values are shipped to the data plane inside the dispatch config (`cli/services.ts:95`)                |
-| Model credentials resolve execution-side                   | Partial       | Read from `process.env` at container spawn (`docker/spawn.ts:91`); execution-side only when `DISPATCH_MODE=remote`                                          |
-| Control plane owns a TUI                                   | Not delivered | No TUI exists anywhere in the tree (TUI is "next" per AGENTS.md, not built)                                                                                 |
-| Raw evidence locality is policy-controlled                 | Not delivered | No evidence-locality policy / config key exists                                                                                                             |
+| Claim                                                      | Status        | Evidence                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A dispatcher seam separates the planes                     | Delivered     | `RunAttemptDispatcher` (`dispatch/types.ts:21`); `AgentRunner` (local) + `DispatchClient` (remote)                                                                                                                                        |
+| A network-shaped contract (HTTP + SSE) exists              | Delivered     | `dispatch/client.ts:114` (`fetch`; `text/event-stream` header at `:119`); `dispatch/server.ts` `createDataPlaneServer` (Express), launched by `dispatch/entrypoint.ts`                                                                    |
+| Control plane owns CLI + HTTP operator surfaces            | Delivered     | `cli/`, `http/server.ts` (full route + OpenAPI surface)                                                                                                                                                                                   |
+| The interface is network-shaped by default, not in-process | ⚠ Drifted     | `DISPATCH_MODE` defaults to `"local"` → in-process call (`dispatch/factory.ts:34`, `orchestrator/worker-launcher.ts:536`). Default deployment is a monolith                                                                               |
+| Secrets resolve in the execution plane by default          | ⚠ Drifted     | `SecretsStore` is a control-plane singleton; secrets are resolved into `ServiceConfig` via `secretResolver` (`config/store.ts:51`) and shipped to the data plane as the `config` field of the dispatch request (`dispatch/client.ts:106`) |
+| Model credentials resolve execution-side                   | Partial       | Read from `process.env` at container spawn (`docker/spawn.ts:93`); execution-side only when `DISPATCH_MODE=remote`                                                                                                                        |
+| Control plane owns a TUI                                   | Not delivered | No TUI exists anywhere in the tree (TUI is "next" per AGENTS.md, not built)                                                                                                                                                               |
+| Raw evidence locality is policy-controlled                 | Not delivered | No evidence-locality policy / config key exists                                                                                                                                                                                           |
 
 ### Consequences
 
@@ -403,16 +408,16 @@ label seam).
 
 ### Implementation status
 
-| Claim                                                         | Status    | Evidence                                                                                                                                                                                                 |
-| ------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All seven pipeline skills exist as real skill dirs            | Delivered | `skills/risoluto-{researcher,vault,ingest,grill,to-prd,to-issues,tdd}/SKILL.md` (`risoluto-ingest` replaces the retired `risoluto-synthesizer`)                                                          |
-| PRDs canonical in git, Linear descriptions mirrored           | Delivered | `docs/prds/README.md`; `risoluto-to-prd/SKILL.md`                                                                                                                                                        |
-| A pre-push hook detects PRD drift and blocks the push         | Delivered | `.husky/pre-push` → `prd:drift-check` → `scripts/prd-drift-check.ts` (runs unconditionally; `SKIP_HOOKS` does not bypass it)                                                                             |
-| The drift check requires `LINEAR_API_KEY`                     | Delivered | `scripts/prd-drift-check.ts` (`requireApiKey`, hard `exit 1` if unset)                                                                                                                                   |
-| Flat issues with blocked-by relations, no nesting             | Delivered | `risoluto-to-issues/SKILL.md`                                                                                                                                                                            |
-| Post-merge automation flips PRD status + back-comments Linear | Delivered | `scripts/post-merge-prd.mjs`, wired to CI in `.github/workflows/post-merge.yml` (`pull_request: closed`, `merged == true`) — **CI-only, not the local `.husky/post-merge` hook**                         |
-| Skills are wired via symlink into `~/.claude/skills`          | Partial   | Repo-local dirs only; discovered via project-level skill loading, not symlinked into the global dir                                                                                                      |
-| The pipeline has been dogfooded end to end                    | Partial   | One PRD exists (`docs/prds/provider-abstraction.md`, `status: draft`); the two-mode research flow (Modes A + B) has not been run end-to-end; Phase 4 (`to-issues` / `tdd`) never exercised to completion |
+| Claim                                                         | Status    | Evidence                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All seven pipeline skills exist as real skill dirs            | Delivered | `skills/risoluto-{researcher,vault,ingest,grill,to-prd,to-issues,tdd}/SKILL.md` (`risoluto-ingest` replaces the retired `risoluto-synthesizer`)                                                                                                                                                    |
+| PRDs canonical in git, Linear descriptions mirrored           | Delivered | `docs/prds/README.md`; `risoluto-to-prd/SKILL.md`                                                                                                                                                                                                                                                  |
+| A pre-push hook detects PRD drift and blocks the push         | Delivered | `.husky/pre-push` → `prd:drift-check` → `scripts/prd-drift-check.ts` (runs unconditionally; `SKIP_HOOKS` does not bypass it)                                                                                                                                                                       |
+| The drift check requires `LINEAR_API_KEY`                     | Delivered | `requireApiKey` defined in `scripts/prd-linear.ts:219` (hard `exit 1` if unset), imported and called from `scripts/prd-drift-check.ts:200`                                                                                                                                                         |
+| Flat issues with blocked-by relations, no nesting             | Delivered | `risoluto-to-issues/SKILL.md`                                                                                                                                                                                                                                                                      |
+| Post-merge automation flips PRD status + back-comments Linear | Delivered | `scripts/post-merge-prd.mjs`, wired to CI in `.github/workflows/post-merge.yml` (`pull_request: closed`, `merged == true`) — **CI-only, not the local `.husky/post-merge` hook**                                                                                                                   |
+| Skills are wired via symlink into `~/.claude/skills`          | Partial   | 19 symlinks in repo-local `.claude/skills/` → `../../skills/risoluto-*`, discovered via project-level skill loading; not symlinked into the user-global `~/.claude/skills/`                                                                                                                        |
+| The pipeline has been dogfooded end to end                    | Partial   | Two PRDs exist (`docs/prds/workflow-first-afk-mvp.md`, `docs/prds/verification-ladder.md`, both `status: draft`; the earlier `provider-abstraction.md` is gone); the two-mode research flow (Modes A + B) has not been run end-to-end; Phase 4 (`to-issues` / `tdd`) never exercised to completion |
 
 ### Consequences
 
@@ -453,20 +458,25 @@ reconciled. In rough dependency order:
 3. **Default-local plane boundary + control-plane secret resolution (§6).** The
    network seam exists but is off by default, and secrets resolve on the wrong
    plane — the promised security posture is not yet in force.
-4. **Gate/hook engines and the intra-state role DAG (§2), artifact validators
-   (§3), built-in definitions (§5).** These are _Not delivered_ (honest targets)
-   rather than drifted, but they are the bulk of the runtime architecture and
-   currently exist only as labels and strings.
+4. **Depth of the role DAG, gate engine, and hook firing (§2).** These now exist
+   in partial form — topological `orderRoles`, `evaluateBuiltInGate`, and
+   `fireStateEntryHooks` — but only `state_entry` hooks fire, gates also accept a
+   caller-supplied pass/fail, and the DAG spans the whole definition rather than
+   running per state. The artifact validators (§3) and YAML definitions (§5) are
+   built; what remains is wiring role I/O contracts through and broadening the
+   built-in role / gate / hook set.
 
 ## Consolidated status summary
 
 - **§7 (planning pipeline)** is the most grounded decision — the back-half skills are built and
   the roadmap-centric model is in force, but the two-mode research flow (Modes A + B) has not
   yet been dogfooded end-to-end.
-- **§1–§6 (runtime architecture)** are largely **target architecture**: the
-  vocabulary, types, and seams exist, but the load-bearing behavior (run identity,
-  log-as-source-of-truth, role DAG, artifact validation, built-in definitions,
-  network-default plane split) is either drifted or not yet built.
+- **§1–§6 (runtime architecture)** are now a mix of built and target: the
+  workflow-definition subsystem (schema, registry, executor), the role-DAG
+  ordering, the gate and entry-hook engines, and the artifact validators exist in
+  partial form. The load-bearing gaps that remain are run-vs-issue identity (§1),
+  log-as-source-of-truth vs the mutable SQLite write (§4), and the network-default
+  plane split with execution-side secrets (§6).
 - The decisions themselves still hold. This document's job is to make sure no
   future reader mistakes the **intent** for the **as-built** — read the status
   table, trust the receipts, and update the row in the same commit that changes
