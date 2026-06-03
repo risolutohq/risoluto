@@ -12,6 +12,14 @@ import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { CodexConfig } from "../core/types/codex.js";
 import type { RisolutoLogger } from "../core/types.js";
 import { asRecord, asStringOrNull as asString, toErrorString } from "../utils/type-guards.js";
+import {
+  CODEX_APPROVE_DECISION,
+  CODEX_DENY_DECISION,
+  decideCodexApproval,
+  resolveCodexApprovalPolicy,
+  type CodexApprovalPolicy,
+} from "./approval-gate.js";
+import { projectCodexNotificationParams } from "./notification-projection.js";
 
 type CapabilityState = "supported" | "unsupported" | "unknown";
 
@@ -120,6 +128,7 @@ export class CodexControlPlane {
     private readonly getCodexConfig: () => CodexConfig,
     private readonly logger: RisolutoLogger,
     private readonly eventBus?: TypedEventBus<RisolutoEventMap>,
+    private readonly approvalPolicy: CodexApprovalPolicy = resolveCodexApprovalPolicy(),
   ) {}
 
   async getCapabilities(): Promise<CapabilityRegistry> {
@@ -317,7 +326,7 @@ export class CodexControlPlane {
           method,
           threadId: asString(params.threadId),
           turnId: asString(params.turnId),
-          params,
+          params: projectCodexNotificationParams(params),
           createdAt: new Date().toISOString(),
         });
       });
@@ -327,12 +336,21 @@ export class CodexControlPlane {
     let response: unknown;
     switch (method) {
       case "item/commandExecution/requestApproval":
-      case "item/fileChange/requestApproval":
-        response = { decision: "acceptForSession" };
+      case "item/fileChange/requestApproval": {
+        const decision = decideCodexApproval({ method, params }, this.approvalPolicy);
+        response = {
+          decision: decision.approved ? CODEX_APPROVE_DECISION : CODEX_DENY_DECISION,
+        };
         break;
-      case "item/permissions/requestApproval":
-        response = { permissions: params.permissionProfile ?? params.permissions ?? null, scope: "session" };
+      }
+      case "item/permissions/requestApproval": {
+        const decision = decideCodexApproval({ method, params }, this.approvalPolicy);
+        response = {
+          permissions: decision.approved ? (params.permissionProfile ?? params.permissions ?? null) : null,
+          scope: "session",
+        };
         break;
+      }
       default:
         response = { error: { code: -32601, message: `unsupported host-side codex request: ${method}` } };
         break;
@@ -354,7 +372,7 @@ export class CodexControlPlane {
 
     this.emitCodexEvent("codex.event", {
       method,
-      params,
+      params: projectCodexNotificationParams(params),
       receivedAt: new Date().toISOString(),
     });
   }

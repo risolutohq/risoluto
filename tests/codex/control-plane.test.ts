@@ -453,6 +453,101 @@ describe("CodexControlPlane", () => {
       expect(pendingMap.size).toBe(0);
     });
   });
+
+  describe("approval gating + notification projection (NIN-237)", () => {
+    type ServerRequestFn = (
+      child: ChildProcessWithoutNullStreams,
+      id: number | string,
+      method: string,
+      params: Record<string, unknown>,
+    ) => Promise<void>;
+    type NotificationFn = (method: string, params: Record<string, unknown>) => void;
+
+    function lastResponse(child: ChildProcessWithoutNullStreams): Record<string, unknown> {
+      const chunks = (child as unknown as Record<string, string[]>).stdinChunks;
+      return JSON.parse(chunks[chunks.length - 1].trim()) as Record<string, unknown>;
+    }
+
+    it("denies command-execution approval by default (deny-by-default)", async () => {
+      const child = makeFakeChild();
+      const plane = createPlane();
+      await (plane as unknown as { handleServerRequest: ServerRequestFn }).handleServerRequest(
+        child,
+        "srv-1",
+        "item/commandExecution/requestApproval",
+        {},
+      );
+      expect(lastResponse(child).result).toEqual({ decision: "reject" });
+    });
+
+    it("denies file-change approval by default", async () => {
+      const child = makeFakeChild();
+      const plane = createPlane();
+      await (plane as unknown as { handleServerRequest: ServerRequestFn }).handleServerRequest(
+        child,
+        "srv-2",
+        "item/fileChange/requestApproval",
+        {},
+      );
+      expect(lastResponse(child).result).toEqual({ decision: "reject" });
+    });
+
+    it("denies a permissions request by default (no permissions granted)", async () => {
+      const child = makeFakeChild();
+      const plane = createPlane();
+      await (plane as unknown as { handleServerRequest: ServerRequestFn }).handleServerRequest(
+        child,
+        "srv-3",
+        "item/permissions/requestApproval",
+        { permissionProfile: "full-access" },
+      );
+      expect(lastResponse(child).result).toEqual({ permissions: null, scope: "session" });
+    });
+
+    it("projects server_request params to an allowlist, dropping prompt/token/questions", async () => {
+      const child = makeFakeChild();
+      const plane = createPlane();
+      const events: Record<string, unknown>[] = [];
+      eventBus.on("codex.server_request", (e) => events.push(e as never));
+
+      const pending = (plane as unknown as { handleServerRequest: ServerRequestFn }).handleServerRequest(
+        child,
+        "srv-4",
+        CODEX_METHOD.ToolRequestUserInput,
+        { threadId: "thr-1", prompt: "leak me", token: "sk-supersecretvalue000", questions: [{ id: "q1" }] },
+      );
+
+      const pendingMap = (plane as unknown as Record<string, Map<string, { resolve: (v: unknown) => void }>>)
+        .pendingServerRequests;
+      pendingMap.get("srv-4")?.resolve({ writeResponse: false });
+      await pending;
+
+      expect(events).toHaveLength(1);
+      const params = events[0].params as Record<string, unknown>;
+      expect(params).toHaveProperty("threadId", "thr-1");
+      expect(params).not.toHaveProperty("prompt");
+      expect(params).not.toHaveProperty("token");
+      expect(params).not.toHaveProperty("questions");
+    });
+
+    it("projects codex.event notification params, dropping prompt/apiKey", () => {
+      const plane = createPlane();
+      const events: Record<string, unknown>[] = [];
+      eventBus.on("codex.event", (e) => events.push(e as never));
+
+      (plane as unknown as { handleNotification: NotificationFn }).handleNotification("item/agentMessage", {
+        prompt: "leak me",
+        status: "completed",
+        apiKey: "sk-supersecretvalue000",
+      });
+
+      expect(events).toHaveLength(1);
+      const params = events[0].params as Record<string, unknown>;
+      expect(params).toHaveProperty("status", "completed");
+      expect(params).not.toHaveProperty("prompt");
+      expect(params).not.toHaveProperty("apiKey");
+    });
+  });
 });
 
 describe("CodexControlPlaneMethodUnsupportedError", () => {
