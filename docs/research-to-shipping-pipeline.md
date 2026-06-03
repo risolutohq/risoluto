@@ -303,15 +303,15 @@ source_count: <int>
 Linear is the pipeline's shared memory across stages — but **git is canon**. Each back-half skill reads
 and writes Linear at defined moments; nothing is lost between stages if each writes its slice:
 
-| Skill                     | Reads (Linear)                           | Writes (Linear)                                                  |
-| ------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
-| `to-issues`               | existing `from:prd-<slug>` issues        | issues, blocked-by/related, 5 labels, wave milestones            |
-| `tdd`                     | issue desc + ACs + blocked-by states     | status→In Progress (claim); AC ticks from proof; PR back-comment |
-| `goal-run` (merge agent)  | live blocked-by states                   | status→Done on merge; merge back-comment                         |
-| `review-handoff`          | issues + ACs + states                    | review summary comment on the tracking issue                     |
-| `verify-acceptance`       | issue ACs                                | (optional) cross-model verdict comment                           |
-| `sync`                    | all `from:prd-<slug>` issues + git state | reconciles status→Done + AC ticks from proof; drift report       |
-| `post-merge-prd.mjs` (CI) | `from:prd-<slug>` issues                 | idempotent merge back-comment (does **not** flip issue status)   |
+| Skill                     | Reads (Linear)                           | Writes (Linear)                                                                   |
+| ------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `to-issues`               | existing `from:prd-<slug>` issues        | issues, blocked-by/related, 5 labels, wave milestones                             |
+| `tdd`                     | issue desc + ACs + blocked-by states     | status→In Progress (claim); AC ticks from proof; PR back-comment                  |
+| `goal-run` (merge agent)  | live blocked-by states                   | status→Done on merge; merge back-comment                                          |
+| `review-handoff`          | issues + ACs + states                    | review summary comment on the tracking issue                                      |
+| `verify-acceptance`       | issue ACs                                | cross-model verdict comment (recommended before `gh pr create`; `NOT_MET` blocks) |
+| `sync`                    | all `from:prd-<slug>` issues + git state | reconciles status→Done + AC ticks from proof; drift report                        |
+| `post-merge-prd.mjs` (CI) | `from:prd-<slug>` issues                 | idempotent merge back-comment (does **not** flip issue status)                    |
 
 Invariants:
 
