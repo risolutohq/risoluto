@@ -11,6 +11,7 @@
  *   node skills/risoluto-grill/scripts/preload.mjs <target-slug>
  */
 
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -150,6 +151,64 @@ function findFeaturesHits(slug) {
   return hits;
 }
 
+/**
+ * Read a top-level scalar from the target README's YAML frontmatter.
+ *
+ * @param {string} raw
+ * @param {string} key
+ * @returns {string | null}
+ */
+function frontmatterValue(raw, key) {
+  if (!raw.startsWith("---")) return null;
+  const end = raw.indexOf("\n---", 3);
+  if (end === -1) return null;
+  const match = raw.slice(3, end).match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+  return match ? match[1].trim().replace(/^["']|["']$/g, "") : null;
+}
+
+/**
+ * Dedup-staleness signal: how far the roadmap/features baseline has moved since this target was last
+ * researched. `last_researched_sha` is the main-repo HEAD captured by the researcher (or "pending").
+ * A non-zero count means the candidates were deduped against an older roadmap and may be stale.
+ *
+ * @param {string} sha
+ * @returns {{ last_researched_sha: string | null, commits_since: number | null, capped: boolean, note: string }}
+ */
+const STALE_DEDUP_CAP = 100;
+function computeStaleDedup(sha) {
+  if (!sha || sha === "pending") {
+    return {
+      last_researched_sha: sha || null,
+      commits_since: null,
+      capped: false,
+      note: "no resolvable last_researched_sha — dedup baseline unknown; re-verify candidates against the current roadmap",
+    };
+  }
+  try {
+    const out = execSync(`git -C ${REPO_ROOT} rev-list --count ${sha}..HEAD`, { encoding: "utf8" }).trim();
+    const total = Number.parseInt(out, 10);
+    if (Number.isNaN(total)) throw new Error(`unexpected rev-list output: ${out}`);
+    const capped = total > STALE_DEDUP_CAP;
+    const count = capped ? STALE_DEDUP_CAP : total;
+    return {
+      last_researched_sha: sha,
+      commits_since: count,
+      capped,
+      note:
+        total === 0
+          ? "roadmap/features unchanged since last research — dedup is fresh"
+          : `${capped ? `${STALE_DEDUP_CAP}+` : count} commit(s) since last research — dedup may be stale; re-check the roadmap rows below`,
+    };
+  } catch (err) {
+    return {
+      last_researched_sha: sha,
+      commits_since: null,
+      capped: false,
+      note: `git rev-list failed (${err instanceof Error ? err.message : String(err)}) — treat dedup baseline as unknown`,
+    };
+  }
+}
+
 function main() {
   const slug = process.argv[2];
   if (!slug) fail("usage: preload.mjs <target-slug>");
@@ -169,12 +228,14 @@ function main() {
   }));
 
   const featuresSpine = findFeaturesHits(slug);
+  const staleDedup = computeStaleDedup(frontmatterValue(raw, "last_researched_sha"));
 
   const bundle = {
     target: slug,
     candidates,
     roadmap_rows: roadmapRows,
     features_spine: featuresSpine,
+    stale_dedup: staleDedup,
   };
   process.stdout.write(`${JSON.stringify(bundle, null, 2)}\n`);
 
@@ -184,7 +245,7 @@ function main() {
   process.stderr.write(
     `risoluto-grill preload: loaded ${slug} — ${candidates.length} candidates (${surviving} surviving), ` +
       `${roadmapRows.length} roadmap rows, ${featuresSpine.length} features-spine hits ` +
-      `(${spineActive} active, ${spineRemoved} tombstoned)\n`,
+      `(${spineActive} active, ${spineRemoved} tombstoned) — ${staleDedup.note}\n`,
   );
 }
 
