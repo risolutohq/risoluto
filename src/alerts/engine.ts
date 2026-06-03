@@ -50,5 +50,6 @@ export class AlertEngine {
 
   stop(): void {
     this.options.eventBus.offAny(this.onAnyHandler);
+    this.pipeline.clearCooldowns();
   }
 }

@@ -522,8 +522,8 @@ export async function createServices(
   const acceptedRunDriver = createAcceptedRunDriver({
     archiveDir,
     // Workflow definitions live next to the archive; the CLI default mirrors run-start-command.ts.
-    // Resolve to an absolute path so daemon-driven runs work regardless of the server process CWD.
-    workflowDir: path.resolve(".risoluto", "workflows"),
+    // Derive from archiveDir (always absolute) so daemon-driven runs work regardless of CWD.
+    workflowDir: path.join(path.dirname(archiveDir), "workflows"),
     logger: logger.child({ component: "accepted-run-driver" }),
   });
   events.eventBus.on("workflow_run.accepted", (e) => {

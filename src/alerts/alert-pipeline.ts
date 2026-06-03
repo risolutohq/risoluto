@@ -19,6 +19,10 @@ export class AlertPipeline {
 
   constructor(private readonly options: AlertPipelineOptions) {}
 
+  clearCooldowns(): void {
+    this.recentDeliveries.clear();
+  }
+
   async processEvent(eventType: string, payload: EventPayload): Promise<void> {
     const rules = this.options.configStore.getConfig().alerts?.rules ?? [];
     const matchingRules = rules.filter((rule) => rule.enabled && matchesEventType(rule, eventType));
