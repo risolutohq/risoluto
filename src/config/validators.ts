@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { isRecord } from "../utils/type-guards.js";
 import { normalizeStateList } from "../state/topology.js";
 import type { ServiceConfig, ValidationError } from "../core/types.js";
 import { codexAuthModeValues } from "./schemas/index.js";
@@ -26,10 +27,6 @@ function trackerParseFailure(field?: string): DispatchTrackerParseResult {
       ],
     },
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 /**

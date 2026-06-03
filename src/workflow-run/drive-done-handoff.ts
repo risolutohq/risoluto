@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { isRecord } from "../utils/type-guards.js";
 import type { WorkflowRunArchive, WorkflowRunArchiveLocation } from "./archive.js";
 import {
   computeWorkflowCostUsd,
@@ -158,8 +159,4 @@ function extractPublishResult(artifacts: Readonly<Record<string, unknown>>): Min
 function resolveArtifactPath(location: WorkflowRunArchiveLocation, workflowRunId: string, artifactId: string): string {
   const archiveRoot = location.archiveDir ?? path.join(location.dataDir ?? "", "archives");
   return path.join(archiveRoot, "workflow-runs", workflowRunId, "artifacts", `${artifactId}.json`);
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
