@@ -7,21 +7,28 @@ import type { WebhookRequest } from "../../src/http/webhook-types.js";
 /** Mirrors the `express.json({ verify })` setup from `server.ts`. */
 function startApp(): Promise<{ port: number; server: http.Server }> {
   const app = express();
-  app.use(
-    express.json({
-      verify: (req: IncomingMessage, _res, buf: Buffer) => {
-        if (req.url?.startsWith("/webhooks/")) {
-          (req as unknown as WebhookRequest).rawBody = buf;
-        }
-      },
-    }),
-  );
+  const captureWebhookRawBody = (req: IncomingMessage, _res: unknown, buf: Buffer): void => {
+    if (req.url?.startsWith("/webhooks/")) {
+      (req as unknown as WebhookRequest).rawBody = buf;
+    }
+  };
+  app.use(express.json({ verify: captureWebhookRawBody }));
+  app.use(express.urlencoded({ extended: false, verify: captureWebhookRawBody }));
 
   app.post("/webhooks/linear", (req, res) => {
     const webhookReq = req as WebhookRequest;
     res.json({
       hasRawBody: Buffer.isBuffer(webhookReq.rawBody),
       rawBodyLength: webhookReq.rawBody?.length ?? null,
+    });
+  });
+
+  app.post("/webhooks/slack", (req, res) => {
+    const webhookReq = req as WebhookRequest;
+    const raw = webhookReq.rawBody?.toString("utf8") ?? "";
+    res.json({
+      hasRawBody: Buffer.isBuffer(webhookReq.rawBody),
+      decodedPayload: new URLSearchParams(raw).get("payload"),
     });
   });
 
@@ -74,6 +81,26 @@ describe("raw body capture for webhook paths", () => {
     const body = (await response.json()) as { hasRawBody: boolean; rawBodyLength: number | null };
     expect(body.hasRawBody).toBe(true);
     expect(body.rawBodyLength).toBe(Buffer.byteLength(payload));
+  });
+
+  it("captures rawBody for an application/x-www-form-urlencoded Slack request (NIN-250)", async () => {
+    const { port, server: s } = await startApp();
+    server = s;
+
+    const interaction = JSON.stringify({ type: "block_actions", user: { id: "U1" } });
+    const formBody = new URLSearchParams({ payload: interaction }).toString();
+    const response = await fetch(`http://127.0.0.1:${port}/webhooks/slack`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formBody,
+    });
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { hasRawBody: boolean; decodedPayload: string | null };
+    expect(body.hasRawBody).toBe(true);
+    // The raw buffer is the exact urlencoded bytes, so signature verification can recompute
+    // the HMAC and the handler can decode the Slack `payload` field.
+    expect(body.decodedPayload).toBe(interaction);
   });
 
   it("does NOT populate rawBody for POST to non-webhook path", async () => {

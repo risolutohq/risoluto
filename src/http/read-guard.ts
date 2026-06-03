@@ -5,7 +5,12 @@ import { isLoopbackAddress } from "./write-guard.js";
 
 const SAFE_READ_METHODS = new Set(["GET", "HEAD"]);
 const PUBLIC_READ_PATHS = new Set(["/api/v1/runtime", "/api/v1/openapi.json"]);
+// EventSource cannot attach an Authorization header, so the SSE stream is the only
+// protected read that may authenticate with a query-string token.
+const SSE_READ_PATH = "/api/v1/events";
 const PROTECTED_READ_PREFIXES = [
+  // Prometheus scrape surface — operational data that must require auth off loopback.
+  "/metrics",
   "/api/v1/state",
   "/api/v1/events",
   "/api/v1/models",
@@ -111,14 +116,22 @@ function guardReadRequest(req: Request, res: Response, next: NextFunction): void
     return;
   }
 
-  const queryValue = req.query["read_token"];
-  const queryToken = typeof queryValue === "string" ? queryValue : null;
-  if (queryToken) {
-    authorizeReadToken(queryToken, configuredTokens, res, next);
-    return;
+  // Accept a query-string token only on the SSE stream — every other protected read
+  // requires a header, so tokens never leak through URLs/history/referrers (NIN-250).
+  if (isServerSentEventsPath(req.path)) {
+    const queryValue = req.query["read_token"];
+    const queryToken = typeof queryValue === "string" ? queryValue : null;
+    if (queryToken) {
+      authorizeReadToken(queryToken, configuredTokens, res, next);
+      return;
+    }
   }
 
   sendReadUnauthorized(res);
+}
+
+function isServerSentEventsPath(pathname: string): boolean {
+  return pathname === SSE_READ_PATH || pathname.startsWith(`${SSE_READ_PATH}/`);
 }
 
 function authorizeReadToken(

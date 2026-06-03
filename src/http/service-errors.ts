@@ -10,6 +10,7 @@ import { toErrorString } from "../utils/type-guards.js";
  * (which throw) and the HTTP surface (which must return structured JSON errors).
  *
  * Failure modes (documented for API consumers):
+ * - 400 `invalid_request_body` — body-parser rejected a malformed/oversized request body.
  * - 400 `service_validation_error` — service rejected input (TypeError from stores).
  * - 500 `service_error` — unexpected internal failure from a service store.
  */
@@ -22,6 +23,27 @@ export interface ApiErrorResponse {
   };
 }
 
+interface BodyParserError extends Error {
+  type?: string;
+  status?: number;
+  statusCode?: number;
+}
+
+/**
+ * body-parser (`express.json`/`express.urlencoded`) rejects malformed or oversized
+ * request bodies with an HTTP-shaped error carrying a `type` and a 4xx `status`. These
+ * are client errors, so we echo the status (400 for a parse failure) instead of letting
+ * them fall through to a misleading 500 (NIN-250).
+ */
+function bodyParserErrorStatus(error: Error): number | null {
+  const candidate = error as BodyParserError;
+  if (typeof candidate.type !== "string") {
+    return null;
+  }
+  const status = candidate.status ?? candidate.statusCode;
+  return typeof status === "number" && status >= 400 && status < 500 ? status : null;
+}
+
 /**
  * Express error-handling middleware that catches service-layer exceptions
  * and returns structured JSON error responses.
@@ -31,6 +53,17 @@ export interface ApiErrorResponse {
 export function serviceErrorHandler(error: Error, req: Request, res: Response, next: NextFunction): void {
   if (res.headersSent) {
     next(error);
+    return;
+  }
+
+  const parseStatus = bodyParserErrorStatus(error);
+  if (parseStatus !== null) {
+    res.status(parseStatus).json({
+      error: {
+        code: "invalid_request_body",
+        message: parseStatus === 413 ? "Request body exceeds the allowed size" : "Request body could not be parsed",
+      },
+    } satisfies ApiErrorResponse);
     return;
   }
 

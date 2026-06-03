@@ -335,6 +335,46 @@ describe("createWriteGuard", () => {
     });
   });
 
+  it("requires a token for a proxied non-loopback mutation even when the TCP peer is loopback (NIN-250)", () => {
+    const next = vi.fn();
+    const response = createMockResponse();
+    const request = {
+      method: "POST",
+      path: "/api/v1/test",
+      socket: { remoteAddress: "127.0.0.1" },
+      get: vi.fn((header: string) => (header.toLowerCase() === "x-forwarded-for" ? "203.0.113.7" : undefined)),
+    } as unknown as Request;
+
+    createWriteGuard()(request, response, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response._status).toBe(403);
+    expect(response._body).toEqual({
+      error: {
+        code: "write_forbidden",
+        message:
+          "Mutating requests are only allowed from loopback addresses. " +
+          "Set RISOLUTO_WRITE_TOKEN to allow remote write access.",
+      },
+    });
+  });
+
+  it("still allows a loopback mutation forwarded by a local proxy (forwarded-for is loopback)", () => {
+    const next = vi.fn();
+    const response = createMockResponse();
+    const request = {
+      method: "POST",
+      path: "/api/v1/test",
+      socket: { remoteAddress: "127.0.0.1" },
+      get: vi.fn((header: string) => (header.toLowerCase() === "x-forwarded-for" ? "127.0.0.1" : undefined)),
+    } as unknown as Request;
+
+    createWriteGuard()(request, response, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response._status).toBe(200);
+  });
+
   it("records write audit details on finish when a request is allowed", async () => {
     const auditLog = {
       record: vi.fn().mockResolvedValue(undefined),

@@ -184,6 +184,26 @@ describe("Codex admin routes", () => {
     );
   });
 
+  it("clamps an over-large pagination limit to the maximum (NIN-250)", async () => {
+    const codexControlPlane = {
+      request: vi.fn().mockResolvedValue({ data: [], nextCursor: null }),
+    };
+
+    await withServer(
+      (app) =>
+        registerCodexRoutes(app, {
+          orchestrator: makeOrchestrator() as never,
+          codexControlPlane: codexControlPlane as never,
+          logger: createMockLogger(),
+        }),
+      async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/api/v1/codex/threads?limit=9999`);
+        expect(response.status).toBe(200);
+        expect(codexControlPlane.request).toHaveBeenCalledWith("thread/list", expect.objectContaining({ limit: 100 }));
+      },
+    );
+  });
+
   it("returns 501 when the connected Codex build does not support a method", async () => {
     const codexControlPlane = {
       request: vi.fn().mockRejectedValue(new CodexControlPlaneMethodUnsupportedError("experimentalFeature/list")),

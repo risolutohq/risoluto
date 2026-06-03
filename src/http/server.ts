@@ -92,16 +92,16 @@ export class HttpServer {
       });
       next();
     });
-    this.app.use(
-      express.json({
-        limit: "1mb",
-        verify: (req: IncomingMessage, _res, buf: Buffer) => {
-          if (req.url?.startsWith("/webhooks/")) {
-            (req as unknown as WebhookRequest).rawBody = buf;
-          }
-        },
-      }),
-    );
+    const captureWebhookRawBody = (req: IncomingMessage, _res: unknown, buf: Buffer): void => {
+      if (req.url?.startsWith("/webhooks/")) {
+        (req as unknown as WebhookRequest).rawBody = buf;
+      }
+    };
+    this.app.use(express.json({ limit: "1mb", verify: captureWebhookRawBody }));
+    // Slack interactive webhooks post application/x-www-form-urlencoded, so express.json()
+    // skips them and never captures rawBody — the signature check then fails on valid
+    // requests. A urlencoded parser with the same raw-body capture closes that gap (NIN-250).
+    this.app.use(express.urlencoded({ extended: false, limit: "1mb", verify: captureWebhookRawBody }));
     this.app.use(createReadGuard());
     this.app.use(createWriteGuard());
     registerHttpRoutes(this.app, { ...this.deps, metrics, observability: this.observability });
