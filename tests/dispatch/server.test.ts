@@ -237,6 +237,104 @@ describe("Data plane server", () => {
       expect(dispatchResponse.status).toBe(200);
       expect(dispatchResponse.body).toContain('"kind":"cancelled"');
     });
+
+    it("rejects a duplicate active dispatch runId with 409 (NIN-258)", async () => {
+      runAttemptMock.mockImplementationOnce(
+        (input: { signal: AbortSignal }) =>
+          new Promise((resolve) => {
+            input.signal.addEventListener(
+              "abort",
+              () =>
+                resolve({
+                  kind: "cancelled",
+                  errorCode: "operator_abort",
+                  errorMessage: "aborted",
+                  threadId: null,
+                  turnId: null,
+                  turnCount: 0,
+                }),
+              { once: true },
+            );
+          }),
+      );
+
+      const app = createDataPlaneServer(secret);
+      const body = createDispatchRequestBody({
+        workflowRun: { id: "dup-run", identifier: "DUP-1", title: "dup", url: "https://linear.app/test/DUP-1" },
+      });
+      const first = makeRequest(app, "POST", "/dispatch", { body, headers: { Authorization: `Bearer ${secret}` } });
+      await waitFor(() => runAttemptMock.mock.calls.length > 0);
+
+      // Second dispatch with the same runId is rejected rather than overwriting the first.
+      const second = await makeRequest(app, "POST", "/dispatch", {
+        body,
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      expect(second.status).toBe(409);
+
+      // The first run is still abortable (its controller was never clobbered).
+      const abortResponse = await makeRequest(app, "POST", "/dispatch/dup-run/abort", {
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      expect(abortResponse.status).toBe(200);
+      await first;
+    });
+
+    it("aborts the in-flight attempt when the client disconnects (NIN-258)", async () => {
+      let capturedSignal: AbortSignal | null = null;
+      runAttemptMock.mockImplementationOnce(
+        (input: { signal: AbortSignal }) =>
+          new Promise((resolve) => {
+            capturedSignal = input.signal;
+            input.signal.addEventListener(
+              "abort",
+              () =>
+                resolve({
+                  kind: "cancelled",
+                  errorCode: "client_disconnect",
+                  errorMessage: "client disconnected",
+                  threadId: null,
+                  turnId: null,
+                  turnCount: 0,
+                }),
+              { once: true },
+            );
+          }),
+      );
+
+      const app = createDataPlaneServer(secret);
+      const server = app.listen(0);
+      await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+      const port = (server.address() as { port: number }).port;
+
+      const bodyString = JSON.stringify(
+        createDispatchRequestBody({
+          workflowRun: { id: "disc-run", identifier: "DISC-1", title: "disc", url: "https://linear.app/test/DISC-1" },
+        }),
+      );
+      const clientReq = http.request({
+        hostname: "127.0.0.1",
+        port,
+        path: "/dispatch",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(bodyString),
+          Authorization: `Bearer ${secret}`,
+        },
+      });
+      clientReq.on("error", () => undefined);
+      clientReq.write(bodyString);
+      clientReq.end();
+
+      await waitFor(() => runAttemptMock.mock.calls.length > 0);
+      // Client drops the connection mid-stream — the server must abort the attempt.
+      clientReq.destroy();
+
+      await waitFor(() => capturedSignal?.aborted === true);
+      expect(capturedSignal?.aborted).toBe(true);
+      server.close();
+    });
   });
 
   describe("POST /dispatch/:runId/abort", () => {
