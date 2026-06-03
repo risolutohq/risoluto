@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 
 import { asStringRecord, isRecord, toErrorString } from "../utils/type-guards.js";
 import type { RisolutoLogger } from "../core/types.js";
@@ -8,6 +8,8 @@ import type { SecretsPort } from "./port.js";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const IV_BYTE_LENGTH = 12;
+const KDF_SALT_BYTE_LENGTH = 16;
+const KDF_VERSION_CURRENT = 2;
 
 interface SecretsEnvelope {
   version: number;
@@ -15,10 +17,31 @@ interface SecretsEnvelope {
   iv: string;
   authTag: string;
   ciphertext: string;
+  /** KDF version: 1 = SHA-256 (legacy), 2 = scrypt. Absent on old files implies 1. */
+  kdfVersion?: number;
+  /** Base64-encoded per-file random salt used by KDF V2. */
+  kdfSalt?: string;
 }
 
-function deriveKey(masterKey: string): Buffer {
+/** V1 (legacy): single-pass SHA-256, no salt — read-only, migration path only. */
+function deriveKeyV1(masterKey: string): Buffer {
   return createHash("sha256").update(masterKey, "utf8").digest();
+}
+
+/** V2: scrypt with a random salt — current write path. */
+function deriveKeyV2(masterKey: string, salt: Buffer): Buffer {
+  return scryptSync(masterKey, salt, 32, { N: 16384, r: 8, p: 1 });
+}
+
+function resolveEnvelopeKey(masterKey: string, envelope: SecretsEnvelope): Buffer {
+  const kdfVersion = envelope.kdfVersion ?? 1;
+  if (kdfVersion === 1) {
+    return deriveKeyV1(masterKey);
+  }
+  if (!envelope.kdfSalt) {
+    throw new Error(`secrets envelope kdfVersion=${kdfVersion} is missing kdfSalt`);
+  }
+  return deriveKeyV2(masterKey, Buffer.from(envelope.kdfSalt, "base64"));
 }
 
 function encodeEnvelope(envelope: SecretsEnvelope): string {
@@ -41,6 +64,8 @@ function parseEnvelope(source: string): SecretsEnvelope {
   const iv = parsed.iv;
   const authTag = parsed.authTag;
   const ciphertext = parsed.ciphertext;
+  const kdfVersion = parsed.kdfVersion;
+  const kdfSalt = parsed.kdfSalt;
 
   if (version !== 1) {
     throw new Error(`unsupported secrets envelope version: ${String(version)}`);
@@ -51,6 +76,12 @@ function parseEnvelope(source: string): SecretsEnvelope {
   if (typeof iv !== "string" || typeof authTag !== "string" || typeof ciphertext !== "string") {
     throw new TypeError("secrets envelope contains invalid binary fields");
   }
+  if (kdfVersion !== undefined && kdfVersion !== 1 && kdfVersion !== 2) {
+    throw new Error(`unsupported secrets envelope kdfVersion: ${String(kdfVersion)}`);
+  }
+  if (kdfSalt !== undefined && typeof kdfSalt !== "string") {
+    throw new TypeError("secrets envelope kdfSalt must be a string");
+  }
 
   return {
     version,
@@ -58,10 +89,14 @@ function parseEnvelope(source: string): SecretsEnvelope {
     iv,
     authTag,
     ciphertext,
+    kdfVersion: typeof kdfVersion === "number" ? kdfVersion : undefined,
+    kdfSalt: typeof kdfSalt === "string" ? kdfSalt : undefined,
   };
 }
 
-function encrypt(plaintext: string, key: Buffer): SecretsEnvelope {
+function encrypt(plaintext: string, masterKey: string): SecretsEnvelope {
+  const salt = randomBytes(KDF_SALT_BYTE_LENGTH);
+  const key = deriveKeyV2(masterKey, salt);
   const iv = randomBytes(IV_BYTE_LENGTH);
   const cipher = createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -73,6 +108,8 @@ function encrypt(plaintext: string, key: Buffer): SecretsEnvelope {
     iv: iv.toString("base64"),
     authTag: authTag.toString("base64"),
     ciphertext: ciphertext.toString("base64"),
+    kdfVersion: KDF_VERSION_CURRENT,
+    kdfSalt: salt.toString("base64"),
   };
 }
 
@@ -88,7 +125,7 @@ function decrypt(envelope: SecretsEnvelope, key: Buffer): string {
 export class SecretsStore implements SecretsPort {
   private readonly cache = new Map<string, string>();
   private readonly listeners = new Set<() => void>();
-  private encryptionKey: Buffer | null = null;
+  private activeMasterKey: string | null = null;
 
   constructor(
     private readonly baseDir: string,
@@ -103,7 +140,7 @@ export class SecretsStore implements SecretsPort {
     if (!masterKey) {
       throw new Error("MASTER_KEY is required to initialize SecretsStore");
     }
-    this.encryptionKey = deriveKey(masterKey);
+    this.activeMasterKey = masterKey;
     const source = await this.readEncryptedFile();
     if (source === null) {
       await this.persist();
@@ -111,9 +148,10 @@ export class SecretsStore implements SecretsPort {
     }
 
     const envelope = parseEnvelope(source);
+    const decryptKey = resolveEnvelopeKey(masterKey, envelope);
     let decrypted: string;
     try {
-      decrypted = decrypt(envelope, this.requiredKey());
+      decrypted = decrypt(envelope, decryptKey);
     } catch (error) {
       this.logger.error(
         { error: toErrorString(error), secretsPath: this.secretsPath() },
@@ -122,6 +160,10 @@ export class SecretsStore implements SecretsPort {
       throw new Error("failed to decrypt secrets.enc; MASTER_KEY may not match the existing archive", { cause: error });
     }
     this.loadCache(decrypted);
+    // If the file used the legacy V1 KDF, re-encrypt in-place with V2.
+    if ((envelope.kdfVersion ?? 1) < KDF_VERSION_CURRENT) {
+      await this.persist();
+    }
   }
 
   async startDeferred(): Promise<void> {
@@ -129,7 +171,7 @@ export class SecretsStore implements SecretsPort {
   }
 
   async initializeWithKey(masterKey: string): Promise<void> {
-    this.encryptionKey = deriveKey(masterKey);
+    this.activeMasterKey = masterKey;
     const source = await this.readEncryptedFile();
     if (source === null) {
       await this.persist();
@@ -138,28 +180,34 @@ export class SecretsStore implements SecretsPort {
     }
 
     const envelope = parseEnvelope(source);
+    const decryptKey = resolveEnvelopeKey(masterKey, envelope);
     let decrypted: string;
     try {
-      decrypted = decrypt(envelope, this.requiredKey());
+      decrypted = decrypt(envelope, decryptKey);
     } catch (error) {
-      this.logger.warn(
-        { error: toErrorString(error) },
-        "failed to decrypt secrets.enc — MASTER_KEY may have changed; starting with empty store",
+      this.logger.error(
+        { error: toErrorString(error), secretsPath: this.secretsPath() },
+        "failed to decrypt secrets.enc — refusing to overwrite existing secret store",
       );
-      await this.persist();
-      this.notify();
-      return;
+      throw new Error("failed to decrypt secrets.enc; MASTER_KEY may not match the existing archive", {
+        cause: error,
+      });
     }
     this.loadCache(decrypted);
+    // If the file used the legacy V1 KDF, re-encrypt in-place with V2.
+    if ((envelope.kdfVersion ?? 1) < KDF_VERSION_CURRENT) {
+      await this.persist();
+    }
     this.notify();
   }
+
   isInitialized(): boolean {
-    return this.encryptionKey !== null;
+    return this.activeMasterKey !== null;
   }
 
   reset(): void {
     this.cache.clear();
-    this.encryptionKey = null;
+    this.activeMasterKey = null;
     this.notify();
   }
 
@@ -198,11 +246,11 @@ export class SecretsStore implements SecretsPort {
     return true;
   }
 
-  private requiredKey(): Buffer {
-    if (!this.encryptionKey) {
+  private requiredMasterKey(): string {
+    if (!this.activeMasterKey) {
       throw new Error("SecretsStore has not been started");
     }
-    return this.encryptionKey;
+    return this.activeMasterKey;
   }
 
   private notify(): void {
@@ -250,7 +298,7 @@ export class SecretsStore implements SecretsPort {
 
   private async writeCacheToDisk(): Promise<void> {
     const serializedSecrets = JSON.stringify(Object.fromEntries(this.cache), null, 2);
-    const envelope = encrypt(serializedSecrets, this.requiredKey());
+    const envelope = encrypt(serializedSecrets, this.requiredMasterKey());
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const temporaryPath = `${this.secretsPath()}.tmp-${process.pid}-${Date.now()}`;
