@@ -32,7 +32,13 @@ const SETUP_SCHEMA = {
   type: "object",
   required: ["ok", "waveBranch"],
   additionalProperties: true,
-  properties: { ok: { type: "boolean" }, waveBranch: { type: "string" }, note: { type: "string" } },
+  properties: {
+    ok: { type: "boolean" },
+    waveBranch: { type: "string" },
+    // The require_approval_for list parsed from CONTROL.md, threaded into build agents as a hard gate.
+    requireApprovalFor: { type: "array", items: { type: "string" } },
+    note: { type: "string" },
+  },
 };
 const BUILD_SCHEMA = {
   type: "object",
@@ -42,6 +48,9 @@ const BUILD_SCHEMA = {
     issueId: { type: "string" },
     branch: { type: "string" },
     status: { enum: ["green", "failed"] },
+    // commitSha is the `git rev-parse HEAD` of the slice commit; required in practice for a green
+    // build so the merge-verification agent can prove the commit is reachable from the wave branch.
+    commitSha: { type: "string" },
     evidence: { type: "string" },
   },
 };
@@ -53,6 +62,19 @@ const MERGE_SCHEMA = {
     mergedIds: { type: "array", items: { type: "string" } },
     blocked: { type: "boolean" },
     note: { type: "string" },
+  },
+};
+// Post-merge audit: git is canon (verifiedIds gate doneIds), Linear is a mirror (linearNotDoneIds
+// only journals drift). Read-only — the agent makes no merges, commits, or Linear writes.
+const VERIFY_MERGE_SCHEMA = {
+  type: "object",
+  required: ["verifiedIds", "unverifiedIds", "linearDoneIds", "linearNotDoneIds"],
+  additionalProperties: true,
+  properties: {
+    verifiedIds: { type: "array", items: { type: "string" } },
+    unverifiedIds: { type: "array", items: { type: "string" } },
+    linearDoneIds: { type: "array", items: { type: "string" } },
+    linearNotDoneIds: { type: "array", items: { type: "string" } },
   },
 };
 const GATE_SCHEMA = {
@@ -95,8 +117,8 @@ for (const wave of waves) {
       "Steps:",
       `1. cd ${repoRoot}; git fetch origin. Ensure ${integrationBranch} exists (create from origin/${baseBranch} if absent).`,
       `2. Create the wave branch ${wave.branch} from the current ${integrationBranch} tip (it already contains every earlier merged wave).`,
-      `3. Read ${goalDir}/CONTROL.md; if it says paused: true, return ok:false with note "paused".`,
-      `Return {ok, waveBranch:"${wave.branch}", note}.`,
+      `3. Read ${goalDir}/CONTROL.md; if it says paused: true, return ok:false with note "paused". Also parse its require_approval_for YAML list (the dash items under that key) and return it verbatim as requireApprovalFor (an array of strings; [] if absent).`,
+      `Return {ok, waveBranch:"${wave.branch}", requireApprovalFor, note}.`,
     ].join("\n"),
     { schema: SETUP_SCHEMA, label: `setup:w${wave.number}`, phase: "Cascade", agentType: "general-purpose" },
   );
@@ -104,6 +126,14 @@ for (const wave of waves) {
     results.push({ wave: wave.number, blocked: true, reason: setup ? setup.note : "setup failed" });
     break;
   }
+
+  // CONTROL.md steering: actions the operator gated behind approval. Build agents have no way to ask
+  // mid-run, so a gated action must halt that slice (status:failed) rather than proceed unapproved.
+  const requireApprovalFor = Array.isArray(setup.requireApprovalFor) ? setup.requireApprovalFor : [];
+  const approvalRule =
+    requireApprovalFor.length > 0
+      ? `APPROVAL GATE (from CONTROL.md): you must NOT perform any of these without operator approval: ${requireApprovalFor.join(", ")}. There is no way to obtain approval in this run, so if the slice would require any of them (e.g. widening scope, a destructive change, or adding/upgrading a dependency), STOP and return status:"failed" with evidence naming the gated action — do not proceed unapproved.`
+      : null;
 
   const doneIds = new Set();
   let remaining = wave.issues.slice();
@@ -123,12 +153,15 @@ for (const wave of waves) {
             [
               `You are the issue-build agent for ${iss.id} (${iss.title}) in ${slug} wave ${wave.number}.`,
               gitRules,
+              approvalRule,
               "Steps:",
               `1. Create a worktree: git -C ${repoRoot} worktree add ${repoRoot}/.agent-worktrees/${slug}-${iss.id} -b ${iss.branch} ${wave.branch}. Symlink node_modules in.`,
               `2. Implement ${iss.id} against its Linear acceptance criteria + linked PRD. Use /risoluto-tdd ${iss.id} as the local method if available; otherwise follow the same red -> green -> refactor shape directly. Stay scoped to this issue.`,
-              `3. Run the focused acceptance check for the slice; commit on ${iss.branch} with a conventional message (CI=true). Do NOT open a PR. Do NOT mark Linear Done (the merge agent does that after merge).`,
-              `Return {issueId:"${iss.id}", branch:"${iss.branch}", status:"green" or "failed", evidence}. If you cannot make the slice pass, return status:"failed" with the failure evidence — do not widen scope.`,
-            ].join("\n"),
+              `3. Run the focused acceptance check for the slice; commit on ${iss.branch} with a conventional message (CI=true). On green, capture the commit hash with: git -C ${repoRoot}/.agent-worktrees/${slug}-${iss.id} rev-parse HEAD. Do NOT open a PR. Do NOT mark Linear Done (the merge agent does that after merge).`,
+              `Return {issueId:"${iss.id}", branch:"${iss.branch}", status:"green" or "failed", commitSha:"<the rev-parse HEAD on green, omit on failed>", evidence}. If you cannot make the slice pass, return status:"failed" with the failure evidence — do not widen scope.`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
             { schema: BUILD_SCHEMA, label: `build:${iss.id}`, phase: "Cascade", agentType: "general-purpose" },
           ).then((r) => r || { issueId: iss.id, status: "failed", evidence: "agent returned null (skipped)" }),
       ),
@@ -148,9 +181,47 @@ for (const wave of waves) {
     );
 
     const mergedIds = merge && Array.isArray(merge.mergedIds) ? merge.mergedIds : [];
-    mergedIds.forEach((id) => doneIds.add(id));
+    // Do not trust the merge agent's self-report. Git is canon: only commits provably reachable from
+    // the wave branch count as Done. Linear is a mirror: a Done mismatch journals drift but does not halt.
+    let verifiedIds = [];
+    if (mergedIds.length > 0) {
+      const shaById = new Map(green.filter((b) => b.commitSha).map((b) => [b.issueId, b.commitSha]));
+      const branchById = new Map(green.map((b) => [b.issueId, b.branch]));
+      const claims = mergedIds.map((id) => ({
+        issueId: id,
+        commitSha: shaById.get(id) || null,
+        branch: branchById.get(id) || null,
+      }));
+      const verify = await agent(
+        [
+          `You are the read-only merge-verification agent for ${slug} wave ${wave.number}. The merge agent claims it merged these issues into ${wave.branch}: ${JSON.stringify(claims)}.`,
+          gitRules,
+          `1. GIT (canon): for each claim with a commitSha, run: git -C ${repoRoot} merge-base --is-ancestor <commitSha> ${wave.branch} (exit 0 = the commit is reachable from ${wave.branch}). Put issueIds whose commit is reachable in verifiedIds; put every other claimed id — unreachable, or with a null/missing commitSha — in unverifiedIds.`,
+          `2. LINEAR (mirror): read each claimed issue's current state; put ids with state.name == "Done" in linearDoneIds, the rest in linearNotDoneIds.`,
+          "Make NO merges, NO commits, NO Linear writes — this is a read-only audit.",
+          "Return {verifiedIds, unverifiedIds, linearDoneIds, linearNotDoneIds}.",
+        ].join("\n"),
+        { schema: VERIFY_MERGE_SCHEMA, label: `verify:w${wave.number}`, phase: "Cascade", agentType: "general-purpose" },
+      );
+      verifiedIds = verify && Array.isArray(verify.verifiedIds) ? verify.verifiedIds : [];
+      const unverified = verify && Array.isArray(verify.unverifiedIds) ? verify.unverifiedIds : mergedIds;
+      const linearNotDone = verify && Array.isArray(verify.linearNotDoneIds) ? verify.linearNotDoneIds : [];
+      if (unverified.length > 0) {
+        await recordBlocker(
+          wave.number,
+          `merge agent reported [${unverified.join(", ")}] merged, but their commits are NOT reachable from ${wave.branch} — not counted Done`,
+        );
+      }
+      if (linearNotDone.length > 0) {
+        await recordBlocker(
+          wave.number,
+          `git-merged issues not yet marked Done in Linear (mirror drift — continuing): [${linearNotDone.join(", ")}]`,
+        );
+      }
+    }
+    verifiedIds.forEach((id) => doneIds.add(id));
     remaining = remaining.filter((i) => !doneIds.has(i.id));
-    if ((merge && merge.blocked) || mergedIds.length === 0) {
+    if ((merge && merge.blocked) || verifiedIds.length === 0) {
       blockedWave = true;
       break;
     }
@@ -200,6 +271,37 @@ log(
         blocked ? blocked.blockedReason || blocked.reason || "see PLAN.md" : "unknown reason"
       }.`,
 );
+
+// Append a machine-readable run footer to NOTES.md so AFK completion is jq-queryable. The script has
+// no fs access and cannot call Date.now(); a best-effort agent stamps finishedAt and writes the block.
+const runFooter = {
+  contract: "conductor-run.v1",
+  finishedAt: "<FINISHED_AT>",
+  slug,
+  wavesMerged,
+  waveTotal: waves.length,
+  allWavesMerged,
+  blocked: blocked ? { wave: blocked.wave, reason: blocked.blockedReason || blocked.reason || "see PLAN.md" } : null,
+  waves: results,
+};
+try {
+  await agent(
+    [
+      `You are the run-footer agent for ${slug}. Append a machine-readable footer to ${goalDir}/NOTES.md and make NO other changes (no code, no git, no Linear).`,
+      `1. Get the current UTC timestamp: date -u +%Y-%m-%dT%H:%M:%SZ`,
+      `2. Append (do not overwrite) the following to the END of ${goalDir}/NOTES.md, replacing the <FINISHED_AT> placeholder with that timestamp:`,
+      "",
+      "## conductor-run.v1",
+      "",
+      "```json",
+      JSON.stringify(runFooter, null, 2),
+      "```",
+    ].join("\n"),
+    { label: "run-footer", phase: "Cascade", agentType: "general-purpose" },
+  );
+} catch (err) {
+  log(`run footer could not be written to NOTES.md (${err instanceof Error ? err.message : String(err)})`);
+}
 
 return {
   slug,
