@@ -6,6 +6,7 @@ import {
   buildInitCacheVolumeArgs as _buildInitCacheVolumeArgs,
   type DockerRunInput,
 } from "../../src/docker/spawn.js";
+import { InvalidDockerImageRefError } from "../../src/docker/image-ref.js";
 import { PathRegistry } from "../../src/workspace/path-registry.js";
 import type { SandboxConfig } from "../../src/core/types.js";
 
@@ -155,6 +156,24 @@ describe("buildDockerRunArgs", () => {
     );
     expect(result.args[imageIdx + 3]).toContain('echo "risoluto:container_ready"');
     expect(result.args[imageIdx + 3]).toContain('exec bash -lc "$RISOLUTO_CODEX_COMMAND"');
+  });
+
+  it("rejects an image reference that could be parsed as a docker flag", () => {
+    const cfg = baseSandboxConfig();
+    cfg.image = "--privileged";
+    expect(() => buildDockerRunArgs(baseInput({ sandboxConfig: cfg }))).toThrow(InvalidDockerImageRefError);
+  });
+
+  it("rejects an image reference containing whitespace or shell metacharacters", () => {
+    const cfg = baseSandboxConfig();
+    cfg.image = "alpine; rm -rf /";
+    expect(() => buildDockerRunArgs(baseInput({ sandboxConfig: cfg }))).toThrow(InvalidDockerImageRefError);
+  });
+
+  it("accepts a fully-qualified registry image reference", () => {
+    const cfg = baseSandboxConfig();
+    cfg.image = "registry.example.com:5000/ns/img:1.2.3";
+    expect(() => buildDockerRunArgs(baseInput({ sandboxConfig: cfg }))).not.toThrow();
   });
 
   it("emits risoluto:container_ready marker before exec in entrypoint", () => {

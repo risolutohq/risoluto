@@ -1,5 +1,6 @@
 import os from "node:os";
 
+import { assertValidDockerImageRef } from "./image-ref.js";
 import type { PathRegistry } from "../workspace/path-registry.js";
 import type { SandboxConfig } from "../core/types.js";
 
@@ -180,6 +181,7 @@ function buildEntrypointScript(egressAllowlist: string[], options?: { unsetApiKe
 
 export function buildDockerRunArgs(input: DockerRunInput): DockerRunResult {
   const { sandboxConfig, runId, workspacePath } = input;
+  assertValidDockerImageRef(sandboxConfig.image);
   const containerName = `risoluto-${runId}`;
   const cacheVolumeName = `risoluto-cache-${runId}`;
   const uid = os.userInfo().uid;

@@ -95,7 +95,7 @@ export async function createDockerSession(
     command: config.codex.command,
     workspacePath: input.workspace.path,
     archiveDir,
-    extraMountPaths: await resolveWorkspaceExtraMountPaths(input.workspace.path),
+    extraMountPaths: await resolveWorkspaceExtraMountPaths(input.workspace.path, input.workspace.gitBaseDir),
     pathRegistry: deps.pathRegistry,
     runtimeConfigToml: runtimeConfig.configToml,
     runtimeAuthJsonBase64: runtimeConfig.authJsonBase64,

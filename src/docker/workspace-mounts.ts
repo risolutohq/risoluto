@@ -1,19 +1,28 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const SENSITIVE_PATH_PREFIXES = ["/etc", "/proc", "/sys", "/dev", "/run", "/"];
-
-function isSensitivePath(p: string): boolean {
-  return SENSITIVE_PATH_PREFIXES.some((prefix) => p === prefix || p.startsWith(prefix + "/"));
-}
-
 /**
  * Returns extra host paths that must be mounted into the container for the
  * workspace to behave like it does on the host. This is primarily needed for
  * git worktrees whose `.git` file points at shared metadata outside the issue
  * workspace.
+ *
+ * The `.git`/`gitdir`/`commondir` contents are workspace-controlled and cannot
+ * be trusted to name a safe host path (NIN-242): a malicious pointer to e.g.
+ * `/home/...` must never become a container mount. The resolved directory is
+ * therefore only returned when it is the trusted base clone (`gitBaseDir`) or a
+ * path contained within it; anything outside is ignored.
  */
-export async function resolveWorkspaceExtraMountPaths(workspacePath: string): Promise<string[]> {
+export async function resolveWorkspaceExtraMountPaths(
+  workspacePath: string,
+  gitBaseDir: string | undefined,
+): Promise<string[]> {
+  // Without a trusted base clone there is no legitimate path to mount, so a
+  // workspace-controlled .git pointer is never honoured.
+  if (!gitBaseDir) {
+    return [];
+  }
+
   const gitFilePath = path.join(workspacePath, ".git");
 
   let gitPointer: string;
@@ -39,18 +48,24 @@ export async function resolveWorkspaceExtraMountPaths(workspacePath: string): Pr
   try {
     commonDir = (await readFile(path.join(gitDirPath, "commondir"), "utf8")).trim();
   } catch {
-    return isOutsideWorkspace(workspacePath, gitDirPath) && !isSensitivePath(gitDirPath) ? [gitDirPath] : [];
+    return allowedMount(gitBaseDir, gitDirPath);
   }
 
   if (!commonDir) {
-    return isOutsideWorkspace(workspacePath, gitDirPath) && !isSensitivePath(gitDirPath) ? [gitDirPath] : [];
+    return allowedMount(gitBaseDir, gitDirPath);
   }
 
   const commonDirPath = path.resolve(gitDirPath, commonDir);
-  return isOutsideWorkspace(workspacePath, commonDirPath) && !isSensitivePath(commonDirPath) ? [commonDirPath] : [];
+  return allowedMount(gitBaseDir, commonDirPath);
 }
 
-function isOutsideWorkspace(workspacePath: string, candidatePath: string): boolean {
-  const relative = path.relative(workspacePath, candidatePath);
-  return relative !== "" && relative.startsWith("..") && !path.isAbsolute(relative);
+/** Returns `[candidatePath]` only when it is contained within the trusted base. */
+function allowedMount(gitBaseDir: string, candidatePath: string): string[] {
+  return isWithinBase(gitBaseDir, candidatePath) ? [candidatePath] : [];
+}
+
+/** True when `candidatePath` is the base directory itself or nested under it. */
+function isWithinBase(baseDir: string, candidatePath: string): boolean {
+  const relative = path.relative(baseDir, candidatePath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
