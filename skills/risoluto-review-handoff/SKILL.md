@@ -41,7 +41,8 @@ Collect:
 - PRD: `docs/prds/<slug>.md`, especially User Stories, Implementation Decisions, Testing Decisions, Out of Scope;
 - wave map: `~/.risoluto/goals/<slug>/WAVES.md`;
 - Linear issues labelled `from:prd-<slug>` with descriptions, states, and acceptance criteria;
-- latest gate evidence from `~/.risoluto/goals/<slug>/NOTES.md`.
+- latest gate evidence from `~/.risoluto/goals/<slug>/NOTES.md`;
+- **ac_summary**: glob `~/.risoluto/goals/<slug>/ac-verify-*.json` (the `ac-verify.v1` files written per ticket by `/risoluto-verify-acceptance`). For each, read its `verdicts`; compute totals across all tickets — `total`, `met`, `not_met`, `unverifiable` — and the set of tickets with any `NOT_MET`. If the glob is empty, record `ac_summary: none (no cross-model acceptance checks were run)` so the gap is explicit. Read this **before** the diff: any prior `NOT_MET` is a known acceptance gap the review must confirm is resolved (or carry forward as a HIGH finding), not re-litigate from scratch.
 
 Review the branch against the PRD and issues, not just against TypeScript correctness.
 
@@ -96,6 +97,12 @@ Drop vague findings instead of handing them to the conductor.
 
 Add the same review summary as a Linear comment on the PRD's highest-level tracking issue. If no parent issue
 exists, comment on the first `from:prd-<slug>` issue and include the goal folder path.
+
+**Make the comment idempotent** (the marker convention from `/risoluto-sync`): key the marker to the integration
+state you reviewed — `<!-- risoluto:review:<slug>:<reviewed-head-sha> -->`, where `<reviewed-head-sha>` is the short
+SHA of `integration/<slug>` from Step 1. List the issue's comments first and **skip** if one already carries that
+exact marker; otherwise post with the marker as the first line. A re-review of the same integration HEAD then
+dedups, while a fresh review after more waves merge (a new HEAD) still posts its own comment.
 
 Do not fix findings. Print:
 

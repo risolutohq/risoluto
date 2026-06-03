@@ -80,6 +80,25 @@ VERDICT: BLOCK (1 NOT_MET, 1 UNVERIFIABLE) — resolve before merge
 GATE: **CLEARED** only when every criterion is MET. Any NOT_MET → **BLOCK**, listing the gaps. Surface
 UNVERIFIABLE criteria for the operator to judge.
 
+Also persist the verdict so a goal-level review can roll it up. Write `ac-verify.v1` JSON to
+`~/.risoluto/goals/<slug>/ac-verify-<ticket>.json` (create the dir if absent; `<slug>` is the
+`from:prd-<slug>` slug from Step 1):
+
+```json
+{
+  "contract": "ac-verify.v1",
+  "ticket": "<ticket>",
+  "slug": "<slug>",
+  "model": "<provider/model>",
+  "gate": "CLEARED | BLOCK",
+  "checked_at": "<ISO8601 UTC, from `date -u +%Y-%m-%dT%H:%M:%SZ`>",
+  "verdicts": [{ "n": 1, "criterion": "...", "verdict": "MET | NOT_MET | UNVERIFIABLE", "proof_or_gap": "..." }]
+}
+```
+
+Overwrite any prior file for the same ticket (idempotent — the latest run is the truth). This file is the
+input `/risoluto-review-handoff` Step 1 aggregates into its `ac_summary`.
+
 ### Step 4 — Record (optional, idempotent)
 
 Offer to post the verdict as a Linear comment on the ticket using the marker convention

@@ -6,15 +6,16 @@ each using its `problem` + `fix`; it treats every `HIGH` as merge-blocking.
 
 ## Fields
 
-| Field         | Type   | Meaning                                            |
-| ------------- | ------ | -------------------------------------------------- |
-| `contract`    | string | always `"review-handoff.v1"`                       |
-| `slug`        | string | the PRD slug reviewed                              |
-| `branch`      | string | the branch reviewed (`integration/<slug>`)         |
-| `base`        | string | what it was diffed against (`origin/master`)       |
-| `reviewed_by` | string | the reviewing model/agent (e.g. `claude-opus-4.8`) |
-| `summary`     | object | `{ high: int, med: int, nit: int }`                |
-| `findings`    | array  | the prioritized findings (below)                   |
+| Field         | Type           | Meaning                                                                                                                                          |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `contract`    | string         | always `"review-handoff.v1"`                                                                                                                     |
+| `slug`        | string         | the PRD slug reviewed                                                                                                                            |
+| `branch`      | string         | the branch reviewed (`integration/<slug>`)                                                                                                       |
+| `base`        | string         | what it was diffed against (`origin/master`)                                                                                                     |
+| `reviewed_by` | string         | the reviewing model/agent (e.g. `claude-opus-4.8`)                                                                                               |
+| `summary`     | object         | `{ high: int, med: int, nit: int }`                                                                                                              |
+| `ac_summary`  | object \| null | rollup of the per-ticket `ac-verify.v1` files: `{ total, met, not_met, unverifiable, blocking_tickets: string[] }`; `null` if no checks were run |
+| `findings`    | array          | the prioritized findings (below)                                                                                                                 |
 
 ### `findings[]`
 
@@ -42,6 +43,7 @@ Severity is a contract: **HIGH** = correctness bug / unmet acceptance criterion 
   "base": "origin/master",
   "reviewed_by": "claude-opus-4-8",
   "summary": { "high": 2, "med": 1, "nit": 1 },
+  "ac_summary": { "total": 8, "met": 7, "not_met": 1, "unverifiable": 0, "blocking_tickets": ["NIN-220"] },
   "findings": [
     {
       "id": "H1",
