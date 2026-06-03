@@ -1,4 +1,4 @@
-import type { ServiceConfig, WorkflowDefinition } from "../core/types.js";
+import type { ServiceConfig, WorkflowRuntimeConfig } from "../core/types.js";
 import { asRecord } from "./coercion.js";
 import {
   deriveAgentConfig,
@@ -66,7 +66,10 @@ function createDerivationInput(mergedConfig: Record<string, unknown>): ConfigDer
   };
 }
 
-export function deriveServiceConfig(workflow: WorkflowDefinition, options?: DeriveServiceConfigOptions): ServiceConfig {
+export function deriveServiceConfig(
+  workflow: WorkflowRuntimeConfig,
+  options?: DeriveServiceConfigOptions,
+): ServiceConfig {
   const mergedConfig = options?.mergedConfigMap ?? workflow.config;
   const secretResolver = options?.secretResolver;
   const input = createDerivationInput(mergedConfig);

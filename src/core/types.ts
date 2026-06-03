@@ -95,7 +95,7 @@ export type {
   TriggerConfig,
 } from "./notification-types.js";
 
-export interface WorkflowDefinition {
+export interface WorkflowRuntimeConfig {
   config: Record<string, unknown>;
   promptTemplate: string;
 }
