@@ -99,6 +99,20 @@ function verificationArtifact(decision: string): Readonly<Record<string, unknown
   };
 }
 
+function passingValidationResult(): Readonly<Record<string, unknown>> {
+  return {
+    version: 1,
+    workflowRunId,
+    createdAt,
+    profileId: "node-pnpm-standard",
+    failureHandling: "stop_on_first",
+    status: "passed",
+    checks: [
+      { id: "test", command: "pnpm test", status: "passed", exitCode: 0, stdout: "", stderr: "", durationMs: 1 },
+    ],
+  };
+}
+
 describe("executeWorkflowDefinition", () => {
   it("executes planner, implementer, and reviewer in DAG order over typed artifacts", async () => {
     const roleOrder: string[] = [];
@@ -499,6 +513,42 @@ describe("executeWorkflowDefinition", () => {
     expect(result.status).toBe("done");
     // not_satisfied loops back to the implement state: implement → review → verify re-run, then satisfied.
     expect(roleRuns).toEqual(["planner", "implementer", "reviewer", "verifier", "implementer", "reviewer", "verifier"]);
+  });
+
+  it("re-runs run-validation-profile on a verifier-driven retry instead of reusing stale validation (NIN-261)", async () => {
+    let validationRuns = 0;
+    let verifyCount = 0;
+    const base = createVerifierDefinition();
+    const definition: ResolvedWorkflowDefinition = {
+      ...base,
+      actions: ["run-validation-profile"],
+      // The implement state's boundary runs validation; gating on validation-passed makes the action
+      // fire in the before_state_gates phase that a verifier retry re-enters.
+      states: base.states.map((state) =>
+        state.id === "implement" ? { ...state, gates: ["validation-passed"] } : state,
+      ),
+    };
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async ({ role }) => {
+        if (role.id === "verifier") {
+          verifyCount += 1;
+          return { "verification.v1": verificationArtifact(verifyCount >= 2 ? "satisfied" : "not_satisfied") };
+        }
+        return roleOutput(role.id);
+      },
+      runAction: async () => {
+        validationRuns += 1;
+        return { "validation_result.v1": passingValidationResult() };
+      },
+    });
+
+    expect(result.status).toBe("done");
+    // Global actionId dedupe ran validation exactly once; scoping by attempt re-runs it after the retry.
+    expect(validationRuns).toBeGreaterThanOrEqual(2);
   });
 
   it("blocks once the verifier retry budget is exhausted (default one retry) (NIN-201)", async () => {

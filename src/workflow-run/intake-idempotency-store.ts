@@ -41,11 +41,19 @@ export async function readDeliveryMapping(input: {
   return readMapping(deliveryMappingPath(input.location, input.provider, deliveryId));
 }
 
+/**
+ * Predicate that reports whether an existing mapping is stale — i.e., it points to a run record
+ * that never landed because intake crashed between claiming the mapping and writing the run. A
+ * stale mapping is overwritten and re-claimed instead of poisoning future duplicate intake (NIN-261).
+ */
+export type StaleMappingRecovery = (mapping: WorkflowRunIntakeMapping) => Promise<boolean>;
+
 export async function claimExternalMapping(input: {
   readonly location: WorkflowRunArchiveLocation;
   readonly externalObject: WorkflowRunIntakeExternalObject | null;
   readonly workflowRunId: string;
   readonly ruleId: string | null;
+  readonly recoverStaleMapping?: StaleMappingRecovery;
 }): Promise<WorkflowRunIntakeClaimResult> {
   if (!input.externalObject) {
     return { status: "claimed" };
@@ -55,6 +63,7 @@ export async function claimExternalMapping(input: {
     input.externalObject,
     input.workflowRunId,
     input.ruleId,
+    input.recoverStaleMapping,
   );
 }
 
@@ -64,6 +73,7 @@ export async function claimDeliveryMapping(input: {
   readonly deliveryId?: string | null;
   readonly workflowRunId: string;
   readonly ruleId: string | null;
+  readonly recoverStaleMapping?: StaleMappingRecovery;
 }): Promise<WorkflowRunIntakeClaimResult> {
   const deliveryId = input.deliveryId?.trim();
   if (!deliveryId) {
@@ -74,6 +84,7 @@ export async function claimDeliveryMapping(input: {
     { provider: input.provider, id: deliveryId },
     input.workflowRunId,
     input.ruleId,
+    input.recoverStaleMapping,
   );
 }
 
@@ -93,18 +104,27 @@ async function claimMapping(
   key: { readonly provider: string; readonly id: string },
   workflowRunId: string,
   ruleId: string | null,
+  recoverStaleMapping?: StaleMappingRecovery,
 ): Promise<WorkflowRunIntakeClaimResult> {
   await mkdir(path.dirname(filePath), { recursive: true });
   const record = { provider: key.provider, externalObjectId: key.id, workflowRunId, ruleId };
+  const payload = `${JSON.stringify(record, null, 2)}\n`;
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await writeFile(filePath, `${JSON.stringify(record, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      await writeFile(filePath, payload, { encoding: "utf8", flag: "wx" });
       return { status: "claimed" };
     } catch (error) {
       if (isErrorCode(error, "EEXIST")) {
         const mapping = await readMapping(filePath);
         if (mapping) {
+          // A mapping whose run record never landed (crash between claim and run write) would
+          // otherwise poison every future duplicate intake with an ENOENT loop. Overwrite it and
+          // claim afresh for this run instead (NIN-261).
+          if (recoverStaleMapping && (await recoverStaleMapping(mapping))) {
+            await writeFile(filePath, payload, { encoding: "utf8", flag: "w" });
+            return { status: "claimed" };
+          }
           return { status: "existing", mapping };
         }
         lastError = error;

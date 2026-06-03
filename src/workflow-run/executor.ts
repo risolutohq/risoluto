@@ -67,6 +67,8 @@ interface WorkflowExecutionState {
   readonly statesVisited: string[];
   readonly roleExecutions: string[];
   readonly actionExecutions: string[];
+  /** Phase/state/attempt-scoped dedupe ledger so a verifier retry re-runs validation (NIN-261). */
+  readonly actionDedupeKeys: string[];
   readonly events: WorkflowExecutorEvent[];
 }
 
@@ -80,7 +82,7 @@ export async function executeWorkflowDefinition(
   let verifierRetryAttempts = 0;
 
   await recordWorkflowRunStatus(input, "running");
-  await executeConfiguredWorkflowActions({ ...input, ...state, phase: "before_roles" });
+  await executeConfiguredWorkflowActions({ ...input, ...state, phase: "before_roles", attempt: 0 });
   let index = 0;
   while (index < orderedRoles.length) {
     const role = orderedRoles[index];
@@ -105,7 +107,7 @@ export async function executeWorkflowDefinition(
       }
     }
     if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
-      const gateResult = await evaluateGatesAfterRole(input, role, state, gateRetryAttempts);
+      const gateResult = await evaluateGatesAfterRole(input, role, state, gateRetryAttempts, verifierRetryAttempts);
       gateRetryAttempts = gateResult.retryAttemptsUsed;
       state.events.push(...gateResult.events);
       if (gateResult.failed) {
@@ -115,7 +117,7 @@ export async function executeWorkflowDefinition(
     index += 1;
   }
 
-  await executeConfiguredWorkflowActions({ ...input, ...state, phase: "after_roles" });
+  await executeConfiguredWorkflowActions({ ...input, ...state, phase: "after_roles", attempt: verifierRetryAttempts });
   return finishWorkflowExecution(input, "done", state);
 }
 
@@ -164,6 +166,7 @@ function createWorkflowExecutionState(input: ExecuteWorkflowDefinitionInput): Wo
     statesVisited: [],
     roleExecutions: [],
     actionExecutions: [],
+    actionDedupeKeys: [],
     events: [],
   };
 }
@@ -173,6 +176,7 @@ async function evaluateGatesAfterRole(
   role: ResolvedWorkflowRole,
   executionState: WorkflowExecutionState,
   retryAttemptsUsed: number,
+  verifierRetryAttempts: number,
 ): Promise<{
   readonly events: readonly WorkflowExecutorEvent[];
   readonly failed: boolean;
@@ -183,6 +187,8 @@ async function evaluateGatesAfterRole(
     ...input,
     artifacts: executionState.artifacts,
     actionExecutions: executionState.actionExecutions,
+    actionDedupeKeys: executionState.actionDedupeKeys,
+    attempt: verifierRetryAttempts,
     phase: "before_state_gates",
     state,
   });
