@@ -72,7 +72,8 @@ node skills/risoluto-grill/scripts/preload.mjs <target-slug>
   "target": "<slug>",
   "candidates": [{ "title": "...", "summary": "...", "job": "cost-control", "flag": "new", "merge_target_slug": null }],
   "roadmap_rows": [{ "slug": "...", "item": "...", "status": "..." }],
-  "features_spine": [{ "line": 42, "text": "...", "status": "active" }]
+  "features_spine": [{ "line": 42, "text": "...", "status": "active" }],
+  "stale_dedup": { "last_researched_sha": "abc123", "commits_since": 7, "capped": false, "note": "..." }
 }
 ```
 
@@ -82,8 +83,9 @@ node skills/risoluto-grill/scripts/preload.mjs <target-slug>
   - `status: "active"` → Risoluto **ships** this. The "why us" / saturation anchor: if a candidate duplicates an active entry, it's `skip`/`merge` territory, and for a `differentiator` it's the bar to clear.
   - `status: "removed"` → a `⚠️ Removed` tombstone: Risoluto **built this and deliberately dropped it**. This is the _opposite_ of shipped — never read it as "covered." It's a strong prior _against_ re-admitting: the candidate must clear a higher bar (what changed since we killed it? why won't it be removed again?). The tombstone's `> REMOVED:` reason names why it went.
   - `status: "meta"` → the hit is in the `## Run history` ledger or `## Changed since last spine` diff, not a feature entry. Treat as noise unless it adds context.
+- `stale_dedup` — how far the roadmap/features baseline has drifted since this target was last researched. `commits_since` counts main-repo commits between `last_researched_sha` and `HEAD` (capped at 100; `capped: true` means 100+). **If `commits_since` is non-zero (or `null` — baseline unknown), the dedup flags on the candidates were computed against an older roadmap and may be stale: re-check each `merge`/`supersede`/`skip` against the live `roadmap_rows` before trusting it.** Zero means the dedup is fresh.
 
-The script also writes a one-line summary to **stderr** (`loaded <slug> — N candidates (M surviving), R roadmap rows, K features-spine hits (A active, T tombstoned)`). Surface that line to Omer before grilling — do not dump the raw bundle. Consume the stdout JSON directly; you do not need to re-read or re-parse the three files.
+The script also writes a one-line summary to **stderr** (`loaded <slug> — N candidates (M surviving), R roadmap rows, K features-spine hits (A active, T tombstoned) — <stale_dedup note>`). Surface that line to Omer before grilling — do not dump the raw bundle. Consume the stdout JSON directly; you do not need to re-read or re-parse the three files.
 
 ### Step 2 — Grill each surviving candidate
 
