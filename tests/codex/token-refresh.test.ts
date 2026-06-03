@@ -227,4 +227,39 @@ describe("refreshAccessToken", () => {
     expect(result.tokens.account_id).toBe("acc-123");
     expect(result.tokens.access_token).toBe("refreshed");
   });
+
+  it("rejects a malformed refresh response and does not overwrite auth.json", async () => {
+    const dir = await createTempDir();
+    const authPath = path.join(dir, "auth.json");
+    const original = buildNestedAuthJson({ expired: "2020-01-01T00:00:00Z" });
+    await writeFile(authPath, original, "utf8");
+
+    // 200 OK but missing access_token / token_type / expires_in.
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ refresh_token: "rt-new" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(refreshAccessToken(authPath)).rejects.toThrow("malformed response");
+
+    // auth.json must be untouched by a rejected refresh.
+    expect(await readFile(authPath, "utf8")).toBe(original);
+  });
+
+  it("rejects when expires_in is not a finite number", async () => {
+    const dir = await createTempDir();
+    const authPath = path.join(dir, "auth.json");
+    await writeFile(authPath, buildNestedAuthJson({ expired: "2020-01-01T00:00:00Z" }), "utf8");
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ access_token: "a", token_type: "Bearer", expires_in: "soon" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await expect(refreshAccessToken(authPath)).rejects.toThrow("malformed response");
+  });
 });

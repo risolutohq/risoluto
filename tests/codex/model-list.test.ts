@@ -219,30 +219,32 @@ describe("fetchCodexModels", () => {
     });
   });
 
-  describe("timeout fallback", () => {
-    it("falls back to static model list when codex takes too long", async () => {
+  describe("timeout surfaces to caller", () => {
+    it("rejects instead of masking a timeout as a static list", async () => {
       vi.useFakeTimers();
       const child = makeFakeChild();
       mockSpawn.mockReturnValue(child);
 
       const fetchFn = await freshFetchCodexModels();
       const promise = fetchFn();
+      const settled = promise.then(
+        () => ({ ok: true }) as const,
+        (error: unknown) => ({ ok: false, error }) as const,
+      );
 
       // Advance past the 15s timeout
       vi.advanceTimersByTime(16_000);
 
-      const result = await promise;
-
-      expect(result.length).toBeGreaterThan(0);
-      for (const entry of result) {
-        expect(entry.displayName).toBe(entry.id);
-        expect(entry.isDefault).toBe(false);
+      const outcome = await settled;
+      expect(outcome.ok).toBe(false);
+      if (!outcome.ok) {
+        expect(String((outcome.error as Error).message)).toContain("timed out");
       }
     });
   });
 
-  describe("process exit fallback", () => {
-    it("falls back to static list when codex exits with non-zero code", async () => {
+  describe("process exit surfaces to caller", () => {
+    it("rejects when codex exits with non-zero code", async () => {
       const child = makeFakeChild();
       mockSpawn.mockReturnValue(child);
 
@@ -251,11 +253,21 @@ describe("fetchCodexModels", () => {
 
       child.emit("exit", 1);
 
-      const result = await promise;
-      expect(result.length).toBeGreaterThan(0);
-      for (const entry of result) {
-        expect(entry.displayName).toBe(entry.id);
-      }
+      await expect(promise).rejects.toThrow(/before responding/);
+    });
+  });
+
+  describe("malformed response surfaces to caller", () => {
+    it("rejects when the model/list result is missing the data array", async () => {
+      const child = makeFakeChild();
+      mockSpawn.mockReturnValue(child);
+
+      const fetchFn = await freshFetchCodexModels();
+      const promise = fetchFn();
+
+      child.stdout.emit("data", Buffer.from(JSON.stringify({ id: 1, result: {} }) + "\n"));
+
+      await expect(promise).rejects.toThrow(/missing data array/);
     });
   });
 

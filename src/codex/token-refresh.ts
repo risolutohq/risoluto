@@ -41,6 +41,35 @@ interface TokenErrorResponse {
 }
 
 /**
+ * Validates that a parsed token-refresh payload has the required shape before it
+ * is trusted and persisted. A malformed response (missing/empty access_token,
+ * non-string token_type, or non-finite expires_in) is rejected rather than
+ * written to auth.json.
+ */
+function assertTokenRefreshResponse(value: unknown): TokenRefreshResponse {
+  const malformed = (): never => {
+    throw new TokenRefreshError(
+      "auth_token_expired",
+      "Token refresh returned a malformed response. Please re-authenticate via the setup wizard.",
+    );
+  };
+  if (typeof value !== "object" || value === null) {
+    malformed();
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.access_token !== "string" || record.access_token.length === 0) {
+    malformed();
+  }
+  if (typeof record.token_type !== "string" || record.token_type.length === 0) {
+    malformed();
+  }
+  if (typeof record.expires_in !== "number" || !Number.isFinite(record.expires_in) || record.expires_in < 0) {
+    malformed();
+  }
+  return record as unknown as TokenRefreshResponse;
+}
+
+/**
  * Check whether the auth token in the given JSON string is expired
  * or will expire within the safety margin.
  *
@@ -177,15 +206,16 @@ export async function refreshAccessToken(authJsonPath: string): Promise<string> 
     );
   }
 
-  let tokenData: TokenRefreshResponse;
+  let parsed: unknown;
   try {
-    tokenData = JSON.parse(responseText) as TokenRefreshResponse;
+    parsed = JSON.parse(responseText);
   } catch {
     throw new TokenRefreshError(
       "auth_token_expired",
       "Token refresh returned invalid JSON. Please re-authenticate via the setup wizard.",
     );
   }
+  const tokenData = assertTokenRefreshResponse(parsed);
   const updatedAuth = buildRefreshedAuthRecord({ ...auth }, tokens, tokenData);
 
   const updatedJson = JSON.stringify(updatedAuth, null, 2);
