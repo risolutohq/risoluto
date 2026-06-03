@@ -1,8 +1,7 @@
-import { homedir } from "node:os";
-import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { openWorkflowRun, type WorkflowRunWorkerProcessReference } from "../workflow-run/artifacts.js";
+import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
 
 export async function recordWorkerProcessCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -40,18 +39,6 @@ export async function recordWorkerProcessCommand(argv: string[]): Promise<number
     );
   }
   return 0;
-}
-
-function resolveDataDir(value: string | undefined): string {
-  return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
-}
-
-function requireNonEmpty(value: string | undefined, flag: string): string {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    throw new TypeError(`${flag} is required`);
-  }
-  return trimmed;
 }
 
 function parseWorkerProcessStatus(value: string): WorkflowRunWorkerProcessReference["status"] {

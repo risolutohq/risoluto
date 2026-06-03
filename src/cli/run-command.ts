@@ -1,9 +1,8 @@
-import { homedir } from "node:os";
-import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { startAndDriveRunCommand } from "./run-start-command.js";
+import { resolveDataDir } from "./cli-helpers.js";
 
 export async function tryHandleRunCommand(argv: string[]): Promise<number | null> {
   if (argv[0] !== "run") {
@@ -41,10 +40,6 @@ async function workflowRunStatusCommand(argv: string[]): Promise<number> {
     console.log(`Workflow Run ${workflowRun.id} status: ${workflowRun.status}`);
   }
   return 0;
-}
-
-function resolveDataDir(value: string | undefined): string {
-  return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
 }
 
 function requireRunId(value: string | undefined): string {

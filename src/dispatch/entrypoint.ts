@@ -23,6 +23,7 @@ const shutdown = () => {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({}, "Shutting down data plane server...");
+  app.drain();
   server.close(() => {
     logger.info({}, "Data plane server closed");
     process.exit(0);

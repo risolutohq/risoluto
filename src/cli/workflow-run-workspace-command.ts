@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -8,6 +7,7 @@ import {
   type WorkflowRunWorkspaceTerminalStatus,
   type WorktreePullRequestState,
 } from "../workflow-run/workspace-lifecycle.js";
+import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
 
 export async function recordWorkspaceLifecycleCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -107,10 +107,6 @@ export async function classifyWorkspaceRetentionCommand(argv: string[]): Promise
   return 0;
 }
 
-function resolveDataDir(value: string | undefined): string {
-  return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
-}
-
 function parseRetentionDays(value: string | undefined): number {
   if (value === undefined || value.trim() === "") {
     return 7;
@@ -134,14 +130,6 @@ function parseRunStatus(value: string): WorkflowRunWorkspaceTerminalStatus {
     return value;
   }
   throw new TypeError("--run-status must be done, blocked, cancelled, or failed");
-}
-
-function requireNonEmpty(value: string | undefined, flag: string): string {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    throw new TypeError(`${flag} is required`);
-  }
-  return trimmed;
 }
 
 function parseWorkspaceCleanupResult(value: string): "removed" | "kept" {

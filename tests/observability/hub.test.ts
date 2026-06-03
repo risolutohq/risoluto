@@ -99,6 +99,42 @@ describe("ObservabilityHub", () => {
     expect(summary.rawMetrics).toContain("risoluto_http_requests_total 1");
   });
 
+  it("deduplicates snapshots by component name keeping the most recent updatedAt", async () => {
+    const archiveDir = await createTempDir();
+    const hub = createObservabilityHub({ archiveDir });
+    const root = hub.snapshotRoot;
+
+    // Write a stale disk snapshot for "api" component tagged with the current PID
+    // (so isProcessAlive passes) but with an old updatedAt
+    const staleSnapshot = {
+      component: "api",
+      pid: process.pid,
+      updatedAt: "2026-01-01T00:00:00Z",
+      metrics: {},
+      health: {},
+      traces: [],
+      sessions: {},
+    };
+    await writeComponentSnapshot(root, staleSnapshot);
+
+    // Register an in-memory observer for the same component — it will have a later timestamp
+    const observer = hub.getComponent("api");
+    observer.setHealth({ surface: "api", status: "ok" });
+    await observer.drain();
+
+    const summary = await hub.aggregate({
+      runtimeState: {},
+      rawMetrics: "",
+      attemptStoreConfigured: false,
+    });
+
+    // Only one component "api" should appear despite disk + memory both having it
+    const apiComponents = summary.components.filter((c) => c.component === "api");
+    expect(apiComponents).toHaveLength(1);
+    // The in-memory snapshot should win (it was set just now, so later than 2026-01-01)
+    expect(Date.parse(apiComponents[0]!.updatedAt)).toBeGreaterThan(Date.parse("2026-01-01T00:00:00Z"));
+  });
+
   it("ignores snapshots from dead processes and prunes them from disk", async () => {
     const archiveDir = await createTempDir();
     const root = path.join(archiveDir, "observability");

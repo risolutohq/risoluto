@@ -39,7 +39,8 @@ export async function getContainerStats(containerName: string): Promise<Containe
       netIO: parsed.net ?? "0B / 0B",
       pids: parsed.pids ?? "0",
     };
-  } catch {
+  } catch (err) {
+    console.debug("[docker/stats] getContainerStats failed:", err);
     return null;
   }
 }

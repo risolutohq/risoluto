@@ -7,6 +7,7 @@ import {
   createWorkflowRunAgentDispatch,
 } from "../workflow-run/agent-role-dispatch.js";
 import type { WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
+import { LIVE_RUN_START_ENV } from "./constants.js";
 
 /**
  * Injection seam for the agent-dispatch composition in `run start`. Production passes nothing; the
@@ -23,9 +24,6 @@ export interface RunStartDispatchDeps {
   /** The run's abort signal, threaded from the CLI so SIGINT/SIGTERM cancels the active agent session. */
   readonly signal?: AbortSignal;
 }
-
-/** Env var that opts the production CLI into agent dispatch instead of the honest block. */
-const LIVE_RUN_START_ENV = "RISOLUTO_LIVE_RUN_START";
 
 /**
  * Resolve the role-dispatch function for a `run start` invocation.

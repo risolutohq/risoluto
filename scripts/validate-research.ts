@@ -62,7 +62,14 @@ async function safeReaddir(dir: string): Promise<string[]> {
 
 async function collectTargetFiles(): Promise<FileToValidate[]> {
   const targetsDir = path.join(RESEARCH_ROOT, "targets");
-  const slugs = await safeReaddir(targetsDir);
+  let slugEntries: import("node:fs").Dirent[];
+  try {
+    slugEntries = await readdir(targetsDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const slugs = slugEntries.filter((e) => e.isDirectory()).map((e) => e.name);
   const files: FileToValidate[] = [];
   for (const slug of slugs) {
     const slugDir = path.join(targetsDir, slug);

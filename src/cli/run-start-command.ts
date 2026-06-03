@@ -1,4 +1,3 @@
-import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -21,9 +20,8 @@ import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
 import { resolveWorkflowRunIntake, type ResolvedWorkflowRunIntake } from "./workflow-run-intake.js";
 import { resolveDispatchRole } from "./run-start-dispatch.js";
 import { composeLiveDispatch, type ComposedLiveDispatch } from "./run-start-live-dispatch.js";
-
-/** Env var that opts the production CLI into the live agent-dispatch composition (real Codex spend). */
-const LIVE_RUN_START_ENV = "RISOLUTO_LIVE_RUN_START";
+import { LIVE_RUN_START_ENV } from "./constants.js";
+import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
 
 /**
  * Injection seam: production passes nothing, so `run start` drives the engine through the real agent
@@ -218,20 +216,8 @@ function createDefaultWorkflowBudget(): WorkflowBudgetPolicy {
   };
 }
 
-function resolveDataDir(value: string | undefined): string {
-  return path.resolve(value ?? process.env.DATA_DIR ?? path.join(homedir(), ".risoluto"));
-}
-
 function resolveWorkflowDir(value: string | undefined): string {
   return value?.trim() ? path.resolve(value.trim()) : path.resolve(".risoluto", "workflows");
-}
-
-function requireNonEmpty(value: string | undefined, flag: string): string {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    throw new TypeError(`${flag} is required`);
-  }
-  return trimmed;
 }
 
 const PUBLISH_MODES = ["auto_merge", "draft", "incomplete_draft", "none", "ready"] as const;

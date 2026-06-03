@@ -358,6 +358,7 @@ class SetupServiceImpl implements SetupPort {
       return { status: "error", error: this.activePkceSession.error };
     }
     if (this.activePkceSession.complete) {
+      this.activePkceSession = null;
       return { status: "complete" };
     }
     if (this.activePkceSession.authCode) {

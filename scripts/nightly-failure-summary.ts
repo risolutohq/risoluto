@@ -112,8 +112,10 @@ function collectFailingTests(): NightlyFailingTest[] {
   for (const path of reportPaths()) {
     try {
       failing.push(...collectFailingTestsFromReport(path));
-    } catch {
-      // Ignore unreadable reports so intake can still proceed with partial evidence.
+    } catch (e) {
+      process.stderr.write(
+        `Warning: skipping unreadable report "${path}": ${e instanceof Error ? e.message : String(e)}\n`,
+      );
     }
   }
 
