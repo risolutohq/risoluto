@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -241,7 +241,17 @@ describe("createServices integration", () => {
   // and asserts the accepted run is actually driven to a real blocked handoff through the same engine
   // `run start` uses. Deleting the subscriber inside createServices makes this test time out.
   it("daemon subscriber drives an accepted run to a real blocked handoff", async () => {
-    const archiveDir = await createTempDir();
+    // createServices derives workflowDir as dirname(archiveDir)/workflows (mirrors production, where
+    // archiveDir is dataDir/archives). Seed the real default workflow there so the driver resolves it.
+    const baseDir = await createTempDir();
+    const archiveDir = path.join(baseDir, "archives");
+    await mkdir(archiveDir, { recursive: true });
+    const workflowDir = path.join(baseDir, "workflows");
+    await mkdir(workflowDir, { recursive: true });
+    await copyFile(
+      path.resolve(".risoluto", "workflows", `${DEFAULT_WORKFLOW_DEFINITION_ID}.yaml`),
+      path.join(workflowDir, `${DEFAULT_WORKFLOW_DEFINITION_ID}.yaml`),
+    );
     const logger = createMockLogger();
     const result = await createServices(
       createConfigStore(createServiceConfig(archiveDir)),
