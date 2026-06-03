@@ -348,6 +348,29 @@ describe("createDockerSession", () => {
     );
   });
 
+  it("spawns the docker child with a whitelisted env, not the full host env (NIN-256)", async () => {
+    process.env.NIN256_LEAK_SECRET = "should-not-leak";
+    try {
+      const mainChild = makeFakeChild();
+      const fakeSpawn = setupSpawnMock(mainChild);
+      const deps = makeDeps({ spawnProcess: fakeSpawn as unknown as typeof import("node:child_process").spawn });
+
+      await createDockerSession(makeConfig(), makeInput(), deps, makeTurnState());
+
+      const spawnEnv = fakeSpawn.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv | undefined;
+      expect(spawnEnv).toBeDefined();
+      // An unrelated host secret must not be inherited; provider secrets are injected as
+      // -e NAME=value args by buildDockerRunArgs instead.
+      expect(spawnEnv?.NIN256_LEAK_SECRET).toBeUndefined();
+      expect(spawnEnv).not.toBe(process.env);
+      if (process.env.PATH) {
+        expect(spawnEnv?.PATH).toBe(process.env.PATH);
+      }
+    } finally {
+      delete process.env.NIN256_LEAK_SECRET;
+    }
+  });
+
   it("uses precomputedRuntimeConfig when provided", async () => {
     const { prepareCodexRuntimeConfig } = await import("../../src/codex/runtime-config.js");
 
@@ -542,6 +565,35 @@ describe("abort signal wiring", () => {
 
     expect(session.connection.close).toHaveBeenCalled();
     expect(mocks.stopContainer).toHaveBeenCalledWith("risoluto-MT-42-123", 5);
+  });
+
+  it("removes the container and cache volume exactly once after abort, idempotent with cleanup (NIN-256)", async () => {
+    const mainChild = makeFakeChild();
+    const fakeSpawn = setupSpawnMock(mainChild);
+    const controller = new AbortController();
+    const deps = makeDeps({ spawnProcess: fakeSpawn as unknown as typeof import("node:child_process").spawn });
+
+    const session = await createDockerSession(
+      makeConfig(),
+      makeInput({ signal: controller.signal }),
+      deps,
+      makeTurnState(),
+    );
+
+    // Resolve exitPromise so teardown's stop→exit→remove race completes promptly.
+    mainChild.emit("exit", 0, null);
+    controller.abort();
+    // Allow the async abort IIFE (interrupt + full teardown) to flush.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Abort now runs the full teardown — container + cache volume removed (old abort path leaked them).
+    expect(mocks.removeContainer).toHaveBeenCalledTimes(1);
+    expect(mocks.removeVolume).toHaveBeenCalledTimes(1);
+
+    // A later cleanup() is a no-op — teardown already ran, so nothing is removed twice.
+    await session.cleanup(makeConfig(), controller.signal);
+    expect(mocks.removeContainer).toHaveBeenCalledTimes(1);
+    expect(mocks.removeVolume).toHaveBeenCalledTimes(1);
   });
 });
 

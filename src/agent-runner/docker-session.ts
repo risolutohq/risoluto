@@ -33,6 +33,30 @@ function parsePercent(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// The docker CLI child only needs the variables required to locate the binary and reach
+// the daemon. Provider secrets are injected explicitly as `-e NAME=value` args by
+// buildDockerRunArgs, so the child must NOT inherit the full host env (NIN-256).
+const DOCKER_CLI_ENV_ALLOWLIST = [
+  "PATH",
+  "HOME",
+  "DOCKER_HOST",
+  "DOCKER_CONFIG",
+  "DOCKER_CERT_PATH",
+  "DOCKER_TLS_VERIFY",
+  "XDG_RUNTIME_DIR",
+] as const;
+
+function buildDockerCliEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const name of DOCKER_CLI_ENV_ALLOWLIST) {
+    const value = process.env[name];
+    if (value !== undefined) {
+      env[name] = value;
+    }
+  }
+  return env;
+}
+
 export interface DockerSessionDeps {
   archiveDir?: string;
   pathRegistry?: PathRegistry;
@@ -136,7 +160,7 @@ export async function createDockerSession(
   }
 
   const child: ChildProcessWithoutNullStreams = spawnProcess(docker.program, docker.args, {
-    env: process.env,
+    env: buildDockerCliEnv(),
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -160,7 +184,10 @@ function buildDockerSessionObject(
   const containerName = docker.containerName;
   const cacheVolumeName = docker.cacheVolumeName;
 
-  let teardownStarted = false;
+  // One idempotent teardown shared by the abort and normal-cleanup paths. Guards against
+  // double-run so the container + cache volume are removed exactly once, and runs in full
+  // even after an abort (the old abort path left the timer/container/volume behind).
+  let teardownDone = false;
 
   // Placeholder getter — setupConnection replaces this with one that closes
   // over the real mutable fatalFailure inside the connection's request
@@ -179,8 +206,7 @@ function buildDockerSessionObject(
     inspectRunning: helpers.inspectRunning,
     abortHandler: () => {
       void (async () => {
-        if (teardownStarted) return;
-        teardownStarted = true;
+        if (teardownDone) return;
         if (session.threadId && session.turnId) {
           const interrupted = await session.connection.interruptTurn(session.threadId, session.turnId, 3000);
           if (interrupted) {
@@ -188,8 +214,7 @@ function buildDockerSessionObject(
             await new Promise((resolve) => setTimeout(resolve, 1000));
           }
         }
-        session.connection.close();
-        await stopContainer(containerName, 5).catch(() => undefined);
+        await teardown();
       })();
     },
     statsInterval: null,
@@ -207,25 +232,33 @@ function buildDockerSessionObject(
       }
     },
     cleanup: async (cfg: ServiceConfig, signal: AbortSignal) => {
-      if (teardownStarted) return;
-      teardownStarted = true;
-      if (session.statsInterval) clearInterval(session.statsInterval);
-      signal.removeEventListener("abort", session.abortHandler);
+      if (teardownDone) return;
       if (!signal.aborted && cfg.codex.drainTimeoutMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, cfg.codex.drainTimeoutMs));
       }
-      session.connection.close();
-      try {
-        await stopContainer(containerName, 5);
-        await Promise.race([session.exitPromise, new Promise((resolve) => setTimeout(resolve, 5000))]).catch(
-          () => undefined,
-        );
-        await removeContainer(containerName);
-      } finally {
-        // Always reclaim the cache volume even if stop/remove throws, or it leaks.
-        await removeVolume(cacheVolumeName);
-      }
+      await teardown();
     },
+  };
+
+  // Clears the stats timer + abort listener, closes the connection, and removes the
+  // container and cache volume — exactly once. Every removal is best-effort (logged
+  // failures don't reject the attempt) so a Docker cleanup error can't fail the run, and
+  // the cache volume is always reclaimed even when stop/remove throws (NIN-256).
+  const teardown = async (): Promise<void> => {
+    if (teardownDone) return;
+    teardownDone = true;
+    if (session.statsInterval) clearInterval(session.statsInterval);
+    input.signal.removeEventListener("abort", session.abortHandler);
+    session.connection.close();
+    try {
+      await stopContainer(containerName, 5).catch(() => undefined);
+      await Promise.race([session.exitPromise, new Promise((resolve) => setTimeout(resolve, 5000))]).catch(
+        () => undefined,
+      );
+      await removeContainer(containerName).catch(() => undefined);
+    } finally {
+      await removeVolume(cacheVolumeName).catch(() => undefined);
+    }
   };
 
   input.signal.addEventListener("abort", session.abortHandler, { once: true });
