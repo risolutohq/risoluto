@@ -28,7 +28,7 @@ form. Decisions in SPEC §2–§8 are **locked** — follow them, don't re-litig
 - **IS:** a self-directed, unattended loop. It finds its own work, builds it, verifies it, and merges it
   with **no interactive approval**. Passive control is via Linear (comment/close the run issue to
   pause/stop); live steering is the `/goal` overlay + Remote Control; push status is Slack.
-- **NOT [`improve-codebase-architecture`](references/) (the interactive founder tool).** That skill writes
+- **NOT `improve-codebase-architecture` (the interactive founder tool — a global Claude Code skill, not in this repo).** That skill writes
   an HTML report, asks _"which would you like to explore?"_, and grills the founder. This loop **never**
   invokes that command and **never** halts for a human pick. It reuses only that skill's companion
   **rubric files** — vendored into [`references/`](references/): [`LANGUAGE.md`](references/LANGUAGE.md)
@@ -42,12 +42,12 @@ form. Decisions in SPEC §2–§8 are **locked** — follow them, don't re-litig
 
 ## Model + tool map (SPEC §7)
 
-| Role                          | Tool / surface                | Model                                                  |
-| ----------------------------- | ----------------------------- | ------------------------------------------------------ |
-| Builder (this loop / `/goal`) | the `/goal` session           | `claude-opus-4-8`                                      |
-| Discovery                     | `Explore` subagents           | `claude-sonnet-4-6`                                    |
-| Per-fix referee (≈8×/run)     | `/risoluto-verify-acceptance` | **DeepSeek V4 Pro** (`deepseek-v4-pro`) via `opencode` |
-| End oracle (1×/run)           | `/risoluto-review-handoff`    | **Codex GPT-5.4 high** (local auth)                    |
+| Role                          | Tool / surface                | Model                                                      |
+| ----------------------------- | ----------------------------- | ---------------------------------------------------------- |
+| Builder (this loop / `/goal`) | the `/goal` session           | `claude-opus-4-8`                                          |
+| Discovery                     | `Explore` subagents           | `claude-sonnet-4-6`                                        |
+| Per-fix referee (≈8×/run)     | `/risoluto-verify-acceptance` | **DeepSeek V4 Pro** (`deepseek-v4-pro`) via `opencode`     |
+| End oracle (1×/run)           | `/risoluto-review-handoff`    | **Codex GPT-5.4 high** (local auth); opt-in `gpt-5.5 high` |
 
 Launch the `/goal` itself on `claude-opus-4-8`. Discovery `Explore` subagents run on `claude-sonnet-4-6`
 (scope their prompts accordingly). The referee is cheap and fires per candidate; the Codex oracle fires
@@ -58,21 +58,30 @@ Launch the `/goal` itself on `claude-opus-4-8`. Discovery `Explore` subagents ru
 Run **before any Linear write or code edit**. Block on the first failure — never start the loop on a
 broken precondition.
 
-| #   | Check                           | Verification                                                                                  | NO-GO if                                              |
-| --- | ------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| 1   | Repo root                       | `test -f package.json && test -f .gitmodules`                                                 | Not in the Risoluto checkout root.                    |
-| 2   | Repo clean                      | `git status --short` empty                                                                    | Uncommitted work would contaminate the cascade.       |
-| 3   | No tracked scratch markdown     | no tracked `PLAN.md` / `ATTEMPTS.md` / `NOTES.md` / `DISCOVERY.md`                            | Repo-local runtime scratch is banned (memory→Linear). |
-| 4   | `research/` submodule init      | `git submodule status research` leads with a space, not `-`                                   | Run `git submodule update --init research`.           |
-| 5   | Base branch                     | `git branch --show-current` is `master`                                                       | Launch from `master`.                                 |
-| 6   | Integration branch ready        | `git rev-parse --verify integration/architecture-loop` (else create it off `master` and push) | Cannot create the branch.                             |
-| 7   | Linear auth live                | a `list_teams` / GraphQL probe succeeds (team **NIN**)                                        | Surface verbatim; do not retry auth.                  |
-| 8   | DeepSeek reachable via opencode | `command -v opencode` and `deepseek-v4-pro` in `opencode models`                              | Referee gate cannot run — fix opencode provider.      |
-| 9   | Codex local auth live           | Codex CLI authenticated for `gpt-5.4 high`                                                    | End oracle cannot run.                                |
-| 10  | Required secrets present        | `LINEAR_API_KEY`, Slack, opencode/DeepSeek keys (existence only)                              | Missing credential — fix before launch.               |
+| #   | Check                           | Verification                                                                                                                                                                    | NO-GO if                                              |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1   | Repo root                       | `test -f package.json && test -f .gitmodules`                                                                                                                                   | Not in the Risoluto checkout root.                    |
+| 2   | Repo clean (tracked)            | `git status --short \| grep -v '^??'` empty — untracked project docs (`CONTEXT.md`, `DISCOVERY.md`, `research/`) are **not** contamination; check #3 still bans tracked scratch | Uncommitted work would contaminate the cascade.       |
+| 3   | No tracked scratch markdown     | no tracked `PLAN.md` / `ATTEMPTS.md` / `NOTES.md` / `CONTROL.md` / `DISCOVERY.md`                                                                                               | Repo-local runtime scratch is banned (memory→Linear). |
+| 4   | `research/` submodule init      | `git submodule status research` leads with a space, not `-`                                                                                                                     | Run `git submodule update --init research`.           |
+| 5   | Base branch                     | `git branch --show-current` is `master`                                                                                                                                         | Launch from `master`.                                 |
+| 6   | Integration branch ready        | `git rev-parse --verify integration/architecture-loop` (else create it off `master` and push)                                                                                   | Cannot create the branch.                             |
+| 7   | Linear auth live                | a `list_teams` / GraphQL probe succeeds (team **NIN**)                                                                                                                          | Surface verbatim; do not retry auth.                  |
+| 8   | DeepSeek reachable via opencode | `command -v opencode` and `deepseek-v4-pro` in `opencode models`                                                                                                                | Referee gate cannot run — fix opencode provider.      |
+| 9   | Codex local auth live           | Codex CLI authenticated for `gpt-5.4 high`                                                                                                                                      | End oracle cannot run.                                |
+| 10  | Required secrets present        | `LINEAR_API_KEY`, Slack, opencode/DeepSeek keys (existence only)                                                                                                                | Missing credential — fix before launch.               |
 
 Emit a single **GO** / **NO-GO** verdict with the failing row(s). The first interactive run should babysit
 1–2 candidates through discover→build→gate→merge with Remote Control on, then trust it for headless runs.
+
+**Orphan reconcile (run before check #2).** A crashed mid-build turn can leave a `.agent-worktrees/arch-<hash>`
+worktree and an `arch/<hash>-*` branch behind; on resume `git worktree add` then fails `already exists` and
+strands the loop. So sweep first: for each stale `arch-*` worktree/branch (`git worktree list --porcelain`),
+look up the matching candidate sub-issue by its `hash` label — if it is `rejected`/`blocked`,
+`git worktree remove --force <path>` + `git branch -D <branch>`; if it is still `open` it crashed mid-build, so
+discard the worktree, mark the sub-issue `blocked` (reason "orphaned mid-build crash"), and re-queue it next
+pass; if no sub-issue matches, discard unconditionally. This is the arch-loop analogue of `/risoluto-tdd`'s
+Step 0 reconcile.
 
 ## Working memory — Linear-primary hybrid (SPEC §2)
 
@@ -82,17 +91,31 @@ Durable memory and control live in **Linear**, never in repo-local scratch markd
   (search-before-create with `list_projects`; never the Live Sandbox).
 - **Run issue** — one per `/goal` launch. Its body holds the run config (completion condition, `K=2`,
   `fuse=8`, the model map); its comments hold the narrative `ATTEMPTS`/`NOTES` log. This is the
-  goal-forge "working memory" pillar, in Linear.
+  goal-forge "working memory" pillar, in Linear. Its Linear identifier (e.g. `NIN-42`) **is** the `<run-id>`:
+  capture it as `RUN_ID` once when the run issue is created/found in Phase 0, and use it verbatim in every
+  `/tmp` path and the final HTML filename (`/tmp/risoluto-architecture-loop/NIN-42/…`,
+  `$TMPDIR/architecture-loop-NIN-42.html`); never re-derive it mid-run.
 - **Candidate sub-issues** — children of the run issue, one per `Strong` candidate. State
-  `open → merged | rejected | blocked`. Each carries a `hash(files + problem statement)` label, the
-  branch/PR link, and the referee verdict. The sub-issue **body is the self-authored deepening contract**
+  `open → merged | rejected | blocked`. Each carries a `hash` label (computed at discovery — see
+  **Anti-thrash**), the branch/PR link, and the referee verdict. The sub-issue **body is the self-authored deepening contract**
   (see Discover→Self-author below).
 - **Anti-thrash (cross-run):** before opening a candidate, query the project for any sub-issue (any run)
   whose `hash` label is already `merged`/`rejected` — if found, **skip** it. Candidates are first-class
   issues precisely so this dedup survives across runs.
+  - **Hash stability (the executable reading of SPEC §2's `hash(files + problem statement)`).** Compute the
+    label at **discovery time** (step 1, before self-authoring) as
+    `sha256(sorted_unique_repo_relative_file_paths + "\n" + normalized_problem_framing)` truncated to 12 hex
+    chars. `normalized_problem_framing` is the lower-cased, whitespace-collapsed **one-line** deletion-test
+    statement — **not** the free-form contract prose written in step 3 (that prose varies run-to-run, so
+    hashing it would silently defeat dedup, and it doesn't exist yet at step 1).
 - **`/tmp` projection:** `/tmp/risoluto-architecture-loop/<run-id>/ledger.json` — one row per candidate
   `{ id: hash, strength, status }`, **rebuilt from Linear at run start**. The evaluator counts it; Linear
   is the source of truth, the JSON is the fast read.
+- **Dry-counter storage.** The consecutive-dry count must survive `/goal` turns and crashes, so it lives on
+  the **run issue**, not only in the `/tmp` ledger: after each discovery pass append a marker comment
+  `<!-- risoluto:arch-dry --> DRY_COUNTER=<n>` — `<n>` incremented when the pass yields zero `open`+`Strong`
+  candidates, reset to `0` when it yields ≥1. At run start (ledger rebuild) read the **latest** such comment
+  to restore the counter; the evaluator reads it for `done_when` #1. Linear is durable; the ledger is the fast read.
 - **Rejected with a load-bearing reason** ⇒ optionally record an ADR in `docs/adr/` so future runs don't
   re-suggest it.
 
@@ -146,11 +169,20 @@ red-test spec; write them so a different model can rule each one `met`/`not-met`
   git worktree add .agent-worktrees/arch-<hash> -b arch/<hash>-<short-slug> integration/architecture-loop
   ```
 
-- Drive **`/risoluto-tdd`** against the candidate sub-issue (red→green→refactor), using its bundled TDD
-  companion files for method. The integration base is `integration/architecture-loop`; the **contract is
-  the sub-issue body** (the substitute for the `from:prd-<slug>` PRD that `/risoluto-tdd` normally
-  resolves). Honor `/risoluto-tdd`'s reachability rule: wire what you build and prove it through a real
-  entry point — an exported-but-uncalled symbol is not done.
+- **Run `/risoluto-tdd`'s _method_ directly — do not invoke it as a slash command.** `/risoluto-tdd`
+  hard-refuses any issue without a `from:prd-<slug>` label **and** a `docs/prds/<slug>.md` file (its
+  Hard-preconditions table); an arch-loop candidate sub-issue has neither. So drive its red→green→refactor
+  loop (its Step 4) directly, using its bundled companion files for method —
+  [`tests.md`](../risoluto-tdd/tests.md), [`interface-design.md`](../risoluto-tdd/interface-design.md),
+  [`refactoring.md`](../risoluto-tdd/refactoring.md), [`mocking.md`](../risoluto-tdd/mocking.md),
+  [`deep-modules.md`](../risoluto-tdd/deep-modules.md) — with these substitutions:
+  - **Spec / "PRD" = the candidate sub-issue body** you self-authored in step 3; its `## Acceptance criteria`
+    block is the criteria. There is no PRD file to read.
+  - **Integration base = `integration/architecture-loop`** (the worktree above is already on it) — never
+    `integration/<prd-slug>`, and no `from:prd-<slug>` label is applied (this loop ships one consolidated PR
+    at the end; see Termination).
+  - **Honor `/risoluto-tdd`'s reachability rule:** wire what you build and prove it through a real entry
+    point — an exported-but-uncalled symbol is not done.
 
 ### 5. Gate (in strict order; stop on the first failure)
 
@@ -158,10 +190,13 @@ red-test spec; write them so a different model can rule each one `met`/`not-met`
    (`build → lint → format:check → test → typecheck → typecheck:coverage`).
 2. **`/code-review high`** — `xhigh` for high-risk areas. Findings are **evidence, not authority** —
    verify each against the actual diff and source before acting.
-3. **`/risoluto-verify-acceptance`** — the per-fix referee, opencode model pinned to **`deepseek-v4-pro`**
-   (e.g. `opencode run --pure --model deepseek/deepseek-v4-pro …`; plain `run`, `--pure`, no `--agent`).
-   It is fed the **sub-issue contract** as the spec (there is no PRD) and is adversarially prompted to
-   **default to `not-met` / escalate when unsure** — a rubber-stamping cheap model is worse than none.
+3. **`/risoluto-verify-acceptance`** — the per-fix referee. Invoke it with the opencode model pinned to
+   **`deepseek/deepseek-v4-pro`** (that skill owns the concrete `opencode run --pure --format json …`
+   invocation — plain `run`, `--pure`, no `--agent`; don't re-derive the command here). Two arch-loop
+   substitutions to its Step-1 packet: there is **no PRD**, so put the **candidate sub-issue body** in the
+   packet's _PRD-context_ slot (delimit it `## Contract (sub-issue body)`) and skip the `from:prd-<slug>`
+   resolution entirely — the `## Acceptance criteria` block is already in that body. It is adversarially
+   prompted to **default to `not-met` / escalate when unsure** — a rubber-stamping cheap model is worse than none.
    - `met` → proceed to merge.
    - `not-met` → mark the sub-issue `rejected`, **discard the worktree** (+ ADR if load-bearing). Do not
      merge.
@@ -178,7 +213,9 @@ red-test spec; write them so a different model can rule each one `met`/`not-met`
 
 ### 7. Loop
 
-Re-discover (step 1), update the consecutive-dry counter, and check the stop condition (Termination).
+Re-discover (step 1); update the consecutive-dry counter — **reset it to `0` if a candidate merged this
+iteration, otherwise it was already incremented in Select (step 2)** — then check the stop condition
+(Termination). "Consecutive" means the count only climbs across passes that find nothing; any merge resets it.
 
 ## Termination & output (SPEC §4)
 
@@ -199,9 +236,20 @@ On completion:
 - **End oracle:** run **`/risoluto-review-handoff`** with the reviewer model pinned to **Codex
   `gpt-5.4 high`** (local auth). It assembles the packet (integration diff + each candidate contract +
   Linear issues) and writes `REVIEW.md` + a Linear comment + Slack.
+  - **No-PRD bypass.** `/risoluto-review-handoff` hard-refuses on a missing `docs/prds/<slug>.md` and wants a
+    `WAVES.md` + `from:prd-<slug>` issues — none of which this loop produces. So run its review pipeline
+    directly: diff = `git diff origin/master...integration/architecture-loop`; in place of the PRD + wave map
+    feed each **candidate sub-issue body** (the self-authored contracts) and the run issue's child-issue list
+    with states; in place of `from:prd-<slug>` issues query the run issue's children by `parentId`; gate
+    evidence = the per-candidate referee verdicts on the sub-issues. Write `REVIEW.md` per
+    [`../risoluto-review-handoff/references/review-handoff.v1.md`](../risoluto-review-handoff/references/review-handoff.v1.md).
 - **Hand-off, no auto-PR:** **PRINT (never run)** `gh pr create` for
   `integration/architecture-loop → master`. The founder reviews one consolidated PR.
-- **After the founder merges:** `/risoluto-sync` reconciles the candidate sub-issues to Done (out of band).
+- **After the founder merges:** reconcile the candidate sub-issues to Done (out of band). `/risoluto-sync`
+  keys on a `from:prd-<slug>` label these sub-issues don't carry, so it can't be called by slug — instead
+  apply its proof-only reconcile manually: query the run issue's children by `parentId`, and for each whose
+  `arch/<hash>-*` branch is merged into `integration/architecture-loop` (`git branch --all --merged`), flip it
+  to Done and tick only the acceptance criteria you can cite (`/risoluto-sync` Step 3); report the rest as drift.
 
 ## Slack notifications — all five (SPEC §6)
 
@@ -225,8 +273,9 @@ Remote Control = live steering:
 - **No unrelated cleanup,** style churn, dependency bumps, broad rewrites, or speculative architecture.
 - **Subagent / model-review findings are evidence, not authority** — verify every finding against the
   actual diff and source before acting.
-- **Never** add to `quarantine.json` silently. **Never** `--no-verify` / skip hooks. **Never**
-  force-push or rewrite history. **Never** auto-open a PR — print `gh pr create` and stop.
+- **Never** add to `quarantine.json` silently — quarantine is only for pre-existing flaky tests with an open
+  ticket; a candidate that fails the gate is `rejected`, not silenced into a pass. **Never** `--no-verify` /
+  skip hooks. **Never** force-push or rewrite history. **Never** auto-open a PR — print `gh pr create` and stop.
 - **No repo-local runtime scratch markdown** (PLAN/ATTEMPTS/NOTES/CONTROL/DISCOVERY). Run-level memory
   lives inside the Linear run issue.
 

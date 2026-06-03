@@ -268,6 +268,7 @@ mutation CreateIssue(
   $title: String!
   $description: String!
   $projectId: String
+  $parentId: String
   $labelIds: [String!]
   $stateId: String
   $projectMilestoneId: String
@@ -278,6 +279,7 @@ mutation CreateIssue(
       title: $title
       description: $description
       projectId: $projectId
+      parentId: $parentId
       labelIds: $labelIds
       stateId: $stateId
       projectMilestoneId: $projectMilestoneId
@@ -293,7 +295,7 @@ mutation CreateIssue(
 }
 ```
 
-Pass `labelIds` (resolved UUIDs), not label names. Capture `identifier` + `url` for downstream relations and summaries.
+Pass `labelIds` (resolved UUIDs), not label names. Capture `identifier` + `url` for downstream relations and summaries. Pass `parentId` (the parent issue's UUID) to create a **sub-issue** — e.g. `risoluto-architecture-loop`'s candidate sub-issues are children of its run issue. It is optional, so existing callers that omit it are unaffected.
 
 ### Attach a URL to an issue (native sidebar link)
 

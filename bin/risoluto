@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
-PACKAGE_ROOT="$(dirname "$(dirname "$SCRIPT_PATH")")"
+# Resolve this launcher's real path without `realpath`/`readlink -f` (absent on
+# stock macOS and minimal images like Alpine/BusyBox/distroless), while still
+# following symlinks so npm `.bin` links resolve to the package root rather than
+# node_modules/.bin.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+PACKAGE_ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
 exec node "$PACKAGE_ROOT/dist/cli/index.js" "$@"
