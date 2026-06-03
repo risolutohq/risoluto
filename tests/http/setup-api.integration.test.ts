@@ -199,10 +199,11 @@ describe("POST /api/v1/setup/master-key", () => {
       });
       expect(response.status).toBe(200);
 
-      const body = (await response.json()) as { key: string };
-      expect(body.key).toBe("integration-master-key-abc");
+      // Response must never echo the key material; it lands on disk only (NIN-249).
+      const body = await response.json();
+      expect(body).toEqual({ ok: true });
 
-      // Verify file on disk
+      // Verify file on disk — the persisted key is the source of truth.
       const keyPath = path.join(freshCtx.dataDir, "master.key");
       const written = await readFile(keyPath, "utf8");
       expect(written).toBe("integration-master-key-abc");

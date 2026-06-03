@@ -109,7 +109,8 @@ describe("handlePostMasterKey — real filesystem", () => {
     await handler({ body: { key: "my-integration-key-12345" } } as Request, res as unknown as Response);
 
     expect(res._status).toBe(200);
-    expect((res._body as { key: string }).key).toBe("my-integration-key-12345");
+    // Response never echoes the key material; it lands on disk only (NIN-249).
+    expect(res._body).toEqual({ ok: true });
 
     // Verify the file was written to the real filesystem
     const keyPath = path.join(freshDir, "master.key");
@@ -132,13 +133,13 @@ describe("handlePostMasterKey — real filesystem", () => {
     await handler({ body: {} } as Request, res as unknown as Response);
 
     expect(res._status).toBe(200);
-    const generatedKey = (res._body as { key: string }).key;
-    // randomBytes(32).toString("hex") produces a 64-char hex string
-    expect(generatedKey).toMatch(/^[a-f0-9]{64}$/u);
+    expect(res._body).toEqual({ ok: true });
 
+    // The generated key is the file on disk, never the response body (NIN-249).
     const keyPath = path.join(freshDir, "master.key");
     const written = await readFile(keyPath, "utf8");
-    expect(written).toBe(generatedKey);
+    // randomBytes(32).toString("hex") produces a 64-char hex string
+    expect(written).toMatch(/^[a-f0-9]{64}$/u);
   });
 
   it("returns 409 when the secrets store is already initialized", async () => {

@@ -143,15 +143,16 @@ describe("registerSetupApi", () => {
     const { baseUrl } = await startSetupApiServer({ secretsStore });
 
     const response = await postJson(baseUrl, "/api/v1/setup/master-key", {});
-    const body = (await response.json()) as { key: string };
 
     expect(response.status).toBe(200);
-    expect(body.key).toMatch(/^[a-f0-9]{64}$/u);
-    expect(mocks.writeFileMock).toHaveBeenCalledWith("/archive-root/master.key", body.key, {
+    expect(await response.json()).toEqual({ ok: true });
+    const persistedKey = mocks.writeFileMock.mock.calls[0]?.[1] as string;
+    expect(persistedKey).toMatch(/^[a-f0-9]{64}$/u);
+    expect(mocks.writeFileMock).toHaveBeenCalledWith("/archive-root/master.key", persistedKey, {
       encoding: "utf8",
       mode: 0o600,
     });
-    expect(secretsStore.initializeWithKey).toHaveBeenCalledWith(body.key);
+    expect(secretsStore.initializeWithKey).toHaveBeenCalledWith(persistedKey);
   });
 
   it("rejects master key creation when already initialized", async () => {
