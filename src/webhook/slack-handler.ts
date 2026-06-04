@@ -125,8 +125,9 @@ async function dispatchModalSubmission(
     res.status(200).json({ response_action: "clear" });
     return;
   }
+  let intake: Awaited<ReturnType<typeof acceptSlackModalWorkflowRun>>;
   try {
-    const intake = await acceptSlackModalWorkflowRun({
+    intake = await acceptSlackModalWorkflowRun({
       dataDir: deps.dataDir,
       archiveDir: deps.archiveDir,
       modal,
@@ -134,19 +135,23 @@ async function dispatchModalSubmission(
       now: deps.now,
       id: deps.id,
     });
-    deps.eventBus?.emit("workflow_run.accepted", {
-      workflowRunId: intake.workflowRun.id,
-      source: intake.workflowRun.source,
-      title: intake.workflowRun.title,
-      workflowDefinitionId: intake.workflowRun.workflowDefinitionId,
-    });
-    await deps.webhookInbox?.markApplied?.(slackModalDeliveryId(modal.viewId));
-    res.status(200).json({ response_action: "clear" });
   } catch (error) {
+    // Only an intake failure routes to retry. Marking the durable record applied happens afterwards
+    // and is best-effort, so a markApplied storage error can't re-enter this catch and move a run that
+    // actually started into retry (mirrors WebhookDeliveryWorkflow.transitionApplied/forRetry) (NIN-263).
     deps.logger.error({ error: String(error) }, "slack modal intake failed");
     await markSlackModalForRetry(deps, modal.viewId, error);
     sendError(res, 500, "slack_intake_failed", "Slack modal intake failed");
+    return;
   }
+  deps.eventBus?.emit("workflow_run.accepted", {
+    workflowRunId: intake.workflowRun.id,
+    source: intake.workflowRun.source,
+    title: intake.workflowRun.title,
+    workflowDefinitionId: intake.workflowRun.workflowDefinitionId,
+  });
+  await markSlackModalApplied(deps, modal.viewId);
+  res.status(200).json({ response_action: "clear" });
 }
 
 // Dedupe a verified Slack modal on the body+signature digest so a replayed signed submission (even
@@ -179,11 +184,26 @@ async function deduplicateSlackModal(
   }
 }
 
+// Mark the durable record applied after a successful intake. Best-effort: a storage failure here must
+// not fail the request (the run already started), so it is logged, never thrown (NIN-263).
+async function markSlackModalApplied(deps: SlackWebhookHandlerDeps, viewId: string): Promise<void> {
+  try {
+    await deps.webhookInbox?.markApplied?.(slackModalDeliveryId(viewId));
+  } catch (error) {
+    deps.logger.error({ error: String(error) }, "failed to mark slack modal applied");
+  }
+}
+
 // A modal recorded before its intake ran is moved to a retryable state on failure so the durable
 // record isn't stranded as a dedupe tombstone that would silently swallow Slack's own retry (NIN-263).
+// Wrapped so a storage failure while marking retry can't escape the handler's catch unanswered.
 async function markSlackModalForRetry(deps: SlackWebhookHandlerDeps, viewId: string, error: unknown): Promise<void> {
-  const nextAttemptAt = new Date(Date.now() + 60_000).toISOString();
-  await deps.webhookInbox?.markForRetry?.(slackModalDeliveryId(viewId), String(error), 1, nextAttemptAt);
+  try {
+    const nextAttemptAt = new Date(Date.now() + 60_000).toISOString();
+    await deps.webhookInbox?.markForRetry?.(slackModalDeliveryId(viewId), String(error), 1, nextAttemptAt);
+  } catch (retryError) {
+    deps.logger.error({ error: String(retryError) }, "failed to mark slack modal for retry");
+  }
 }
 
 function slackModalDeliveryId(viewId: string): string {

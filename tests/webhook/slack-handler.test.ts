@@ -115,6 +115,38 @@ describe("handleWebhookSlack", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
+  it("answers 200 and does not retry when markApplied fails after a successful intake (NIN-263)", async () => {
+    const dataDir = await createTempDir();
+    const rawBody = slackInteractionBody({
+      type: "view_submission",
+      team: { id: "T_OK" },
+      user: { id: "U_OK" },
+      view: {
+        id: "V_MODAL",
+        private_metadata: JSON.stringify({
+          title: "Ship Slack intake",
+          body: "Wire the inbound route.",
+          workflowDefinitionId: "single-operator-afk-coder",
+          workspaceKey: "risoluto",
+        }),
+      },
+    });
+    const inbox = fakeInbox();
+    inbox.store.markApplied = vi.fn(async () => {
+      throw new Error("inbox write failed");
+    });
+    const handlerDeps: SlackWebhookHandlerDeps = { ...deps({ dataDir }), webhookInbox: inbox.store };
+    const { req, res, capture } = makeReqRes(rawBody, signSlack(rawBody));
+
+    await handleWebhookSlack(handlerDeps, req, res);
+
+    // The run started; a best-effort markApplied failure must not become a 500 + retry of a live run.
+    expect(capture.status).toBe(200);
+    expect(capture.body).toEqual({ response_action: "clear" });
+    expect(inbox.store.markForRetry).not.toHaveBeenCalled();
+    await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
+  });
+
   it("rejects a request whose timestamp is outside the replay window", async () => {
     const dataDir = await createTempDir();
     const rawBody = slackInteractionBody({ type: "view_submission" });
