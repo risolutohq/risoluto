@@ -375,6 +375,30 @@ describe("createWriteGuard", () => {
     expect(response._status).toBe(200);
   });
 
+  it("rejects a non-loopback mutation that spoofs X-Forwarded-For: 127.0.0.1 (no trusted local proxy)", () => {
+    const next = vi.fn();
+    const response = createMockResponse();
+    const request = {
+      method: "POST",
+      path: "/api/v1/test",
+      socket: { remoteAddress: "203.0.113.10" },
+      get: vi.fn((header: string) => (header.toLowerCase() === "x-forwarded-for" ? "127.0.0.1" : undefined)),
+    } as unknown as Request;
+
+    createWriteGuard()(request, response, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response._status).toBe(403);
+    expect(response._body).toEqual({
+      error: {
+        code: "write_forbidden",
+        message:
+          "Mutating requests are only allowed from loopback addresses. " +
+          "Set RISOLUTO_WRITE_TOKEN to allow remote write access.",
+      },
+    });
+  });
+
   it("records write audit details on finish when a request is allowed", async () => {
     const auditLog = {
       record: vi.fn().mockResolvedValue(undefined),

@@ -67,16 +67,27 @@ function forwardedClientIp(req: Request): string | undefined {
 
 /**
  * A bare loopback TCP peer is not proof of a local client: a reverse proxy or
- * tunnel terminates on loopback while forwarding a remote caller. When a
- * forwarding header is present we classify by the forwarded client instead, so a
- * proxied non-loopback request cannot ride the loopback write bypass (NIN-250).
+ * tunnel terminates on loopback while forwarding a remote caller. When the TCP
+ * peer is itself loopback (a trusted local proxy) we classify by the forwarded
+ * client, so a proxied non-loopback request cannot ride the loopback write
+ * bypass (NIN-250).
+ *
+ * A forwarding header is only trusted from a loopback peer. A non-loopback peer
+ * can set `X-Forwarded-For: 127.0.0.1` itself, so trusting that header would let
+ * a direct remote caller spoof loopback and bypass the write gate — we classify
+ * such a peer by its socket address and ignore its forwarding header.
  */
 export function isRequestFromLoopback(req: Request): boolean {
+  // Only a loopback TCP peer may be a trusted local proxy whose forwarding header
+  // we honor; a non-loopback peer's header is unauthenticated and must be ignored.
+  if (!isLoopbackAddress(req.socket.remoteAddress)) {
+    return false;
+  }
   const forwarded = forwardedClientIp(req);
   if (forwarded !== undefined) {
     return isLoopbackAddress(forwarded);
   }
-  return isLoopbackAddress(req.socket.remoteAddress);
+  return true;
 }
 
 export interface WriteGuardOptions {

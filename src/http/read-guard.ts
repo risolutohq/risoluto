@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 
 import { includesMatchingToken } from "./token-compare.js";
-import { isLoopbackAddress } from "./write-guard.js";
+import { isRequestFromLoopback } from "./write-guard.js";
 
 const SAFE_READ_METHODS = new Set(["GET", "HEAD"]);
 const PUBLIC_READ_PATHS = new Set(["/api/v1/runtime", "/api/v1/openapi.json"]);
@@ -99,7 +99,11 @@ function guardReadRequest(req: Request, res: Response, next: NextFunction): void
     return;
   }
 
-  if (isLoopbackAddress(req.socket.remoteAddress)) {
+  // Use the same proxy-aware loopback classification as the write guard: a
+  // forwarded header is honored only from a loopback peer, so a reverse proxy on
+  // loopback cannot forward a remote caller into the unauthenticated read bypass
+  // and a remote peer cannot spoof loopback via X-Forwarded-For (NIN-250).
+  if (isRequestFromLoopback(req)) {
     next();
     return;
   }
