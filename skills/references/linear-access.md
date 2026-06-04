@@ -78,7 +78,7 @@ Pick the node whose `name` is `In Progress` (or `type: started`).
 
 ### Get an issue by ticket ref
 
-Linear's `issue(id:)` resolver accepts both the UUID **and** the team-prefixed identifier (e.g. `RSL-123`).
+Linear's `issue(id:)` resolver accepts both the UUID **and** the team-prefixed identifier (e.g. `NIN-123`).
 
 ```graphql
 query GetIssue($id: String!) {
@@ -313,6 +313,8 @@ mutation CreateAttachment($issueId: String!, $title: String!, $url: String!, $su
 ```
 
 Use this after `issueCreate` returns the issue id. Attachment URLs are idempotent per issue, so re-running with the same PRD blob URL updates the existing attachment instead of duplicating it.
+
+Under Claude (MCP), the same native sidebar link is achievable without the raw mutation by passing `links: [{ url, title }]` to `save_issue` (append-only; existing links are never removed) — prefer that over the GraphQL fallback when running on the Claude fast-path.
 
 ### Wire relations (`blocked-by` / `related`)
 
