@@ -38,25 +38,23 @@ export async function completeAutoMergeForRun(input: CompleteAutoMergeForRunInpu
     return { status: "blocked", reason: "auto_merge_publish_not_ready" };
   }
 
-  const ci = await readRunArtifact<CiResultArtifact>(archive, input.workflowRunId, "ci_result", "ci_result.v1");
-  const verification = await readRunArtifact<VerificationArtifact>(
-    archive,
-    input.workflowRunId,
-    "verification",
-    "verification.v1",
-  );
-  const approval = await readRunArtifact<OperatorApprovalArtifact>(
-    archive,
-    input.workflowRunId,
-    "operator_approval",
-    "operator_approval.v1",
-  );
-  const mergePolicy = await readRunArtifact<MergePolicyResultArtifact>(
-    archive,
-    input.workflowRunId,
-    "merge_policy_result",
-    "merge_policy_result.v1",
-  );
+  // The remaining gate artifacts are independent reads keyed on the same run, so fetch them concurrently.
+  const [ci, verification, approval, mergePolicy] = await Promise.all([
+    readRunArtifact<CiResultArtifact>(archive, input.workflowRunId, "ci_result", "ci_result.v1"),
+    readRunArtifact<VerificationArtifact>(archive, input.workflowRunId, "verification", "verification.v1"),
+    readRunArtifact<OperatorApprovalArtifact>(
+      archive,
+      input.workflowRunId,
+      "operator_approval",
+      "operator_approval.v1",
+    ),
+    readRunArtifact<MergePolicyResultArtifact>(
+      archive,
+      input.workflowRunId,
+      "merge_policy_result",
+      "merge_policy_result.v1",
+    ),
+  ]);
 
   return completeAutoMerge({
     ...archiveLocation(input),
