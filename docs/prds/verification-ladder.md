@@ -148,7 +148,7 @@ answers "is this capability wired into Risoluto," never "did a Workflow Run sati
     runtime Verifier role or Validation Gate, so that the dev-time check and the product concept stay
     distinct.
 32. As a Risoluto maintainer, I want the ladder to add no new runtime dependency and to respect the
-    ESLint ceilings, so that the verification tooling does not itself become tech debt.
+    lint ceilings, so that the verification tooling does not itself become tech debt.
 
 ## Implementation Decisions
 
@@ -198,7 +198,7 @@ answers "is this capability wired into Risoluto," never "did a Workflow Run sati
   reachability acceptance criterion per capability-bearing slice), and the review-handoff lens
   (independently confirm the manifest entry and e2e). These edits encode the bar already proven by hand
   during the workflow-first-afk-mvp build.
-- No new runtime dependency is added; `madge`, `knip`, and `vitest` are already present. The ESLint
+- No new runtime dependency is added; `madge`, `knip`, and `vitest` are already present. The lint
   ceilings (300 lines per file, 50 per function, complexity 15) apply; the analyzer is split into the
   deep module plus a thin script to stay under them.
 - The first `reach:check` run doubles as a retroactive audit of the current branch's capabilities; its

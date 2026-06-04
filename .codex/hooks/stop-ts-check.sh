@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook: if there are uncommitted .ts/.tsx changes in the working tree,
-# surface eslint output + a typecheck reminder. Silent when nothing changed.
+# surface oxlint output + a typecheck reminder. Silent when nothing changed.
 set -u
 
 # Drain stdin (Stop payload — not used).
@@ -15,15 +15,15 @@ fi
 file_count=$(printf '%s\n' "$ts_files" | wc -l | tr -d ' ')
 reminder="$file_count uncommitted TypeScript file(s) in working tree. Run \`pnpm run typecheck\` before commit."
 
-if [ -x ./node_modules/.bin/eslint ]; then
-  lint_out=$(printf '%s\n' "$ts_files" | xargs -r timeout 30 ./node_modules/.bin/eslint --no-error-on-unmatched-pattern 2>&1 | tail -60)
+if [ -x ./node_modules/.bin/oxlint ]; then
+  lint_out=$(printf '%s\n' "$ts_files" | xargs -r timeout 30 ./node_modules/.bin/oxlint 2>&1 | tail -60)
   if [ -n "$lint_out" ]; then
-    msg=$(printf '%s\n\nESLint output (modified files):\n%s' "$reminder" "$lint_out")
+    msg=$(printf '%s\n\nOXLint output (modified files):\n%s' "$reminder" "$lint_out")
   else
     msg="$reminder"
   fi
 else
-  msg="$reminder (skipped lint: node_modules/.bin/eslint not found — run \`pnpm install\`.)"
+  msg="$reminder (skipped lint: node_modules/.bin/oxlint not found — run \`pnpm install\`.)"
 fi
 
 jq -n --arg m "$msg" '{systemMessage: $m, suppressOutput: true}'

@@ -45,13 +45,13 @@ Run the steps in that order — `build` first surfaces TS errors before lint was
 
 When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
 
-## Code-style ceilings (enforced by ESLint)
+## Code-style ceilings (enforced by OXLint)
 
 - `complexity`: **15** per function
 
-Refactor before a function's branching would breach the complexity cap — splitting is cheaper than disabling the rule. Prettier config: 120-col, double quotes, 2-space indent, LF.
+Refactor before a function's branching would breach the complexity cap — splitting is cheaper than disabling the rule. oxfmt config (Prettier-compatible): 120-col, double quotes, 2-space indent, LF.
 
-ESLint ignores `*.mjs`, so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to this ceiling — it applies to `.ts` files only.
+OXLint ignores `*.mjs` (via `ignorePatterns`), so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to this ceiling — it applies to `.ts` files only.
 
 ## Test tiers (4 vitest configs)
 
@@ -68,7 +68,7 @@ The core primitive is `Workflow Run`, not tracker issue. Trackers are intake, mi
 
 ## Commit / release flow
 
-Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks` (secret scan) + `lint-staged` (eslint --fix + prettier on staged `.ts` / `.json` / `.yml`). `semantic-release` (`.releaserc.yml`) handles changelog + git tagging from commit subjects — write subjects accordingly (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`).
+Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks` (secret scan) + `lint-staged` (oxlint --fix + oxfmt on staged `.ts` / `.json` / `.yml`). `semantic-release` (`.releaserc.yml`) handles changelog + git tagging from commit subjects — write subjects accordingly (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`).
 
 ## Living context (read on demand)
 

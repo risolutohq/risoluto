@@ -182,13 +182,13 @@ After the write, show Omer a summary: "Added N rows, edited M rows, dropped K ca
 The grill only edits `docs/roadmap.md`. Build and lint compile/scan TypeScript — they can't catch a malformed roadmap table, so they're the wrong gate here. Two things actually matter, and both are cheap:
 
 - `grill-write.mjs` already asserts the plan table parses (`parseRoadmap(...).found`) before it writes, and re-renders through the locked 6-column `renderRoadmap` — so a successful write is itself the structural check.
-- `docs/roadmap.md` is in the repo's prettier `format:check` glob, so confirm it stays clean:
+- `docs/roadmap.md` is in the repo's oxfmt `format:check` scope, so confirm it stays clean:
 
 ```bash
-npx prettier --check docs/roadmap.md
+npx oxfmt --check docs/roadmap.md
 ```
 
-If prettier reports drift, run `npx prettier --write docs/roadmap.md`. No schema validation is needed beyond this — the locked table shape is enforced by `renderRoadmap`, not by convention.
+If oxfmt reports drift, run `npx oxfmt docs/roadmap.md`. No schema validation is needed beyond this — the locked table shape is enforced by `renderRoadmap`, not by convention.
 
 ### Step 5 — Commit
 

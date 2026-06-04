@@ -27,7 +27,10 @@ const EXCLUDE_PATHS = new Set([
 
 function gitFiles(args) {
   const result = execFileSync("git", args, { encoding: "utf8" });
-  return result.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  return result
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 const tracked = gitFiles(["diff", "--name-only", "HEAD", "--", "src/"]);

@@ -1,6 +1,6 @@
 #!/bin/sh
 # ── Pre-commit: fast staged-file checks ──────────────────────────────
-# lint-staged runs eslint --fix + prettier --write on staged *.ts files.
+# lint-staged runs oxlint --fix + oxfmt on staged *.ts files.
 # This is the formatting/linting gate — pre-push does NOT re-run these.
 
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0

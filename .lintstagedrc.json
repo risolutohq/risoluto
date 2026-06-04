@@ -1,7 +1,4 @@
 {
-  "*.ts": [
-    "eslint --fix --max-warnings 100 --ignore-pattern '.agents/**' --ignore-pattern 'skills/**' --ignore-pattern '**/resolve_bundle.ts'",
-    "prettier --write"
-  ],
-  "*.{json,yml,yaml}": ["prettier --write"]
+  "*.ts": ["oxlint --fix", "oxfmt"],
+  "*.{json,yml,yaml}": ["oxfmt"]
 }

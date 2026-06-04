@@ -14,6 +14,8 @@ skills/
 !WORKFLOW.docker.md
 .eslintrc*
 .prettierrc*
+.oxlintrc*
+.oxfmtrc*
 .jscpd.json
 vitest*.config.*
 knip.json

@@ -281,7 +281,9 @@ async function main() {
 
   const mergedCoverage = mergeCoverageMaps(
     await readCoverageMap(deterministicCoverageDir),
-    shouldRunLive && existsSync(path.join(liveCoverageDir, "coverage-final.json")) ? await readCoverageMap(liveCoverageDir) : {},
+    shouldRunLive && existsSync(path.join(liveCoverageDir, "coverage-final.json"))
+      ? await readCoverageMap(liveCoverageDir)
+      : {},
   );
   const summary = summarizeCoverage(mergedCoverage);
 

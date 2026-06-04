@@ -15,3 +15,11 @@ CODE-REVIEW-FINDINGS.md
 # Prettier reformatting would diverge from the Linear content and fail that check, so leave PRDs
 # formatted as authored/synced.
 docs/prds/
+
+# oxfmt formats the whole tree; keep these out of scope (research is a submodule).
+research/
+mockups/
+interview/
+skills/
+.claude/
+tests/fixtures/

@@ -15,7 +15,7 @@
  * The slug is carried as an HTML comment in the Item cell: `Title <!-- slug:<slug> -->`.
  * It is the join key (roadmap row <-> PRD filename <-> prd.slug <-> Linear from:prd-<slug>).
  *
- * .mjs is ESLint-exempt by repo config; keep the code small and pure anyway.
+ * .mjs is OXLint-exempt by repo config; keep the code small and pure anyway.
  */
 
 export const ROADMAP_HEADERS = ["#", "Item", "Why now", "Size", "Status", "Research link"];

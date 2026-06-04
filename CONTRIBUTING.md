@@ -18,7 +18,7 @@ When a change touches an integration boundary, also run the relevant focused sui
 
 ## Commit conventions
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by `commitlint` (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`). The Husky pre-commit hook runs `gitleaks` (secret scan) and `lint-staged` (eslint --fix + prettier on staged files). `semantic-release` derives the changelog and tags from commit subjects, so write subjects accordingly. Never leak hostnames, credentials, or infrastructure details in commit messages.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/), enforced by `commitlint` (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`). The Husky pre-commit hook runs `gitleaks` (secret scan) and `lint-staged` (oxlint --fix + oxfmt on staged files). `semantic-release` derives the changelog and tags from commit subjects, so write subjects accordingly. Never leak hostnames, credentials, or infrastructure details in commit messages.
 
 ## Pull requests
 
