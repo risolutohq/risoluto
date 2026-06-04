@@ -4,7 +4,10 @@ import type { OrchestratorPort } from "../orchestrator/port.js";
 import type { WebhookDeliveryRecord, WebhookInboxStats } from "../persistence/sqlite/webhook-inbox.js";
 import type { WebhookHealthState } from "./types.js";
 
-type WebhookOrchestrator = Pick<OrchestratorPort, "requestRefresh" | "requestTargetedRefresh" | "stopWorkerForIssue">;
+type WebhookOrchestrator = Pick<
+  OrchestratorPort,
+  "requestRefresh" | "requestTargetedRefresh" | "stopWorkerForIssue" | "getIssueDetail"
+>;
 
 export interface WebhookPortSnapshot {
   health: WebhookHealthState | null;

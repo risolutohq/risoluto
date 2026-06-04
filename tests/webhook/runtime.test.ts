@@ -114,6 +114,7 @@ function makeOrchestrator() {
     }),
     requestTargetedRefresh: vi.fn(),
     stopWorkerForIssue: vi.fn(),
+    getIssueDetail: vi.fn().mockReturnValue(null),
   };
 }
 
@@ -180,6 +181,69 @@ describe("createWebhookRuntime", () => {
 
     expect(handlerDeps?.acceptGitHubTriggeredWorkflowRun).toBe(acceptGitHubTriggeredWorkflowRun);
     expect(handlerDeps?.acceptLinearTriggeredWorkflowRun).toBe(acceptLinearTriggeredWorkflowRun);
+  });
+
+  it("records an inbound external status change as a read-only observation (NIN-270 AC3)", () => {
+    const logger = makeLogger();
+    const orchestrator = makeOrchestrator();
+    // The orchestrator's current view of the run reports canonical status "running".
+    orchestrator.getIssueDetail.mockReturnValue({ issueId: "issue-1", identifier: "NIN-1", status: "running" });
+    const runtime = createWebhookRuntime({
+      persistence: makePersistence(),
+      webhookConfig: makeWebhookConfig(),
+      linearClient: null,
+      eventBus: new TypedEventBus<RisolutoEventMap>(),
+      secretsStore: makeSecretsStore(),
+      logger: makeLogger(),
+    });
+
+    const handlerDeps = runtime.buildHandlerDeps({ orchestrator, logger });
+    handlerDeps?.observeExternalStatusChange?.({
+      issueId: "issue-1",
+      issueIdentifier: "NIN-1",
+      externalStatus: "In Review",
+    });
+
+    // The observation reaches observeExternalStatusChange and is recorded against the canonical status…
+    expect(orchestrator.getIssueDetail).toHaveBeenCalledWith("NIN-1");
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflow_run_id: "issue-1",
+        canonical_run_status: "running",
+        external_status: "In Review",
+      }),
+      expect.stringContaining("canonical Workflow Run truth unchanged"),
+    );
+    // …without mutating canonical truth (no run-state transition triggered).
+    expect(orchestrator.stopWorkerForIssue).not.toHaveBeenCalled();
+  });
+
+  it("skips the observation when the runtime status is not a canonical Workflow Run status (NIN-270 AC3)", () => {
+    const logger = makeLogger();
+    const orchestrator = makeOrchestrator();
+    // "retrying" is an orchestrator runtime status, not a canonical Workflow Run status — no truth to
+    // compare against, so the observation must be skipped rather than recorded against a fabricated status.
+    orchestrator.getIssueDetail.mockReturnValue({ issueId: "issue-1", identifier: "NIN-1", status: "retrying" });
+    const runtime = createWebhookRuntime({
+      persistence: makePersistence(),
+      webhookConfig: makeWebhookConfig(),
+      linearClient: null,
+      eventBus: new TypedEventBus<RisolutoEventMap>(),
+      secretsStore: makeSecretsStore(),
+      logger: makeLogger(),
+    });
+
+    const handlerDeps = runtime.buildHandlerDeps({ orchestrator, logger });
+    handlerDeps?.observeExternalStatusChange?.({
+      issueId: "issue-1",
+      issueIdentifier: "NIN-1",
+      externalStatus: "In Review",
+    });
+
+    expect(logger.info).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("canonical Workflow Run truth unchanged"),
+    );
   });
 
   it("merges persistence and health state behind one runtime snapshot", async () => {

@@ -51,7 +51,10 @@ export function initWebhookInfrastructure(input: {
  * Build webhook handler deps through the runtime boundary.
  */
 export function buildWebhookHandlerDeps(input: {
-  orchestrator: Pick<OrchestratorPort, "requestRefresh" | "requestTargetedRefresh" | "stopWorkerForIssue">;
+  orchestrator: Pick<
+    OrchestratorPort,
+    "requestRefresh" | "requestTargetedRefresh" | "stopWorkerForIssue" | "getIssueDetail"
+  >;
   webhook: WebhookRuntime;
   logger: RisolutoLogger;
 }): WebhookHandlerDeps {
