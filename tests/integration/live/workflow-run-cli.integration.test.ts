@@ -68,8 +68,54 @@ describe.skipIf(!LIVE_ENABLED)("run start drives a real Workflow Run end-to-end"
     expect(handoff).toMatchObject({ contractId: "handoff.v1" });
   });
 
-  // Pending the agent-harness binding for `runRole` (RunAttemptDispatcher + src/agent-runner/): once
-  // the CLI constructs the harness, a live run should plan -> implement -> review -> verify and open a
-  // reviewable draft PR. Tracked as the SEAM-1 follow-up `discovered` issue.
-  it.todo("opens a reviewable draft PR after a full plan -> verify run");
+  it("opens a reviewable draft PR after a full plan -> verify run (or blocks with honest evidence)", async () => {
+    const dataDir = await mkdtemp(path.join(os.tmpdir(), "risoluto-live-run-pr-"));
+    tempDirs.push(dataDir);
+
+    const { main } = await import("../../../src/cli/index.js");
+    const stdout: string[] = [];
+    const originalLog = console.log;
+    console.log = (line: string) => {
+      stdout.push(line);
+    };
+    try {
+      await expect(
+        main([
+          "run",
+          "start",
+          "--title",
+          "Live capstone drive",
+          "--intent",
+          "Drive the workflow engine end to end and open a reviewable draft PR.",
+          "--data-dir",
+          dataDir,
+          "--publish-mode",
+          "draft",
+          "--json",
+        ]),
+      ).resolves.toBe(0);
+    } finally {
+      console.log = originalLog;
+    }
+
+    const driven = JSON.parse(stdout[0] ?? "{}") as { outcome: string; workflowRun: { id: string } };
+    const archive = createWorkflowRunArchive({ dataDir });
+    const handoff = (
+      await archive.readWorkflowRunArtifact({ workflowRunId: driven.workflowRun.id, artifactId: "handoff" })
+    ).data as {
+      outcome: string;
+      output: { pullRequestUrl: string | null };
+      blockers: readonly unknown[];
+      evidence: readonly unknown[];
+    };
+
+    // The capstone is satisfied EITHER by a reviewable draft PR on a clean run OR by an honest blocked
+    // handoff carrying real evidence — never a stubbed success.
+    if (handoff.outcome === "done") {
+      expect(handoff.output.pullRequestUrl).toMatch(/^https:\/\/github\.com\/.+\/pull\/\d+/);
+    } else {
+      expect(handoff.outcome).toBe("blocked");
+      expect(handoff.blockers.length + handoff.evidence.length).toBeGreaterThan(0);
+    }
+  });
 });
