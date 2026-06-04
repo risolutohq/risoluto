@@ -58,6 +58,87 @@ query FindTeam($key: String!) {
 
 Only one team exists in this workspace — do not ask. Cache the returned `id` for `teamId` fields below.
 
+### Create / update a project (PRD body)
+
+The owner of project-level mutations for the PRD pipeline (`risoluto-to-prd`). A PRD's body is the
+project's `content` field — **not** the short `description`, and not reachable via the
+`mcp__linear-server__save_project` MCP surface (which cannot set `content`). Use GraphQL.
+
+**CREATE** (first promotion of a roadmap row). First resolve the project **lead** — a minted PRD
+project is _born owned_, never an orphaned unassigned Backlog container:
+
+```graphql
+query Me {
+  viewer {
+    id
+    name
+  }
+}
+```
+
+Then `projectCreate`:
+
+```graphql
+mutation CreateProject(
+  $name: String!
+  $teamIds: [String!]!
+  $description: String!
+  $content: String!
+  $leadId: String!
+  $priority: Int!
+) {
+  projectCreate(
+    input: { name: $name, teamIds: $teamIds, description: $description, content: $content, leadId: $leadId, priority: $priority }
+  ) {
+    success
+    project {
+      id
+      name
+      url
+      description
+      content
+      lead {
+        id
+        name
+      }
+      priority
+    }
+  }
+}
+```
+
+- `name`: the `<slug>` (or a humanised variant; the slug is the stable join key).
+- `teamIds`: `[<Ninetech team id>]` (the only team — do not ask).
+- `description`: a clean one-sentence summary, max 255 chars.
+- `content`: the PRD body (literal markdown, real newlines — no escape sequences).
+- `leadId`: the `viewer.id` above — born owned, not an orphaned planning container.
+- `priority`: `2` (High) — a promoted PRD is real, active work; stamp it at birth.
+
+Capture the returned `url` (e.g. `https://linear.app/ninetech/project/<slug>-<random>/overview`) — it
+becomes the PRD frontmatter `linear_project` value and the roadmap Status-cell link.
+
+**SYNC** (re-run; git PRD is canon, overwrite the mirror). Resolve the existing project by the
+`slugId` segment of the `linear_project` URL (see [ProjectBySlug](#list-project-milestones--issues-wave-derivation)),
+then `projectUpdate`:
+
+```graphql
+mutation UpdateProject($id: String!, $description: String!, $content: String!) {
+  projectUpdate(id: $id, input: { description: $description, content: $content }) {
+    success
+    project {
+      id
+      name
+      url
+      description
+      content
+    }
+  }
+}
+```
+
+SYNC deliberately does **not** re-assert `leadId` or `priority`: once the project exists, ownership and
+priority are operator-owned and a re-sync must not clobber a reassignment.
+
 ### Resolve a workflow-state id (needed to claim a ticket as "In Progress")
 
 States are team-scoped; you need the **UUID**, not the name.
@@ -358,9 +439,24 @@ mutation Comment($issueId: String!, $body: String!) {
 }
 ```
 
+**Idempotent back-comments — the marker convention.** Any skill (or the afk-orchestrator daemon)
+that back-comments an issue more than once over its lifetime must make the write idempotent so a
+re-run never stacks duplicate comments. Embed a hidden HTML-comment marker on the first line of the
+body:
+
+```
+<!-- risoluto:<kind>[:<key>] -->
+```
+
+`<kind>` names the writer's intent (`pr-link`, `sync`, `discovery`, `review`, …); the optional
+`<key>` scopes it (a slug, a ticket ref, a wave id). Before commenting, **list the issue's existing
+comments and skip the write if a comment already carries the same marker** (update it in place only
+if the body changed). This is the one convention shared across every Linear writer — keep the marker
+string identical so the dedup matches.
+
 ## Notes
 
 - **Connections paginate — don't silently truncate.** Linear returns at most 50 nodes per connection unless you ask for more (`first:` up to 250). For any scan that could exceed that (`issues(filter: { labels … })` on a large PRD), pass `first: 250` and follow `pageInfo { hasNextPage endCursor }` with `after: $endCursor` until exhausted. A bare `issues(filter:)` that quietly stops at 50 will drop ready-set members.
-- **Project create/update mutations** (`projectCreate` / `projectUpdate`, for PRD bodies) live in `risoluto-to-prd` Step 3 — the original reference implementation for the GraphQL path.
+- **Project create/update mutations** (`projectCreate` / `projectUpdate`, for PRD bodies) live in [Create / update a project (PRD body)](#create--update-a-project-prd-body) above — this file owns _all_ Linear GraphQL, issue- and project-level. `risoluto-to-prd` binds to that operation; it carries no inline mutation of its own.
 - **Attachments can rate-limit.** If `attachmentCreate` returns a rate-limit error, the issue's other fields still saved — retry just that attachment after a short gap.
 - Field names track the live Linear schema; if a mutation shape drifts, the authoritative source is the schema explorer at <https://studio.apollographql.com/public/Linear-API/variant/current/schema/reference>.

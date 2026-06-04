@@ -24,7 +24,7 @@ This is an **initial minimal version** (heuristic grouping; the agent does the l
 reasoning against its knowledge of the codebase). The grouping heuristic will sharpen as more
 PRDs and issues accumulate.
 
-> **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `list_issues`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
+> **Linear access.** This skill names Linear **operations**, not a fixed tool — bind each to your agent's surface (Claude MCP or Codex GraphQL) per [`../references/linear-access.md`](../references/linear-access.md), which owns every operation's ready-to-run query plus the connectivity probe. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
 
 ## Two constraints, neither of which is the roadmap
 
@@ -65,14 +65,12 @@ The founder picks a bundle. The skill stops there — no issue updates, no Linea
 
 ## Hard preconditions
 
-Stop and report if any fail:
+The shared rows (repo root, Linear reachable) live in [`../references/preconditions.md`](../references/preconditions.md). Stop and report on the first failure. Plus the skill-specific checks:
 
-| Check                       | Command                                                  | If it fails                                                                       |
-| --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Run from repo root          | `test -f package.json && test -f .gitmodules`            | Tell Omer to `cd` into the `risoluto` checkout root.                              |
-| `docs/prds/` exists         | `test -d docs/prds`                                      | No PRDs yet — run `/risoluto-to-prd` on a `next` roadmap row first.               |
-| At least one non-README PRD | `ls docs/prds/*.md` (excluding README.md)                | No PRDs to pull issues for — nothing to bundle. Tell Omer to promote a row first. |
-| Linear reachable            | A Linear connectivity probe succeeds (see Linear access) | Surface the error verbatim; do not retry auth.                                    |
+| Check                       | Command                                   | If it fails                                                                       |
+| --------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------- |
+| `docs/prds/` exists         | `test -d docs/prds`                       | No PRDs yet — run `/risoluto-to-prd` on a `next` roadmap row first.               |
+| At least one non-README PRD | `ls docs/prds/*.md` (excluding README.md) | No PRDs to pull issues for — nothing to bundle. Tell Omer to promote a row first. |
 
 ## Pipeline
 

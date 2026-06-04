@@ -7,7 +7,7 @@ description: Risoluto-repo Linear-aware TDD skill — the namespaced variant of 
 
 Linear-aware TDD for the Risoluto pipeline. Stage 3. Forked from the generic global `tdd` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the bundled TDD companion files live here.
 
-> **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `get_issue`, `save_issue`, `save_comment`, `create_issue_label`, `list_teams`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
+> **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `get_issue`, `save_issue`, `save_comment`, `create_issue_label`, `list_teams`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (that file owns all Linear mutations, project- and issue-level). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
 
 ## What this skill does
 
@@ -17,7 +17,7 @@ Given a `<ticket-ref>` (e.g. `RSL-123`):
 2. Resolves the linked PRD from the issue's `from:prd-<slug>` label → reads `docs/prds/<slug>.md` from disk.
 3. Validates all upstream blocked-by tickets are status: Done. If any are not, refuses and lists the open blockers.
 4. Creates an isolated git worktree from the PRD integration branch, then claims the ticket by setting it In Progress. Two parallel `/risoluto-tdd` runs from a `risoluto-next-bundle` plan never share a working tree.
-5. Runs the TDD red-green-refactor loop (see [tests.md](tests.md), [mocking.md](mocking.md), [deep-modules.md](deep-modules.md), [interface-design.md](interface-design.md), [refactoring.md](refactoring.md)) guided by the issue's acceptance criteria and the PRD's implementation decisions. Out-of-scope work found mid-implementation is filed as its own Linear issue, not fixed inline.
+5. Runs the TDD red-green-refactor loop (see [tests.md](../references/coder-discipline/tests.md), [mocking.md](../references/coder-discipline/mocking.md), [deep-modules.md](../references/coder-discipline/deep-modules.md), [interface-design.md](../references/coder-discipline/interface-design.md), [refactoring.md](../references/coder-discipline/refactoring.md)) guided by the issue's acceptance criteria and the PRD's implementation decisions. Out-of-scope work found mid-implementation is filed as its own Linear issue, not fixed inline.
 6. On PR open:
    - Back-comments the Linear ticket with the PR URL.
    - Applies the `from:prd-<slug>` label to the PR (so Stage 4's post-merge workflow can find it).
@@ -102,7 +102,7 @@ From the `from:prd-<slug>` label, read `docs/prds/<slug>.md`. The PRD's:
 
 ### Step 4 — TDD red-green-refactor loop
 
-Follow the TDD workflow defined in this skill's bundled companion files — [tests.md](tests.md), [interface-design.md](interface-design.md), [refactoring.md](refactoring.md), [mocking.md](mocking.md), [deep-modules.md](deep-modules.md) — which are authoritative for the philosophy, anti-patterns, and workflow steps:
+Follow the TDD workflow defined in the shared coder-discipline references — [tests.md](../references/coder-discipline/tests.md), [interface-design.md](../references/coder-discipline/interface-design.md), [refactoring.md](../references/coder-discipline/refactoring.md), [mocking.md](../references/coder-discipline/mocking.md), [deep-modules.md](../references/coder-discipline/deep-modules.md) — which are authoritative for the philosophy, anti-patterns, and workflow steps:
 
 1. **Planning** — confirm interface with Omer, identify behaviors to test, get approval
 2. **Tracer bullet** — one test → one implementation → proves the path
@@ -148,7 +148,7 @@ When implementation is complete and all tests pass:
 - **Linear errors are operator concerns.** Surface verbatim, stop, do not retry.
 - **The `from:prd-<slug>` label on the PR is load-bearing.** Stage 4's post-merge workflow triggers on it. Always apply it.
 - **Do not skip the blocked-by validation.** The dependency graph exists for a reason — implementing out of order produces integration failures.
-- **The TDD companion files in this directory are authoritative** for test philosophy and patterns. They mirror the generic global `tdd` skill — the TDD philosophy doesn't change, only the Linear integration is added.
+- **The shared coder-discipline files (`../references/coder-discipline/`) are authoritative** for test philosophy and patterns. They mirror the generic global `tdd` skill — the TDD philosophy doesn't change, only the Linear integration is added. The afk-orchestrator daemon's coder prompt injects the same files.
 - **PRD Out of Scope is a hard boundary.** If the issue's acceptance criteria seem to require something the PRD explicitly scopes out, surface the conflict to Omer rather than implementing it.
 - **Work in a worktree, never in-place.** `risoluto-next-bundle`'s disjoint-locality reasoning only pays off if bundled slices run as parallel worktrees; implementing in the main checkout forfeits that and risks index collisions with a sibling run.
 - **Merge ticket branches into the integration branch first.** For this PRD, the reviewable branch is `integration/<prd-slug>`; ticket PRs target that branch, and Codex reviews the finished integration branch after Claude/Codex workers have merged their slices.

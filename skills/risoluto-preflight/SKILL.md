@@ -20,13 +20,13 @@ package, never starts the cascade. It reports and interviews; you apply fixes th
 
 ## Hard preconditions
 
-| Check              | Verification                                  | If it fails                                        |
-| ------------------ | --------------------------------------------- | -------------------------------------------------- |
-| Run from repo root | `test -f package.json && test -f .gitmodules` | Tell Omer to `cd` into the Risoluto checkout root. |
-| Slug provided      | argv has `<slug>`                             | Ask Omer for the PRD slug.                         |
-| PRD exists         | `docs/prds/<slug>.md` exists                  | Run `/risoluto-to-prd <slug>` first.               |
-| Issues exist       | `from:prd-<slug>` label returns ≥1 issue      | Run `/risoluto-to-issues <slug>` first.            |
-| Linear reachable   | connectivity probe succeeds                   | Surface the error verbatim; do not retry auth.     |
+The shared rows (repo root, Linear reachable) live in [`../references/preconditions.md`](../references/preconditions.md). Plus the skill-specific checks:
+
+| Check         | Verification                             | If it fails                             |
+| ------------- | ---------------------------------------- | --------------------------------------- |
+| Slug provided | argv has `<slug>`                        | Ask Omer for the PRD slug.              |
+| PRD exists    | `docs/prds/<slug>.md` exists             | Run `/risoluto-to-prd <slug>` first.    |
+| Issues exist  | `from:prd-<slug>` label returns ≥1 issue | Run `/risoluto-to-issues <slug>` first. |
 
 ## Pipeline
 

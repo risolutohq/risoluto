@@ -176,10 +176,10 @@ red-test spec; write them so a different model can rule each one `met`/`not-met`
 - **Run `/risoluto-tdd`'s _method_ directly — do not invoke it as a slash command.** `/risoluto-tdd`
   hard-refuses any issue without a `from:prd-<slug>` label **and** a `docs/prds/<slug>.md` file (its
   Hard-preconditions table); an arch-loop candidate sub-issue has neither. So drive its red→green→refactor
-  loop (its Step 4) directly, using its bundled companion files for method —
-  [`tests.md`](../risoluto-tdd/tests.md), [`interface-design.md`](../risoluto-tdd/interface-design.md),
-  [`refactoring.md`](../risoluto-tdd/refactoring.md), [`mocking.md`](../risoluto-tdd/mocking.md),
-  [`deep-modules.md`](../risoluto-tdd/deep-modules.md) — with these substitutions:
+  loop (its Step 4) directly, using the shared coder-discipline references for method —
+  [`tests.md`](../references/coder-discipline/tests.md), [`interface-design.md`](../references/coder-discipline/interface-design.md),
+  [`refactoring.md`](../references/coder-discipline/refactoring.md), [`mocking.md`](../references/coder-discipline/mocking.md),
+  [`deep-modules.md`](../references/coder-discipline/deep-modules.md) — with these substitutions:
   - **Spec / "PRD" = the candidate sub-issue body** you self-authored in step 3; its `## Acceptance criteria`
     block is the criteria. There is no PRD file to read.
   - **Integration base = `integration/architecture-loop`** (the worktree above is already on it) — never
@@ -299,7 +299,7 @@ Remote Control = live steering:
   `improve-codebase-architecture` so this skill is self-contained; the interactive command is never run).
 - `~/.risoluto/goals/risoluto-architecture-loop/SPEC.md` — the locked human-readable design (source of
   truth for §2–§8).
-- [`../risoluto-tdd/`](../risoluto-tdd/) — the per-candidate red-green-refactor build method.
+- [`../references/coder-discipline/`](../references/coder-discipline/) — the per-candidate red-green-refactor build method (the shared discipline files; `risoluto-tdd` is the Linear-aware wrapper around them).
 - [`../risoluto-verify-acceptance/`](../risoluto-verify-acceptance/) — the cross-model per-fix referee
   (pin `deepseek-v4-pro`).
 - [`../risoluto-review-handoff/`](../risoluto-review-handoff/) — the end-of-run oracle (pin Codex

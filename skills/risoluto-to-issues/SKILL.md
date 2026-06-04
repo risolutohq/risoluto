@@ -7,7 +7,7 @@ description: 'Risoluto-repo variant of to-issues: breaks a PRD at `docs/prds/<sl
 
 PRD-to-Linear-Issues breaker for the Risoluto planning pipeline. Stage 2 of the pipeline. Forked from the generic global `to-issues` skill — keep that one tracker-agnostic, never edit it; the Linear-specific behaviour and the flat-issue-with-blocked-by layout live here.
 
-> **Linear access (agent-portable).** This skill names Linear **operations**, not a fixed tool. Bind each operation to whatever Linear surface your agent has: under **Claude**, the Linear MCP tools (`mcp__linear-server__<op>` — e.g. `list_issues`, `save_issue`, `list_issue_labels`, `create_issue_label`, `save_milestone`, native attachment/link operation, `list_teams`); under **Codex** or any agent without the Linear MCP, `LINEAR_API_KEY` + the Linear GraphQL API — see [`../references/linear-access.md`](../references/linear-access.md) for ready-to-run queries for every operation this skill uses (`risoluto-to-prd` Step 3 covers the project mutations). `.codex/config.toml` ships no Linear MCP, so GraphQL is the Codex path. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
+> **Linear access.** This skill names Linear **operations**, not a fixed tool — bind each to your agent's surface (Claude MCP or Codex GraphQL) per [`../references/linear-access.md`](../references/linear-access.md), which owns every operation's ready-to-run query (issue- and project-level) plus the connectivity probe. If neither surface is reachable, surface the error verbatim and stop — never retry auth.
 
 ## What this skill produces
 
@@ -28,16 +28,13 @@ For one `<prd-slug>` per invocation:
 
 ## Hard preconditions
 
-Stop and report if any of these fail. Do **not** retry Linear auth from inside this skill — if Linear errors, surface it to the operator.
+The shared rows (repo root, `research/` init, Linear reachable) live in [`../references/preconditions.md`](../references/preconditions.md). Stop and report on the first failure; never retry Linear auth from inside this skill. Plus the skill-specific checks:
 
 | Check                             | Command / verification                                   | If it fails                                                                                                                               |
 | --------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Run from repo root                | `test -f package.json && test -f .gitmodules`            | Tell Omer to `cd` into the `risoluto` checkout root.                                                                                      |
-| `research/` initialised           | `git submodule status research` starts with a space      | Tell Omer to `git submodule update --init research`.                                                                                      |
 | PRD exists                        | `test -f docs/prds/<slug>.md`                            | Tell Omer to run `/risoluto-to-prd <slug>` first.                                                                                         |
 | PRD has `linear_project`          | frontmatter `linear_project` is non-null                 | Tell Omer to run `/risoluto-to-prd <slug>` first.                                                                                         |
 | PRD has `source`                  | frontmatter `source` is non-null                         | Acceptable to proceed; `source` may be absent for older PRDs.                                                                             |
-| Linear reachable                  | A Linear connectivity probe succeeds (see Linear access) | Surface the error verbatim; do not retry auth.                                                                                            |
 | Issues for this PRD already exist | A list-issues-by-label query returns non-empty           | This is a re-run — go to **Step 0 — Reconcile**: resume to create only missing slices, or abort. Never blind-create over an existing set. |
 
 ## Pipeline

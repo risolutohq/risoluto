@@ -416,6 +416,16 @@ Invariants:
 
 ## Back-half AFK conductor
 
+> **⚠ Being restructured — the daemon becomes the only build path.** The [`afk-orchestrator`](prds/afk-orchestrator.md)
+> PRD (umbrella) replaces this whole back-half with a standing `scripts/afk-orchestrator/` daemon that reads the
+> Linear DAG live, drives opencode coder/reviewer sessions, serializes gated merges, and owns the Linear writeback +
+> reconcile in-process. As its waves land, the manual single-ticket path and the AFK conductor are retired:
+> `goal-prep` and the `goal-run` conductor at Wave 1; `tdd` and `pre-pr` at Wave 2; `review-handoff`,
+> `verify-acceptance`, and `sync` at Wave 3. `goal-run`'s SKILL.md becomes a thin launcher; `preflight` stays.
+> The shared concerns those skills duplicated now live in `skills/references/` (`linear-access.md` owns all Linear
+> GraphQL, `preconditions.md`, `reachability.md`, `coder-discipline/`). Until each wave ships, the skills below are
+> still live — this section describes the current conductor; the PRD describes where it is going.
+
 Before launching an autonomous build, run **`/risoluto-preflight <slug>`** — the interactive roadblocker
 gate that clears missing env/secrets, non-falsifiable ACs, unresolved blocked-by, missing test infra, and
 scope conflicts (incl. `discovered` issues orphaned from `WAVES.md`). `goal-prep`'s "runner readiness" is a

@@ -1,7 +1,7 @@
 ---
 slug: afk-orchestrator
 linear_project: https://linear.app/kyanite/project/afk-orchestrator-77742470e134
-synced_at: 2026-06-04T11:45:54.170Z
+synced_at: 2026-06-04T13:36:44.000Z
 source: docs/roadmap.md#afk-orchestrator
 status: draft
 ---
@@ -54,6 +54,13 @@ The observable seam: an operator promotes a PRD, walks away, and returns to an `
 22. As a Risoluto operator, I want a `GET /status` HTTP endpoint plus `PATCH` controls to abort a session and skip a wave, and a `CONTROL.md` pause flag honoured at wave boundaries, so that I can observe and steer an AFK run. *Verifiable: `/status` reflects the journal; `PATCH /session/:id/abort` routes to `session.abort` and journals; `paused:true` halts before the next wave.*
 23. As a Risoluto operator, I want SIGTERM to flush the journal and shut the HTTP/SSE servers cleanly, so that the journal is always a valid resume point. *Verifiable: SIGTERM exits 0 after the journal is flushed and servers are closed.*
 24. As a Risoluto operator, I want the thin `/risoluto-goal-run` launcher to validate the required model ids and `LINEAR_API_KEY`, invoke the orchestrator, tail the journal, and print the `gh pr create` command (never run it), so that opening the PR stays my decision. *Verifiable: with a model unset the launcher reports the precondition failure and does not start the orchestrator; on success it prints, but does not execute, `gh pr create`.*
+25. As a Risoluto operator, I want `skills/references/linear-access.md` to own every Linear GraphQL operation (issue- **and** project-level), so that no skill carries an inline mutation that can drift. *Verifiable: `rg 'projectCreate|projectUpdate' skills/risoluto-to-prd/` finds no mutation body; the only definitions live in `linear-access.md`.*
+26. As a Risoluto operator, I want `/risoluto-to-prd` to document one parameterized publish path instead of mirrored CREATE/SYNC branches, so that the skill is roughly half its former size with one flow to reason about. *Verifiable: `write.mjs` takes a single `--mode create|sync`; the SKILL.md has one "Publish to Linear" step that branches only on mode; the file is under ~140 lines (was 268).*
+27. As a Risoluto operator, I want the duplicated preconditions table, agent-portable Linear block, and reachability invariant extracted into shared `skills/references/` docs that every surviving skill links, so that a change lands once. *Verifiable: `skills/references/{preconditions,reachability}.md` exist; `to-prd`/`to-issues`/`preflight`/`next-bundle` link them rather than restating the rows.*
+28. As a Risoluto operator, I want the daemon to be the only build path — the manual single-ticket skills (`tdd`, `pre-pr`, `verify-acceptance`) and the back-half AFK chain (`goal-prep`, the `goal-run` conductor, `review-handoff`, `sync`) retired — so that there is one way to build, not two drifting ones. *Verifiable: after each deletion's wave gate, the named skill directory is absent and no live (non-archived) caller references it.*
+29. As a Risoluto operator, I want the TDD red-green-refactor discipline preserved as `skills/references/coder-discipline/` and injected into the daemon's coder prompt, so that retiring the `tdd` skill loses the surface but not the knowledge. *Verifiable: the five discipline files live under `skills/references/coder-discipline/`; the daemon's coder prompt cites them; no skill points at the old `risoluto-tdd/*.md` paths.*
+30. As a Risoluto operator, I want each skill deletion gated on the daemon wave that replaces its capability, so that a skill is never removed before its replacement is proven. *Verifiable: `goal-prep`/conductor delete only at Wave 1, `tdd`/`pre-pr` at Wave 2, `review-handoff`/`verify-acceptance`/`sync` at Wave 3; a deletion landing before its wave fails review.*
+31. As a Risoluto operator, I want the idempotent back-comment marker convention defined once in `linear-access.md` and reused by every Linear writer (surviving skills and the daemon), so that a re-run never stacks duplicate comments. *Verifiable: the `<!-- risoluto:<kind>[:<key>] -->` convention is defined once; the daemon's Linear writeback and any surviving skill reference it rather than restating it.*
 
 ## Implementation Decisions
 
@@ -81,7 +88,38 @@ The observable seam: an operator promotes a PRD, walks away, and returns to an `
 
 **Linear write boundary (D10) & AC discipline (D11).** The orchestrator writes per-slice status transitions live and ticks acceptance criteria, **fully replacing `/risoluto-sync`**. AC ticking is proof-only — a criterion is ticked only with a concrete git/test citation, never invented from a bare `merged`. A boot/end reconcile pass re-derives expected Linear state from journal+git and repairs drift. All Linear writes are non-fatal; the journal is canon. This roughly doubles the Linear surface area relative to the original plan and is the single largest scope item — it absorbs `/risoluto-sync`'s hardest logic.
 
-**Thin launcher.** `skills/risoluto-goal-run/SKILL.md` becomes a thin launcher (validate required models + `LINEAR_API_KEY` → run orchestrator → tail journal → print `gh pr create`). `conductor.workflow.mjs` is deprecated but retained for its `readyIn` reference.
+**Thin launcher.** `skills/risoluto-goal-run/SKILL.md` becomes a thin launcher (validate required models + `LINEAR_API_KEY` → run orchestrator → tail journal → print `gh pr create`). `conductor.workflow.mjs`'s `readyIn` logic is ported into `dag.ts`, after which the conductor file is **deleted** (Wave 1) — the daemon is the only build path, so nothing else consumes it.
+
+**Pipeline skill restructure (D12).** This PRD is the umbrella for both the daemon and the pipeline-skill simplification. The daemon is the **only** build path: the manual single-ticket path (`tdd`, `pre-pr`, `verify-acceptance`) and the back-half AFK chain (`goal-prep`, the `goal-run` conductor, `review-handoff`, `sync`) are retired, their capabilities living inside the daemon (`coder`, `reviewer`, `gate`, live writeback + reconcile). Shared concerns consolidate into `skills/references/`: `linear-access.md` owns all Linear GraphQL (issue + project) and the back-comment marker convention; `preconditions.md` and `reachability.md` hold the formerly copy-pasted gate and invariant; `coder-discipline/` holds the relocated TDD discipline the coder prompt injects. Every deletion is gated on the daemon wave that proves its replacement (see [Pipeline Skill Restructure](#pipeline-skill-restructure)). Survivors (`to-prd`, `to-issues`, `preflight`, `next-bundle`, the thin launcher) keep their identity and only delegate to the shared refs; no skills are merged. `architecture-loop` stays out of scope — it only repoints its discipline reference.
+
+## Pipeline Skill Restructure
+
+The umbrella's second half. Because the daemon collapses the back-half of the planning pipeline, the surrounding skills are simplified in the same initiative. The end-state build pipeline is `to-prd → to-issues → preflight → goal-run (thin launcher) → [afk-orchestrator daemon] → operator opens PR` — down from a ten-skill manual+AFK tangle.
+
+**Daemon is the only build path.** The manual single-ticket path and the old AFK conductor are both retired; their capabilities move in-process into the daemon's `coder`, `reviewer`, `gate`, and live Linear writeback/reconcile modules. There is no remaining way to hand-build and reconcile a single ticket outside a cascade — by design. The goal-level cross-model review that `review-handoff` provided collapses into the daemon's per-slice `reviewer`.
+
+**Shared references (`skills/references/`).** The duplicated concerns are extracted so a change lands once:
+
+| Reference | Owns | Replaces copies in |
+| --- | --- | --- |
+| `linear-access.md` | every Linear GraphQL op (issue + project) and the idempotent back-comment marker convention | inline `projectCreate`/`projectUpdate` in `to-prd`; the marker convention formerly restated in `tdd`/`sync`/`review-handoff` |
+| `preconditions.md` | repo-root / `research/` init / Linear-reachable / clean-tree gate | the per-skill preconditions tables |
+| `reachability.md` | the non-test-caller invariant (a green gate is not reachability) | the five skills that each restated it |
+| `coder-discipline/` | the relocated red-green-refactor discipline (`tests`, `interface-design`, `refactoring`, `mocking`, `deep-modules`) | `risoluto-tdd/*.md`; injected into the daemon coder prompt |
+
+**Deletion set — each gated on the daemon wave that replaces it** (never delete-before-replace):
+
+| Skill / file | Replaced by | Gate |
+| --- | --- | --- |
+| `risoluto-goal-prep` (+ `render.mjs`, templates) | live Linear DAG read (`dag.ts`) | Wave 1 |
+| `goal-run` conductor (`conductor.workflow.mjs`) | `cascade.ts` + `dag.ts` `readyIn` port | Wave 1 |
+| `risoluto-tdd` (skill) | daemon `coder` (the discipline files survive as references) | Wave 2 |
+| `risoluto-pre-pr` | daemon `reviewer` + `gate` | Wave 2 |
+| `risoluto-review-handoff` | daemon per-slice `reviewer` | Wave 3 |
+| `risoluto-verify-acceptance` | daemon `reviewer` + proof-only AC writeback | Wave 3 |
+| `risoluto-sync` | daemon live writeback + boot/end reconcile | Wave 3 |
+
+**Survivors get a DRY pass only — no merges.** `to-prd` (slim + unified CREATE/SYNC), `to-issues`, `preflight`, and `next-bundle` keep their boundaries and link the shared refs; the new thin `goal-run` launcher is a Wave-1 deliverable. The independent restructure work (extracting the references, slimming the survivors, relocating the discipline) is **Wave 4** and carries no daemon dependency — only the deletions above wait on their gates.
 
 ## Testing Decisions
 
@@ -103,11 +141,12 @@ Prior-art shape to follow: the existing skill scripts and `src/orchestrator/` us
 - **Goal-package rendering.** The DAG is read live from Linear; `/risoluto-goal-prep`-style pre-rendered packages are not required or produced.
 - **Replacing the v1 gate definition.** The orchestrator *runs* the existing six commands; it does not redefine what the gate is.
 - **A UI beyond the minimal `/status` + PATCH HTTP surface.** No dashboard.
-- **Retaining `/risoluto-sync`.** It is deprecated and replaced by the orchestrator's live writeback + reconcile; the reconcile pass is the only safety net and must carry `/risoluto-sync`'s proof-only discipline.
+- **Retaining the manual build path.** `/risoluto-sync`, `/risoluto-verify-acceptance`, `/risoluto-pre-pr`, `/risoluto-tdd`, `/risoluto-review-handoff`, `/risoluto-goal-prep`, and the `goal-run` conductor are all retired — their capabilities move into the daemon (see [Pipeline Skill Restructure](#pipeline-skill-restructure)). The boot/end reconcile pass is the only reconciliation safety net and carries `/risoluto-sync`'s proof-only discipline.
+- **Merging or redesigning surviving skills.** The restructure is DRY-only on survivors (`to-prd`, `to-issues`, `preflight`, `next-bundle`); none are merged. `risoluto-architecture-loop` keeps its own identity — only its discipline reference is repointed to `coder-discipline/`.
 
 ## Further Notes
 
-- **Sequencing.** Wave 0 = the SDK capability spike (gates everything; SDK dep added only once green). Wave 1 = minimal end-to-end (journal + SSE + `/status`; Linear read + DAG; worktree lifecycle; single-slice runner; thin launcher) to first `awaiting-review`. Wave 2 = cascade + robustness (serial merge; watchdog + diagnoser; multi-wave loop + gate + budget; crash recovery). Wave 3 = quality + Linear ownership (reviewer + auto-fix; domain fixtures; HTTP steering + pause + SIGTERM; Linear writeback + proof-only AC + reconcile).
+- **Sequencing.** Wave 0 = the SDK capability spike (gates everything; SDK dep added only once green). Wave 1 = minimal end-to-end (journal + SSE + `/status`; Linear read + DAG; worktree lifecycle; single-slice runner; thin launcher) to first `awaiting-review`. Wave 2 = cascade + robustness (serial merge; watchdog + diagnoser; multi-wave loop + gate + budget; crash recovery). Wave 3 = quality + Linear ownership (reviewer + auto-fix; domain fixtures; HTTP steering + pause + SIGTERM; Linear writeback + proof-only AC + reconcile). Wave 4 = the pipeline skill restructure's **independent** work (extract the shared `skills/references/`, slim `to-prd`/`to-issues`/`preflight`/`next-bundle`, relocate the coder discipline, write the thin launcher); the skill **deletions** in the Pipeline Skill Restructure table are exit criteria on Waves 1–3, not Wave 4, so a capability is never removed before its replacement ships.
 - **Hard external preconditions** beyond the spike: required model ids before the coder/watchdog/reviewer items; `LINEAR_API_KEY` before the DAG and Linear-writeback items.
 - **Risk to watch.** The Linear writeback + proof-only AC + reconcile item (D10/D11) roughly doubles the Linear surface area and folds in `/risoluto-sync`'s hardest logic; track it as a first-class item, not a side effect.
 - **Open question.** The exact mapping from slice statuses to the Ninetech team's Linear workflow states (`running→In Progress`, `awaiting-review→In Review`, `merged→Done`, `blocked/rejected→?`) should be config-driven and confirmed against the live workflow before the writeback item lands.
