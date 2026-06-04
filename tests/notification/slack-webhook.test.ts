@@ -50,6 +50,34 @@ describe("SlackWebhookChannel", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("escapes Slack mrkdwn special characters in issue title and message (NIN-266)", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" }));
+    const channel = new SlackWebhookChannel({
+      webhookUrl: "https://hooks.slack.test/one",
+      verbosity: "critical",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    await channel.notify(
+      baseEvent({
+        issue: {
+          id: "issue-1",
+          identifier: "MT-42",
+          title: "fix <script> & <b>",
+          state: "In Progress",
+          url: "https://linear.app/example/issue/MT-42",
+        },
+        message: "a < b && c > d",
+      }),
+    );
+
+    const body = (fetchMock.mock.calls[0]?.[1] as { body: string }).body;
+    expect(body).toContain("fix &lt;script&gt; &amp; &lt;b&gt;");
+    expect(body).toContain("a &lt; b &amp;&amp; c &gt; d");
+    // The raw, unescaped user markup never reaches a mrkdwn field.
+    expect(body).not.toContain("<script>");
+  });
+
   it("posts a block payload for critical events", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

@@ -28,6 +28,10 @@ export interface AuditRecord {
   actor: string;
   requestId: string | null;
   timestamp: string;
+  /** sha256 of this entry's canonical fields + previousHash. Null for pre-chain (legacy) rows. */
+  entryHash: string | null;
+  /** The prior entry's entryHash — the chain link. Null for the genesis entry / legacy rows. */
+  previousHash: string | null;
 }
 
 export interface AuditQueryOptions {

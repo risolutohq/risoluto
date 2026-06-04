@@ -382,6 +382,8 @@ describe("configHistory table schema", () => {
         "actor",
         "request_id",
         "timestamp",
+        "entry_hash",
+        "previous_hash",
       ].sort(),
     );
   });

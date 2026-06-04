@@ -110,7 +110,9 @@ const CREATE_TABLES_SQL = `
     new_value       TEXT,
     actor           TEXT NOT NULL DEFAULT 'operator',
     request_id      TEXT,
-    timestamp       TEXT NOT NULL
+    timestamp       TEXT NOT NULL,
+    entry_hash      TEXT,
+    previous_hash   TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_config_history_table_key ON config_history(table_name, key);
@@ -594,6 +596,18 @@ function applyV12Migration(sqlite: SqliteDb): void {
 }
 
 /**
+ * Adds the tamper-evident hash-chain columns to config_history. Existing rows keep NULL hashes
+ * (pre-chain history); every new audit entry links to the prior entry's hash (NIN-266). Fresh
+ * installs already have the columns from CREATE_TABLES_SQL.
+ */
+function applyV13Migration(sqlite: SqliteDb): void {
+  if (hasSchemaVersion(sqlite, 13)) return;
+  addColumnIfAbsent(sqlite, "config_history", "entry_hash", "TEXT");
+  addColumnIfAbsent(sqlite, "config_history", "previous_hash", "TEXT");
+  bumpSchemaVersion(sqlite, 13);
+}
+
+/**
  * Opens (or creates) a SQLite database at the given path,
  * enables WAL journal mode, and ensures the schema tables exist.
  *
@@ -628,6 +642,7 @@ export function openDatabase(dbPath: string): RisolutoDatabase {
     applyV10Migration(sqlite);
     applyV11Migration(sqlite);
     applyV12Migration(sqlite);
+    applyV13Migration(sqlite);
   } catch (error) {
     // Release the file handle / WAL locks if schema creation or a migration throws,
     // so a failed open never leaks the raw better-sqlite3 connection (NIN-254).

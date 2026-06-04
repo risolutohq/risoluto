@@ -245,6 +245,34 @@ function validateRoleGraph(definition: WorkflowDefinition): void {
       }
     }
   }
+  assertAcyclicRoleGraph(roles);
+}
+
+// Depth-first colouring: a back-edge to a node already on the current path is a cycle. Without this a
+// definition whose roles depend on each other in a loop would deadlock the role DAG executor (NIN-266).
+function assertAcyclicRoleGraph(roles: readonly WorkflowRoleDefinition[]): void {
+  const dependenciesById = new Map(roles.map((role) => [role.id, role.dependsOn]));
+  const visitState = new Map<string, "visiting" | "visited">();
+
+  const visit = (id: string, pathToHere: readonly string[]): void => {
+    const status = visitState.get(id);
+    if (status === "visited") {
+      return;
+    }
+    if (status === "visiting") {
+      const cyclePath = [...pathToHere.slice(pathToHere.indexOf(id)), id].join(" -> ");
+      throw new WorkflowDefinitionRegistryError(`role dependency cycle detected: ${cyclePath}`);
+    }
+    visitState.set(id, "visiting");
+    for (const dependency of dependenciesById.get(id) ?? []) {
+      visit(dependency, [...pathToHere, id]);
+    }
+    visitState.set(id, "visited");
+  };
+
+  for (const role of roles) {
+    visit(role.id, []);
+  }
 }
 
 function resolveWorkflowDefinition(

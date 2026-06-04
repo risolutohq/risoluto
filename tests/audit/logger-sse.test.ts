@@ -3,9 +3,12 @@ import { TypedEventBus } from "../../src/core/event-bus.js";
 import type { RisolutoEventMap } from "../../src/core/risoluto-events.js";
 import { AuditLogger } from "../../src/audit/logger.js";
 
-/** Stub db with insert().values().run() chain. */
+/** Stub db with the insert().values().run() chain plus the $client.prepare().get() the hash chain reads. */
 function createMockDb() {
-  return { insert: () => ({ values: () => ({ run: () => {} }) }) };
+  return {
+    insert: () => ({ values: () => ({ run: () => {} }) }),
+    $client: { prepare: () => ({ get: () => undefined }) },
+  };
 }
 
 describe("AuditLogger SSE emission", () => {

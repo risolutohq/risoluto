@@ -310,6 +310,39 @@ actions: []
     ).rejects.toThrow(/declares no roles/);
   });
 
+  it("rejects a role dependency cycle (NIN-266)", async () => {
+    const workflowDir = await createWorkflowDir();
+    await writeWorkflowDefinition(
+      workflowDir,
+      "cycle.yaml",
+      `
+version: 1
+id: cycle
+defaults:
+  modelProfile: balanced
+  validationProfile: node-pnpm-standard
+states:
+  - id: loop
+    roles:
+      - id: planner
+        consumes: [intent.v1]
+        produces: [plan.v1]
+        dependsOn: [reviewer]
+      - id: reviewer
+        consumes: [change_summary.v1]
+        produces: [review.v1]
+        dependsOn: [planner]
+    gates: []
+    hooks: []
+actions: []
+`.trimStart(),
+    );
+
+    await expect(
+      loadWorkflowDefinitionRegistry({ workflowDir, globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS }),
+    ).rejects.toThrow(/role dependency cycle detected/);
+  });
+
   it("rejects definitions without a version field", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(

@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { z } from "zod";
@@ -122,7 +122,9 @@ async function claimMapping(
           // otherwise poison every future duplicate intake with an ENOENT loop. Overwrite it and
           // claim afresh for this run instead (NIN-261).
           if (recoverStaleMapping && (await recoverStaleMapping(mapping))) {
-            await writeFile(filePath, payload, { encoding: "utf8", flag: "w" });
+            // Overwrite atomically (temp file + rename) so a crash mid-write can't leave a torn or
+            // empty mapping that would ENOENT-loop every future intake (NIN-266).
+            await atomicOverwrite(filePath, payload);
             return { status: "claimed" };
           }
           return { status: "existing", mapping };
@@ -134,6 +136,14 @@ async function claimMapping(
     }
   }
   throw lastError;
+}
+
+// Write to a unique temp file then rename over the target — rename is atomic within a filesystem,
+// so a reader never observes a partially-written mapping (NIN-266).
+async function atomicOverwrite(filePath: string, payload: string): Promise<void> {
+  const tempPath = `${filePath}.${randomUUID()}.tmp`;
+  await writeFile(tempPath, payload, { encoding: "utf8", flag: "wx" });
+  await rename(tempPath, filePath);
 }
 
 function externalMappingPath(

@@ -111,6 +111,13 @@ describe("CLI parseCliArgs (via main module)", () => {
       "invalid --port value: 04000. Expected an integer between 1 and 65535 with no leading zeros.",
     );
   }, 15_000);
+
+  it("rejects bad CLI input with a typed CliArgumentError (NIN-266)", async () => {
+    const cli = await import("../../src/cli/index.js");
+    // Malformed value and unknown flag both surface as the concise, typed CLI error (not a raw stack).
+    expect(() => cli.parseCliArgs(["--port", "0"])).toThrow(cli.CliArgumentError);
+    expect(() => cli.parseCliArgs(["--unknown-flag"])).toThrow(cli.CliArgumentError);
+  }, 15_000);
 });
 
 describe("CLI readMasterKeyFile equivalent", () => {

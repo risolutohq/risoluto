@@ -155,6 +155,10 @@ export const configHistory = sqliteTable("config_history", {
   actor: text("actor").notNull().default("operator"),
   requestId: text("request_id"),
   timestamp: text("timestamp").notNull(),
+  // Tamper-evident hash chain: entryHash = sha256(canonical fields + previousHash); previousHash is
+  // the prior entry's entryHash. A broken link reveals an inserted/edited/removed entry (NIN-266).
+  entryHash: text("entry_hash"),
+  previousHash: text("previous_hash"),
 });
 
 /**

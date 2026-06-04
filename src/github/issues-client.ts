@@ -3,7 +3,11 @@ import { GitHubTransport } from "./transport.js";
 import { toErrorString } from "../utils/type-guards.js";
 import { withRetry as sharedWithRetry, withRetryReturn as sharedWithRetryReturn } from "../utils/retry.js";
 
-type GitHubErrorCode = "github_transport_error" | "github_http_error" | "github_unknown_payload";
+type GitHubErrorCode =
+  | "github_transport_error"
+  | "github_http_error"
+  | "github_rate_limited"
+  | "github_unknown_payload";
 
 export class GitHubIssuesClientError extends Error {
   constructor(
@@ -139,16 +143,30 @@ export class GitHubIssuesClient {
     }
   }
 
+  // Distinguish a rate-limit response (429, or 403 with the rate-limit budget exhausted) from a
+  // generic HTTP error so callers can back off on the reported window instead of hard-failing (NIN-266).
+  private httpError(response: Response): GitHubIssuesClientError {
+    const rateLimited =
+      response.status === 429 || (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0");
+    if (rateLimited) {
+      const retryAfter = response.headers.get("retry-after");
+      const reset = response.headers.get("x-ratelimit-reset");
+      const detail = retryAfter ? `retry after ${retryAfter}s` : reset ? `resets at epoch ${reset}` : "no retry hint";
+      return new GitHubIssuesClientError(
+        "github_rate_limited",
+        `github api rate limited (status ${response.status}; ${detail})`,
+      );
+    }
+    return new GitHubIssuesClientError("github_http_error", `github api request failed with status ${response.status}`);
+  }
+
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const url = `${this.getApiBaseUrl()}${path}`;
     const response = await this.send(path, options);
 
     if (!response.ok) {
       this.logger.error({ status: response.status, statusText: response.statusText, url }, "github api request failed");
-      throw new GitHubIssuesClientError(
-        "github_http_error",
-        `github api request failed with status ${response.status}`,
-      );
+      throw this.httpError(response);
     }
 
     if (response.status === 204) {
@@ -191,10 +209,7 @@ export class GitHubIssuesClient {
       const response = await this.send(`${basePath}&page=${page}`);
       if (!response.ok) {
         this.logger.error({ status: response.status, statusText: response.statusText }, "github api request failed");
-        throw new GitHubIssuesClientError(
-          "github_http_error",
-          `github api request failed with status ${response.status}`,
-        );
+        throw this.httpError(response);
       }
       try {
         all.push(...((await response.json()) as T[]));
@@ -241,10 +256,7 @@ export class GitHubIssuesClient {
       { method: "DELETE" },
     );
     if (!response.ok && response.status !== 404) {
-      throw new GitHubIssuesClientError(
-        "github_http_error",
-        `github api request failed with status ${response.status}`,
-      );
+      throw this.httpError(response);
     }
   }
 

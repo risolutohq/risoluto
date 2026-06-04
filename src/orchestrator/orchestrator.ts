@@ -60,6 +60,10 @@ export class Orchestrator implements OrchestratorPort {
     revision: number;
     entriesByIdentifier: Map<string, RunningEntry>;
   } | null = null;
+  // Captured so stop() can tear the subscriptions down — otherwise each Orchestrator instance would
+  // leave a live config/health listener behind, growing the bus across restart cycles (NIN-266).
+  private configUnsubscribe: (() => void) | null = null;
+  private healthTransitionHandler: (() => void) | null = null;
 
   constructor(private readonly deps: OrchestratorDeps) {
     this.deps.metrics ??= createMetricsCollector();
@@ -84,14 +88,31 @@ export class Orchestrator implements OrchestratorPort {
       },
     });
     this._ctx = this.runtimeCoordinator.getContext();
-    this.deps.configStore.subscribe(() => {
-      this.markStateDirty();
-    });
-    if (typeof this.deps.eventBus?.on === "function") {
-      this.deps.eventBus.on("health.transition", () => {
+    this.registerSubscriptions();
+  }
+
+  // Idempotent: registers the config + health listeners and captures their teardown handles. Safe to
+  // call again after stop() tore them down, so a restart re-arms the same listeners (NIN-266).
+  private registerSubscriptions(): void {
+    if (!this.configUnsubscribe) {
+      this.configUnsubscribe = this.deps.configStore.subscribe(() => {
         this.markStateDirty();
       });
     }
+    if (!this.healthTransitionHandler && typeof this.deps.eventBus?.on === "function") {
+      const handler = () => this.markStateDirty();
+      this.healthTransitionHandler = handler;
+      this.deps.eventBus.on("health.transition", handler);
+    }
+  }
+
+  private teardownSubscriptions(): void {
+    this.configUnsubscribe?.();
+    this.configUnsubscribe = null;
+    if (this.healthTransitionHandler && typeof this.deps.eventBus?.off === "function") {
+      this.deps.eventBus.off("health.transition", this.healthTransitionHandler);
+    }
+    this.healthTransitionHandler = null;
   }
 
   private markStateDirty(): void {
@@ -118,6 +139,8 @@ export class Orchestrator implements OrchestratorPort {
   async start(): Promise<void> {
     if (this._state.running) return;
     this._state.running = true;
+    // Re-arm listeners in case a prior stop() tore them down (idempotent on first start) (NIN-266).
+    this.registerSubscriptions();
     this.markStateDirty();
     this.deps.observability?.getComponent("orchestrator").setHealth({
       surface: "orchestrator",
@@ -226,6 +249,18 @@ export class Orchestrator implements OrchestratorPort {
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
     }
+
+    // Release listeners and clear the in-memory projection caches so nothing accumulates across
+    // repeated start/stop cycles. The seeded maps (completed/model/template) are rebuilt on the next
+    // start(); the rest are runtime caches repopulated during operation (NIN-266).
+    this.teardownSubscriptions();
+    this._state.completedViews.clear();
+    this._state.detailViews.clear();
+    this._state.issueModelOverrides.clear();
+    this._state.issueTemplateOverrides.clear();
+    this._state.operatorAbortSuppressions.clear();
+    this._state.sessionUsageTotals.clear();
+    this.markStateDirty();
   }
 
   async executeCommand(command: RefreshCommand): Promise<RefreshCommandResult>;

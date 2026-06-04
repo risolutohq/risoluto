@@ -25,6 +25,12 @@ function metadataLines(metadata: Record<string, unknown> | undefined): string[] 
     });
 }
 
+// Slack mrkdwn treats &, <, > as control characters; escape them in issue/operator-derived text so a
+// title or message can't break the message layout or forge link/markup syntax (NIN-266).
+function escapeSlackMrkdwn(text: string): string {
+  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
 function slackColorForSeverity(severity: NotificationEvent["severity"]): string {
   return severity === "critical" ? "#d32f2f" : "#1d4ed8";
 }
@@ -57,14 +63,14 @@ function buildSlackPayload(event: NotificationEvent): Record<string, unknown> {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*${event.issue.identifier}* - ${event.issue.title}`,
+        text: `*${escapeSlackMrkdwn(event.issue.identifier)}* - ${escapeSlackMrkdwn(event.issue.title)}`,
       },
     },
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: event.message,
+        text: escapeSlackMrkdwn(event.message),
       },
     },
     {
@@ -93,7 +99,7 @@ function buildSlackPayload(event: NotificationEvent): Record<string, unknown> {
   }
 
   return {
-    text: `[Risoluto ${slackSeverityTag(event.severity)}] ${event.issue.identifier}: ${event.message}`,
+    text: `[Risoluto ${slackSeverityTag(event.severity)}] ${escapeSlackMrkdwn(event.issue.identifier)}: ${escapeSlackMrkdwn(event.message)}`,
     attachments: [
       {
         color: slackColorForSeverity(event.severity),
