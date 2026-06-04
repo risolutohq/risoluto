@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 // JSON parse in src/core/signal-detection.ts swallows parse failures silently and emits no
 // placeholder). This guard asserts the noise never leaks into the source — any agent/tool output path
 // lives under src/, so its absence there proves the AC and catches a regression if anyone adds it
-// (NIN-267). Matched on the distinctive ASCII fragments so an em-dash encoding change can't slip past.
+// (RIS-267). Matched on the distinctive ASCII fragments so an em-dash encoding change can't slip past.
 const INJECTED_NOISE_FRAGMENTS = ["JSON PARSE ERROR", "IMMEDIATE ACTION REQUIRED"] as const;
 
 async function collectTsFiles(dir: string): Promise<string[]> {
@@ -25,7 +25,7 @@ async function collectTsFiles(dir: string): Promise<string[]> {
   return nested.flat();
 }
 
-describe("injected-noise guard (NIN-267)", () => {
+describe("injected-noise guard (RIS-267)", () => {
   it("no source file emits the spurious [JSON PARSE ERROR …] string", async () => {
     const srcDir = path.resolve("src");
     const files = await collectTsFiles(srcDir);

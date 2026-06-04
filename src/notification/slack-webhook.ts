@@ -26,14 +26,14 @@ function metadataLines(metadata: Record<string, unknown> | undefined): string[] 
 }
 
 // Slack mrkdwn treats &, <, > as control characters; escape them in issue/operator-derived text so a
-// title or message can't break the message layout or forge link/markup syntax (NIN-266).
+// title or message can't break the message layout or forge link/markup syntax (RIS-266).
 function escapeSlackMrkdwn(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 // A Slack link target lives inside `<url|label>`; percent-encode the characters that would otherwise
 // close the link (`>`), split off the label (`|`), or open a nested link (`<`) so an attacker-controlled
-// issue URL cannot break out and inject markup. `&` is left intact so query strings stay valid (NIN-266).
+// issue URL cannot break out and inject markup. `&` is left intact so query strings stay valid (RIS-266).
 function escapeSlackLinkUrl(url: string): string {
   return url.replaceAll("<", "%3C").replaceAll(">", "%3E").replaceAll("|", "%7C");
 }

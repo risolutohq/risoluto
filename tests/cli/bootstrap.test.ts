@@ -112,7 +112,7 @@ describe("CLI parseCliArgs (via main module)", () => {
     );
   }, 15_000);
 
-  it("rejects bad CLI input with a typed CliArgumentError (NIN-266)", async () => {
+  it("rejects bad CLI input with a typed CliArgumentError (RIS-266)", async () => {
     const cli = await import("../../src/cli/index.js");
     // Malformed value and unknown flag both surface as the concise, typed CLI error (not a raw stack).
     expect(() => cli.parseCliArgs(["--port", "0"])).toThrow(cli.CliArgumentError);

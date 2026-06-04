@@ -149,7 +149,7 @@ const CREATE_TABLES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_webhook_inbox_issue_id ON webhook_inbox(issue_id);
   CREATE INDEX IF NOT EXISTS idx_webhook_inbox_next_attempt ON webhook_inbox(next_attempt_at);
   -- Replay dedupe on the verified body+signature digest. SQLite treats NULLs as distinct, so
-  -- providers without a digest are unaffected while duplicate digests collide (NIN-262).
+  -- providers without a digest are unaffected while duplicate digests collide (RIS-262).
   CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_inbox_body_digest ON webhook_inbox(body_digest);
 
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -363,7 +363,7 @@ function applyV6Migration(sqlite: SqliteDb): void {
     existingColumns.some((column) => column.name === "pull_number");
 
   // Rebuild/copy/drop/rename/index/version run in one transaction so a crash mid-step
-  // can't leave the DB without the original pull_requests table (NIN-254).
+  // can't leave the DB without the original pull_requests table (RIS-254).
   sqlite.transaction(() => rebuildPullRequestsV6(sqlite, hasTable, hasCanonicalShape))();
 }
 
@@ -586,7 +586,7 @@ function applyV11Migration(sqlite: SqliteDb): void {
  * v12 migration: add `body_digest` to `webhook_inbox` with a unique index so replay protection
  * dedupes on the verified body+signature digest rather than the spoofable provider delivery id.
  * SQLite treats NULLs as distinct, so existing rows and digest-less providers are unaffected.
- * Fresh installs already have the column + index from CREATE_TABLES_SQL (NIN-262).
+ * Fresh installs already have the column + index from CREATE_TABLES_SQL (RIS-262).
  */
 function applyV12Migration(sqlite: SqliteDb): void {
   if (hasSchemaVersion(sqlite, 12)) return;
@@ -597,7 +597,7 @@ function applyV12Migration(sqlite: SqliteDb): void {
 
 /**
  * Adds the tamper-evident hash-chain columns to config_history. Existing rows keep NULL hashes
- * (pre-chain history); every new audit entry links to the prior entry's hash (NIN-266). Fresh
+ * (pre-chain history); every new audit entry links to the prior entry's hash (RIS-266). Fresh
  * installs already have the columns from CREATE_TABLES_SQL.
  */
 function applyV13Migration(sqlite: SqliteDb): void {
@@ -645,7 +645,7 @@ export function openDatabase(dbPath: string): RisolutoDatabase {
     applyV13Migration(sqlite);
   } catch (error) {
     // Release the file handle / WAL locks if schema creation or a migration throws,
-    // so a failed open never leaks the raw better-sqlite3 connection (NIN-254).
+    // so a failed open never leaks the raw better-sqlite3 connection (RIS-254).
     sqlite.close();
     throw error;
   }

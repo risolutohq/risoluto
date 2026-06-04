@@ -13,7 +13,7 @@ function createCommitAndPushRunner(calls: string[][]): GitRunner {
     }
     if (args[0] === "rev-parse") {
       if (args[1] === "--abbrev-ref") {
-        return { stdout: "risoluto/nin-42\n", stderr: "" };
+        return { stdout: "risoluto/ris-42\n", stderr: "" };
       }
       return { stdout: "abc123\n", stderr: "" };
     }
@@ -24,13 +24,13 @@ function createCommitAndPushRunner(calls: string[][]): GitRunner {
 function createIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "issue-1",
-    identifier: "NIN-42",
+    identifier: "RIS-42",
     title: "Implement feature",
     description: null,
     priority: null,
     state: "Todo",
     branchName: null,
-    url: "https://linear.app/acme/issue/NIN-42",
+    url: "https://linear.app/acme/issue/RIS-42",
     labels: [],
     blockedBy: [],
     createdAt: null,
@@ -60,10 +60,10 @@ describe("GitManager", () => {
     const manager = new GitManager({ runGit, env: {} });
     const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue());
 
-    expect(result.branchName).toBe("risoluto/nin-42");
+    expect(result.branchName).toBe("risoluto/ris-42");
     expect(calls).toEqual([
       ["clone", "--branch", "main", "--single-branch", "--", "https://github.com/acme/backend.git", "."],
-      ["checkout", "-b", "risoluto/nin-42"],
+      ["checkout", "-b", "risoluto/ris-42"],
     ]);
   });
 
@@ -120,10 +120,10 @@ describe("GitManager", () => {
     };
 
     const manager = new GitManager({ runGit, env: {} });
-    const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ identifier: "  /NIN 42??/ " }));
+    const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ identifier: "  /RIS 42??/ " }));
 
-    expect(result.branchName).toBe("risoluto/nin-42");
-    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/nin-42"]);
+    expect(result.branchName).toBe("risoluto/ris-42");
+    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/ris-42"]);
   });
 
   it("collapses repeated internal hyphens when deriving a branch slug", async () => {
@@ -134,10 +134,10 @@ describe("GitManager", () => {
     };
 
     const manager = new GitManager({ runGit, env: {} });
-    const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ identifier: "NIN---42" }));
+    const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ identifier: "RIS---42" }));
 
-    expect(result.branchName).toBe("risoluto/nin-42");
-    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/nin-42"]);
+    expect(result.branchName).toBe("risoluto/ris-42");
+    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/ris-42"]);
   });
 
   it("strips repeated leading separators when deriving a branch slug", async () => {
@@ -148,10 +148,10 @@ describe("GitManager", () => {
     };
 
     const manager = new GitManager({ runGit, env: {} });
-    const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ identifier: "///NIN-42" }));
+    const result = await manager.cloneInto(createRepoMatch(), "/tmp/ws", createIssue({ identifier: "///RIS-42" }));
 
-    expect(result.branchName).toBe("risoluto/nin-42");
-    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/nin-42"]);
+    expect(result.branchName).toBe("risoluto/ris-42");
+    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/ris-42"]);
   });
 
   it("falls back to the issue slug when sanitization removes the identifier entirely", async () => {
@@ -197,11 +197,11 @@ describe("GitManager", () => {
     const result = await manager.cloneInto(
       createRepoMatch(),
       "/tmp/ws",
-      createIssue({ branchName: "   ", identifier: "NIN-99" }),
+      createIssue({ branchName: "   ", identifier: "RIS-99" }),
     );
 
-    expect(result.branchName).toBe("risoluto/nin-99");
-    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/nin-99"]);
+    expect(result.branchName).toBe("risoluto/ris-99");
+    expect(calls[1]).toEqual(["checkout", "-b", "risoluto/ris-99"]);
   });
 
   it("sets up a worktree for a new prefixed branch", async () => {
@@ -221,19 +221,19 @@ describe("GitManager", () => {
     const result = await manager.setupWorktree(
       createRepoMatch(),
       "/tmp/base/backend.git",
-      "/tmp/worktrees/NIN-42",
+      "/tmp/worktrees/RIS-42",
       createIssue(),
       "feature/",
     );
 
-    expect(result).toEqual({ branchName: "feature/nin-42" });
+    expect(result).toEqual({ branchName: "feature/ris-42" });
     expect(calls).toEqual([
       ["rev-parse", "--git-dir"],
       ["fetch", "origin", "--prune"],
       ["fetch", "origin", "--prune"],
-      ["rev-parse", "--verify", "refs/heads/feature/nin-42"],
-      ["rev-parse", "--verify", "refs/remotes/origin/feature/nin-42"],
-      ["worktree", "add", "-b", "feature/nin-42", "/tmp/worktrees/NIN-42", "main"],
+      ["rev-parse", "--verify", "refs/heads/feature/ris-42"],
+      ["rev-parse", "--verify", "refs/remotes/origin/feature/ris-42"],
+      ["worktree", "add", "-b", "feature/ris-42", "/tmp/worktrees/RIS-42", "main"],
     ]);
   });
 
@@ -244,7 +244,7 @@ describe("GitManager", () => {
       if (args[0] === "rev-parse" && args[1] === "--git-dir") {
         return { stdout: ".git\n", stderr: "" };
       }
-      if (args[0] === "rev-parse" && args[1] === "--verify" && args[2] === "refs/heads/risoluto/nin-42") {
+      if (args[0] === "rev-parse" && args[1] === "--verify" && args[2] === "refs/heads/risoluto/ris-42") {
         throw new Error("no local branch");
       }
       return { stdout: "", stderr: "" };
@@ -254,13 +254,13 @@ describe("GitManager", () => {
     const result = await manager.setupWorktree(
       createRepoMatch(),
       "/tmp/base/backend.git",
-      "/tmp/worktrees/NIN-42",
+      "/tmp/worktrees/RIS-42",
       createIssue(),
     );
 
-    expect(result).toEqual({ branchName: "risoluto/nin-42" });
-    expect(calls).toContainEqual(["rev-parse", "--verify", "refs/remotes/origin/risoluto/nin-42"]);
-    expect(calls).toContainEqual(["worktree", "add", "/tmp/worktrees/NIN-42", "risoluto/nin-42"]);
+    expect(result).toEqual({ branchName: "risoluto/ris-42" });
+    expect(calls).toContainEqual(["rev-parse", "--verify", "refs/remotes/origin/risoluto/ris-42"]);
+    expect(calls).toContainEqual(["worktree", "add", "/tmp/worktrees/RIS-42", "risoluto/ris-42"]);
   });
 
   it("attaches an existing worktree branch", async () => {
@@ -271,7 +271,7 @@ describe("GitManager", () => {
         return { stdout: ".git\n", stderr: "" };
       }
       if (args[0] === "rev-parse" && args[1] === "--verify") {
-        return { stdout: "refs/heads/risoluto/nin-42\n", stderr: "" };
+        return { stdout: "refs/heads/risoluto/ris-42\n", stderr: "" };
       }
       return { stdout: "", stderr: "" };
     };
@@ -280,17 +280,17 @@ describe("GitManager", () => {
     const result = await manager.setupWorktree(
       createRepoMatch(),
       "/tmp/base/backend.git",
-      "/tmp/worktrees/NIN-42",
+      "/tmp/worktrees/RIS-42",
       createIssue(),
     );
 
-    expect(result).toEqual({ branchName: "risoluto/nin-42" });
+    expect(result).toEqual({ branchName: "risoluto/ris-42" });
     expect(calls).toEqual([
       ["rev-parse", "--git-dir"],
       ["fetch", "origin", "--prune"],
       ["fetch", "origin", "--prune"],
-      ["rev-parse", "--verify", "refs/heads/risoluto/nin-42"],
-      ["worktree", "add", "/tmp/worktrees/NIN-42", "risoluto/nin-42"],
+      ["rev-parse", "--verify", "refs/heads/risoluto/ris-42"],
+      ["worktree", "add", "/tmp/worktrees/RIS-42", "risoluto/ris-42"],
     ]);
   });
 
@@ -315,10 +315,10 @@ describe("GitManager", () => {
     };
 
     const manager = new GitManager({ runGit, env: {} });
-    await manager.removeWorktree("/tmp/base/backend.git", "/tmp/worktrees/NIN-42");
+    await manager.removeWorktree("/tmp/base/backend.git", "/tmp/worktrees/RIS-42");
 
     expect(calls).toEqual([
-      ["worktree", "remove", "--force", "/tmp/worktrees/NIN-42"],
+      ["worktree", "remove", "--force", "/tmp/worktrees/RIS-42"],
       ["worktree", "prune"],
     ]);
   });
@@ -393,14 +393,14 @@ describe("GitManager", () => {
       env: {},
     });
 
-    const sha = await manager.autoCommit("/tmp/ws", "[NIN-42] auto-commit: workspace cleanup preservation", {
+    const sha = await manager.autoCommit("/tmp/ws", "[RIS-42] auto-commit: workspace cleanup preservation", {
       noVerify: true,
     });
 
     expect(sha).toBe("abc123");
     expect(calls).toEqual([
       ["add", "-A"],
-      ["commit", "--no-verify", "-m", "[NIN-42] auto-commit: workspace cleanup preservation"],
+      ["commit", "--no-verify", "-m", "[RIS-42] auto-commit: workspace cleanup preservation"],
       ["rev-parse", "HEAD"],
     ]);
   });
@@ -415,7 +415,7 @@ describe("GitManager", () => {
     expect(result).toEqual({
       committed: true,
       pushed: true,
-      branchName: "risoluto/nin-42",
+      branchName: "risoluto/ris-42",
     });
     expect(calls).toEqual([
       ["rev-parse", "--abbrev-ref", "HEAD"],
@@ -423,7 +423,7 @@ describe("GitManager", () => {
       ["add", "-A"],
       ["commit", "-m", "feat: finish issue"],
       ["rev-parse", "HEAD"],
-      ["push", "-u", "origin", "risoluto/nin-42"],
+      ["push", "-u", "origin", "risoluto/ris-42"],
     ]);
   });
 
@@ -442,7 +442,7 @@ describe("GitManager", () => {
     expect(result).toEqual({
       committed: true,
       pushed: true,
-      branchName: "risoluto/nin-42",
+      branchName: "risoluto/ris-42",
     });
     expect(calls.at(-1)).toEqual([
       "-c",
@@ -450,7 +450,7 @@ describe("GitManager", () => {
       "push",
       "-u",
       "origin",
-      "risoluto/nin-42",
+      "risoluto/ris-42",
     ]);
   });
 
@@ -472,7 +472,7 @@ describe("GitManager", () => {
       "push",
       "-u",
       "origin",
-      "risoluto/nin-42",
+      "risoluto/ris-42",
     ]);
   });
 
@@ -507,9 +507,9 @@ describe("GitManager", () => {
       env: {},
     });
 
-    await manager.forcePushIfBranchExists("risoluto/nin-42", "/tmp/ws");
+    await manager.forcePushIfBranchExists("risoluto/ris-42", "/tmp/ws");
 
-    expect(calls).toEqual([["push", "--force-with-lease", "origin", "risoluto/nin-42"]]);
+    expect(calls).toEqual([["push", "--force-with-lease", "origin", "risoluto/ris-42"]]);
   });
 
   it("creates a pull request via GitHub API", async () => {
@@ -530,7 +530,7 @@ describe("GitManager", () => {
       env: { GITHUB_TOKEN: "ghs_test" },
     });
 
-    const payload = await manager.createPullRequest(createRepoMatch(), createIssue(), "risoluto/nin-42");
+    const payload = await manager.createPullRequest(createRepoMatch(), createIssue(), "risoluto/ris-42");
     expect(payload).toMatchObject({ number: 101 });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.github.com/repos/acme/backend/pulls",
@@ -549,7 +549,7 @@ describe("GitManager", () => {
       env: {},
     });
 
-    await expect(manager.createPullRequest(createRepoMatch(), createIssue(), "risoluto/nin-42")).rejects.toThrow(
+    await expect(manager.createPullRequest(createRepoMatch(), createIssue(), "risoluto/ris-42")).rejects.toThrow(
       "missing GitHub token env var",
     );
   });
@@ -569,7 +569,7 @@ describe("GitManager", () => {
       env: { GITHUB_TOKEN: "ghs_test" },
     });
 
-    await expect(manager.createPullRequest(createRepoMatch(), createIssue(), "risoluto/nin-42")).rejects.toThrow(
+    await expect(manager.createPullRequest(createRepoMatch(), createIssue(), "risoluto/ris-42")).rejects.toThrow(
       "github request failed with status 502",
     );
   });

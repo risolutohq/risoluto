@@ -37,7 +37,7 @@ describe("handleLinearGraphqlToolCall", () => {
     });
   });
 
-  it("rejects mutation operations and never calls the client (NIN-248)", async () => {
+  it("rejects mutation operations and never calls the client (RIS-248)", async () => {
     const runGraphQL = vi.fn();
     const client = { runGraphQL } as unknown as LinearClient;
 
@@ -52,7 +52,7 @@ describe("handleLinearGraphqlToolCall", () => {
     expect(runGraphQL).not.toHaveBeenCalled();
   });
 
-  it("rejects subscription operations and never calls the client (NIN-248)", async () => {
+  it("rejects subscription operations and never calls the client (RIS-248)", async () => {
     const runGraphQL = vi.fn();
     const client = { runGraphQL } as unknown as LinearClient;
 
@@ -67,7 +67,7 @@ describe("handleLinearGraphqlToolCall", () => {
     expect(runGraphQL).not.toHaveBeenCalled();
   });
 
-  it("rejects queries that select secret-bearing fields (NIN-248)", async () => {
+  it("rejects queries that select secret-bearing fields (RIS-248)", async () => {
     const runGraphQL = vi.fn();
     const client = { runGraphQL } as unknown as LinearClient;
 
@@ -82,7 +82,7 @@ describe("handleLinearGraphqlToolCall", () => {
     expect(runGraphQL).not.toHaveBeenCalled();
   });
 
-  it("rejects camelCase/compound secret fields the word-boundary regex missed (NIN-248)", async () => {
+  it("rejects camelCase/compound secret fields the word-boundary regex missed (RIS-248)", async () => {
     const runGraphQL = vi.fn();
     const client = { runGraphQL } as unknown as LinearClient;
 
@@ -94,8 +94,8 @@ describe("handleLinearGraphqlToolCall", () => {
     expect(runGraphQL).not.toHaveBeenCalled();
   });
 
-  it("still allows a non-secret field that merely contains 'key' such as Team.key (NIN-248)", async () => {
-    const runGraphQL = vi.fn(async () => ({ data: { teams: { nodes: [{ key: "NIN" }] } } }));
+  it("still allows a non-secret field that merely contains 'key' such as Team.key (RIS-248)", async () => {
+    const runGraphQL = vi.fn(async () => ({ data: { teams: { nodes: [{ key: "RIS" }] } } }));
     const client = { runGraphQL } as unknown as LinearClient;
 
     const response = await handleLinearGraphqlToolCall(client, {

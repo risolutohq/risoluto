@@ -101,7 +101,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("evidence and attempt-memory recorded during run start (NIN-204 + NIN-214)", () => {
+describe("evidence and attempt-memory recorded during run start (RIS-204 + RIS-214)", () => {
   it("writes an evidence record for each hook firing and an attempt-memory record for the run", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-ev-mem-data-");

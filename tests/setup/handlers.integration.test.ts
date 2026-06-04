@@ -109,7 +109,7 @@ describe("handlePostMasterKey — real filesystem", () => {
     await handler({ body: { key: "my-integration-key-12345" } } as Request, res as unknown as Response);
 
     expect(res._status).toBe(200);
-    // Response never echoes the key material; it lands on disk only (NIN-249).
+    // Response never echoes the key material; it lands on disk only (RIS-249).
     expect(res._body).toEqual({ ok: true });
 
     // Verify the file was written to the real filesystem
@@ -135,7 +135,7 @@ describe("handlePostMasterKey — real filesystem", () => {
     expect(res._status).toBe(200);
     expect(res._body).toEqual({ ok: true });
 
-    // The generated key is the file on disk, never the response body (NIN-249).
+    // The generated key is the file on disk, never the response body (RIS-249).
     const keyPath = path.join(freshDir, "master.key");
     const written = await readFile(keyPath, "utf8");
     // randomBytes(32).toString("hex") produces a 64-char hex string

@@ -82,7 +82,7 @@ export class SqliteAttemptStore {
     }
     // Build the SET from only the columns the patch actually changes, instead of writing
     // the whole row back. A full read-merge-write would clobber any unrelated field a
-    // concurrent writer changed between our read and write (NIN-254).
+    // concurrent writer changed between our read and write (RIS-254).
     const mergedRow = attemptRecordToRow({ ...current, ...patch }) as Record<string, unknown>;
     const currentRow = attemptRecordToRow(current) as Record<string, unknown>;
     const changes: Record<string, unknown> = {};
@@ -153,7 +153,7 @@ export class SqliteAttemptStore {
       // Deduplication: skip the write only when the new checkpoint is identical to the
       // last on EVERY persisted field. Comparing the full set (incl. eventCursor, token
       // counts, metadata, createdAt) keeps distinct recovery/evidence checkpoints that
-      // happen to share status/thread/turn (NIN-254).
+      // happen to share status/thread/turn (RIS-254).
       if (lastRow) {
         const candidate = fromAttemptCheckpointRecord({ ...checkpoint, ordinal: lastRow.ordinal });
         const fields = [

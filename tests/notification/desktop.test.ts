@@ -11,10 +11,10 @@ function createEvent(overrides?: Partial<NotificationEvent>): NotificationEvent 
     message: "worker crashed",
     issue: {
       id: "issue-1",
-      identifier: "NIN-42",
+      identifier: "RIS-42",
       title: "Notifications bundle",
       state: "In Progress",
-      url: "https://linear.app/example/issue/NIN-42",
+      url: "https://linear.app/example/issue/RIS-42",
     },
     attempt: 2,
     ...overrides,

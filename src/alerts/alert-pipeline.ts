@@ -51,7 +51,7 @@ export class AlertPipeline {
     }
     // Reserve the cooldown before sending so a concurrent duplicate is suppressed, then release it
     // if the delivery genuinely failed — a failed notify must not suppress this rule's retry within
-    // the cooldown window (NIN-264). A manager-level dedupe (skippedDuplicate) counts as a recent
+    // the cooldown window (RIS-264). A manager-level dedupe (skippedDuplicate) counts as a recent
     // delivery, so the reservation is kept in that case.
     this.recentDeliveries.set(cooldownKey, now);
     const notificationEvent = buildNotificationEvent(rule, eventType, payload);
@@ -150,7 +150,7 @@ function buildNotificationEvent(rule: AlertRuleConfig, eventType: string, payloa
 /**
  * Allowlisted, redacted per-event summary for alert notifications — replaces the
  * raw event payload so secrets in error/message/context are never embedded
- * verbatim in the persisted/sent notification metadata (NIN-247).
+ * verbatim in the persisted/sent notification metadata (RIS-247).
  */
 function buildAlertSummary(payload: EventPayload): Record<string, string | null> {
   return {

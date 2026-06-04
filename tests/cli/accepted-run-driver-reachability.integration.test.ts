@@ -169,13 +169,13 @@ describe("Linear webhook → accepted-run driver reachability", () => {
       type: "Issue",
       data: {
         id: "lin_reach_1",
-        identifier: "NIN-REACH-1",
+        identifier: "RIS-REACH-1",
         title: "Reachability test from Linear",
-        url: "https://linear.app/test/NIN-REACH-1",
+        url: "https://linear.app/test/RIS-REACH-1",
         description: "Integration reachability test.",
       },
       webhookTimestamp: timestamp,
-      url: "https://linear.app/test/NIN-REACH-1",
+      url: "https://linear.app/test/RIS-REACH-1",
     };
     const rawBody = Buffer.from(JSON.stringify(bodyObj));
     const signature = signLinear(rawBody.toString(), LINEAR_SECRET);

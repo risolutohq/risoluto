@@ -195,7 +195,7 @@ describe("initializeSession", () => {
       expect(result).toEqual({ threadId: "thread-abc", prompt: "Workflow Run WR-1: Workflow Run title" });
     });
 
-    it("fences Liquid delimiter tokens injected into a user-origin workflow-run title (NIN-238)", async () => {
+    it("fences Liquid delimiter tokens injected into a user-origin workflow-run title (RIS-238)", async () => {
       const session = makeMockSession();
       session.connection.request
         .mockResolvedValueOnce({})
@@ -234,7 +234,7 @@ describe("initializeSession", () => {
       expect(prompt).toContain("HACK");
     });
 
-    it("fences Liquid delimiter tokens injected into a user-origin issue title (NIN-238)", async () => {
+    it("fences Liquid delimiter tokens injected into a user-origin issue title (RIS-238)", async () => {
       const session = makeMockSession();
       session.connection.request
         .mockResolvedValueOnce({})

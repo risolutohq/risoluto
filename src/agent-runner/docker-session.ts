@@ -35,7 +35,7 @@ function parsePercent(value: string): number {
 
 // The docker CLI child only needs the variables required to locate the binary and reach
 // the daemon. Provider secrets are injected explicitly as `-e NAME=value` args by
-// buildDockerRunArgs, so the child must NOT inherit the full host env (NIN-256).
+// buildDockerRunArgs, so the child must NOT inherit the full host env (RIS-256).
 const DOCKER_CLI_ENV_ALLOWLIST = [
   "PATH",
   "HOME",
@@ -247,7 +247,7 @@ function buildDockerSessionObject(
   // Clears the stats timer + abort listener, closes the connection, and removes the
   // container and cache volume — exactly once. Every removal is best-effort (logged
   // failures don't reject the attempt) so a Docker cleanup error can't fail the run, and
-  // the cache volume is always reclaimed even when stop/remove throws (NIN-256).
+  // the cache volume is always reclaimed even when stop/remove throws (RIS-256).
   const teardown = async (): Promise<void> => {
     if (teardownDone) return;
     teardownDone = true;

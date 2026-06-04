@@ -530,7 +530,7 @@ describe("JsonRpcConnection", () => {
     });
   });
 
-  describe("secret redaction (NIN-246)", () => {
+  describe("secret redaction (RIS-246)", () => {
     it("redacts secrets in codex stderr before logging", () => {
       const mock = makeMockChild();
       createConnection(mock);

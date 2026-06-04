@@ -225,7 +225,7 @@ export async function handleGitContext(deps: GitContextDeps, _req: Request, res:
   const apiBaseUrl = config?.github?.apiBaseUrl ?? "https://api.github.com";
   // Only send the GitHub token to a safe https host; a config that points
   // apiBaseUrl at a loopback/private/link-local or non-https host must not
-  // receive the token (SSRF / token exfiltration, NIN-245).
+  // receive the token (SSRF / token exfiltration, RIS-245).
   const enrichmentEnabled = token !== null && isSafeOutboundHttpsUrl(apiBaseUrl);
   const fetchOptions: GitHubFetchOptions = {
     token: token ?? "",

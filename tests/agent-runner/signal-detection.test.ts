@@ -41,7 +41,7 @@ describe("detectStopSignal", () => {
 
   it("detects DONE embedded in longer message", () => {
     const longMessage =
-      "NIN-10 is complete. CHANGELOG.md has been added.\n\n" +
+      "RIS-10 is complete. CHANGELOG.md has been added.\n\n" +
       "There is no further in-scope work.\n\n" +
       "RISOLUTO_STATUS: DONE";
     expect(detectStopSignal(longMessage)).toBe("done");

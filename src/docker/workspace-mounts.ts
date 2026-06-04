@@ -8,7 +8,7 @@ import path from "node:path";
  * workspace.
  *
  * The `.git`/`gitdir`/`commondir` contents are workspace-controlled and cannot
- * be trusted to name a safe host path (NIN-242): a malicious pointer to e.g.
+ * be trusted to name a safe host path (RIS-242): a malicious pointer to e.g.
  * `/home/...` must never become a container mount. The resolved directory is
  * therefore only returned when it is the trusted base clone (`gitBaseDir`) or a
  * path contained within it; anything outside is ignored.

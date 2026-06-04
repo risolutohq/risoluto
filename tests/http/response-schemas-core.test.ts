@@ -264,7 +264,7 @@ describe("recoveryReportResponseSchema", () => {
         {
           attemptId: "attempt-1",
           issueId: "issue-1",
-          issueIdentifier: "NIN-42",
+          issueIdentifier: "RIS-42",
           persistedStatus: "running",
           attemptNumber: 2,
           threadId: "thread-1",

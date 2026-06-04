@@ -12,12 +12,12 @@ import { createMockLogger } from "../helpers.js";
 function createMockIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "issue-abc",
-    identifier: "NIN-42",
+    identifier: "RIS-42",
     title: "Sample issue",
     state: "In Progress",
-    url: "https://linear.app/team/issue/NIN-42",
+    url: "https://linear.app/team/issue/RIS-42",
     priority: 2,
-    branchName: "feature/NIN-42",
+    branchName: "feature/RIS-42",
     ...overrides,
   };
 }
@@ -33,8 +33,8 @@ function createMockClient(): LinearClient {
     createComment: vi.fn<(id: string, body: string) => Promise<void>>().mockResolvedValue(undefined),
     createIssue: vi.fn().mockResolvedValue({
       issueId: "issue-created",
-      identifier: "NIN-77",
-      url: "https://linear.app/team/issue/NIN-77",
+      identifier: "RIS-77",
+      url: "https://linear.app/team/issue/RIS-77",
     }),
     listProjects: vi.fn().mockResolvedValue([{ id: "project-1", name: "Ops", slugId: "ops", teamKey: "ENG" }]),
     createProject: vi.fn().mockResolvedValue({
@@ -45,8 +45,8 @@ function createMockClient(): LinearClient {
       teamKey: "ENG",
     }),
     createSetupTestIssue: vi.fn().mockResolvedValue({
-      issueIdentifier: "NIN-77",
-      issueUrl: "https://linear.app/team/issue/NIN-77",
+      issueIdentifier: "RIS-77",
+      issueUrl: "https://linear.app/team/issue/RIS-77",
     }),
     ensureRisolutoLabel: vi.fn().mockResolvedValue({
       labelId: "label-1",
@@ -179,8 +179,8 @@ describe("LinearTrackerAdapter", () => {
       });
       expect(result).toEqual({
         issueId: "issue-created",
-        identifier: "NIN-77",
-        url: "https://linear.app/team/issue/NIN-77",
+        identifier: "RIS-77",
+        url: "https://linear.app/team/issue/RIS-77",
       });
     });
   });
@@ -267,8 +267,8 @@ describe("LinearTrackerAdapter", () => {
       expect(client.createSetupTestIssue).toHaveBeenCalledOnce();
       expect(result).toEqual({
         ok: true,
-        issueIdentifier: "NIN-77",
-        issueUrl: "https://linear.app/team/issue/NIN-77",
+        issueIdentifier: "RIS-77",
+        issueUrl: "https://linear.app/team/issue/RIS-77",
       });
     });
 

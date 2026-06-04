@@ -81,7 +81,7 @@ describe("workflow-run intake core", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
-  it("recovers from a crash mid-claim instead of poisoning future duplicate intake (NIN-261)", async () => {
+  it("recovers from a crash mid-claim instead of poisoning future duplicate intake (RIS-261)", async () => {
     const dataDir = await createTempDir();
     const rules: WorkflowRunIntakeRule[] = [trackerRule({ id: "afk" })];
     const externalObject = { provider: "linear" as const, id: "lin_issue_1", url: "https://linear.example/RIS-1" };

@@ -100,7 +100,7 @@ export class HttpServer {
     this.app.use(express.json({ limit: "1mb", verify: captureWebhookRawBody }));
     // Slack interactive webhooks post application/x-www-form-urlencoded, so express.json()
     // skips them and never captures rawBody — the signature check then fails on valid
-    // requests. A urlencoded parser with the same raw-body capture closes that gap (NIN-250).
+    // requests. A urlencoded parser with the same raw-body capture closes that gap (RIS-250).
     this.app.use(express.urlencoded({ extended: false, limit: "1mb", verify: captureWebhookRawBody }));
     this.app.use(createReadGuard());
     this.app.use(createWriteGuard());

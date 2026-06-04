@@ -29,7 +29,7 @@ function makeOrchestrator() {
       running: [
         {
           id: "i1",
-          identifier: "NIN-1",
+          identifier: "RIS-1",
           title: "Auth flow",
           state: "In Progress",
           runningAttemptId: "att-1",
@@ -39,7 +39,7 @@ function makeOrchestrator() {
       ],
       retrying: [],
       completed: [],
-      queued: [{ id: "i3", identifier: "NIN-3", title: "Settings page", state: "Todo" }],
+      queued: [{ id: "i3", identifier: "RIS-3", title: "Settings page", state: "Todo" }],
       workflowColumns: [
         { key: "in progress", label: "In Progress", terminal: false },
         { key: "done", label: "Done", terminal: true },
@@ -52,7 +52,7 @@ function makeOrchestrator() {
         costUsd: 19.44,
       },
       rateLimits: null,
-      recentEvents: [{ type: "attempt_started", timestamp: "2024-01-01T00:00:00Z", issueIdentifier: "NIN-1" }],
+      recentEvents: [{ type: "attempt_started", timestamp: "2024-01-01T00:00:00Z", issueIdentifier: "RIS-1" }],
     }),
     requestRefresh: vi.fn().mockReturnValue({
       queued: true,
@@ -61,7 +61,7 @@ function makeOrchestrator() {
     }),
     getIssueDetail: vi.fn().mockReturnValue({
       issueId: "i1",
-      identifier: "NIN-1",
+      identifier: "RIS-1",
       title: "Auth flow",
       state: "In Progress",
       attempts: [{ id: "att-1", startedAt: "2024-01-01T00:00:00Z" }],
@@ -173,7 +173,7 @@ describe("Load Tests", () => {
 
   it("GET /api/v1/:id handles concurrent reads with 0 errors", async () => {
     const result = await runLoad({
-      url: `http://127.0.0.1:${port}/api/v1/NIN-1`,
+      url: `http://127.0.0.1:${port}/api/v1/RIS-1`,
       connections: 10,
       duration: 2,
       pipelining: 1,

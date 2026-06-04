@@ -87,7 +87,7 @@ describe("turn state", () => {
     expect(state.turnCompletionResolvers.has("turn-abort")).toBe(false);
   });
 
-  it("rejects immediately when the signal is already aborted before waiting (NIN-259)", async () => {
+  it("rejects immediately when the signal is already aborted before waiting (RIS-259)", async () => {
     const state = createTurnState();
     const controller = new AbortController();
     controller.abort();

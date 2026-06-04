@@ -54,7 +54,7 @@ export interface EvaluateCiBabysitterInput {
 export function evaluateCiBabysitter(input: EvaluateCiBabysitterInput): CiResultArtifact {
   // An empty check list must never be read as success — a misconfigured or unavailable CI
   // poller would otherwise fabricate "all CI checks passed". Surface it as blocked with
-  // explicit "no checks observed" evidence so an operator investigates (NIN-260).
+  // explicit "no checks observed" evidence so an operator investigates (RIS-260).
   if (input.checks.length === 0) {
     return ciResultArtifactSchema.parse(noChecksObservedResult(input));
   }

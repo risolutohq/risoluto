@@ -38,7 +38,7 @@ export function resolveWorkspacePath(
   // worktrees instead of reusing the prior one. Without it, fall back to the legacy issue-keyed behavior.
   const workspaceKey = workflowRunId ? `${baseKey}_${sanitizeIdentifier(workflowRunId)}` : baseKey;
   // An empty key resolves to the workspace root itself, so a later removal would
-  // target the whole root. Reject it (NIN-243).
+  // target the whole root. Reject it (RIS-243).
   if (workspaceKey.length === 0) {
     throw new Error(`workspace key resolved to empty for issue identifier: ${JSON.stringify(issueIdentifier)}`);
   }

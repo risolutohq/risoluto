@@ -79,7 +79,7 @@ describe("initPersistenceRuntime", () => {
       action: "update",
       entityId: "entity-1",
       issueId: "issue-1",
-      issueIdentifier: "NIN-1",
+      issueIdentifier: "RIS-1",
       webhookTimestamp: 1_777_777_777,
       payloadJson: '{"ok":true}',
     });

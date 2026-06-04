@@ -271,7 +271,7 @@ export class LinearClient {
     }>
   > {
     // The listing never carries the signing secret — it is omitted from the query and the result so
-    // health/registration code can't accidentally leak it (NIN-263).
+    // health/registration code can't accidentally leak it (RIS-263).
     const payload = await this.runGraphQL(buildWebhooksQuery());
     const nodes = asArray(asRecord(asRecord(payload.data).webhooks).nodes);
     return nodes.map((node) => {

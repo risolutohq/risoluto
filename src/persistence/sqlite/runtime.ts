@@ -71,7 +71,7 @@ export function seedDefaults(db: RisolutoDatabase): void {
   const existingTemplates = db.select().from(promptTemplates).limit(1).all();
   if (existingTemplates.length === 0) {
     // Seed the template and patch system.selectedTemplateId in one transaction so a crash
-    // between the two can't leave the template inserted but config unpatched (NIN-254).
+    // between the two can't leave the template inserted but config unpatched (RIS-254).
     db.transaction((tx) => {
       tx.insert(promptTemplates)
         .values({
@@ -152,7 +152,7 @@ export async function initPersistenceRuntime(options: PersistenceRuntimeOptions)
     };
   } catch (error) {
     // A failed migration/seed must not leak the open connection or its WAL/file locks —
-    // close the handle before the error propagates to the caller (NIN-254).
+    // close the handle before the error propagates to the caller (RIS-254).
     closeDatabase(db);
     throw error;
   }

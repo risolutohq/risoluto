@@ -80,7 +80,7 @@ export async function driveAcceptedWorkflowRun(
       // Defer the terminal "done" persistence until after publishOnDone (in finishDrivenRun). If the
       // executor wrote "done" here, the archive's terminal-status guard would reject the later
       // done -> blocked transition when a PR publish fails, stranding a "done" run with no PR
-      // (NIN-260). "running"/"blocked" still persist immediately.
+      // (RIS-260). "running"/"blocked" still persist immediately.
       recordStatus: async ({ workflowRunId, status }) => {
         if (status !== "done") {
           await archive.updateWorkflowRunStatus(workflowRunId, status);
@@ -117,7 +117,7 @@ async function finishDrivenRun(
   if (result.status === "done") {
     const createdAt = (input.now ?? defaultNow)();
     // Publish the PR BEFORE the run is finalized as done. If publishing fails, move the run
-    // to blocked with a handoff rather than leaving a terminal "done" run with no PR (NIN-260).
+    // to blocked with a handoff rather than leaving a terminal "done" run with no PR (RIS-260).
     let published: { pullRequestUrl: string | null } | null = null;
     if (input.publishOnDone) {
       try {
@@ -128,7 +128,7 @@ async function finishDrivenRun(
     }
     // The PR is published (or there was no publish step) — only now finalize the run as done. The
     // executor's terminal "done" write was deferred (see recordStatus above) so the publish-failure
-    // path above could still route to blocked past the archive's terminal guard (NIN-260).
+    // path above could still route to blocked past the archive's terminal guard (RIS-260).
     await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
     const handoff = await writeDoneHandoff(
       archive,

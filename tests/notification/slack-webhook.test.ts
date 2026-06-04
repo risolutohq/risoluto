@@ -50,7 +50,7 @@ describe("SlackWebhookChannel", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("escapes Slack mrkdwn special characters in issue title and message (NIN-266)", async () => {
+  it("escapes Slack mrkdwn special characters in issue title and message (RIS-266)", async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" }));
     const channel = new SlackWebhookChannel({
       webhookUrl: "https://hooks.slack.test/one",
@@ -78,7 +78,7 @@ describe("SlackWebhookChannel", () => {
     expect(body).not.toContain("<script>");
   });
 
-  it("escapes the context-block identifier/state, the issue URL, and the metadata code fence (NIN-266)", async () => {
+  it("escapes the context-block identifier/state, the issue URL, and the metadata code fence (RIS-266)", async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, text: async () => "ok" }));
     const channel = new SlackWebhookChannel({
       webhookUrl: "https://hooks.slack.test/one",

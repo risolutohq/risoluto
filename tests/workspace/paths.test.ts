@@ -181,7 +181,7 @@ describe("resolveWorkspacePath", () => {
 
   it("rejects an empty identifier so the path can never resolve to the workspace root", () => {
     // An empty sanitized key would make path.resolve(root, "") === root, letting a
-    // later removal target the entire workspace root (NIN-243).
+    // later removal target the entire workspace root (RIS-243).
     expect(() => resolveWorkspacePath("/workspaces", "")).toThrow(/empty|root/);
   });
 });

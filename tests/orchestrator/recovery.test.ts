@@ -25,9 +25,9 @@ function createAttempt(overrides: Partial<AttemptRecord> = {}): AttemptRecord {
   return {
     attemptId: "attempt-1",
     issueId: "issue-1",
-    issueIdentifier: "NIN-42",
+    issueIdentifier: "RIS-42",
     title: "Recover me",
-    workspaceKey: "NIN-42",
+    workspaceKey: "RIS-42",
     workspacePath: "/tmp/missing",
     status: "running",
     attemptNumber: 2,
@@ -52,7 +52,7 @@ function createAttempt(overrides: Partial<AttemptRecord> = {}): AttemptRecord {
 function createIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "issue-1",
-    identifier: "NIN-42",
+    identifier: "RIS-42",
     title: "Recover me",
     description: null,
     priority: 1,
@@ -73,7 +73,7 @@ function createConfig(): ServiceConfig {
       kind: "linear",
       apiKey: "key",
       endpoint: "https://api.linear.app/graphql",
-      projectSlug: "NIN",
+      projectSlug: "RIS",
       activeStates: ["In Progress"],
       terminalStates: ["Done", "Canceled"],
     },
@@ -213,7 +213,7 @@ describe("runStartupRecovery", () => {
     );
   });
 
-  it("supersedes older running attempts for the same issue and marks them failed (NIN-240)", async () => {
+  it("supersedes older running attempts for the same issue and marks them failed (RIS-240)", async () => {
     const workspace = await createTempDir();
     await mkdir(workspace, { recursive: true });
     const older = createAttempt({
@@ -255,7 +255,7 @@ describe("runStartupRecovery", () => {
     );
   });
 
-  it("continues cleaning remaining containers when one removal fails (NIN-240)", async () => {
+  it("continues cleaning remaining containers when one removal fails (RIS-240)", async () => {
     const workspace = await createTempDir();
     await mkdir(workspace, { recursive: true });
     const attempt = createAttempt({ workspacePath: workspace });

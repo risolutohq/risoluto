@@ -46,7 +46,7 @@ describe("AuditLogger", () => {
     expect(entries[0].newValue).toBe("new body");
   });
 
-  it("links audit entries in a tamper-evident hash chain (NIN-266)", () => {
+  it("links audit entries in a tamper-evident hash chain (RIS-266)", () => {
     audit.logConfigChange("a", null, "1");
     audit.logConfigChange("b", null, "2");
     audit.logConfigChange("c", null, "3");
@@ -61,13 +61,13 @@ describe("AuditLogger", () => {
     expect(new Set(entries.map((entry) => entry.entryHash)).size).toBe(3);
   });
 
-  it("redacts a config mutation whose key names a secret (NIN-247)", () => {
+  it("redacts a config mutation whose key names a secret (RIS-247)", () => {
     audit.logConfigChange("tracker.api_key", null, "sk-supersecret123");
     const entries = audit.query();
     expect(entries[0].newValue).toBe("[REDACTED]");
   });
 
-  it("redacts a secret embedded in a config value while preserving JSON shape (NIN-247)", () => {
+  it("redacts a secret embedded in a config value while preserving JSON shape (RIS-247)", () => {
     audit.logConfigChange("codex.provider", null, '{"token":"sk-supersecret123","wireApi":"responses"}');
     const entries = audit.query();
     expect(entries[0].newValue).not.toContain("sk-supersecret123");

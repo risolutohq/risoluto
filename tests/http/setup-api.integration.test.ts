@@ -199,7 +199,7 @@ describe("POST /api/v1/setup/master-key", () => {
       });
       expect(response.status).toBe(200);
 
-      // Response must never echo the key material; it lands on disk only (NIN-249).
+      // Response must never echo the key material; it lands on disk only (RIS-249).
       const body = await response.json();
       expect(body).toEqual({ ok: true });
 

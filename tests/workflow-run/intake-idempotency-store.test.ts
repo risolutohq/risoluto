@@ -19,7 +19,7 @@ async function createDataDir(): Promise<string> {
 }
 
 describe("intake idempotency store", () => {
-  it("atomically overwrites a stale mapping and leaves no partial temp file (NIN-266)", async () => {
+  it("atomically overwrites a stale mapping and leaves no partial temp file (RIS-266)", async () => {
     const dataDir = await createDataDir();
     const location = { dataDir };
     const externalObject = { provider: "github" as const, id: "acme/repo#7", url: null };

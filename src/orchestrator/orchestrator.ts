@@ -61,7 +61,7 @@ export class Orchestrator implements OrchestratorPort {
     entriesByIdentifier: Map<string, RunningEntry>;
   } | null = null;
   // Captured so stop() can tear the subscriptions down — otherwise each Orchestrator instance would
-  // leave a live config/health listener behind, growing the bus across restart cycles (NIN-266).
+  // leave a live config/health listener behind, growing the bus across restart cycles (RIS-266).
   private configUnsubscribe: (() => void) | null = null;
   private healthTransitionHandler: (() => void) | null = null;
 
@@ -92,7 +92,7 @@ export class Orchestrator implements OrchestratorPort {
   }
 
   // Idempotent: registers the config + health listeners and captures their teardown handles. Safe to
-  // call again after stop() tore them down, so a restart re-arms the same listeners (NIN-266).
+  // call again after stop() tore them down, so a restart re-arms the same listeners (RIS-266).
   private registerSubscriptions(): void {
     if (!this.configUnsubscribe) {
       this.configUnsubscribe = this.deps.configStore.subscribe(() => {
@@ -139,7 +139,7 @@ export class Orchestrator implements OrchestratorPort {
   async start(): Promise<void> {
     if (this._state.running) return;
     this._state.running = true;
-    // Re-arm listeners in case a prior stop() tore them down (idempotent on first start) (NIN-266).
+    // Re-arm listeners in case a prior stop() tore them down (idempotent on first start) (RIS-266).
     this.registerSubscriptions();
     this.markStateDirty();
     this.deps.observability?.getComponent("orchestrator").setHealth({
@@ -194,7 +194,7 @@ export class Orchestrator implements OrchestratorPort {
       this._state.retryEntries.clear();
       // Startup recovery may have resumed workers via launchWorker before the failing step. Abort and drop
       // them so a rolled-back start doesn't leak live workers with active abort controllers running outside
-      // the now-stopped loop, where only a later stop() would ever reap them (NIN-266).
+      // the now-stopped loop, where only a later stop() would ever reap them (RIS-266).
       for (const entry of this._state.runningEntries.values()) {
         entry.abortController.abort("startup rollback");
       }
@@ -259,7 +259,7 @@ export class Orchestrator implements OrchestratorPort {
 
     // Release listeners and clear the in-memory projection caches so nothing accumulates across
     // repeated start/stop cycles. The seeded maps (completed/model/template) are rebuilt on the next
-    // start(); the rest are runtime caches repopulated during operation (NIN-266).
+    // start(); the rest are runtime caches repopulated during operation (RIS-266).
     this.teardownSubscriptions();
     this._state.completedViews.clear();
     this._state.detailViews.clear();

@@ -554,7 +554,7 @@ export async function launchWorker(
       ensureRunning();
       // Persist the attempt only after this final stop check, so a launch aborted by a concurrent
       // stop() never leaves an orphaned "running" attempt row for startup recovery to resurrect — the
-      // in-memory entry and claim are cleaned up by the catch below (NIN-239/258).
+      // in-memory entry and claim are cleaned up by the catch below (RIS-239/258).
       if (options?.recoveredAttempt) {
         await persistRecoveredAttempt(ctx, entry, issue, workspace, options.recoveredAttempt, modelSelection);
       } else {

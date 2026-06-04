@@ -20,7 +20,7 @@ function makeOrchestrator() {
       running: [
         {
           id: "issue-1",
-          identifier: "NIN-1",
+          identifier: "RIS-1",
           title: "Auth flow",
           state: "In Progress",
           runningAttemptId: "att-1",
@@ -30,7 +30,7 @@ function makeOrchestrator() {
       ],
       retrying: [],
       completed: [],
-      queued: [{ id: "issue-2", identifier: "NIN-2", title: "Dashboard", state: "Todo" }],
+      queued: [{ id: "issue-2", identifier: "RIS-2", title: "Dashboard", state: "Todo" }],
       workflowColumns: [
         { key: "backlog", label: "Backlog", terminal: false },
         { key: "in progress", label: "In Progress", terminal: false },
@@ -44,7 +44,7 @@ function makeOrchestrator() {
         costUsd: 0.1944,
       },
       rateLimits: null,
-      recentEvents: [{ type: "attempt_started", timestamp: "2024-01-01T00:00:00Z", issueIdentifier: "NIN-1" }],
+      recentEvents: [{ type: "attempt_started", timestamp: "2024-01-01T00:00:00Z", issueIdentifier: "RIS-1" }],
     }),
     requestRefresh: vi.fn().mockReturnValue({
       queued: true,
@@ -61,7 +61,7 @@ function makeOrchestrator() {
       running: [
         {
           id: "issue-1",
-          identifier: "NIN-1",
+          identifier: "RIS-1",
           title: "Auth flow",
           state: "In Progress",
           runningAttemptId: "att-1",
@@ -71,7 +71,7 @@ function makeOrchestrator() {
       ],
       retrying: [],
       completed: [],
-      queued: [{ id: "issue-2", identifier: "NIN-2", title: "Dashboard", state: "Todo" }],
+      queued: [{ id: "issue-2", identifier: "RIS-2", title: "Dashboard", state: "Todo" }],
       workflow_columns: [
         { key: "backlog", label: "Backlog", terminal: false, count: 0, issues: [] },
         { key: "in progress", label: "In Progress", terminal: false, count: 0, issues: [] },
@@ -85,7 +85,7 @@ function makeOrchestrator() {
         cost_usd: 0.1944,
       },
       rate_limits: null,
-      recent_events: [{ issue_identifier: "NIN-1", content: null, metadata: null }],
+      recent_events: [{ issue_identifier: "RIS-1", content: null, metadata: null }],
     }),
   };
 }
@@ -310,7 +310,7 @@ describe("API Contract Snapshots", () => {
         requestedAt: "2024-01-01T00:00:00Z",
       });
 
-      const res = await fetchRoute("/api/v1/NIN-1/abort", { method: "POST" });
+      const res = await fetchRoute("/api/v1/RIS-1/abort", { method: "POST" });
       expect(res.status).toBe(202);
 
       const body = await res.json();
@@ -398,7 +398,7 @@ describe("API Contract Snapshots", () => {
         currentAttemptId: "a1",
       });
 
-      const res = await fetchRoute("/api/v1/NIN-1/attempts");
+      const res = await fetchRoute("/api/v1/RIS-1/attempts");
       expect(res.status).toBe(200);
 
       const body = await res.json();

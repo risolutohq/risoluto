@@ -238,7 +238,7 @@ describe("Data plane server", () => {
       expect(dispatchResponse.body).toContain('"kind":"cancelled"');
     });
 
-    it("rejects a duplicate active dispatch runId with 409 (NIN-258)", async () => {
+    it("rejects a duplicate active dispatch runId with 409 (RIS-258)", async () => {
       runAttemptMock.mockImplementationOnce(
         (input: { signal: AbortSignal }) =>
           new Promise((resolve) => {
@@ -280,7 +280,7 @@ describe("Data plane server", () => {
       await first;
     });
 
-    it("aborts the in-flight attempt when the client disconnects (NIN-258)", async () => {
+    it("aborts the in-flight attempt when the client disconnects (RIS-258)", async () => {
       let capturedSignal: AbortSignal | null = null;
       runAttemptMock.mockImplementationOnce(
         (input: { signal: AbortSignal }) =>

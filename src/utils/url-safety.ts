@@ -1,5 +1,5 @@
 /**
- * SSRF guards for outbound URLs built from configuration (NIN-245).
+ * SSRF guards for outbound URLs built from configuration (RIS-245).
  *
  * Credentials must only be sent to a URL that uses https and does not target a
  * loopback, private, or link-local host — the usual SSRF pivots (cloud metadata

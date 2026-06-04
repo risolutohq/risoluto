@@ -162,8 +162,8 @@ PRD: [docs/prds/<slug>.md](https://github.com/risolutohq/risoluto/blob/<default-
 
 <!-- One blocker per line as a bullet — a comma-run is unreadable in Linear past two entries. -->
 
-- NIN-123 Blocker title
-- NIN-124 Another blocker title
+- RIS-123 Blocker title
+- RIS-124 Another blocker title
 
 (or "None - can start immediately")
 
@@ -171,7 +171,7 @@ PRD: [docs/prds/<slug>.md](https://github.com/risolutohq/risoluto/blob/<default-
 
 <!-- Soft couplings only — these become `related` relations, NOT blockers. Omit the section if there are none. -->
 
-- NIN-125 Related slice title — one-line why (shared contract / module / test)
+- RIS-125 Related slice title — one-line why (shared contract / module / test)
 ```
 
 ## Notes for the agent

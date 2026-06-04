@@ -31,7 +31,7 @@ export interface RawGitHubIssue {
   updated_at: string;
   /**
    * Present only when the record is a pull request. The GitHub `/issues` endpoint returns PRs
-   * alongside issues, so this field is used to filter PR-backed records out (NIN-263).
+   * alongside issues, so this field is used to filter PR-backed records out (RIS-263).
    */
   pull_request?: unknown;
 }
@@ -144,7 +144,7 @@ export class GitHubIssuesClient {
   }
 
   // Distinguish a rate-limit response (429, or 403 with the rate-limit budget exhausted) from a
-  // generic HTTP error so callers can back off on the reported window instead of hard-failing (NIN-266).
+  // generic HTTP error so callers can back off on the reported window instead of hard-failing (RIS-266).
   private httpError(response: Response): GitHubIssuesClientError {
     const rateLimited =
       response.status === 429 || (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0");
@@ -197,7 +197,7 @@ export class GitHubIssuesClient {
       `/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`,
     );
     // GitHub's /issues endpoint returns pull requests too; drop PR-backed records so they are
-    // never treated as Tracker Issues (NIN-263).
+    // never treated as Tracker Issues (RIS-263).
     return records.filter((record) => record.pull_request === undefined);
   }
 
@@ -247,7 +247,7 @@ export class GitHubIssuesClient {
 
   /**
    * Remove a label, treating a 404 (the label isn't on the issue) as a no-op. Used to clear stale
-   * state labels during a transition without first fetching the issue's current labels (NIN-263).
+   * state labels during a transition without first fetching the issue's current labels (RIS-263).
    */
   async removeLabelIfPresent(issueNumber: number, label: string): Promise<void> {
     const { owner, repo } = this.getOwnerRepo();

@@ -22,7 +22,7 @@ describe("MetricsCollector", () => {
     expect(output).toContain('risoluto_http_requests_total{method="POST",status="202"} 1');
   });
 
-  it("escapes backslash, double-quote, and newline in label values (NIN-264)", () => {
+  it("escapes backslash, double-quote, and newline in label values (RIS-264)", () => {
     const metrics = new MetricsCollector();
     metrics.httpRequestsTotal.increment({ route: 'a"b\\c\nd' });
 

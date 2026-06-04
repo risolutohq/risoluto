@@ -151,7 +151,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("run start drives the workflow executor (NIN-198 reachability)", () => {
+describe("run start drives the workflow executor (RIS-198 reachability)", () => {
   it("executes planner -> implementer -> reviewer in DAG order, each consuming the prior typed artifact", async () => {
     silenceStdout();
     const dataDir = await createTempDir("risoluto-run-start-data-");

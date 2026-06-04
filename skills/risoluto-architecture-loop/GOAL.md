@@ -31,7 +31,7 @@ Discipline source (read, do not invoke the interactive command): the
 (depth/seam/deletion-test vocabulary), `DEEPENING.md` (patterns),
 `INTERFACE-DESIGN.md` (contract shape), `HTML-REPORT.md` (report scaffold).
 
-Durable memory & control = Linear (team `NIN`, project `Risoluto Architecture
+Durable memory & control = Linear (team `RIS`, project `Risoluto Architecture
 Loop`, created idempotently). Fast scratch = `/tmp/risoluto-architecture-loop/<run-id>/`.
 `research/` submodule is a hard prerequisite.
 
@@ -117,7 +117,7 @@ Per candidate, sequentially:
 </workflow>
 
 <working_memory>
-Linear is durable memory. Project `Risoluto Architecture Loop` (team NIN, idempotent).
+Linear is durable memory. Project `Risoluto Architecture Loop` (team RIS, idempotent).
 One run issue per launch holds run config + narrative log (as comments). Candidate
 sub-issues (state open/merged/rejected/blocked, `hash(files+problem)` label, PR link,
 review verdict, contract in body). `/tmp/.../ledger.json` is the fast projection rebuilt

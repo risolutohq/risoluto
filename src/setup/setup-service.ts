@@ -31,7 +31,7 @@ import { assertValidBranchName, InvalidGitRefError } from "../git/git-validation
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?$/u;
 
 /** Raised when a GitHub request fails authentication (bad/expired token) — surfaced
- * distinctly from network/not-found errors so setup does not mask a bad token (NIN-253). */
+ * distinctly from network/not-found errors so setup does not mask a bad token (RIS-253). */
 export class GitHubAuthError extends Error {
   constructor(
     message: string,
@@ -90,7 +90,7 @@ function normalizeDefaultBranch(defaultBranch: string | null | undefined): strin
     return "main";
   }
   // A persisted defaultBranch is later used as a git ref / start point, so it must pass
-  // git ref-format rules (no leading '-', whitespace, control chars, '..') (NIN-253).
+  // git ref-format rules (no leading '-', whitespace, control chars, '..') (RIS-253).
   try {
     assertValidBranchName(trimmed);
   } catch (error) {
@@ -128,7 +128,7 @@ async function validateOpenaiKey(key: string, validationUrl: string): Promise<bo
 
 /**
  * Validate a provider base URL before the API key is sent to it (SSRF / key
- * exfiltration, NIN-245). A loopback host is the explicitly-trusted local-proxy
+ * exfiltration, RIS-245). A loopback host is the explicitly-trusted local-proxy
  * case (the operator's own machine) and may use http or https; every other host
  * must use https and must not be a private or link-local address. Throws
  * SetupServiceError(400) on any violation.
@@ -222,7 +222,7 @@ export async function fetchDefaultBranch(
 
   // When a token is supplied, use it and surface failures — a bad/expired token must not
   // silently fall back to an unauthenticated request (which would mask the auth problem).
-  // The unauthenticated request is only used when no token exists at all (NIN-253).
+  // The unauthenticated request is only used when no token exists at all (RIS-253).
   const omitAuthorization = token === null;
   let data: Record<string, unknown>;
   try {
@@ -311,7 +311,7 @@ class SetupServiceImpl implements SetupPort {
   async selectLinearProject(slugId: string): Promise<{ ok: true }> {
     // Probe the project first (this validates it exists / is reachable), then persist
     // the slug, then start. A failed start rolls the slug back so a broken setup is not
-    // left looking configured (NIN-253).
+    // left looking configured (RIS-253).
     await this.requireTracker().provision({ type: "select_project", slugId });
     await this.deps.configOverlayStore.set("tracker.project_slug", slugId);
     try {
@@ -342,7 +342,7 @@ class SetupServiceImpl implements SetupPort {
     }
 
     // Snapshot the rollback state so a partial failure leaves neither the secret nor the
-    // codex overlay section persisted (NIN-253).
+    // codex overlay section persisted (RIS-253).
     const priorKey = this.deps.secretsStore.get("OPENAI_API_KEY");
     const priorCodex = this.deps.configOverlayStore.toMap().codex;
 
@@ -556,7 +556,7 @@ class SetupServiceImpl implements SetupPort {
       return { defaultBranch };
     } catch (error) {
       // A bad/expired token is surfaced distinctly; network / not-found failures are
-      // non-fatal and fall back to the default branch (NIN-253).
+      // non-fatal and fall back to the default branch (RIS-253).
       if (error instanceof GitHubAuthError) {
         throw new SetupServiceError(401, "github_auth_failed", "GitHub token is invalid or expired");
       }

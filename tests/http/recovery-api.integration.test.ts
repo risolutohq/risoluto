@@ -17,7 +17,7 @@ function makeRecoveryReport(overrides: Partial<RecoveryReport> = {}): RecoveryRe
       {
         attemptId: "attempt-1",
         issueId: "issue-1",
-        issueIdentifier: "NIN-42",
+        issueIdentifier: "RIS-42",
         persistedStatus: "running",
         attemptNumber: 2,
         threadId: "thread-123",
@@ -35,7 +35,7 @@ function makeRecoveryReport(overrides: Partial<RecoveryReport> = {}): RecoveryRe
       {
         attemptId: "attempt-2",
         issueId: "issue-2",
-        issueIdentifier: "NIN-77",
+        issueIdentifier: "RIS-77",
         persistedStatus: "running",
         attemptNumber: 1,
         threadId: null,

@@ -414,7 +414,7 @@ describe("handleNotification", () => {
     });
   });
 
-  describe("secret redaction in streamed buffers (NIN-246)", () => {
+  describe("secret redaction in streamed buffers (RIS-246)", () => {
     it("sanitizes a streamed command-output buffer before emitting", () => {
       handleNotification({
         state,

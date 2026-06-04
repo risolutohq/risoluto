@@ -52,7 +52,7 @@ class LoggerErrorTracker implements ErrorTracker {
 
   captureException(error: Error, context?: Record<string, unknown>): void {
     // Redact message/stack/breadcrumbs/contexts (key names + embedded secret
-    // patterns) before anything is persisted by the logger (NIN-247).
+    // patterns) before anything is persisted by the logger (RIS-247).
     const payload = redactSensitiveValue({
       error: error.message,
       stack: error.stack,

@@ -213,7 +213,7 @@ export class DefaultAttemptExecutor implements AttemptExecutor {
       cleanupAbortBridge();
       // A shutdown failure must not override the computed outcome or skip afterRun — log it
       // and continue so the real run result (or the caught error's outcome) is preserved,
-      // and the after_run hook always runs (NIN-259).
+      // and the after_run hook always runs (RIS-259).
       await runtime.shutdown(input.signal).catch((error) => {
         logger.warn({ error: toErrorString(error) }, "session shutdown failed");
       });

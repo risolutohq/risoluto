@@ -12,7 +12,7 @@ export function handlePostMasterKey(deps: SetupApiDeps | SetupService) {
 
     try {
       // The key is persisted to archiveDir/master.key (mode 0600) inside the service;
-      // the HTTP response must never echo the key material back (NIN-249).
+      // the HTTP response must never echo the key material back (RIS-249).
       await service.createMasterKey(providedKey);
       res.json({ ok: true });
     } catch (error) {

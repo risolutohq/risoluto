@@ -205,7 +205,7 @@ function printRunOutcome(
 
 // Default budget: enforce the PRD's 120-minute / $10 hard stops live (wall-clock from the clock, cost
 // from token usage). A fresh CLI run is far under both, so this never stops a healthy run; it is the
-// always-on guard the executor checks before every step. The agent harness now runs (NIN-222), but its
+// always-on guard the executor checks before every step. The agent harness now runs (RIS-222), but its
 // token-usage accumulator is not yet wired into usage(), so measured cost is 0 until that follow-on lands.
 function createDefaultWorkflowBudget(): WorkflowBudgetPolicy {
   const startedAtMs = Date.now();

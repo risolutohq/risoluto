@@ -99,7 +99,7 @@ The Workflow script cannot read files, so gather everything it needs first:
       "number": 1,
       "name": "<wave name>",
       "branch": "wave/1-<wave-slug>",
-      "issues": [{ "id": "NIN-225", "title": "...", "branch": "feature/nin-225-...", "blockedBy": [] }],
+      "issues": [{ "id": "RIS-225", "title": "...", "branch": "feature/ris-225-...", "blockedBy": [] }],
     },
   ],
 }

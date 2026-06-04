@@ -501,7 +501,7 @@ describe("SqliteAttemptStore", () => {
     closeDatabase(db2);
   });
 
-  it("keeps checkpoints that differ only in eventCursor or token usage (full-field dedupe) (NIN-254)", async () => {
+  it("keeps checkpoints that differ only in eventCursor or token usage (full-field dedupe) (RIS-254)", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);
 

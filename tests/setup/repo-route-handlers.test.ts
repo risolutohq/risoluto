@@ -49,7 +49,7 @@ describe("repo route handlers", () => {
     const response = await postJson(baseUrl, "/api/v1/setup/repo-route", {
       repoUrl: "https://github.com/org/repo",
       defaultBranch: "main",
-      identifierPrefix: "NIN",
+      identifierPrefix: "RIS",
     });
 
     expect(response.status).toBe(200);
@@ -58,13 +58,13 @@ describe("repo route handlers", () => {
     expect(body.route).toEqual({
       repo_url: "https://github.com/org/repo",
       default_branch: "main",
-      identifier_prefix: "NIN",
+      identifier_prefix: "RIS",
     });
     expect(configOverlayStore.set).toHaveBeenCalledWith("repos", [
       {
         repo_url: "https://github.com/org/repo",
         default_branch: "main",
-        identifier_prefix: "NIN",
+        identifier_prefix: "RIS",
       },
     ]);
   });
@@ -72,14 +72,14 @@ describe("repo route handlers", () => {
   it("POST with same prefix replaces existing route", async () => {
     const configOverlayStore = createConfigOverlayStoreMock();
     vi.spyOn(configOverlayStore, "toMap").mockReturnValue({
-      repos: [{ repo_url: "https://github.com/org/old-repo", default_branch: "main", identifier_prefix: "NIN" }],
+      repos: [{ repo_url: "https://github.com/org/old-repo", default_branch: "main", identifier_prefix: "RIS" }],
     });
 
     const { baseUrl } = await startSetupApiServer({ configOverlayStore });
     const response = await postJson(baseUrl, "/api/v1/setup/repo-route", {
       repoUrl: "https://github.com/org/new-repo",
       defaultBranch: "develop",
-      identifierPrefix: "NIN",
+      identifierPrefix: "RIS",
     });
 
     expect(response.status).toBe(200);
@@ -90,7 +90,7 @@ describe("repo route handlers", () => {
       {
         repo_url: "https://github.com/org/new-repo",
         default_branch: "develop",
-        identifier_prefix: "NIN",
+        identifier_prefix: "RIS",
       },
     ]);
   });
@@ -100,7 +100,7 @@ describe("repo route handlers", () => {
 
     const response = await postJson(baseUrl, "/api/v1/setup/repo-route", {
       repoUrl: "not-a-valid-url",
-      identifierPrefix: "NIN",
+      identifierPrefix: "RIS",
     });
 
     expect(response.status).toBe(400);
@@ -171,7 +171,7 @@ describe("repo route handlers", () => {
   it("GET returns routes from overlay", async () => {
     const configOverlayStore = createConfigOverlayStoreMock();
     vi.spyOn(configOverlayStore, "toMap").mockReturnValue({
-      repos: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "NIN" }],
+      repos: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "RIS" }],
     });
 
     const { baseUrl } = await startSetupApiServer({ configOverlayStore });
@@ -179,14 +179,14 @@ describe("repo route handlers", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      routes: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "NIN" }],
+      routes: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "RIS" }],
     });
   });
 
   it("still returns repo routes after bootstrap is configured", async () => {
     const configOverlayStore = createConfigOverlayStoreMock();
     vi.spyOn(configOverlayStore, "toMap").mockReturnValue({
-      repos: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "NIN" }],
+      repos: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "RIS" }],
     });
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "isInitialized").mockReturnValue(true);
@@ -197,14 +197,14 @@ describe("repo route handlers", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      routes: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "NIN" }],
+      routes: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "RIS" }],
     });
   });
 
   it("status endpoint includes repoRoute.done", async () => {
     const configOverlayStore = createConfigOverlayStoreMock();
     vi.spyOn(configOverlayStore, "toMap").mockReturnValue({
-      repos: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "NIN" }],
+      repos: [{ repo_url: "https://github.com/org/repo", default_branch: "main", identifier_prefix: "RIS" }],
     });
 
     const { baseUrl } = await startSetupApiServer({ configOverlayStore });

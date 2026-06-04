@@ -44,7 +44,7 @@ export async function readDeliveryMapping(input: {
 /**
  * Predicate that reports whether an existing mapping is stale — i.e., it points to a run record
  * that never landed because intake crashed between claiming the mapping and writing the run. A
- * stale mapping is overwritten and re-claimed instead of poisoning future duplicate intake (NIN-261).
+ * stale mapping is overwritten and re-claimed instead of poisoning future duplicate intake (RIS-261).
  */
 export type StaleMappingRecovery = (mapping: WorkflowRunIntakeMapping) => Promise<boolean>;
 
@@ -120,10 +120,10 @@ async function claimMapping(
         if (mapping) {
           // A mapping whose run record never landed (crash between claim and run write) would
           // otherwise poison every future duplicate intake with an ENOENT loop. Overwrite it and
-          // claim afresh for this run instead (NIN-261).
+          // claim afresh for this run instead (RIS-261).
           if (recoverStaleMapping && (await recoverStaleMapping(mapping))) {
             // Overwrite atomically (temp file + rename) so a crash mid-write can't leave a torn or
-            // empty mapping that would ENOENT-loop every future intake (NIN-266).
+            // empty mapping that would ENOENT-loop every future intake (RIS-266).
             await atomicOverwrite(filePath, payload);
             return { status: "claimed" };
           }
@@ -139,7 +139,7 @@ async function claimMapping(
 }
 
 // Write to a unique temp file then rename over the target — rename is atomic within a filesystem,
-// so a reader never observes a partially-written mapping (NIN-266).
+// so a reader never observes a partially-written mapping (RIS-266).
 async function atomicOverwrite(filePath: string, payload: string): Promise<void> {
   const tempPath = `${filePath}.${randomUUID()}.tmp`;
   await writeFile(tempPath, payload, { encoding: "utf8", flag: "wx" });

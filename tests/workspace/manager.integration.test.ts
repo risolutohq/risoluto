@@ -15,7 +15,7 @@ async function createTempDir(): Promise<string> {
   return dir;
 }
 
-function createIssue(identifier = "NIN-42"): Issue {
+function createIssue(identifier = "RIS-42"): Issue {
   return {
     id: "issue-1",
     identifier,
@@ -58,7 +58,7 @@ function createWorktreeDeps(root: string, options?: { removeShouldFail?: boolean
       setupWorktree: async (_route, _baseCloneDir, worktreePath) => {
         await mkdir(worktreePath, { recursive: true });
         await writeFile(path.join(worktreePath, ".git"), "gitdir: /tmp/fake.git\n", "utf8");
-        return { branchName: "risoluto/NIN-42" };
+        return { branchName: "risoluto/RIS-42" };
       },
       removeWorktree: async (_baseCloneDir, worktreePath) => {
         if (options?.removeShouldFail) {
@@ -97,7 +97,7 @@ describe("WorkspaceManager integration", () => {
     const logger = createMockLogger();
     const manager = new WorkspaceManager(() => config, logger);
 
-    const workspace = await manager.ensureWorkspace("NIN/42");
+    const workspace = await manager.ensureWorkspace("RIS/42");
     expect(workspace.createdNow).toBe(true);
     expect(workspace.workspaceKey).toBe("NIN_42");
     expect((await stat(workspace.path)).isDirectory()).toBe(true);
@@ -109,8 +109,8 @@ describe("WorkspaceManager integration", () => {
     await writeFile(path.join(workspace.path, "keep.txt"), "persist\n", "utf8");
 
     await manager.prepareForAttempt(workspace);
-    await manager.runBeforeRun(workspace, "NIN/42");
-    await manager.runAfterRun(workspace, "NIN/42");
+    await manager.runBeforeRun(workspace, "RIS/42");
+    await manager.runAfterRun(workspace, "RIS/42");
 
     await expect(stat(path.join(workspace.path, "tmp"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(path.join(workspace.path, ".elixir_ls"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -131,9 +131,9 @@ describe("WorkspaceManager integration", () => {
       },
     });
     const manager = new WorkspaceManager(() => config, createMockLogger());
-    const workspace = await manager.ensureWorkspace("NIN-42");
+    const workspace = await manager.ensureWorkspace("RIS-42");
 
-    await expect(manager.runBeforeRun(workspace, "NIN-42")).rejects.toThrow("hook timed out after 50ms");
+    await expect(manager.runBeforeRun(workspace, "RIS-42")).rejects.toThrow("hook timed out after 50ms");
   });
 
   it("logs beforeRemove hook failures but still removes directory workspaces", async () => {
@@ -150,16 +150,16 @@ describe("WorkspaceManager integration", () => {
     const logger = createMockLogger();
     const manager = new WorkspaceManager(() => config, logger);
 
-    const workspace = await manager.ensureWorkspace("NIN-77");
+    const workspace = await manager.ensureWorkspace("RIS-77");
     await writeFile(path.join(workspace.path, "artifact.txt"), "data\n", "utf8");
 
-    await manager.removeWorkspace("NIN-77");
+    await manager.removeWorkspace("RIS-77");
 
     await expect(stat(workspace.path)).rejects.toMatchObject({ code: "ENOENT" });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         workspacePath: workspace.path,
-        issueIdentifier: "NIN-77",
+        issueIdentifier: "RIS-77",
         classification: "before_remove_hook_failed",
       }),
       "before_remove hook failed; continuing with workspace removal",
@@ -168,7 +168,7 @@ describe("WorkspaceManager integration", () => {
 
   it("creates worktree workspaces and falls back to rm when git worktree removal fails", async () => {
     const root = await createTempDir();
-    const issue = createIssue("NIN-88");
+    const issue = createIssue("RIS-88");
     const config = createConfig(root, { strategy: "worktree" });
     const deps = createWorktreeDeps(root, { removeShouldFail: true });
     const logger = createMockLogger();

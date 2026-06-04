@@ -201,7 +201,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
     const now = new Date().toISOString();
     // Atomically claim due retries: select the due 'retry' rows and flip them to
     // 'processing' inside one transaction, so two concurrent pollers sharing the
-    // connection can never both claim the same delivery (NIN-255).
+    // connection can never both claim the same delivery (RIS-255).
     return this.db.transaction((tx) => {
       const rows = tx
         .select()

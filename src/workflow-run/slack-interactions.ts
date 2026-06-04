@@ -114,7 +114,7 @@ export async function recordSlackOperatorResponse(
   const response = toOperatorResponseArtifact(input);
   try {
     // ifNotExists makes the per-questionId artifact write exclusive: a second reply to the same
-    // question loses the race (EEXIST) instead of overwriting the first operator's answer (NIN-263).
+    // question loses the race (EEXIST) instead of overwriting the first operator's answer (RIS-263).
     const artifact = await createWorkflowRunArchive(input).writeWorkflowRunArtifact({
       workflowRunId: input.workflowRunId,
       artifactId: operatorResponseArtifactId(input.questionId),

@@ -49,7 +49,7 @@ export class AutomationScheduler {
 
   start(): void {
     // Idempotent: a second start() must not leak the prior config subscription or register a
-    // duplicate that fires sync() twice per config change (NIN-264).
+    // duplicate that fires sync() twice per config change (RIS-264).
     if (this.unsubscribe) {
       return;
     }

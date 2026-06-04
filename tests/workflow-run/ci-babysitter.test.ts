@@ -130,7 +130,7 @@ describe("CI babysitter", () => {
     });
   });
 
-  it("blocks with 'no checks observed' evidence when the check list is empty (NIN-260)", () => {
+  it("blocks with 'no checks observed' evidence when the check list is empty (RIS-260)", () => {
     const result = evaluateCiBabysitter({
       workflowRunId,
       createdAt,

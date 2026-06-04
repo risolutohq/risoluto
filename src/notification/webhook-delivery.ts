@@ -32,7 +32,7 @@ export async function deliverWebhookJson(options: WebhookDeliveryOptions): Promi
     });
     if (!response.ok) {
       // Status only — never read or log the upstream body, which can echo
-      // secrets/payloads back into logs (NIN-248).
+      // secrets/payloads back into logs (RIS-248).
       throw new Error(
         `${options.failureLabel} request failed with status ${response.status} ${response.statusText}`.trim(),
       );

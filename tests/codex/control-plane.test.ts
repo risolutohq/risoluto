@@ -454,7 +454,7 @@ describe("CodexControlPlane", () => {
     });
   });
 
-  describe("approval gating + notification projection (NIN-237)", () => {
+  describe("approval gating + notification projection (RIS-237)", () => {
     type ServerRequestFn = (
       child: ChildProcessWithoutNullStreams,
       id: number | string,

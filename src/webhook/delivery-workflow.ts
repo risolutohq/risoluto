@@ -131,7 +131,7 @@ export class WebhookDeliveryWorkflow {
   /**
    * Run the deferred side effects after the ack. On success the durable record is marked applied; on
    * failure it is moved to a retryable state (not just logged) so an early ack can't drop a delivery
-   * whose side effects later fail (NIN-262).
+   * whose side effects later fail (RIS-262).
    */
   private async runProcessing(options: {
     delivery: VerifiedWebhookDelivery;

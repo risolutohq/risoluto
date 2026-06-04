@@ -75,9 +75,9 @@ preflight: <slug>  AFK issues: <N>  cleared: <C>  outstanding: <O>
 VERDICT: GO            → next: /risoluto-goal-prep <slug>  then  /risoluto-goal-run <slug>
   (or)
 VERDICT: NO-GO         → outstanding roadblockers:
-  - NIN-209  missing SLACK_SIGNING_SECRET (slice:afk) — provide or defer before launch
-  - NIN-212  AC 3/4 non-falsifiable — sharpen via /risoluto-to-issues reconcile
-  - NIN-222  discovered, orphaned from WAVES.md — re-run /risoluto-goal-prep
+  - RIS-209  missing SLACK_SIGNING_SECRET (slice:afk) — provide or defer before launch
+  - RIS-212  AC 3/4 non-falsifiable — sharpen via /risoluto-to-issues reconcile
+  - RIS-222  discovered, orphaned from WAVES.md — re-run /risoluto-goal-prep
 ```
 
 GO only when every outstanding roadblocker is cleared or consciously deferred. A deferred slice is named

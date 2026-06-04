@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { detectStopSignal } from "../../src/core/signal-detection.js";
 
-describe("detectStopSignal boundary anchoring (NIN-235)", () => {
+describe("detectStopSignal boundary anchoring (RIS-235)", () => {
   it("detects a clean done marker", () => {
     expect(detectStopSignal("RISOLUTO_STATUS: DONE")).toBe("done");
   });

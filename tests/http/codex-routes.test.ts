@@ -184,7 +184,7 @@ describe("Codex admin routes", () => {
     );
   });
 
-  it("clamps an over-large pagination limit to the maximum (NIN-250)", async () => {
+  it("clamps an over-large pagination limit to the maximum (RIS-250)", async () => {
     const codexControlPlane = {
       request: vi.fn().mockResolvedValue({ data: [], nextCursor: null }),
     };

@@ -8,7 +8,7 @@ import type { RisolutoLogger } from "../core/types.js";
 
 /**
  * Bad CLI input (unknown flag, malformed --port). The top-level handler renders this as a single
- * concise line instead of a full stack trace, since it's user error not an internal fault (NIN-266).
+ * concise line instead of a full stack trace, since it's user error not an internal fault (RIS-266).
  */
 export class CliArgumentError extends Error {
   constructor(message: string) {
@@ -36,7 +36,7 @@ function parsePortValue(rawPort: string | undefined): number | undefined {
 }
 
 // Wrap node:util parseArgs so its TypeError for an unknown/malformed flag becomes a CliArgumentError
-// (concise top-level rendering), while preserving the precisely-inferred values type (NIN-266).
+// (concise top-level rendering), while preserving the precisely-inferred values type (RIS-266).
 function parseRawCliArgs(argv: string[]) {
   try {
     return parseArgs({

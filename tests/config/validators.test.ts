@@ -372,7 +372,7 @@ describe("collectDispatchWarnings", () => {
           {
             repoUrl: " https://github.com/risolutohq/risoluto.git ",
             defaultBranch: "main",
-            identifierPrefix: "NIN",
+            identifierPrefix: "RIS",
             label: "Self test",
             githubRepo: null,
           },
@@ -384,7 +384,7 @@ describe("collectDispatchWarnings", () => {
       {
         code: "self_routing_repo",
         message:
-          'repo route "NIN" points to risoluto itself. This is fine for self-test traffic, but it will make dispatched agents modify the orchestrator repo instead of the intended target repository.',
+          'repo route "RIS" points to risoluto itself. This is fine for self-test traffic, but it will make dispatched agents modify the orchestrator repo instead of the intended target repository.',
       },
     ]);
   });

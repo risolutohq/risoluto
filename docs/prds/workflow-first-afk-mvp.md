@@ -391,9 +391,9 @@ targeted live checks.
 
 The PRD assumed roles emit typed artifacts but never said _how_ an LLM role's session output becomes a
 contract-valid artifact the executor can read back. Building the production `runRole`/`runAction`
-providers (SEAM 1, NIN-198) forces that decision. This addendum fixes it; it adds no new contracts and
-no new surface — it only makes the existing role→artifact boundary explicit. Affects NIN-198 (executor
-reachability), NIN-201/207 (verifier), NIN-204 (evidence), and the role-bearing slices.
+providers (SEAM 1, RIS-198) forces that decision. This addendum fixes it; it adds no new contracts and
+no new surface — it only makes the existing role→artifact boundary explicit. Affects RIS-198 (executor
+reachability), RIS-201/207 (verifier), RIS-204 (evidence), and the role-bearing slices.
 
 - **Role→contract map (`role.produces`).** Each role deposits exactly the contracts in its workflow
   definition `produces` list, no more: planner → `plan.v1`; implementer → `change_summary.v1`;

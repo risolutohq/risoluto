@@ -159,7 +159,7 @@ Pick the node whose `name` is `In Progress` (or `type: started`).
 
 ### Get an issue by ticket ref
 
-Linear's `issue(id:)` resolver accepts both the UUID **and** the team-prefixed identifier (e.g. `NIN-123`).
+Linear's `issue(id:)` resolver accepts both the UUID **and** the team-prefixed identifier (e.g. `RIS-123`).
 
 ```graphql
 query GetIssue($id: String!) {

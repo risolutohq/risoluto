@@ -65,7 +65,7 @@ export class NotificationManager {
 
     // Reserve the dedupe key before sending so a concurrent duplicate is still suppressed, then
     // release it if the send genuinely delivered nothing — a fully-failed delivery must not suppress
-    // the retry of the same notification within the window (NIN-264).
+    // the retry of the same notification within the window (RIS-264).
     this.remember(dedupeKey);
     const deliverySummary = await this.deliver(event, options);
     if (deliverySummary.deliveredChannels.length === 0) {

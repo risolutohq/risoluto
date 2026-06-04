@@ -11,10 +11,10 @@ function createEvent(): NotificationEvent {
     message: "worker failed",
     issue: {
       id: "issue-1",
-      identifier: "NIN-42",
+      identifier: "RIS-42",
       title: "Fix delivery",
       state: "In Progress",
-      url: "https://linear.app/example/issue/NIN-42",
+      url: "https://linear.app/example/issue/RIS-42",
     },
     attempt: 2,
   };
@@ -52,7 +52,7 @@ describe("deliverWebhookJson", () => {
     );
   });
 
-  it("logs status only, never the upstream body, on failure (NIN-248)", async () => {
+  it("logs status only, never the upstream body, on failure (RIS-248)", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response("error: token=sk-upstreamsecret123", { status: 503 }));

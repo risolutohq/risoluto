@@ -91,7 +91,7 @@ describe("handlePostMasterKey", () => {
     expect(deps.secretsStore.initializeWithKey).toHaveBeenCalledWith("my-custom-key-1234");
   });
 
-  it("never echoes the key material in the response body (NIN-249)", async () => {
+  it("never echoes the key material in the response body (RIS-249)", async () => {
     const deps = makeDeps();
     const handler = handlePostMasterKey(deps);
     const res = makeMockResponse();

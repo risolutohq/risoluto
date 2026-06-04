@@ -81,7 +81,7 @@ describe("handleWebhookSlack", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toEqual([]);
   });
 
-  it("dedupes a replayed signed Slack modal on the body+signature digest (NIN-263)", async () => {
+  it("dedupes a replayed signed Slack modal on the body+signature digest (RIS-263)", async () => {
     const dataDir = await createTempDir();
     const rawBody = slackInteractionBody({
       type: "view_submission",
@@ -115,7 +115,7 @@ describe("handleWebhookSlack", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
-  it("answers 200 and does not retry when markApplied fails after a successful intake (NIN-263)", async () => {
+  it("answers 200 and does not retry when markApplied fails after a successful intake (RIS-263)", async () => {
     const dataDir = await createTempDir();
     const rawBody = slackInteractionBody({
       type: "view_submission",
@@ -147,7 +147,7 @@ describe("handleWebhookSlack", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
-  it("discards the dedup row on intake failure so Slack's redelivery re-drives intake (NIN-263)", async () => {
+  it("discards the dedup row on intake failure so Slack's redelivery re-drives intake (RIS-263)", async () => {
     const dataDir = await createTempDir();
     const rawBody = slackInteractionBody({
       type: "view_submission",

@@ -110,11 +110,11 @@ Read the generated summary and spot-check:
 
 For `workflow-first-afk-mvp`, the expected waves are:
 
-- W1 Foundation: NIN-194, NIN-195
-- W2 Skeleton: NIN-196, NIN-197, NIN-198, NIN-199
-- W3 Engine: NIN-200, NIN-201, NIN-205, NIN-206, NIN-207, NIN-211
-- W4 Surfaces: NIN-202, NIN-203, NIN-204, NIN-208, NIN-209, NIN-210, NIN-212, NIN-213, NIN-214, NIN-215, NIN-216, NIN-219, NIN-220
-- W5: NIN-217, NIN-218
+- W1 Foundation: RIS-194, RIS-195
+- W2 Skeleton: RIS-196, RIS-197, RIS-198, RIS-199
+- W3 Engine: RIS-200, RIS-201, RIS-205, RIS-206, RIS-207, RIS-211
+- W4 Surfaces: RIS-202, RIS-203, RIS-204, RIS-208, RIS-209, RIS-210, RIS-212, RIS-213, RIS-214, RIS-215, RIS-216, RIS-219, RIS-220
+- W5: RIS-217, RIS-218
 
 This list is a fixture for checking the current PRD only; the generator must derive future PRDs from Linear.
 

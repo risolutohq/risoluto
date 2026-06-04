@@ -115,7 +115,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("budget enforcement and retry controller reachable from run start (NIN-206)", () => {
+describe("budget enforcement and retry controller reachable from run start (RIS-206)", () => {
   it("hard-stops a run that exceeds its wall-clock budget before the next workflow step starts", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-budget-retry-data-");

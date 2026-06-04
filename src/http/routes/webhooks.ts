@@ -44,7 +44,7 @@ export function registerWebhookRoutes(app: Express, deps: HttpRouteDeps): void {
     limit: 600,
     // Key by IP + route only. Folding the attacker-controlled delivery ID into the key
     // let unique x-github-delivery/linear-delivery values sidestep the per-IP limit;
-    // delivery IDs are used for dedupe after auth, not for rate-limiting (NIN-250).
+    // delivery IDs are used for dedupe after auth, not for rate-limiting (RIS-250).
     keyGenerator: (req) => `${ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown")}:${req.path}`,
     standardHeaders: true,
     legacyHeaders: false,

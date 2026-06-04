@@ -213,7 +213,7 @@ describe("executeTurns", () => {
     expect(state.turnCount).toBe(0);
   });
 
-  it("returns an explicit max_turns_exceeded failure when maxTurns is exhausted (NIN-257)", async () => {
+  it("returns an explicit max_turns_exceeded failure when maxTurns is exhausted (RIS-257)", async () => {
     vi.mocked(isActiveState).mockReturnValue(true); // always active
 
     const input = makeInput({ maxTurns: 2 });

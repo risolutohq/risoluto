@@ -11,10 +11,10 @@ function createEvent(overrides?: Partial<NotificationEvent>): NotificationEvent 
     message: "run completed",
     issue: {
       id: "issue-1",
-      identifier: "NIN-42",
+      identifier: "RIS-42",
       title: "Notifications bundle",
       state: "Done",
-      url: "https://linear.app/example/issue/NIN-42",
+      url: "https://linear.app/example/issue/RIS-42",
     },
     attempt: 1,
     ...overrides,
@@ -43,7 +43,7 @@ describe("WebhookChannel", () => {
     const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)) as {
       notification: { message: string; issue: { identifier: string } };
     };
-    expect(body.notification.issue.identifier).toBe("NIN-42");
+    expect(body.notification.issue.identifier).toBe("RIS-42");
     expect(body.notification.message).toBe("run completed");
   });
 

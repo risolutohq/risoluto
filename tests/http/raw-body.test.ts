@@ -83,7 +83,7 @@ describe("raw body capture for webhook paths", () => {
     expect(body.rawBodyLength).toBe(Buffer.byteLength(payload));
   });
 
-  it("captures rawBody for an application/x-www-form-urlencoded Slack request (NIN-250)", async () => {
+  it("captures rawBody for an application/x-www-form-urlencoded Slack request (RIS-250)", async () => {
     const { port, server: s } = await startApp();
     server = s;
 

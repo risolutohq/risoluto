@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The real engine needs a resolved definition + role harness; this suite exercises only the
-// done-path publish handling, so the driver is stubbed to report a clean "done" run (NIN-260).
+// done-path publish handling, so the driver is stubbed to report a clean "done" run (RIS-260).
 vi.mock("../../src/workflow-run/workflow-run-driver.js", () => ({
   driveWorkflowRun: vi.fn(),
 }));
@@ -63,7 +63,7 @@ async function buildInput(
 }
 
 describe("driveAcceptedWorkflowRun publish-before-done", () => {
-  it("moves the run to blocked with a handoff when publishOnDone fails (NIN-260)", async () => {
+  it("moves the run to blocked with a handoff when publishOnDone fails (RIS-260)", async () => {
     const { archiveDir, workflowRunId, input } = await acceptedRun();
     // Reproduce the production executor: it persists "running" then the terminal "done" through the
     // recordStatus the driver wires to the archive. Earlier this suite stubbed driveWorkflowRun with

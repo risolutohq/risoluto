@@ -70,7 +70,7 @@ function forwardedClientIp(req: Request): string | undefined {
  * tunnel terminates on loopback while forwarding a remote caller. When the TCP
  * peer is itself loopback (a trusted local proxy) we classify by the forwarded
  * client, so a proxied non-loopback request cannot ride the loopback write
- * bypass (NIN-250).
+ * bypass (RIS-250).
  *
  * A forwarding header is only trusted from a loopback peer. A non-loopback peer
  * can set `X-Forwarded-For: 127.0.0.1` itself, so trusting that header would let

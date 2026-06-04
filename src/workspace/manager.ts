@@ -34,7 +34,7 @@ async function pathExists(pathname: string): Promise<boolean> {
 
 /**
  * Reject an existing workspace path that is a symlink or whose real path escapes
- * the workspace root (NIN-243). `stat()` follows symlinks, so a pre-planted
+ * the workspace root (RIS-243). `stat()` follows symlinks, so a pre-planted
  * symlink at the workspace path could let hooks and cleanup operate outside the
  * root; `lstat()` + `realpath()` close that gap. A no-op when the path does not
  * yet exist (ENOENT) — creation is handled by the caller.
@@ -228,7 +228,7 @@ export class WorkspaceManager implements WorkspacePort {
 
     // Refuse a pre-planted symlink (or a path whose real location escapes the root) before any hook can
     // run with cwd resolved through it — the worktree strategy must enforce the same guard the directory
-    // strategy got (NIN-243). pathIsDirectory() follows symlinks, so this lstat/realpath check is what
+    // strategy got (RIS-243). pathIsDirectory() follows symlinks, so this lstat/realpath check is what
     // actually closes the escape.
     await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
     const worktreeExists = await pathIsDirectory(workspacePath);
@@ -310,7 +310,7 @@ export class WorkspaceManager implements WorkspacePort {
       return emptyRemovalResult();
     }
     // Refuse a symlinked workspace before the before-remove hook runs with cwd resolved through it
-    // (matches removeDirectoryWorkspace) (NIN-243).
+    // (matches removeDirectoryWorkspace) (RIS-243).
     await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
 
     const workspace = { path: workspacePath, workspaceKey, createdNow: false };
@@ -345,7 +345,7 @@ export class WorkspaceManager implements WorkspacePort {
     await rm(workspacePath, { recursive: true, force: true });
     if (baseCloneToPrune) {
       // The git worktree registration now references a deleted dir; prune it so
-      // the base clone does not accumulate stale worktree metadata (NIN-244).
+      // the base clone does not accumulate stale worktree metadata (RIS-244).
       await this.worktreeDeps.gitManager.pruneWorktrees(baseCloneToPrune).catch((error: unknown) => {
         this.logger.warn(
           { workspacePath, issueIdentifier, error: toErrorString(error) },

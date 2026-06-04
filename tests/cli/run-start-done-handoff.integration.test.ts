@@ -134,7 +134,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("DONE-path handoff written on successful run completion (NIN-210)", () => {
+describe("DONE-path handoff written on successful run completion (RIS-210)", () => {
   it("writes a handoff.v1 with outcome done and validation reference on a simple DONE run", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-done-handoff-data-");

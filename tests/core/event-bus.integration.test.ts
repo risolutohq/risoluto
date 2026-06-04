@@ -131,7 +131,7 @@ describe("TypedEventBus — once — integration", () => {
       throw new Error("boom");
     });
 
-    // emit isolates a throwing listener — it logs and continues rather than rethrowing (NIN-235).
+    // emit isolates a throwing listener — it logs and continues rather than rethrowing (RIS-235).
     expect(() => bus.emit("task.started", { id: "err" })).not.toThrow();
     // handler was already removed before the throw, so second emit is silent
     expect(() => bus.emit("task.started", { id: "safe" })).not.toThrow();

@@ -127,7 +127,7 @@ export class HealthRunner {
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     // Race the probe against the deadline rather than only signalling abort: a probe that ignores
     // its AbortSignal would otherwise hang the runner indefinitely, so the timeout is enforced here
-    // regardless of probe cooperation (NIN-264).
+    // regardless of probe cooperation (RIS-264).
     const timeout = new Promise<HealthSubprobe[]>((resolve) => {
       timeoutHandle = setTimeout(() => {
         controller.abort();

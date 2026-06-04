@@ -120,9 +120,9 @@ function trackerRule(input: { readonly provider: "github" | "linear" }): Workflo
 function linearIssue() {
   return {
     id: "lin_issue_208",
-    identifier: "NIN-208",
+    identifier: "RIS-208",
     title: "Linear tracker intake",
-    url: "https://linear.app/ninetech/issue/NIN-208",
+    url: "https://linear.app/ninetech/issue/RIS-208",
     description: "Start this workflow from Linear.",
     labels: ["risoluto"],
     state: "Ready",

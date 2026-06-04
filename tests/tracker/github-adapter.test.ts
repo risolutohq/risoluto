@@ -282,7 +282,7 @@ describe("GitHubTrackerAdapter", () => {
       expect(ops).toContain("reopenIssue");
     });
 
-    it("removes the other state labels so only the new state label remains (NIN-263)", async () => {
+    it("removes the other state labels so only the new state label remains (RIS-263)", async () => {
       await adapter.updateIssueState("7", "in-progress");
 
       // config: activeStates ["in-progress"], terminalStates ["done"]. The new state label is added;

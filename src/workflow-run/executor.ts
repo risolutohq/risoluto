@@ -67,7 +67,7 @@ interface WorkflowExecutionState {
   readonly statesVisited: string[];
   readonly roleExecutions: string[];
   readonly actionExecutions: string[];
-  /** Phase/state/attempt-scoped dedupe ledger so a verifier retry re-runs validation (NIN-261). */
+  /** Phase/state/attempt-scoped dedupe ledger so a verifier retry re-runs validation (RIS-261). */
   readonly actionDedupeKeys: string[];
   readonly events: WorkflowExecutorEvent[];
 }

@@ -40,7 +40,7 @@ function readConfigMap(db: RisolutoDatabase): Record<string, unknown> {
       map[row.key] = JSON.parse(row.value);
     } catch (error) {
       // Corrupt persisted JSON is treated as unsafe — the caller (refresh) keeps the
-      // last-known-good config rather than silently running on an empty section (NIN-252).
+      // last-known-good config rather than silently running on an empty section (RIS-252).
       throw new Error(`config section "${row.key}" contains invalid JSON`, { cause: error });
     }
   }
@@ -102,7 +102,7 @@ export class DbConfigStore implements ConfigOverlayPort {
     } catch (error) {
       // Corrupt JSON or a config that fails derivation must not blow away a working
       // runtime: retain the last-known-good config if we have one, otherwise (startup)
-      // fail loudly rather than run on a half-built config (NIN-252).
+      // fail loudly rather than run on a half-built config (RIS-252).
       if (this.cachedConfig) {
         this.logger.error({ error: toErrorString(error) }, "config refresh failed — retaining last-known-good config");
         return;
@@ -130,7 +130,7 @@ export class DbConfigStore implements ConfigOverlayPort {
 
   // Derive + validate the candidate BEFORE writing, so a config that fails derivation
   // never lands in the DB. After a successful write, refresh() re-reads the persisted
-  // (dangerous-key-sanitized) sections so the cache matches disk exactly (NIN-252).
+  // (dangerous-key-sanitized) sections so the cache matches disk exactly (RIS-252).
   private commit(candidateMap: Record<string, unknown>): void {
     this.deriveFromMap(candidateMap);
     this.writeSections(candidateMap);

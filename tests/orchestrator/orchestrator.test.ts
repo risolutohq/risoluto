@@ -641,7 +641,7 @@ describe("Orchestrator", () => {
     await orchestrator.stop();
   });
 
-  it("rolls back a half-started instance when startup recovery throws (NIN-240)", async () => {
+  it("rolls back a half-started instance when startup recovery throws (RIS-240)", async () => {
     const runningAttempt = {
       attemptId: "attempt-1",
       issueId: "issue-1",
@@ -711,7 +711,7 @@ describe("Orchestrator", () => {
     expect(orchestrator.getSnapshot().running).toHaveLength(0);
   });
 
-  it("bounds shutdown with a timeout and force-cleans stuck workers (NIN-240)", async () => {
+  it("bounds shutdown with a timeout and force-cleans stuck workers (RIS-240)", async () => {
     vi.useFakeTimers();
     const issue = { ...createIssue(), id: "issue-1", identifier: "MT-42" };
     const tracker = {

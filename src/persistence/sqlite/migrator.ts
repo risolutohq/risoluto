@@ -101,7 +101,7 @@ async function loadArchiveFiles(
   // An event whose attempt has no parent row (its attempt file was skipped/corrupt and it
   // is not already in the DB) would raise a foreign-key violation and abort the entire
   // migration. Drop those orphan events (with a warning) before the DB write phase. Events
-  // for attempts already persisted in the DB are kept — their FK is satisfied (NIN-254).
+  // for attempts already persisted in the DB are kept — their FK is satisfied (RIS-254).
   const existingAttemptIds = db
     .select({ attemptId: attempts.attemptId })
     .from(attempts)
@@ -186,7 +186,7 @@ async function safeReaddir(dir: string): Promise<string[]> {
     }
     // A permission / I/O error must hard-fail. Treating it as "no archive files" would
     // let initPersistenceRuntime mark the JSONL migration complete and silently drop
-    // real archive data (NIN-254).
+    // real archive data (RIS-254).
     throw error;
   }
 }

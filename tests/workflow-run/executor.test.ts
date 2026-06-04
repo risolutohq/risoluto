@@ -492,7 +492,7 @@ describe("executeWorkflowDefinition", () => {
     );
   });
 
-  it("retries the implementer state on a not_satisfied verdict until the verifier is satisfied (NIN-201)", async () => {
+  it("retries the implementer state on a not_satisfied verdict until the verifier is satisfied (RIS-201)", async () => {
     const roleRuns: string[] = [];
     let verifyCount = 0;
 
@@ -515,7 +515,7 @@ describe("executeWorkflowDefinition", () => {
     expect(roleRuns).toEqual(["planner", "implementer", "reviewer", "verifier", "implementer", "reviewer", "verifier"]);
   });
 
-  it("re-runs run-validation-profile on a verifier-driven retry instead of reusing stale validation (NIN-261)", async () => {
+  it("re-runs run-validation-profile on a verifier-driven retry instead of reusing stale validation (RIS-261)", async () => {
     let validationRuns = 0;
     let verifyCount = 0;
     const base = createVerifierDefinition();
@@ -551,7 +551,7 @@ describe("executeWorkflowDefinition", () => {
     expect(validationRuns).toBeGreaterThanOrEqual(2);
   });
 
-  it("creates the worktree exactly once even across a verifier-driven retry (NIN-261)", async () => {
+  it("creates the worktree exactly once even across a verifier-driven retry (RIS-261)", async () => {
     let worktreeRuns = 0;
     let verifyCount = 0;
     const definition: ResolvedWorkflowDefinition = {
@@ -585,7 +585,7 @@ describe("executeWorkflowDefinition", () => {
     expect(worktreeRuns).toBe(1);
   });
 
-  it("blocks once the verifier retry budget is exhausted (default one retry) (NIN-201)", async () => {
+  it("blocks once the verifier retry budget is exhausted (default one retry) (RIS-201)", async () => {
     const roleRuns: string[] = [];
 
     const result = await executeWorkflowDefinition({

@@ -214,7 +214,7 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(promptTemplate).not.toMatch(/finished the issue/i);
   });
 
-  it("retains the last-known-good config when a section's JSON is corrupted (NIN-252)", () => {
+  it("retains the last-known-good config when a section's JSON is corrupted (RIS-252)", () => {
     const goodTracker = store.toMap().tracker;
 
     db.update(config)
@@ -229,7 +229,7 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(store.toMap().tracker).not.toEqual({});
   });
 
-  it("logs an error and keeps the last-known-good config when a section row has invalid JSON (NIN-252)", () => {
+  it("logs an error and keeps the last-known-good config when a section row has invalid JSON (RIS-252)", () => {
     const mockLogger = createMockLogger();
     const storeWithMockLogger = new DbConfigStore(db, mockLogger);
     storeWithMockLogger.refresh();
@@ -249,7 +249,7 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(storeWithMockLogger.toMap().tracker).toEqual(goodTracker);
   });
 
-  it("fails refresh on startup when config JSON is corrupt and there is no last-known-good (NIN-252)", () => {
+  it("fails refresh on startup when config JSON is corrupt and there is no last-known-good (RIS-252)", () => {
     db.update(config)
       .set({ value: "{not-valid-json", updatedAt: new Date().toISOString() })
       .where(eq(config.key, "tracker"))
@@ -259,7 +259,7 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(() => freshStore.refresh()).toThrow(/invalid JSON/);
   });
 
-  it("does not persist a bad overlay when derivation throws — write+refresh stay together (NIN-252)", async () => {
+  it("does not persist a bad overlay when derivation throws — write+refresh stay together (RIS-252)", async () => {
     const trackerRowBefore = db
       .select()
       .from(config)
@@ -278,7 +278,7 @@ describe("DbConfigStore — ConfigStore surface", () => {
     expect(JSON.stringify(store.toMap().tracker)).not.toContain("not-a-valid-url");
   });
 
-  it("rejects an out-of-range server.port and falls back to the default (NIN-252)", async () => {
+  it("rejects an out-of-range server.port and falls back to the default (RIS-252)", async () => {
     await store.applyPatch({ server: { port: 70000 } });
     expect(store.getConfig().server.port).toBe(4000);
 

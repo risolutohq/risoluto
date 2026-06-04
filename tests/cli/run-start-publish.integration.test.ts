@@ -166,7 +166,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("PR publishing modes reachable from `run start` (NIN-215)", () => {
+describe("PR publishing modes reachable from `run start` (RIS-215)", () => {
   it("defaults to a draft PR when no explicit publish mode is configured", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-publish-data-");

@@ -113,7 +113,7 @@ describe("SecretsStore", () => {
     expect(verifyStore.get("TOKEN")).toBe("safe-value");
   });
 
-  it("clears activeMasterKey on a failed start so the store is left uninitialized (NIN-251)", async () => {
+  it("clears activeMasterKey on a failed start so the store is left uninitialized (RIS-251)", async () => {
     const dir = await createTempDir();
     process.env.MASTER_KEY = "key-a";
 
@@ -131,7 +131,7 @@ describe("SecretsStore", () => {
     await expect(wrongKeyStore.set("TOKEN", "poison")).rejects.toThrow("has not been started");
   });
 
-  it("checks the master key before mutating the cache when set() runs before start (NIN-251)", async () => {
+  it("checks the master key before mutating the cache when set() runs before start (RIS-251)", async () => {
     const dir = await createTempDir();
 
     const store = new SecretsStore(dir, createLogger());
@@ -143,7 +143,7 @@ describe("SecretsStore", () => {
     expect(store.list()).toEqual([]);
   });
 
-  it("rolls the cache back when persist fails so a rejected set never lands on disk later (NIN-251)", async () => {
+  it("rolls the cache back when persist fails so a rejected set never lands on disk later (RIS-251)", async () => {
     const dir = await createTempDir();
     process.env.MASTER_KEY = "rollback-key";
 
@@ -169,7 +169,7 @@ describe("SecretsStore", () => {
     expect(restarted.get("OTHER")).toBe("v2");
   });
 
-  it("writes secrets.enc with owner-only 0o600 permissions (NIN-251)", async () => {
+  it("writes secrets.enc with owner-only 0o600 permissions (RIS-251)", async () => {
     const dir = await createTempDir();
     process.env.MASTER_KEY = "perm-master-key";
 

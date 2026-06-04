@@ -4,7 +4,7 @@
 > Date: 2026-06-02. Method: 22-agent discovery fan-out (10 session-transcript miners over 86 MB of
 > JSONL, git narrative + reachability-miss hunt, 8-skill state-machine audit, 2 adversarial grills)
 >
-> - main-loop reads of every back-half skill, the conductor script, CI, hooks, and Linear (NIN).
+> - main-loop reads of every back-half skill, the conductor script, CI, hooks, and Linear (RIS).
 >   **Convention:** every claim is marked **[C]** confirmed-in-repo (read directly) or **[I]** inferred
 >   (from transcripts / cross-reference, not line-verified). This file is a session working artifact.
 
@@ -13,22 +13,22 @@
 ## 0. TL;DR — the five things that matter
 
 1. **The reachability regression is real and proven.** [C] The `workflow-first-afk-mvp` engine
-   (NIN-194..222, ~9.5k lines, 27 issues "Done") shipped with **two symbols test-only** (zero prod
+   (RIS-194..222, ~9.5k lines, 27 issues "Done") shipped with **two symbols test-only** (zero prod
    callers) and **five partial** (production honest-blocks because the dogfood capstone injected
    fakes). The green gate + capstone passed _because_ the capstone hand-injected `pollCi`,
    `prepareWorkspace`, `retryGate`, `dispatchRole`. This is exactly the gap that already spawned the
    `verification-ladder` PRD.
 2. **`verification-ladder` already owns Themes B/D/E's core.** [C] Roadmap row #2 (`building`) is a
-   full PRD sliced into 9 Linear issues (NIN-225..233): static `reach:check` gate, e2e intake tier,
+   full PRD sliced into 9 Linear issues (RIS-225..233): static `reach:check` gate, e2e intake tier,
    wire-into-gate+CI, and **in-loop DoD edits to tdd/to-issues/review-handoff**. We must not rebuild
    it — only align and target the gaps it doesn't cover.
-3. **Linear is drifting from git with no deterministic repair.** [C] NIN-212, NIN-218 are `Todo` and
-   NIN-222 is `Backlog` though their code is merged. `post-merge-prd.mjs` flips _PRD/roadmap_ status
+3. **Linear is drifting from git with no deterministic repair.** [C] RIS-212, RIS-218 are `Todo` and
+   RIS-222 is `Backlog` though their code is merged. `post-merge-prd.mjs` flips _PRD/roadmap_ status
    and back-comments — it **never flips issue status to Done**. Issue-Done is purely an LLM action.
 4. **The AFK conductor cannot guarantee finishing all issues — by construction.** [C] One stuck issue
    (`mergedIds.length===0`) → `blockedWave` → `break` halts the whole downstream cascade; there is no
    skip-and-continue, no retry/back-off, and **a null gate-agent return breaks the loop without
-   writing the PLAN.md blocker** (silent loss of why it stopped). Discovered issues (NIN-222) are
+   writing the PLAN.md blocker** (silent loss of why it stopped). Discovered issues (RIS-222) are
    orphaned from the frozen `WAVES.md`.
 5. **Determinism is mostly prose.** [C] The load-bearing guards — "print `gh pr create` only if
    v1-check green", "new behaviour ⇒ new test", "every AC has a mapped test", reachability,
@@ -47,12 +47,12 @@ via PR #10 (`0cc3bd9`). Waves:
 
 | Wave | Milestone            | Issues                                                      | Linear status        |
 | ---- | -------------------- | ----------------------------------------------------------- | -------------------- |
-| 1    | Foundation roots     | NIN-194,195                                                 | 100% Done            |
-| 2    | Walking skeleton     | NIN-196,197,198,199                                         | 100% Done            |
-| 3    | Engine controls      | NIN-200,201,205,206,207,211                                 | 100% Done            |
-| 4    | External surfaces    | NIN-202,203,204,208,209,210,**212**,213,214,215,216,219,220 | 92% (NIN-212 `Todo`) |
-| 5    | Readiness/dogfood    | NIN-217, **218**                                            | 50% (NIN-218 `Todo`) |
-| —    | discovered mid-build | **NIN-222**                                                 | `Backlog`            |
+| 1    | Foundation roots     | RIS-194,195                                                 | 100% Done            |
+| 2    | Walking skeleton     | RIS-196,197,198,199                                         | 100% Done            |
+| 3    | Engine controls      | RIS-200,201,205,206,207,211                                 | 100% Done            |
+| 4    | External surfaces    | RIS-202,203,204,208,209,210,**212**,213,214,215,216,219,220 | 92% (RIS-212 `Todo`) |
+| 5    | Readiness/dogfood    | RIS-217, **218**                                            | 50% (RIS-218 `Todo`) |
+| —    | discovered mid-build | **RIS-222**                                                 | `Backlog`            |
 
 **Pipeline skills built/hardened:** the back-half chain `to-prd → to-issues → tdd → pre-pr →
 goal-prep → goal-run → review-handoff`, plus `next-bundle`, and the front-half `researcher / grill /
@@ -72,24 +72,24 @@ ACs lazily one at a time, not all 23 at once; Claude reviews **once at the end**
 
 ## 2. What's half-wired / regressed — [C] reachability proof (git-miss hunt)
 
-The dogfood capstone (NIN-218) passed by injecting fakes, masking that the production binary
+The dogfood capstone (RIS-218) passed by injecting fakes, masking that the production binary
 honest-blocks. Per-symbol verdict:
 
 | Issue              | Symbol                               | Verdict       | Why                                                                |
 | ------------------ | ------------------------------------ | ------------- | ------------------------------------------------------------------ |
-| NIN-198            | `driveAcceptedWorkflowRun`           | **satisfied** | reached from `risoluto run start`                                  |
-| NIN-200            | `persistExecutorEvents`              | **satisfied** | unconditional on every drive                                       |
-| NIN-211            | `createWorkflowRunActionRunner`      | **satisfied** | 2 prod callers                                                     |
-| NIN-215            | `evaluatePrPublishPolicy`            | **satisfied** | runs via `publish-pr` action                                       |
-| NIN-204/214        | evidence + memory hooks              | **satisfied** | unconditional in drive path                                        |
+| RIS-198            | `driveAcceptedWorkflowRun`           | **satisfied** | reached from `risoluto run start`                                  |
+| RIS-200            | `persistExecutorEvents`              | **satisfied** | unconditional on every drive                                       |
+| RIS-211            | `createWorkflowRunActionRunner`      | **satisfied** | 2 prod callers                                                     |
+| RIS-215            | `evaluatePrPublishPolicy`            | **satisfied** | runs via `publish-pr` action                                       |
+| RIS-204/214        | evidence + memory hooks              | **satisfied** | unconditional in drive path                                        |
 | keystone (69957ed) | daemon subscriber                    | **satisfied** | all 4 intakes → real _blocked_ handoff.v1                          |
-| NIN-196            | `createWorkflowRunWorkspacePreparer` | **partial**   | zero prod instantiation → no-op branch                             |
-| NIN-216            | `WorkflowRunCiPoller`                | **partial**   | `pollCi` never injected → honest-block                             |
-| NIN-206            | gate-retry                           | **partial**   | `retryGate` never injected → blocks instead                        |
-| NIN-201/207        | `buildSingleVerifierInput`           | **partial**   | `evidenceLinks:[]` hardcoded empty                                 |
-| NIN-222            | `createWorkflowRunAgentDispatch`     | **partial**   | CLI-only behind `RISOLUTO_LIVE_RUN_START`; daemon path never wired |
-| NIN-219            | `reconfirmPostPublishVerification`   | **test-only** | 0 prod callers; only importer also dead                            |
-| NIN-220            | `completeAutoMerge`                  | **test-only** | referenced only in comments                                        |
+| RIS-196            | `createWorkflowRunWorkspacePreparer` | **partial**   | zero prod instantiation → no-op branch                             |
+| RIS-216            | `WorkflowRunCiPoller`                | **partial**   | `pollCi` never injected → honest-block                             |
+| RIS-206            | gate-retry                           | **partial**   | `retryGate` never injected → blocks instead                        |
+| RIS-201/207        | `buildSingleVerifierInput`           | **partial**   | `evidenceLinks:[]` hardcoded empty                                 |
+| RIS-222            | `createWorkflowRunAgentDispatch`     | **partial**   | CLI-only behind `RISOLUTO_LIVE_RUN_START`; daemon path never wired |
+| RIS-219            | `reconfirmPostPublishVerification`   | **test-only** | 0 prod callers; only importer also dead                            |
+| RIS-220            | `completeAutoMerge`                  | **test-only** | referenced only in comments                                        |
 
 **[I]** Cross-model review of the branch (different Claude agents) found the engine was never wired
 into `src/cli`/`src/http` for live; legacy `src/orchestrator/` still runs the live path. Same-model
@@ -109,8 +109,8 @@ trace to capstone-masked production paths.
   flip PRD frontmatter `status: shipped` → flip roadmap row. It **never calls `issueUpdate`**, so
   issue status is never set Done by CI. [C]
 - `goal-run` says the conductor's merge-agent marks Done; `tdd` says "moving it to Done is the
-  operator's call… never the skill's." **Contradiction** → in practice neither fires reliably → NIN-212/218
-  stuck `Todo`, NIN-222 `Backlog` despite merged code. [C]
+  operator's call… never the skill's." **Contradiction** → in practice neither fires reliably → RIS-212/218
+  stuck `Todo`, RIS-222 `Backlog` despite merged code. [C]
 - `commentCreate` has **no dedup** → duplicate back-comments on any re-run, in `tdd`, `goal-run`,
   `review-handoff`, _and_ `post-merge-prd.mjs`. [C] Systemic.
 - `post-merge.yml` triggers on **any** `pull_request.closed` carrying a `from:prd-*` label with **no
@@ -200,7 +200,7 @@ The cascade is `for (wave of waves) { … if (!merged) break }`. Concretely:
 - **Partial-wave merge leaves integration mixed** — green issue branches merge into the wave branch,
   but if the gate then fails/`break`s, the wave never merges to integration; future waves branch from
   this in-between tip. (HIGH)
-- **Orphaned discovered issues** — `tdd` Step 4.5 files mid-build `discovered` issues (NIN-222);
+- **Orphaned discovered issues** — `tdd` Step 4.5 files mid-build `discovered` issues (RIS-222);
   `WAVES.md` is frozen, so the conductor can never build them. "Finish ALL issues" is impossible for
   anything found mid-run.
 - **CONTROL.md pause only honored at next wave boundary**, not mid-wave round. (low)
@@ -218,14 +218,14 @@ or scope ambiguity. The Theme A gap is real.
 
 | Wave          | Issues                                                                                      | Owns                                      |
 | ------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| 1 Static gate | NIN-225 manifest+loader, NIN-227 analyzer, NIN-229 `reach:check` (madge/knip)               | reachability determinism                  |
-| 2 E2E tier    | NIN-226 harness+CLI e2e, NIN-228 HTTP e2e, NIN-230 Slack e2e                                | behavioural reachability / test mid-tiers |
-| 3 Enforcement | NIN-231 wire into v1 gate+CI, **NIN-232 in-loop DoD edits to tdd/to-issues/review-handoff** | external + in-loop enforcement            |
-| 4 Capstone    | NIN-233 seed manifest, prove the ladder bites, doc live rung                                | retroactive audit                         |
+| 1 Static gate | RIS-225 manifest+loader, RIS-227 analyzer, RIS-229 `reach:check` (madge/knip)               | reachability determinism                  |
+| 2 E2E tier    | RIS-226 harness+CLI e2e, RIS-228 HTTP e2e, RIS-230 Slack e2e                                | behavioural reachability / test mid-tiers |
+| 3 Enforcement | RIS-231 wire into v1 gate+CI, **RIS-232 in-loop DoD edits to tdd/to-issues/review-handoff** | external + in-loop enforcement            |
+| 4 Capstone    | RIS-233 seed manifest, prove the ladder bites, doc live rung                                | retroactive audit                         |
 
 **Implication:** Themes **B (reachability), D (cross-model reachability confirm), E (test pyramid)**
 are substantially **owned by `verification-ladder`.** This session should **not** build them; where a
-theme overlaps, align to the manifest+`reach:check`+e2e design and to NIN-232's DoD edits.
+theme overlaps, align to the manifest+`reach:check`+e2e design and to RIS-232's DoD edits.
 
 ---
 
@@ -252,4 +252,4 @@ Main-loop reads: `skills/risoluto-{to-prd,to-issues,tdd,pre-pr,goal-prep,goal-ru
 `skills/risoluto-goal-run/references/conductor.workflow.mjs`, `.claude/settings.json`,
 `.husky/{pre-commit,pre-push,post-merge}`, `.github/workflows/post-merge.yml`,
 `scripts/post-merge-prd.mjs`, `docs/research-to-shipping-pipeline.md`, `docs/prds/verification-ladder.md`,
-`docs/roadmap.md`, Linear NIN (`workflow-first-afk-mvp`, `verification-ladder` projects).
+`docs/roadmap.md`, Linear RIS (`workflow-first-afk-mvp`, `verification-ladder` projects).

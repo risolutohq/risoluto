@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { projectCodexNotificationParams } from "../../src/codex/notification-projection.js";
 
-describe("codex notification projection (NIN-237)", () => {
+describe("codex notification projection (RIS-237)", () => {
   it("drops prompt text, tool arguments, and account metadata", () => {
     const projected = projectCodexNotificationParams({
       threadId: "t-1",

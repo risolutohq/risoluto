@@ -455,7 +455,7 @@ describe("migrateFromJsonl", () => {
     expect(eventRows).toHaveLength(result.eventCount);
   });
 
-  it("hard-fails on a non-ENOENT scan error instead of reporting an empty archive (NIN-254)", async () => {
+  it("hard-fails on a non-ENOENT scan error instead of reporting an empty archive (RIS-254)", async () => {
     const archiveDir = await createTempDir();
     // The attempts path is a regular file, not a directory → readdir raises ENOTDIR.
     // safeReaddir must rethrow that (only ENOENT yields an empty list), so the caller

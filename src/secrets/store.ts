@@ -157,7 +157,7 @@ export class SecretsStore implements SecretsPort {
    * Validate `masterKey` against the existing archive (if any) before adopting it.
    * activeMasterKey is assigned only after a clean decrypt and is cleared on every
    * failure path, so a wrong key can never become active and overwrite the real
-   * secrets.enc on the next write (NIN-251).
+   * secrets.enc on the next write (RIS-251).
    */
   private async adoptMasterKey(masterKey: string): Promise<void> {
     const source = await this.readEncryptedFile();
@@ -259,7 +259,7 @@ export class SecretsStore implements SecretsPort {
 
   // Persist the cache, restoring `key` to its pre-mutation value if the write fails, so a rejected
   // mutation never leaves the cache ahead of disk — persist() serializes the whole cache, so a later
-  // successful mutation would otherwise flush the rejected value (NIN-251).
+  // successful mutation would otherwise flush the rejected value (RIS-251).
   private async persistOrRollback(key: string, previousValue: string | undefined): Promise<void> {
     try {
       await this.persist();
@@ -274,7 +274,7 @@ export class SecretsStore implements SecretsPort {
   }
 
   // Serializes set()/delete() so the key check, cache mutation, persist, and audit of
-  // one mutation complete before the next begins (NIN-251).
+  // one mutation complete before the next begins (RIS-251).
   private readonly enqueueMutation: SerialChain = createSerialChain();
 
   private requiredMasterKey(): string {
@@ -351,7 +351,7 @@ export class SecretsStore implements SecretsPort {
   }
 
   // Write secrets.enc owner-only (0o600) and fsync the bytes before the rename, so a
-  // crash cannot leave a world-readable or half-written secret archive (NIN-251).
+  // crash cannot leave a world-readable or half-written secret archive (RIS-251).
   private async writeFileSynced(filePath: string, contents: string): Promise<void> {
     const handle = await open(filePath, "w", 0o600);
     try {

@@ -55,7 +55,7 @@ describe("lookupModelPrice", () => {
   });
 });
 
-describe("computeAttemptCostUsd (NIN-235)", () => {
+describe("computeAttemptCostUsd (RIS-235)", () => {
   it("computes a valid cost for finite non-negative token counts", () => {
     const cost = computeAttemptCostUsd({
       model: "gpt-4o",

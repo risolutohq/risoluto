@@ -143,7 +143,7 @@ describe("setup reconfigure flow", () => {
 
     expect(masterKeyResponse.status).toBe(200);
     expect(await masterKeyResponse.json()).toEqual({ ok: true });
-    // The freshly generated key is persisted, never echoed in the response (NIN-249).
+    // The freshly generated key is persisted, never echoed in the response (RIS-249).
     const regeneratedKey = mocks.writeFileMock.mock.calls[1]?.[1] as string;
     expect(regeneratedKey).toMatch(/^[a-f0-9]{64}$/u);
     expect(mocks.writeFileMock).toHaveBeenNthCalledWith(2, "/archive-root/master.key", regeneratedKey, {

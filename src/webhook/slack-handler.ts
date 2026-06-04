@@ -140,7 +140,7 @@ async function dispatchModalSubmission(
     // being swallowed as a duplicate tombstone. acceptSlackModalWorkflowRun is idempotent on the view id,
     // so a redelivery can't double-create the run. Discarding runs only on the intake-failure path —
     // marking the durable record applied happens after a successful intake and is best-effort, so a
-    // markApplied storage error can't re-enter this catch and discard a run that actually started (NIN-263).
+    // markApplied storage error can't re-enter this catch and discard a run that actually started (RIS-263).
     deps.logger.error({ error: String(error) }, "slack modal intake failed");
     await discardSlackModal(deps, modal.viewId);
     sendError(res, 500, "slack_intake_failed", "Slack modal intake failed");
@@ -158,7 +158,7 @@ async function dispatchModalSubmission(
 
 // Dedupe a verified Slack modal on the body+signature digest so a replayed signed submission (even
 // re-delivered under a fresh Slack view id) is recognized as a duplicate and never starts a second
-// Workflow Run (NIN-263). Returns "new" when no inbox is configured so the dedupe stays opt-in.
+// Workflow Run (RIS-263). Returns "new" when no inbox is configured so the dedupe stays opt-in.
 async function deduplicateSlackModal(
   deps: SlackWebhookHandlerDeps,
   request: VerifiedSlackRequest,
@@ -187,7 +187,7 @@ async function deduplicateSlackModal(
 }
 
 // Mark the durable record applied after a successful intake. Best-effort: a storage failure here must
-// not fail the request (the run already started), so it is logged, never thrown (NIN-263).
+// not fail the request (the run already started), so it is logged, never thrown (RIS-263).
 async function markSlackModalApplied(deps: SlackWebhookHandlerDeps, viewId: string): Promise<void> {
   try {
     await deps.webhookInbox?.markApplied?.(slackModalDeliveryId(viewId));
@@ -198,7 +198,7 @@ async function markSlackModalApplied(deps: SlackWebhookHandlerDeps, viewId: stri
 
 // A modal recorded before its intake ran is dropped from the inbox on failure so the durable record
 // isn't stranded as a dedupe tombstone that would silently swallow Slack's own retry — the row is keyed
-// on the view id, which Slack reuses on redelivery, so leaving it would dedupe the retry away (NIN-263).
+// on the view id, which Slack reuses on redelivery, so leaving it would dedupe the retry away (RIS-263).
 // Wrapped so a storage failure while discarding can't escape the handler's catch unanswered.
 async function discardSlackModal(deps: SlackWebhookHandlerDeps, viewId: string): Promise<void> {
   try {

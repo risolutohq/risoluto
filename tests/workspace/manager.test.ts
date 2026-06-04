@@ -53,7 +53,7 @@ function createWorktreeDeps(): WorkspaceManagerWorktreeDeps {
     gitManager: {
       hasUncommittedChanges: vi.fn().mockResolvedValue(false),
       autoCommit: vi.fn().mockResolvedValue("auto-commit-sha"),
-      setupWorktree: vi.fn().mockResolvedValue({ branchName: "risoluto/NIN-1" }),
+      setupWorktree: vi.fn().mockResolvedValue({ branchName: "risoluto/RIS-1" }),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
       pruneWorktrees: vi.fn().mockResolvedValue(undefined),
       deriveBaseCloneDir: vi.fn().mockReturnValue("/tmp/workspaces/.bare-clones/repo"),
@@ -67,16 +67,16 @@ function createWorktreeDeps(): WorkspaceManagerWorktreeDeps {
   };
 }
 
-function createIssue(identifier = "NIN-1") {
+function createIssue(identifier = "RIS-1") {
   return {
     id: "issue-1",
     identifier,
     title: "Test issue",
     description: null,
     state: "In Progress",
-    url: "https://linear.app/team/NIN-1",
+    url: "https://linear.app/team/RIS-1",
     priority: 2,
-    branchName: "feature/NIN-1",
+    branchName: "feature/RIS-1",
     labels: [] as string[],
     blockedBy: [] as { id: string | null; identifier: string | null; state: string | null }[],
     createdAt: "2026-03-15T00:00:00Z",
@@ -112,11 +112,11 @@ describe("WorkspaceManager", () => {
       // Simulate: workspace does not exist → ENOENT → mkdir creates it
       statMock.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 
-      const workspace = await manager.ensureWorkspace("NIN-1");
+      const workspace = await manager.ensureWorkspace("RIS-1");
 
       expect(workspace.createdNow).toBe(true);
-      expect(workspace.workspaceKey).toBe("NIN-1");
-      expect(workspace.path).toBe(path.resolve("/tmp/workspaces", "NIN-1"));
+      expect(workspace.workspaceKey).toBe("RIS-1");
+      expect(workspace.path).toBe(path.resolve("/tmp/workspaces", "RIS-1"));
       expect(mkdirMock).toHaveBeenCalled();
     });
 
@@ -127,10 +127,10 @@ describe("WorkspaceManager", () => {
       // Workspace exists as a directory
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      const workspace = await manager.ensureWorkspace("NIN-1");
+      const workspace = await manager.ensureWorkspace("RIS-1");
 
       expect(workspace.createdNow).toBe(false);
-      expect(workspace.workspaceKey).toBe("NIN-1");
+      expect(workspace.workspaceKey).toBe("RIS-1");
     });
 
     it("throws when workspace target is not a directory", async () => {
@@ -139,7 +139,7 @@ describe("WorkspaceManager", () => {
 
       statMock.mockResolvedValue({ isDirectory: () => false });
 
-      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("not a directory");
+      await expect(manager.ensureWorkspace("RIS-1")).rejects.toThrow("not a directory");
     });
 
     it("rejects an existing workspace path that is a symlink", async () => {
@@ -148,8 +148,8 @@ describe("WorkspaceManager", () => {
 
       lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
 
-      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("symlink");
-      expect(mkdirMock).not.toHaveBeenCalledWith(path.resolve("/tmp/workspaces", "NIN-1"), expect.anything());
+      await expect(manager.ensureWorkspace("RIS-1")).rejects.toThrow("symlink");
+      expect(mkdirMock).not.toHaveBeenCalledWith(path.resolve("/tmp/workspaces", "RIS-1"), expect.anything());
     });
 
     it("rejects an existing workspace dir whose real path escapes the root", async () => {
@@ -161,7 +161,7 @@ describe("WorkspaceManager", () => {
         Promise.resolve(p === "/tmp/workspaces" ? "/tmp/workspaces" : "/etc"),
       );
 
-      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("outside the workspace root");
+      await expect(manager.ensureWorkspace("RIS-1")).rejects.toThrow("outside the workspace root");
     });
   });
 
@@ -170,7 +170,7 @@ describe("WorkspaceManager", () => {
       const config = createConfig({ strategy: "worktree" });
       const manager = new WorkspaceManager(() => config, logger, createWorktreeDeps());
 
-      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow(
+      await expect(manager.ensureWorkspace("RIS-1")).rejects.toThrow(
         "worktree strategy requires the full Issue object",
       );
     });
@@ -179,7 +179,7 @@ describe("WorkspaceManager", () => {
       const config = createConfig({ strategy: "worktree" });
       const manager = new WorkspaceManager(() => config, logger);
 
-      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow(
+      await expect(manager.ensureWorkspace("RIS-1", createIssue())).rejects.toThrow(
         "worktree strategy requires gitManager and repoRouter deps",
       );
     });
@@ -190,7 +190,7 @@ describe("WorkspaceManager", () => {
       vi.mocked(deps.repoRouter.matchIssue).mockReturnValue(null);
       const manager = new WorkspaceManager(() => config, logger, deps);
 
-      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow("no matching repo route found");
+      await expect(manager.ensureWorkspace("RIS-1", createIssue())).rejects.toThrow("no matching repo route found");
     });
 
     it("creates worktree workspace via gitManager on first access", async () => {
@@ -201,13 +201,13 @@ describe("WorkspaceManager", () => {
       // Workspace does not exist
       statMock.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 
-      const workspace = await manager.ensureWorkspace("NIN-1", createIssue());
+      const workspace = await manager.ensureWorkspace("RIS-1", createIssue());
 
       expect(workspace.createdNow).toBe(true);
       expect(deps.gitManager.setupWorktree).toHaveBeenCalledOnce();
     });
 
-    it("rejects a symlinked worktree workspace path before touching git (NIN-243)", async () => {
+    it("rejects a symlinked worktree workspace path before touching git (RIS-243)", async () => {
       const config = createConfig({ strategy: "worktree" });
       const deps = createWorktreeDeps();
       const manager = new WorkspaceManager(() => config, logger, deps);
@@ -217,7 +217,7 @@ describe("WorkspaceManager", () => {
       statMock.mockResolvedValue({ isDirectory: () => true });
       lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
 
-      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow("symlink");
+      await expect(manager.ensureWorkspace("RIS-1", createIssue())).rejects.toThrow("symlink");
       expect(deps.gitManager.setupWorktree).not.toHaveBeenCalled();
     });
 
@@ -229,7 +229,7 @@ describe("WorkspaceManager", () => {
       // Workspace already exists
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      const workspace = await manager.ensureWorkspace("NIN-1", createIssue());
+      const workspace = await manager.ensureWorkspace("RIS-1", createIssue());
 
       expect(workspace.createdNow).toBe(false);
       expect(deps.gitManager.setupWorktree).not.toHaveBeenCalled();
@@ -260,11 +260,11 @@ describe("WorkspaceManager", () => {
         kill: vi.fn(),
       } as never);
 
-      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow();
+      await expect(manager.ensureWorkspace("RIS-1", createIssue())).rejects.toThrow();
       // The worktree should have been removed on failure
       expect(deps.gitManager.removeWorktree).toHaveBeenCalledWith(
         expect.any(String),
-        expect.stringContaining("NIN-1"),
+        expect.stringContaining("RIS-1"),
         true,
       );
     });
@@ -275,19 +275,19 @@ describe("WorkspaceManager", () => {
       const config = createConfig();
       const manager = new WorkspaceManager(() => config, logger);
       const workspace = {
-        path: "/tmp/workspaces/NIN-1",
-        workspaceKey: "NIN-1",
+        path: "/tmp/workspaces/RIS-1",
+        workspaceKey: "RIS-1",
         createdNow: false,
       };
 
       await manager.prepareForAttempt(workspace);
 
       expect(rmMock).toHaveBeenCalledWith(
-        path.resolve("/tmp/workspaces/NIN-1", "tmp"),
+        path.resolve("/tmp/workspaces/RIS-1", "tmp"),
         expect.objectContaining({ recursive: true }),
       );
       expect(rmMock).toHaveBeenCalledWith(
-        path.resolve("/tmp/workspaces/NIN-1", ".elixir_ls"),
+        path.resolve("/tmp/workspaces/RIS-1", ".elixir_ls"),
         expect.objectContaining({ recursive: true }),
       );
     });
@@ -314,10 +314,10 @@ describe("WorkspaceManager", () => {
       // Workspace exists
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      await manager.removeWorkspace("NIN-1");
+      await manager.removeWorkspace("RIS-1");
 
       expect(rmMock).toHaveBeenCalledWith(
-        expect.stringContaining("NIN-1"),
+        expect.stringContaining("RIS-1"),
         expect.objectContaining({ recursive: true }),
       );
     });
@@ -330,11 +330,11 @@ describe("WorkspaceManager", () => {
 
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      const result = await manager.removeWorkspaceWithResult("NIN-1");
+      const result = await manager.removeWorkspaceWithResult("RIS-1");
 
       expect(deps.gitManager.autoCommit).toHaveBeenCalledWith(
-        expect.stringContaining("NIN-1"),
-        "[NIN-1] auto-commit: workspace cleanup preservation",
+        expect.stringContaining("RIS-1"),
+        "[RIS-1] auto-commit: workspace cleanup preservation",
         { noVerify: true },
       );
       expect(result).toMatchObject({
@@ -355,7 +355,7 @@ describe("WorkspaceManager", () => {
 
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      const result = await manager.removeWorkspaceWithResult("NIN-1");
+      const result = await manager.removeWorkspaceWithResult("RIS-1");
 
       expect(rmMock).not.toHaveBeenCalled();
       expect(result).toMatchObject({
@@ -375,7 +375,7 @@ describe("WorkspaceManager", () => {
       // Workspace does not exist
       statMock.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 
-      await manager.removeWorkspace("NIN-1");
+      await manager.removeWorkspace("RIS-1");
 
       // rm should not be called
       expect(rmMock).not.toHaveBeenCalled();
@@ -389,7 +389,7 @@ describe("WorkspaceManager", () => {
       statMock.mockResolvedValue({ isDirectory: () => true });
       lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
 
-      await expect(manager.removeWorkspace("NIN-1")).rejects.toThrow("symlink");
+      await expect(manager.removeWorkspace("RIS-1")).rejects.toThrow("symlink");
       expect(rmMock).not.toHaveBeenCalled();
     });
 
@@ -411,7 +411,7 @@ describe("WorkspaceManager", () => {
       // Workspace exists
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      await manager.removeWorkspace("NIN-1", createIssue());
+      await manager.removeWorkspace("RIS-1", createIssue());
 
       expect(deps.gitManager.removeWorktree).toHaveBeenCalledOnce();
     });
@@ -425,11 +425,11 @@ describe("WorkspaceManager", () => {
       // Workspace exists
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      await manager.removeWorkspace("NIN-1", createIssue());
+      await manager.removeWorkspace("RIS-1", createIssue());
 
       // Should fall back to rm
       expect(rmMock).toHaveBeenCalledWith(
-        expect.stringContaining("NIN-1"),
+        expect.stringContaining("RIS-1"),
         expect.objectContaining({ recursive: true }),
       );
     });
@@ -442,7 +442,7 @@ describe("WorkspaceManager", () => {
 
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      await manager.removeWorkspace("NIN-1", createIssue());
+      await manager.removeWorkspace("RIS-1", createIssue());
 
       expect(rmMock).toHaveBeenCalled();
       expect(deps.gitManager.pruneWorktrees).toHaveBeenCalledWith("/tmp/workspaces/.bare-clones/repo");
@@ -456,7 +456,7 @@ describe("WorkspaceManager", () => {
 
       statMock.mockResolvedValue({ isDirectory: () => true });
 
-      const result = await manager.removeWorkspaceWithResult("NIN-1", createIssue());
+      const result = await manager.removeWorkspaceWithResult("RIS-1", createIssue());
 
       expect(deps.gitManager.removeWorktree).not.toHaveBeenCalled();
       expect(rmMock).not.toHaveBeenCalled();
@@ -472,7 +472,7 @@ describe("WorkspaceManager", () => {
       const config = createConfig({ strategy: "worktree" });
       const manager = new WorkspaceManager(() => config, logger);
 
-      await expect(manager.removeWorkspace("NIN-1")).rejects.toThrow(
+      await expect(manager.removeWorkspace("RIS-1")).rejects.toThrow(
         "worktree strategy requires gitManager and repoRouter deps",
       );
     });
@@ -510,8 +510,8 @@ describe("WorkspaceManager", () => {
         kill: vi.fn(),
       } as never);
 
-      const workspace = { path: "/tmp/workspaces/NIN-1", workspaceKey: "NIN-1", createdNow: false };
-      await manager.runBeforeRun(workspace, "NIN-1");
+      const workspace = { path: "/tmp/workspaces/RIS-1", workspaceKey: "RIS-1", createdNow: false };
+      await manager.runBeforeRun(workspace, "RIS-1");
 
       expect(stdoutOn).toHaveBeenCalledWith("data", expect.any(Function));
     });

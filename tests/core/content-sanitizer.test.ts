@@ -502,7 +502,7 @@ Done.`;
     });
   });
 
-  describe("broad assignment-key redaction (NIN-234)", () => {
+  describe("broad assignment-key redaction (RIS-234)", () => {
     it("redacts any REDACT_KEYS identifier assignment, not just the legacy list", () => {
       expect(sanitizeContent("credential=topsecret done")).toBe("credential=[REDACTED] done");
       expect(sanitizeContent("webhook=https://hooks.example.com/x done")).toBe("webhook=[REDACTED] done");
@@ -522,7 +522,7 @@ Done.`;
     });
   });
 
-  describe("non-plain container redaction (NIN-234)", () => {
+  describe("non-plain container redaction (RIS-234)", () => {
     it("redacts secrets inside a Map", () => {
       expect(
         redactSensitiveValue(

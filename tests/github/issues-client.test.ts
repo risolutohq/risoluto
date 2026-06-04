@@ -174,7 +174,7 @@ describe("GitHubIssuesClient", () => {
     expect(result[0].number).toBe(42);
   });
 
-  it("fetchOpenIssues drops pull-request-backed records (NIN-263)", async () => {
+  it("fetchOpenIssues drops pull-request-backed records (RIS-263)", async () => {
     const issues = [
       makeRawIssue({ number: 42 }),
       makeRawIssue({ number: 99, pull_request: { url: "https://api.github.com/repos/acme/awesome/pulls/99" } }),
@@ -205,7 +205,7 @@ describe("GitHubIssuesClient", () => {
     await expect(client.fetchOpenIssues()).rejects.toThrow(GitHubIssuesClientError);
   });
 
-  it("maps a 429 response to a distinct github_rate_limited error (NIN-266)", async () => {
+  it("maps a 429 response to a distinct github_rate_limited error (RIS-266)", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ message: "rate limited" }), {
         status: 429,
@@ -224,7 +224,7 @@ describe("GitHubIssuesClient", () => {
     }
   });
 
-  it("maps a 403 with exhausted rate-limit budget to github_rate_limited (NIN-266)", async () => {
+  it("maps a 403 with exhausted rate-limit budget to github_rate_limited (RIS-266)", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ message: "forbidden" }), {
         status: 403,

@@ -141,7 +141,7 @@ export class GitManager implements GitIntegrationPort {
     const branchName = deriveBranchName(issue, branchPrefix);
     // route.defaultBranch is attacker-influenceable routing config and reaches git as a ref / start
     // point; validate it at the point of use too — setup validates at write time, but a config written
-    // by an older build (or edited directly) must not slip an option-like ref into git (NIN-241).
+    // by an older build (or edited directly) must not slip an option-like ref into git (RIS-241).
     assertValidBranchName(route.defaultBranch);
     const startPoint = route.defaultBranch;
 

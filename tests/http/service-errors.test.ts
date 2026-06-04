@@ -80,7 +80,7 @@ describe("serviceErrorHandler", () => {
     server = null;
   });
 
-  it("converts a malformed JSON body to 400 invalid_request_body (NIN-250)", async () => {
+  it("converts a malformed JSON body to 400 invalid_request_body (RIS-250)", async () => {
     const { port, server: s } = await startApp();
     server = s;
 

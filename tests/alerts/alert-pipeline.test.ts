@@ -68,7 +68,7 @@ describe("AlertPipeline", () => {
     ]);
   });
 
-  it("emits a redacted allowlisted summary instead of the raw event payload (NIN-247)", async () => {
+  it("emits a redacted allowlisted summary instead of the raw event payload (RIS-247)", async () => {
     const notificationManager = {
       notify: vi.fn().mockResolvedValue({
         deliveredChannels: ["ops-webhook"],
@@ -130,7 +130,7 @@ describe("AlertPipeline", () => {
     expect(statuses).toEqual(["delivered", "suppressed"]);
   });
 
-  it("does not stamp the cooldown when the notify fully fails so the retry is not suppressed (NIN-264)", async () => {
+  it("does not stamp the cooldown when the notify fully fails so the retry is not suppressed (RIS-264)", async () => {
     const notify = vi
       .fn()
       .mockResolvedValueOnce({

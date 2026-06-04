@@ -101,11 +101,11 @@ describe("buildDockerRunArgs", () => {
         'RISOLUTO_CODEX_CONFIG_TOML=model = "gpt-5.4"\n\n[projects."/tmp/workspaces/MT-1"]\ntrust_level = "trusted"\n',
       ]),
     );
-    // The codex command is passed as argv, never as a shell-interpolated env var (NIN-259).
+    // The codex command is passed as argv, never as a shell-interpolated env var (RIS-259).
     expect(envArgs).not.toEqual(expect.arrayContaining([expect.stringContaining("RISOLUTO_CODEX_COMMAND")]));
   });
 
-  it("passes the codex command as positional argv after the entrypoint script (NIN-259)", () => {
+  it("passes the codex command as positional argv after the entrypoint script (RIS-259)", () => {
     const result = buildDockerRunArgs(baseInput());
     const script = entrypointScript(result.args);
     // The entrypoint execs the positional params and never references a command env var.
@@ -116,7 +116,7 @@ describe("buildDockerRunArgs", () => {
     expect(result.args.slice(bashIdx + 3)).toEqual(["risoluto-codex-entry", "codex", "app-server"]);
   });
 
-  it("does not shell-interpolate metacharacters in the codex command (NIN-259)", () => {
+  it("does not shell-interpolate metacharacters in the codex command (RIS-259)", () => {
     const result = buildDockerRunArgs(baseInput({ command: "codex app-server; rm -rf /" }));
     const script = entrypointScript(result.args);
     // The command string is never embedded in the shell-evaluated entrypoint script, so its
@@ -127,7 +127,7 @@ describe("buildDockerRunArgs", () => {
     expect(result.args.slice(bashIdx + 3)).toEqual(["risoluto-codex-entry", "codex", "app-server;", "rm", "-rf", "/"]);
   });
 
-  it("rejects an empty codex command (NIN-259)", () => {
+  it("rejects an empty codex command (RIS-259)", () => {
     expect(() => buildDockerRunArgs(baseInput({ command: "   " }))).toThrow(/at least one argument/);
   });
 
@@ -310,11 +310,11 @@ describe("buildDockerRunArgs", () => {
   });
 
   it("includes observability labels", () => {
-    const result = buildDockerRunArgs(baseInput({ issueIdentifier: "NIN-5", model: "gpt-5.4" }));
+    const result = buildDockerRunArgs(baseInput({ issueIdentifier: "RIS-5", model: "gpt-5.4" }));
     const labelArgs = result.args.filter((_, i) => result.args[i - 1] === "--label");
     expect(labelArgs).toEqual(
       expect.arrayContaining([
-        "risoluto.issue=NIN-5",
+        "risoluto.issue=RIS-5",
         "risoluto.model=gpt-5.4",
         expect.stringContaining("risoluto.workspace=/tmp/workspaces/MT-1"),
         expect.stringMatching(/^risoluto\.started-at=\d{4}-/),

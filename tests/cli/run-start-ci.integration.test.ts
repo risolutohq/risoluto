@@ -161,7 +161,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("GitHub Actions CI babysitter reachable from `run start` (NIN-216)", () => {
+describe("GitHub Actions CI babysitter reachable from `run start` (RIS-216)", () => {
   it("routes a code-caused CI failure back to implementation when retry budget remains", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const result = await runCiFlow({

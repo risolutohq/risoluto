@@ -231,7 +231,7 @@ export class CodexControlPlane {
         const srcAuth = path.join(codexConfig.auth.sourceHome, "auth.json");
         const destAuth = path.join(codexHome, "auth.json");
         // Copy then force owner-only perms — the refreshed credential must not be group/world-readable
-        // in the per-run CODEX_HOME (NIN-251). Each step is logged rather than silently swallowed: a
+        // in the per-run CODEX_HOME (RIS-251). Each step is logged rather than silently swallowed: a
         // failed chmod leaves the credential at its source permissions, which must not pass unnoticed.
         let authCopied = false;
         try {

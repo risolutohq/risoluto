@@ -68,7 +68,7 @@ describe("deepMerge", () => {
     expect(base).toEqual(baseCopy);
   });
 
-  it("drops __proto__/constructor/prototype keys without polluting Object.prototype (NIN-252)", () => {
+  it("drops __proto__/constructor/prototype keys without polluting Object.prototype (RIS-252)", () => {
     const malicious = JSON.parse('{"__proto__": {"polluted": "yes"}, "constructor": {"polluted": "yes"}, "safe": 1}');
     const nestedMalicious = JSON.parse('{"a": {"__proto__": {"polluted": "yes"}}}');
 

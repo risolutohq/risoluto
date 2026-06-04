@@ -71,7 +71,7 @@ describe("HealthRunner", () => {
     expect(checks.github.subprobes).toHaveLength(2);
   });
 
-  it("enforces the per-probe timeout even when a probe ignores its abort signal (NIN-264)", async () => {
+  it("enforces the per-probe timeout even when a probe ignores its abort signal (RIS-264)", async () => {
     // A probe that never resolves and never honors its AbortSignal.
     const probe: HealthProbe = { id: "github", run: vi.fn(() => new Promise<HealthSubprobe[]>(() => undefined)) };
     const store = memoryStore();

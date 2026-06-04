@@ -7,7 +7,7 @@ import { workflowRunRef } from "../../src/orchestrator/worker-outcome/types.js";
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "lin_issue_7",
-    identifier: "NIN-7",
+    identifier: "RIS-7",
     title: "Wire the engine",
     description: null,
     priority: null,
@@ -28,7 +28,7 @@ describe("workflow-run identity (CR-03)", () => {
 
     expect(ref.id).toBe("wr_owned_123");
     expect(ref.id).not.toBe("lin_issue_7");
-    expect(ref.identifier).toBe("NIN-7");
+    expect(ref.identifier).toBe("RIS-7");
   });
 
   it("falls back to the tracker issue id for legacy issues without a wr_UUID", () => {

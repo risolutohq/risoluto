@@ -128,7 +128,7 @@ describe("DbSecretsStore", () => {
     expect(store2.get("PERSIST_TEST")).toBe("survives");
   });
 
-  it("rejects start when the master key cannot decrypt existing rows (NIN-251)", async () => {
+  it("rejects start when the master key cannot decrypt existing rows (RIS-251)", async () => {
     await store.set("SECRET", "hidden");
 
     const store2 = new DbSecretsStore(db, createMockLogger(), { masterKey: "wrong-key" });
@@ -142,7 +142,7 @@ describe("DbSecretsStore", () => {
     expect(store3.get("SECRET")).toBe("hidden");
   });
 
-  it("starts with the correct key even when one row is corrupt, skipping the bad row (NIN-251)", async () => {
+  it("starts with the correct key even when one row is corrupt, skipping the bad row (RIS-251)", async () => {
     await store.set("GOOD", "readable");
     // Inject a row whose ciphertext is corrupt — it can never decrypt with any key. migrateV1Rows skips
     // V1 corruption; verifyRowsDecrypt must not treat this V2 corruption as a wrong-key mismatch.
@@ -166,7 +166,7 @@ describe("DbSecretsStore", () => {
     expect(store2.get("CORRUPT")).toBeNull();
   });
 
-  it("rejects initializeWithKey when the key cannot decrypt existing rows (NIN-251)", async () => {
+  it("rejects initializeWithKey when the key cannot decrypt existing rows (RIS-251)", async () => {
     await store.set("SECRET", "hidden");
 
     const deferred = new DbSecretsStore(db, createMockLogger());

@@ -37,7 +37,7 @@ describe("WorkflowRunArchive", () => {
     await expect(archive.listWorkflowRuns()).resolves.toEqual([workflowRun]);
   });
 
-  it("refuses status writes from a terminal state so done cannot overwrite a cancel (NIN-255)", async () => {
+  it("refuses status writes from a terminal state so done cannot overwrite a cancel (RIS-255)", async () => {
     const dataDir = await createTempDir();
     const archive = createWorkflowRunArchive({ dataDir });
     const workflowRun = archive.createWorkflowRunRecord({
@@ -59,7 +59,7 @@ describe("WorkflowRunArchive", () => {
     await expect(archive.loadWorkflowRun(workflowRun.id)).resolves.toMatchObject({ status: "cancelled" });
   });
 
-  it("serializes concurrent status updates under a per-run lock so the first terminal wins (NIN-255)", async () => {
+  it("serializes concurrent status updates under a per-run lock so the first terminal wins (RIS-255)", async () => {
     const dataDir = await createTempDir();
     const archive = createWorkflowRunArchive({ dataDir });
     const workflowRun = archive.createWorkflowRunRecord({
@@ -120,7 +120,7 @@ describe("WorkflowRunArchive", () => {
     ]);
   });
 
-  it("assigns event sequences atomically under concurrent appends (NIN-263)", async () => {
+  it("assigns event sequences atomically under concurrent appends (RIS-263)", async () => {
     const dataDir = await createTempDir();
     const archive = createWorkflowRunArchive({ dataDir });
     const workflowRun = archive.createWorkflowRunRecord({

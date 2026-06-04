@@ -70,7 +70,7 @@ broken precondition.
 | 4   | `research/` submodule init      | `git submodule status research` leads with a space, not `-`                                                                                                                     | Run `git submodule update --init research`.           |
 | 5   | Base branch                     | `git branch --show-current` is `master`                                                                                                                                         | Launch from `master`.                                 |
 | 6   | Integration branch ready        | `git rev-parse --verify integration/architecture-loop` (else create it off `master` and push)                                                                                   | Cannot create the branch.                             |
-| 7   | Linear auth live                | a `list_teams` / GraphQL probe succeeds (team **NIN**)                                                                                                                          | Surface verbatim; do not retry auth.                  |
+| 7   | Linear auth live                | a `list_teams` / GraphQL probe succeeds (team **RIS**)                                                                                                                          | Surface verbatim; do not retry auth.                  |
 | 8   | DeepSeek reachable via opencode | `command -v opencode` and `deepseek-v4-pro` in `opencode models`                                                                                                                | Referee gate cannot run — fix opencode provider.      |
 | 9   | Codex local auth live           | Codex CLI authenticated for `gpt-5.4 high`                                                                                                                                      | End oracle cannot run.                                |
 | 10  | Required secrets present        | `LINEAR_API_KEY`, Slack, opencode/DeepSeek keys (existence only)                                                                                                                | Missing credential — fix before launch.               |
@@ -91,14 +91,14 @@ Step 0 reconcile.
 
 Durable memory and control live in **Linear**, never in repo-local scratch markdown.
 
-- **Project** `Risoluto Architecture Loop` — team **NIN**, created **once** and reused idempotently
+- **Project** `Risoluto Architecture Loop` — team **RIS**, created **once** and reused idempotently
   (search-before-create with `list_projects`; never the Live Sandbox).
 - **Run issue** — one per `/goal` launch. Its body holds the run config (completion condition, `K=2`,
   `fuse=8`, the model map); its comments hold the narrative `ATTEMPTS`/`NOTES` log. This is the
-  goal-forge "working memory" pillar, in Linear. Its Linear identifier (e.g. `NIN-42`) **is** the `<run-id>`:
+  goal-forge "working memory" pillar, in Linear. Its Linear identifier (e.g. `RIS-42`) **is** the `<run-id>`:
   capture it as `RUN_ID` once when the run issue is created/found in Phase 0, and use it verbatim in every
-  `/tmp` path and the final HTML filename (`/tmp/risoluto-architecture-loop/NIN-42/…`,
-  `$TMPDIR/architecture-loop-NIN-42.html`); never re-derive it mid-run.
+  `/tmp` path and the final HTML filename (`/tmp/risoluto-architecture-loop/RIS-42/…`,
+  `$TMPDIR/architecture-loop-RIS-42.html`); never re-derive it mid-run.
 - **Candidate sub-issues** — children of the run issue, one per `Strong` candidate. State
   `open → merged | rejected | blocked`. Each carries a `hash` label (computed at discovery — see
   **Anti-thrash**), the branch/PR link, and the referee verdict. The sub-issue **body is the self-authored deepening contract**

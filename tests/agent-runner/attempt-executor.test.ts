@@ -226,7 +226,7 @@ describe("DefaultAttemptExecutor", () => {
     });
   });
 
-  it("preserves the run outcome and still runs afterRun when shutdown fails (NIN-259)", async () => {
+  it("preserves the run outcome and still runs afterRun when shutdown fails (RIS-259)", async () => {
     const order: string[] = [];
     const workspaceManager = createWorkspaceManager(order);
     const runtime = createRuntimeSession({

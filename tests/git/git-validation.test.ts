@@ -8,7 +8,7 @@ import {
 } from "../../src/git/git-validation.js";
 
 describe("assertValidBranchName", () => {
-  it.each(["risoluto/nin-42", "feature/custom", "release/1.2.3", "fix-bug"])(
+  it.each(["risoluto/ris-42", "feature/custom", "release/1.2.3", "fix-bug"])(
     "accepts a well-formed branch name (%s)",
     (name) => {
       expect(() => assertValidBranchName(name)).not.toThrow();

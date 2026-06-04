@@ -14,7 +14,7 @@ const commandRequest = {
   params: { command: "rm -rf /" },
 };
 
-describe("codex approval gate (NIN-237)", () => {
+describe("codex approval gate (RIS-237)", () => {
   it("uses acceptForSession/reject as the canonical decision literals", () => {
     expect(CODEX_APPROVE_DECISION).toBe("acceptForSession");
     expect(CODEX_DENY_DECISION).toBe("reject");

@@ -143,7 +143,7 @@ export function waitForTurnCompletion(
   return new Promise((resolve, reject) => {
     // An already-aborted signal never fires a fresh "abort" event, so registering the
     // listener alone would leave the waiter hanging until the timeout. Reject up front and
-    // mark the turn so a late completion notification is discarded (NIN-259).
+    // mark the turn so a late completion notification is discarded (RIS-259).
     if (input.signal.aborted) {
       state.timedOutTurnIds.add(input.turnId);
       reject(new Error("turn completion interrupted"));

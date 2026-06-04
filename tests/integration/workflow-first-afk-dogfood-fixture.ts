@@ -122,9 +122,9 @@ function intakeRule(provider: "linear" | "slack"): WorkflowRunIntakeRule {
 function trackerIssue() {
   return {
     id: "lin_dogfood_218",
-    identifier: "NIN-218",
+    identifier: "RIS-218",
     title: "End-to-end dogfood capstone",
-    url: "https://linear.app/ninetech/issue/NIN-218",
+    url: "https://linear.app/ninetech/issue/RIS-218",
     description: "Prove the dogfood capstone.",
     labels: ["risoluto"],
     state: "Ready",

@@ -221,7 +221,7 @@ export function buildCreateProjectMutation(): string {
 export function buildWebhooksQuery(): string {
   // The `secret` field is intentionally omitted — listing/health never needs it, and requesting it
   // would pull every webhook's signing secret into memory/logs. Only `webhookCreate` returns a secret,
-  // which is handled at registration time (NIN-263).
+  // which is handled at registration time (RIS-263).
   return `
     query RisolutoWebhooks {
       webhooks(first: 50) {

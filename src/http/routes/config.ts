@@ -48,7 +48,7 @@ function normalizeOverlayPatch(patch: Record<string, unknown>): Record<string, u
 
     // Both branches route through setOverlayPathValue so a dangerous key (__proto__,
     // constructor, prototype) is rejected whether or not it is dotted — a literal
-    // non-dotted key is a single-segment path (NIN: config overlay proto-pollution guard).
+    // non-dotted key is a single-segment path (RIS: config overlay proto-pollution guard).
     const segments = key.includes(".") ? normalizePathExpression(key) : [key];
     if (segments.length === 0) {
       continue;
@@ -64,7 +64,7 @@ function normalizeOverlayPatch(patch: Record<string, unknown>): Record<string, u
 
 // Overlay values can hold provider keys, webhook secrets, and tokens. The store
 // keeps them in clear for effective-config resolution, but every HTTP echo of the
-// overlay must redact them so the API never hands a stored secret back out (NIN-249).
+// overlay must redact them so the API never hands a stored secret back out (RIS-249).
 function redactedOverlay(store: ConfigOverlayPort): unknown {
   return redactSensitiveValue(store.toMap());
 }

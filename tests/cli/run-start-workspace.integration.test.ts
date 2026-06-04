@@ -87,7 +87,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("workspace + worktree lifecycle reachable from the CLI (NIN-196)", () => {
+describe("workspace + worktree lifecycle reachable from the CLI (RIS-196)", () => {
   it("renders a sanitized, length-bounded branch with a uniqueness suffix on collision", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-workspace-data-");

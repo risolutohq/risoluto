@@ -43,7 +43,7 @@ Severity is a contract: **HIGH** = correctness bug / unmet acceptance criterion 
   "base": "origin/master",
   "reviewed_by": "claude-opus-4-8",
   "summary": { "high": 2, "med": 1, "nit": 1 },
-  "ac_summary": { "total": 8, "met": 7, "not_met": 1, "unverifiable": 0, "blocking_tickets": ["NIN-220"] },
+  "ac_summary": { "total": 8, "met": 7, "not_met": 1, "unverifiable": 0, "blocking_tickets": ["RIS-220"] },
   "findings": [
     {
       "id": "H1",
@@ -52,7 +52,7 @@ Severity is a contract: **HIGH** = correctness bug / unmet acceptance criterion 
       "line": 142,
       "problem": "An unknown role id is not rejected at load; the run starts and fails mid-execution.",
       "fix": "Validate every referenced role/gate/hook/action id against the registry in loadDefinition() and throw before the run is created.",
-      "trace": "PRD story 14; NIN-195",
+      "trace": "PRD story 14; RIS-195",
       "status": "open"
     },
     {
@@ -62,7 +62,7 @@ Severity is a contract: **HIGH** = correctness bug / unmet acceptance criterion 
       "line": 88,
       "problem": "Webhook and polling can both create a run for one external object (race).",
       "fix": "Claim the logical mapping transactionally before any side effect; key on provider + external object id only.",
-      "trace": "PRD Implementation Decisions (idempotency); NIN-202",
+      "trace": "PRD Implementation Decisions (idempotency); RIS-202",
       "status": "open"
     },
     {
@@ -97,10 +97,10 @@ summary: 2 HIGH, 1 MED, 1 NIT (HIGH blocks the PR)
 
 - [H1] src/workflow/registry.ts:142 - unknown role id not rejected at load
   fix: validate referenced ids against the registry in loadDefinition(); throw before run create
-  trace: PRD story 14; NIN-195
+  trace: PRD story 14; RIS-195
 - [H2] src/intake/idempotency.ts:88 - webhook + polling race creates 2 runs for one object
   fix: claim the mapping transactionally before side effects; key on provider + external object id
-  trace: PRD idempotency; NIN-202
+  trace: PRD idempotency; RIS-202
 
 ## NIT
 

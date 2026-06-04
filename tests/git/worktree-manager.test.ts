@@ -153,12 +153,12 @@ describe("worktree-manager", () => {
     await addWorktree(
       createContext(runGit),
       "/tmp/base/backend.git",
-      "/tmp/worktrees/NIN-42",
-      "risoluto/nin-42",
+      "/tmp/worktrees/RIS-42",
+      "risoluto/ris-42",
       "main",
     );
 
-    expect(calls).toEqual([["worktree", "add", "-b", "risoluto/nin-42", "/tmp/worktrees/NIN-42", "main"]]);
+    expect(calls).toEqual([["worktree", "add", "-b", "risoluto/ris-42", "/tmp/worktrees/RIS-42", "main"]]);
   });
 
   it("attaches an existing branch as a worktree", async () => {
@@ -168,9 +168,9 @@ describe("worktree-manager", () => {
       return { stdout: "", stderr: "" };
     };
 
-    await attachWorktree(createContext(runGit), "/tmp/base/backend.git", "/tmp/worktrees/NIN-42", "risoluto/nin-42");
+    await attachWorktree(createContext(runGit), "/tmp/base/backend.git", "/tmp/worktrees/RIS-42", "risoluto/ris-42");
 
-    expect(calls).toEqual([["worktree", "add", "/tmp/worktrees/NIN-42", "risoluto/nin-42"]]);
+    expect(calls).toEqual([["worktree", "add", "/tmp/worktrees/RIS-42", "risoluto/ris-42"]]);
   });
 
   it("removes a worktree and prunes metadata", async () => {
@@ -180,10 +180,10 @@ describe("worktree-manager", () => {
       return { stdout: "", stderr: "" };
     };
 
-    await removeWorktree(createContext(runGit), "/tmp/base/backend.git", "/tmp/worktrees/NIN-42");
+    await removeWorktree(createContext(runGit), "/tmp/base/backend.git", "/tmp/worktrees/RIS-42");
 
     expect(calls).toEqual([
-      ["worktree", "remove", "/tmp/worktrees/NIN-42"],
+      ["worktree", "remove", "/tmp/worktrees/RIS-42"],
       ["worktree", "prune"],
     ]);
   });
@@ -195,10 +195,10 @@ describe("worktree-manager", () => {
       return { stdout: "", stderr: "" };
     };
 
-    await removeWorktree(createContext(runGit), "/tmp/base/backend.git", "/tmp/worktrees/NIN-42", true);
+    await removeWorktree(createContext(runGit), "/tmp/base/backend.git", "/tmp/worktrees/RIS-42", true);
 
     expect(calls).toEqual([
-      ["worktree", "remove", "--force", "/tmp/worktrees/NIN-42"],
+      ["worktree", "remove", "--force", "/tmp/worktrees/RIS-42"],
       ["worktree", "prune"],
     ]);
   });
@@ -234,13 +234,13 @@ describe("worktree-manager", () => {
   ])("reports worktree cleanliness from porcelain status %j", async (stdout, expected) => {
     const runGit: GitRunner = async () => ({ stdout, stderr: "" });
 
-    await expect(isWorktreeClean(createContext(runGit), "/tmp/worktrees/NIN-42")).resolves.toBe(expected);
+    await expect(isWorktreeClean(createContext(runGit), "/tmp/worktrees/RIS-42")).resolves.toBe(expected);
   });
 
   it("detects when a branch exists", async () => {
-    const runGit = vi.fn<GitRunner>(async () => ({ stdout: "refs/heads/risoluto/nin-42\n", stderr: "" }));
+    const runGit = vi.fn<GitRunner>(async () => ({ stdout: "refs/heads/risoluto/ris-42\n", stderr: "" }));
 
-    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/nin-42")).resolves.toBe(true);
+    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/ris-42")).resolves.toBe(true);
   });
 
   it("detects when a branch is missing", async () => {
@@ -248,23 +248,23 @@ describe("worktree-manager", () => {
       throw new Error("missing branch");
     });
 
-    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/nin-42")).resolves.toBe(false);
+    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/ris-42")).resolves.toBe(false);
   });
 
   it("detects a branch that exists only as a remote-tracking ref", async () => {
     const calls: string[][] = [];
     const runGit: GitRunner = async (args) => {
       calls.push(args);
-      if (args[2] === "refs/heads/risoluto/nin-42") {
+      if (args[2] === "refs/heads/risoluto/ris-42") {
         throw new Error("no local branch");
       }
-      return { stdout: "refs/remotes/origin/risoluto/nin-42\n", stderr: "" };
+      return { stdout: "refs/remotes/origin/risoluto/ris-42\n", stderr: "" };
     };
 
-    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/nin-42")).resolves.toBe(true);
+    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/ris-42")).resolves.toBe(true);
     expect(calls).toEqual([
-      ["rev-parse", "--verify", "refs/heads/risoluto/nin-42"],
-      ["rev-parse", "--verify", "refs/remotes/origin/risoluto/nin-42"],
+      ["rev-parse", "--verify", "refs/heads/risoluto/ris-42"],
+      ["rev-parse", "--verify", "refs/remotes/origin/risoluto/ris-42"],
     ]);
   });
 });

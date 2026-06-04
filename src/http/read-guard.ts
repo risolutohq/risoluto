@@ -102,7 +102,7 @@ function guardReadRequest(req: Request, res: Response, next: NextFunction): void
   // Use the same proxy-aware loopback classification as the write guard: a
   // forwarded header is honored only from a loopback peer, so a reverse proxy on
   // loopback cannot forward a remote caller into the unauthenticated read bypass
-  // and a remote peer cannot spoof loopback via X-Forwarded-For (NIN-250).
+  // and a remote peer cannot spoof loopback via X-Forwarded-For (RIS-250).
   if (isRequestFromLoopback(req)) {
     next(); // codeql[js/user-controlled-bypass] - loopback classification is proxy-aware; X-Forwarded-For is only honored from a loopback peer
     return;
@@ -121,7 +121,7 @@ function guardReadRequest(req: Request, res: Response, next: NextFunction): void
   }
 
   // Accept a query-string token only on the SSE stream — every other protected read
-  // requires a header, so tokens never leak through URLs/history/referrers (NIN-250).
+  // requires a header, so tokens never leak through URLs/history/referrers (RIS-250).
   if (isServerSentEventsPath(req.path)) {
     const queryValue = req.query["read_token"];
     const queryToken = typeof queryValue === "string" ? queryValue : null;

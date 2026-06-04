@@ -348,7 +348,7 @@ describe("createDockerSession", () => {
     );
   });
 
-  it("spawns the docker child with a whitelisted env, not the full host env (NIN-256)", async () => {
+  it("spawns the docker child with a whitelisted env, not the full host env (RIS-256)", async () => {
     process.env.NIN256_LEAK_SECRET = "should-not-leak";
     try {
       const mainChild = makeFakeChild();
@@ -485,7 +485,7 @@ describe("DockerSession.cleanup", () => {
     expect(mocks.removeVolume).toHaveBeenCalledWith("risoluto-cache-MT-42-123");
   });
 
-  it("does not fail cleanup when removeVolume rejects (NIN-259)", async () => {
+  it("does not fail cleanup when removeVolume rejects (RIS-259)", async () => {
     const mainChild = makeFakeChild();
     const fakeSpawn = setupSpawnMock(mainChild);
     const deps = makeDeps({ spawnProcess: fakeSpawn as unknown as typeof import("node:child_process").spawn });
@@ -583,7 +583,7 @@ describe("abort signal wiring", () => {
     expect(mocks.stopContainer).toHaveBeenCalledWith("risoluto-MT-42-123", 5);
   });
 
-  it("removes the container and cache volume exactly once after abort, idempotent with cleanup (NIN-256)", async () => {
+  it("removes the container and cache volume exactly once after abort, idempotent with cleanup (RIS-256)", async () => {
     const mainChild = makeFakeChild();
     const fakeSpawn = setupSpawnMock(mainChild);
     const controller = new AbortController();

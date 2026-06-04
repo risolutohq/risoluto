@@ -87,7 +87,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("gate and hook engine reachable from run start (NIN-200)", () => {
+describe("gate and hook engine reachable from run start (RIS-200)", () => {
   it("blocks on a failed gate and records the gate and hook as separate event records", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-gate-hook-data-");

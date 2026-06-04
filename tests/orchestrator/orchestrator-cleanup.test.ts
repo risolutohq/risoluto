@@ -26,7 +26,7 @@ function healthListenerCount(eventBus: TypedEventBus<RisolutoEventMap>): number 
   return listeners.get("health.transition")?.size ?? 0;
 }
 
-describe("Orchestrator lifecycle cleanup (NIN-266)", () => {
+describe("Orchestrator lifecycle cleanup (RIS-266)", () => {
   it("releases listeners and clears unbounded maps across repeated start/stop", async () => {
     vi.useFakeTimers();
     const eventBus = new TypedEventBus<RisolutoEventMap>();

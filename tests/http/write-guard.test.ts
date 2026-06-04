@@ -335,7 +335,7 @@ describe("createWriteGuard", () => {
     });
   });
 
-  it("requires a token for a proxied non-loopback mutation even when the TCP peer is loopback (NIN-250)", () => {
+  it("requires a token for a proxied non-loopback mutation even when the TCP peer is loopback (RIS-250)", () => {
     const next = vi.fn();
     const response = createMockResponse();
     const request = {

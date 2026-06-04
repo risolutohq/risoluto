@@ -90,7 +90,7 @@ describe("detect-default-branch helpers", () => {
     expect(resolveToken({ secretsStore })).toBeNull();
   });
 
-  it("uses the authenticated request and does not fall back to public when a token is present (NIN-253)", async () => {
+  it("uses the authenticated request and does not fall back to public when a token is present (RIS-253)", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(githubRepoResponse("private-main"));
 
     await expect(fetchDefaultBranch("openai", "risoluto", "ghp_token", fetchImpl)).resolves.toBe("private-main");
@@ -100,7 +100,7 @@ describe("detect-default-branch helpers", () => {
     expect((fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>).authorization).toBe("Bearer ghp_token");
   });
 
-  it("throws a distinct auth error on a 401 authenticated response without retrying publicly (NIN-253)", async () => {
+  it("throws a distinct auth error on a 401 authenticated response without retrying publicly (RIS-253)", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
 
     await expect(fetchDefaultBranch("openai", "risoluto", "ghp_token", fetchImpl)).rejects.toThrow(
@@ -254,7 +254,7 @@ describe("detect-default-branch handler", () => {
     expect(body.defaultBranch).toBe("main");
   });
 
-  it("falls back to main when the authenticated response has no default_branch (no public retry) (NIN-253)", async () => {
+  it("falls back to main when the authenticated response has no default_branch (no public retry) (RIS-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_partial_token" : null));
 
@@ -441,7 +441,7 @@ describe("detect-default-branch handler", () => {
     expect(headers.authorization).toBeUndefined();
   });
 
-  it("surfaces a distinct 401 auth error instead of retrying unauthenticated on a 401 (NIN-253)", async () => {
+  it("surfaces a distinct 401 auth error instead of retrying unauthenticated on a 401 (RIS-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_bad_token" : null));
 
@@ -459,7 +459,7 @@ describe("detect-default-branch handler", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces a distinct 401 auth error for a forbidden (403) authenticated response (NIN-253)", async () => {
+  it("surfaces a distinct 401 auth error for a forbidden (403) authenticated response (RIS-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_bad_token" : null));
 
@@ -476,7 +476,7 @@ describe("detect-default-branch handler", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to main (no public retry) when the authenticated request throws a network error (NIN-253)", async () => {
+  it("falls back to main (no public retry) when the authenticated request throws a network error (RIS-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_throwing_token" : null));
 

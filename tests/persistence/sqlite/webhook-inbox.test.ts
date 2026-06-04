@@ -138,7 +138,7 @@ describe("SqliteWebhookInbox", () => {
     }
   });
 
-  it("dedupes a replay on the body+signature digest even under a fresh delivery id (NIN-262)", async () => {
+  it("dedupes a replay on the body+signature digest even under a fresh delivery id (RIS-262)", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);
 
@@ -167,7 +167,7 @@ describe("SqliteWebhookInbox", () => {
     }
   });
 
-  it("dedupes digest-less deliveries only by delivery id (null digests are distinct) (NIN-262)", async () => {
+  it("dedupes digest-less deliveries only by delivery id (null digests are distinct) (RIS-262)", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);
 
@@ -258,7 +258,7 @@ describe("SqliteWebhookInbox", () => {
     }
   });
 
-  it("increments the stored attempt count on each retry even when callers pass a fixed floor (NIN-263)", async () => {
+  it("increments the stored attempt count on each retry even when callers pass a fixed floor (RIS-263)", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);
 
@@ -373,7 +373,7 @@ describe("SqliteWebhookInbox", () => {
       const due = await store.inbox.fetchDueForRetry();
       expect(due.map((delivery) => delivery.deliveryId).sort()).toEqual(["retry-null", "retry-past"]);
       expect(due.map((delivery) => delivery.attemptCount).sort((left, right) => left - right)).toEqual([1, 2]);
-      // fetchDueForRetry atomically claims the rows, so they come back as 'processing' (NIN-255).
+      // fetchDueForRetry atomically claims the rows, so they come back as 'processing' (RIS-255).
       expect(due.every((delivery) => delivery.status === "processing")).toBe(true);
 
       // A second poll returns nothing — the due rows are already claimed (no double-claim).

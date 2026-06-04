@@ -40,7 +40,7 @@ function makeResolver(opts: {
   return { resolve: createTemplateResolver(deps), logger };
 }
 
-describe("createTemplateResolver — stored-body re-validation (NIN-238)", () => {
+describe("createTemplateResolver — stored-body re-validation (RIS-238)", () => {
   it("returns a stored body that passes the prompt policy", async () => {
     const { resolve } = makeResolver({
       templates: { default: makeTemplate("default", VALID_BODY) },

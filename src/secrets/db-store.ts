@@ -81,7 +81,7 @@ export class DbSecretsStore {
    * Adopt `masterKey` only after the existing rows prove they decrypt with it. A wrong
    * key is rejected here instead of silently returning null from get(), so a mismatch
    * can never masquerade as an empty / "missing secrets" store. masterKey is cleared on
-   * any failure path so a bad key never stays active (NIN-251).
+   * any failure path so a bad key never stays active (RIS-251).
    */
   private adoptMasterKey(masterKey: string): void {
     this.masterKey = masterKey;

@@ -59,7 +59,7 @@ export class ComponentObserver {
         ...input,
         endedAt,
         // The trace data bag is caller-controlled and is persisted to disk + exposed over HTTP —
-        // redact secret-bearing keys/values before it is stored (NIN-264).
+        // redact secret-bearing keys/values before it is stored (RIS-264).
         data: sanitizeBag(input.data),
       }),
       ...this.traces,
@@ -209,7 +209,7 @@ export class ObservabilityHub {
 }
 
 // Deep-redact a caller-controlled metadata/details/data bag (secret-bearing keys + secret-like
-// scalar values) before it is persisted to disk or exposed over HTTP (NIN-264).
+// scalar values) before it is persisted to disk or exposed over HTTP (RIS-264).
 function sanitizeBag(bag: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!bag) {
     return undefined;

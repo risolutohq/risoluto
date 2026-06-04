@@ -61,7 +61,7 @@ describe("toolCallErrorPayload", () => {
   });
 });
 
-describe("jsonText contract via toolCallSuccess (NIN-235)", () => {
+describe("jsonText contract via toolCallSuccess (RIS-235)", () => {
   it("returns a string (not undefined) for an undefined top-level value", () => {
     const result = toolCallSuccess(undefined);
     expect(typeof result.contentItems[0].text).toBe("string");

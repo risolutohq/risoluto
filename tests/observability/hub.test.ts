@@ -99,7 +99,7 @@ describe("ObservabilityHub", () => {
     expect(summary.rawMetrics).toContain("risoluto_http_requests_total 1");
   });
 
-  it("redacts secret-bearing values from snapshot session metadata and trace data (NIN-264)", async () => {
+  it("redacts secret-bearing values from snapshot session metadata and trace data (RIS-264)", async () => {
     const archiveDir = await createTempDir();
     const hub = createObservabilityHub({ archiveDir });
     const observer = hub.getComponent("http");

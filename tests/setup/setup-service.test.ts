@@ -66,7 +66,7 @@ describe("setup-service", () => {
     });
 
     await service.createMasterKey(MASTER_KEY);
-    await service.selectLinearProject("NIN");
+    await service.selectLinearProject("RIS");
     await service.saveCodexAuth(JSON.stringify({ access_token: "tok_abc", refresh_token: "ref_123" }));
 
     expect(orchestrator.start).toHaveBeenCalledTimes(1);
@@ -138,7 +138,7 @@ describe("setup-service", () => {
     await service.saveRepoRoute({
       repoUrl: "https://github.com/org/repo-a",
       defaultBranch: "develop",
-      identifierPrefix: "nin",
+      identifierPrefix: "ris",
       label: "triage",
     });
     await service.saveRepoRoute({
@@ -151,7 +151,7 @@ describe("setup-service", () => {
         {
           repo_url: "https://github.com/org/repo-a",
           default_branch: "develop",
-          identifier_prefix: "NIN",
+          identifier_prefix: "RIS",
           label: "triage",
         },
         {
@@ -175,7 +175,7 @@ describe("setup-service", () => {
     });
   });
 
-  it("rejects an invalid defaultBranch that fails git ref-format rules (NIN-253)", async () => {
+  it("rejects an invalid defaultBranch that fails git ref-format rules (RIS-253)", async () => {
     const service = createSetupService({
       secretsStore,
       configOverlayStore,
@@ -188,7 +188,7 @@ describe("setup-service", () => {
       service.saveRepoRoute({
         repoUrl: "https://github.com/org/repo",
         defaultBranch: "-dangerous..branch",
-        identifierPrefix: "NIN",
+        identifierPrefix: "RIS",
       }),
     ).rejects.toThrow("not a valid git branch name");
 
@@ -196,7 +196,7 @@ describe("setup-service", () => {
     expect(service.getRepoRoutes()).toEqual({ routes: [] });
   });
 
-  it("rolls back the secret and codex overlay when an OpenAI key write fails (NIN-253)", async () => {
+  it("rolls back the secret and codex overlay when an OpenAI key write fails (RIS-253)", async () => {
     const initializedSecrets = new SecretsStore(tmpDir, buildSilentLogger(), { masterKey: MASTER_KEY });
     await initializedSecrets.start();
 
@@ -230,7 +230,7 @@ describe("setup-service", () => {
     expect(overlayStub.delete).toHaveBeenCalledWith("codex");
   });
 
-  it("rolls back the project slug when orchestrator.start fails (NIN-253)", async () => {
+  it("rolls back the project slug when orchestrator.start fails (RIS-253)", async () => {
     orchestrator.start.mockRejectedValueOnce(new Error("startup boom"));
     const service = createSetupService({
       secretsStore,
@@ -240,13 +240,13 @@ describe("setup-service", () => {
       tracker,
     });
 
-    await expect(service.selectLinearProject("NIN")).rejects.toThrow("Failed to start after selecting the project");
+    await expect(service.selectLinearProject("RIS")).rejects.toThrow("Failed to start after selecting the project");
 
     const trackerSection = configOverlayStore.toMap().tracker as Record<string, unknown> | undefined;
     expect(trackerSection?.project_slug).toBeUndefined();
   });
 
-  it("surfaces a GitHub auth failure distinctly when a token is present (NIN-253)", async () => {
+  it("surfaces a GitHub auth failure distinctly when a token is present (RIS-253)", async () => {
     process.env.GITHUB_TOKEN = "ghtok";
     const service = createSetupService({
       secretsStore,

@@ -146,7 +146,7 @@ async function appendWorkflowRunEventsToRunDir(
   }
 
   // Serialize the read-then-append per run directory so two concurrent appends can't read the same
-  // next-sequence and emit duplicate sequence numbers / attempt indices (NIN-263).
+  // next-sequence and emit duplicate sequence numbers / attempt indices (RIS-263).
   return withKeyedSerialChain(runEventAppendChains, artifactDir, async () => {
     const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
     const sequencedEvents = events.map((event, index) => ({
@@ -217,11 +217,11 @@ async function writeWorkflowRunArtifactToArchive(
 }
 
 // blocked / done / cancelled are terminal: a run that has reached one of them refuses
-// any further status write (NIN-255).
+// any further status write (RIS-255).
 const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStartRecord["status"]> = new Set(["blocked", "done", "cancelled"]);
 
 // Status writes are serialized per Workflow Run so a cancel racing a done can no longer
-// interleave (NIN-255).
+// interleave (RIS-255).
 const runStatusUpdateChains = new Map<string, Promise<unknown>>();
 
 function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>): Promise<T> {
@@ -229,7 +229,7 @@ function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>
 }
 
 // Event appends are serialized per run directory so concurrent appends can't collide on the
-// next event sequence (NIN-263).
+// next event sequence (RIS-263).
 const runEventAppendChains = new Map<string, Promise<unknown>>();
 
 async function updateWorkflowRunStatusInArchive(
@@ -241,7 +241,7 @@ async function updateWorkflowRunStatusInArchive(
     const workflowRun = await readWorkflowRunMetadataFromDir(workflowRunDir(archiveRoot, workflowRunId));
     // Terminal states are final — refuse the write (return the run unchanged) so a
     // concurrent done/blocked can never overwrite a cancel, and no write lands on an
-    // already-terminal run (NIN-255).
+    // already-terminal run (RIS-255).
     if (TERMINAL_RUN_STATUSES.has(workflowRun.status) && workflowRun.status !== status) {
       return workflowRun;
     }

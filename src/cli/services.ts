@@ -394,7 +394,7 @@ function buildSlackWebhookDeps(
     eventBus,
     logger: logger.child({ component: "slack-webhook" }),
     // Share the durable webhook inbox so a replayed signed Slack modal dedupes on its body/signature
-    // digest, mirroring the Linear/GitHub webhook surfaces (NIN-263).
+    // digest, mirroring the Linear/GitHub webhook surfaces (RIS-263).
     webhookInbox,
   };
 }
@@ -524,7 +524,7 @@ export async function createServices(
   // (fire-and-forget), so webhook/Slack/HTTP ack windows (~3s) are never blocked.
   //
   // Production dispatchRole = createUnconfiguredAgentRoleDispatch() (honest block).
-  // The real agent binding (NIN-222 live, Omer-gated) wires createWorkflowRunAgentDispatch here.
+  // The real agent binding (RIS-222 live, Omer-gated) wires createWorkflowRunAgentDispatch here.
   const acceptedRunDriver = createAcceptedRunDriver({
     archiveDir,
     // Workflow definitions live next to the archive; the CLI default mirrors run-start-command.ts.

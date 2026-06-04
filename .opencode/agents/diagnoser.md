@@ -3,8 +3,8 @@ description: Risoluto afk-orchestrator diagnoser — a cheap one-shot that inspe
 mode: all
 # model: BLANK on purpose — operator-assigned (interchangeable). Pick a cheap/fast model; this is
 # a one-shot. The daemon validates it is set and supplies a fallback on provider error.
-# e.g. model: opencode/claude-haiku-4-5
-reasoningEffort: low
+# e.g. model: opencode/deepseek-v4-flash (cheap model, but max thinking — see reasoningEffort)
+reasoningEffort: high
 temperature: 0.2
 permission:
   edit: deny

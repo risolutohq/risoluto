@@ -6,7 +6,7 @@ import type { Issue } from "../../src/core/types.js";
 function createIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     id: "issue-1",
-    identifier: "NIN-42",
+    identifier: "RIS-42",
     title: "Route me",
     description: null,
     priority: null,
@@ -40,7 +40,7 @@ describe("repo-router", () => {
 
   it("matches by label before identifier prefix when both match", () => {
     const routes: RepoRoute[] = [
-      { identifierPrefix: "NIN", repoUrl: "https://github.com/acme/backend.git", defaultBranch: "main" },
+      { identifierPrefix: "RIS", repoUrl: "https://github.com/acme/backend.git", defaultBranch: "main" },
       { label: " repo:web ", repoUrl: "https://github.com/acme/web.git", defaultBranch: " develop " },
     ];
 

@@ -123,7 +123,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("validation profiles reachable from run start (NIN-211)", () => {
+describe("validation profiles reachable from run start (RIS-211)", () => {
   it("halts a stop-on-first profile on the first failing command, captures its output, and routes back to implementation", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-validation-data-");

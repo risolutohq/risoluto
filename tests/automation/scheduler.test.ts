@@ -74,7 +74,7 @@ describe("AutomationScheduler", () => {
     ]);
   });
 
-  it("start is idempotent — a second start does not double-subscribe or double-schedule (NIN-264)", () => {
+  it("start is idempotent — a second start does not double-subscribe or double-schedule (RIS-264)", () => {
     const configStore = createConfigStore([
       {
         name: "nightly-report",

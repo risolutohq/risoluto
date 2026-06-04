@@ -64,7 +64,7 @@ describe("error-tracking", () => {
     );
   });
 
-  it("redacts secrets in exception message, breadcrumbs, and context (NIN-247)", () => {
+  it("redacts secrets in exception message, breadcrumbs, and context (RIS-247)", () => {
     process.env.SENTRY_DSN = "https://abc123@sentry.io/1";
     const logger = createMockLogger();
     initErrorTracking(logger);

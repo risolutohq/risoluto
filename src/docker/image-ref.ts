@@ -1,5 +1,5 @@
 /**
- * Docker image-reference validation (NIN-242).
+ * Docker image-reference validation (RIS-242).
  *
  * The sandbox image string is placed directly after the `docker run` options in
  * argv. A reference beginning with `-` would be parsed by docker as a flag

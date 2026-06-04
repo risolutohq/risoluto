@@ -191,41 +191,41 @@ describe("GET /api/v1/workspaces", () => {
   });
 
   it("classifies workspaces by orchestrator state", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1"), { recursive: true });
-    await mkdir(path.join(workspaceRoot, "NIN-2"), { recursive: true });
-    await mkdir(path.join(workspaceRoot, "NIN-3"), { recursive: true });
-    await mkdir(path.join(workspaceRoot, "NIN-4"), { recursive: true });
-    await writeFile(path.join(workspaceRoot, "NIN-1", "file.txt"), "hello");
+    await mkdir(path.join(workspaceRoot, "RIS-1"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-2"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-3"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-4"), { recursive: true });
+    await writeFile(path.join(workspaceRoot, "RIS-1", "file.txt"), "hello");
 
     ({ server } = await startTestServer({
       orchestrator: makeOrchestrator(
         [
           {
             issueId: "i1",
-            identifier: "NIN-1",
+            identifier: "RIS-1",
             title: "Fix auth",
             state: "In Progress",
-            workspaceKey: "NIN-1",
+            workspaceKey: "RIS-1",
             status: "running",
           },
         ],
         [
           {
             issueId: "i2",
-            identifier: "NIN-2",
+            identifier: "RIS-2",
             title: "Update docs",
             state: "In Progress",
-            workspaceKey: "NIN-2",
+            workspaceKey: "RIS-2",
             status: "retrying",
           },
         ],
         [
           {
             issueId: "i3",
-            identifier: "NIN-3",
+            identifier: "RIS-3",
             title: "Add tests",
             state: "Done",
-            workspaceKey: "NIN-3",
+            workspaceKey: "RIS-3",
             status: "completed",
           },
         ],
@@ -243,28 +243,28 @@ describe("GET /api/v1/workspaces", () => {
     const workspaces = body.workspaces as Array<Record<string, unknown>>;
     expect(workspaces).toHaveLength(4);
 
-    const nin1 = workspaces.find((w) => w.workspace_key === "NIN-1");
+    const nin1 = workspaces.find((w) => w.workspace_key === "RIS-1");
     expect(nin1?.status).toBe("running");
-    expect((nin1?.issue as Record<string, unknown>)?.identifier).toBe("NIN-1");
+    expect((nin1?.issue as Record<string, unknown>)?.identifier).toBe("RIS-1");
     expect(nin1?.disk_bytes).toBeGreaterThan(0);
 
-    const nin4 = workspaces.find((w) => w.workspace_key === "NIN-4");
+    const nin4 = workspaces.find((w) => w.workspace_key === "RIS-4");
     expect(nin4?.status).toBe("orphaned");
     expect(nin4?.issue).toBeNull();
   });
 
   it("counts nested files but skips symbolic links when calculating disk usage", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1", "nested"), { recursive: true });
-    await writeFile(path.join(workspaceRoot, "NIN-1", "root.txt"), "root");
-    await writeFile(path.join(workspaceRoot, "NIN-1", "nested", "child.txt"), "child");
+    await mkdir(path.join(workspaceRoot, "RIS-1", "nested"), { recursive: true });
+    await writeFile(path.join(workspaceRoot, "RIS-1", "root.txt"), "root");
+    await writeFile(path.join(workspaceRoot, "RIS-1", "nested", "child.txt"), "child");
     await symlink(
-      path.join(workspaceRoot, "NIN-1", "nested", "child.txt"),
-      path.join(workspaceRoot, "NIN-1", "linked.txt"),
+      path.join(workspaceRoot, "RIS-1", "nested", "child.txt"),
+      path.join(workspaceRoot, "RIS-1", "linked.txt"),
     );
 
     ({ server } = await startTestServer({
       orchestrator: makeOrchestrator([
-        { identifier: "NIN-1", title: "Run", state: "In Progress", workspaceKey: "NIN-1", status: "running" },
+        { identifier: "RIS-1", title: "Run", state: "In Progress", workspaceKey: "RIS-1", status: "running" },
       ]) as never,
       configStore: makeConfigStore(workspaceRoot) as never,
     }));
@@ -273,14 +273,14 @@ describe("GET /api/v1/workspaces", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     const workspaces = body.workspaces as Array<Record<string, unknown>>;
-    const nin1 = workspaces.find((workspace) => workspace.workspace_key === "NIN-1");
+    const nin1 = workspaces.find((workspace) => workspace.workspace_key === "RIS-1");
 
     expect(nin1?.disk_bytes).toBe(9);
     expect(nin1?.last_modified_at).toEqual(expect.any(String));
   });
 
   it("skips hidden directories (e.g. .base)", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-1"), { recursive: true });
     await mkdir(path.join(workspaceRoot, ".base"), { recursive: true });
 
     ({ server } = await startTestServer({
@@ -292,7 +292,7 @@ describe("GET /api/v1/workspaces", () => {
     expect(body.total).toBe(1);
 
     const workspaces = body.workspaces as Array<Record<string, unknown>>;
-    expect(workspaces[0].workspace_key).toBe("NIN-1");
+    expect(workspaces[0].workspace_key).toBe("RIS-1");
   });
 
   it("sorts running first, then retrying, completed, orphaned", async () => {
@@ -354,7 +354,7 @@ describe("GET /api/v1/workspaces", () => {
   });
 
   it("falls back to the default strategy when workspace strategy is missing", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-1"), { recursive: true });
     const configStore = {
       getConfig: vi.fn().mockReturnValue({
         workspace: { root: workspaceRoot },
@@ -393,8 +393,8 @@ describe("DELETE /api/v1/workspaces/:workspace_key", () => {
   });
 
   it("removes an orphaned workspace directory", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1"), { recursive: true });
-    await writeFile(path.join(workspaceRoot, "NIN-1", "file.txt"), "hello");
+    await mkdir(path.join(workspaceRoot, "RIS-1"), { recursive: true });
+    await writeFile(path.join(workspaceRoot, "RIS-1", "file.txt"), "hello");
 
     ({ server } = await startTestServer({
       orchestrator: makeOrchestrator() as never,
@@ -402,7 +402,7 @@ describe("DELETE /api/v1/workspaces/:workspace_key", () => {
     }));
     const port = (server.address() as { port: number }).port;
 
-    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/NIN-1`, { method: "DELETE" });
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/RIS-1`, { method: "DELETE" });
     expect(res.status).toBe(204);
 
     const checkRes = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces`);
@@ -424,42 +424,42 @@ describe("DELETE /api/v1/workspaces/:workspace_key", () => {
   });
 
   it("returns 409 when removing a running workspace", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-1"), { recursive: true });
 
     ({ server } = await startTestServer({
       orchestrator: makeOrchestrator([
-        { identifier: "NIN-1", title: "Run", state: "In Progress", workspaceKey: "NIN-1", status: "running" },
+        { identifier: "RIS-1", title: "Run", state: "In Progress", workspaceKey: "RIS-1", status: "running" },
       ]) as never,
       configStore: makeConfigStore(workspaceRoot) as never,
     }));
     const port = (server.address() as { port: number }).port;
 
-    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/NIN-1`, { method: "DELETE" });
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/RIS-1`, { method: "DELETE" });
     expect(res.status).toBe(409);
     const body = (await res.json()) as Record<string, unknown>;
     expect((body.error as Record<string, unknown>)?.code).toBe("conflict");
   });
 
   it("returns 409 when removing a retrying workspace", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-2"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "RIS-2"), { recursive: true });
 
     ({ server } = await startTestServer({
       orchestrator: makeOrchestrator(
         [],
-        [{ identifier: "NIN-2", title: "Retry", state: "In Progress", workspaceKey: "NIN-2", status: "retrying" }],
+        [{ identifier: "RIS-2", title: "Retry", state: "In Progress", workspaceKey: "RIS-2", status: "retrying" }],
       ) as never,
       configStore: makeConfigStore(workspaceRoot) as never,
     }));
     const port = (server.address() as { port: number }).port;
 
-    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/NIN-2`, { method: "DELETE" });
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/RIS-2`, { method: "DELETE" });
     expect(res.status).toBe(409);
     const body = (await res.json()) as Record<string, unknown>;
     expect((body.error as Record<string, unknown>)?.message).toBe("Cannot remove an active workspace");
   });
 
   it("returns 404 when the workspace path exists but is not a directory", async () => {
-    await writeFile(path.join(workspaceRoot, "NIN-file"), "hello");
+    await writeFile(path.join(workspaceRoot, "RIS-file"), "hello");
 
     ({ server } = await startTestServer({
       orchestrator: makeOrchestrator() as never,
@@ -467,15 +467,15 @@ describe("DELETE /api/v1/workspaces/:workspace_key", () => {
     }));
     const port = (server.address() as { port: number }).port;
 
-    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/NIN-file`, { method: "DELETE" });
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/workspaces/RIS-file`, { method: "DELETE" });
     expect(res.status).toBe(404);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.error).toEqual({ code: "not_found", message: "Workspace not found" });
   });
 
   it("waits for the workspace lifecycle lock before deleting", async () => {
-    await mkdir(path.join(workspaceRoot, "NIN-1"), { recursive: true });
-    await writeFile(path.join(workspaceRoot, "NIN-1", "file.txt"), "hello");
+    await mkdir(path.join(workspaceRoot, "RIS-1"), { recursive: true });
+    await writeFile(path.join(workspaceRoot, "RIS-1", "file.txt"), "hello");
 
     // Use a real WorkspaceManager so the lock the test holds shares state
     // with the lock the handler acquires.
@@ -492,18 +492,18 @@ describe("DELETE /api/v1/workspaces/:workspace_key", () => {
     const port = (server.address() as { port: number }).port;
 
     let releaseLock: (() => void) | null = null;
-    const holdLock = workspaceManager.withLock("NIN-1", async () => {
+    const holdLock = workspaceManager.withLock("RIS-1", async () => {
       await new Promise<void>((resolve) => {
         releaseLock = resolve;
       });
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    const deletePromise = fetch(`http://127.0.0.1:${port}/api/v1/workspaces/NIN-1`, { method: "DELETE" });
+    const deletePromise = fetch(`http://127.0.0.1:${port}/api/v1/workspaces/RIS-1`, { method: "DELETE" });
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     const entriesBeforeRelease = await readdir(workspaceRoot);
-    expect(entriesBeforeRelease).toContain("NIN-1");
+    expect(entriesBeforeRelease).toContain("RIS-1");
 
     releaseLock?.();
     await holdLock;
@@ -579,7 +579,7 @@ describe("workspace inventory direct handler guards", () => {
         orchestrator: makeOrchestrator() as never,
         workspaceManager: makePassThroughWorkspaceManager(),
       },
-      { params: { workspace_key: "NIN-1" } } as unknown as Request,
+      { params: { workspace_key: "RIS-1" } } as unknown as Request,
       response,
     );
 
@@ -591,7 +591,7 @@ describe("workspace inventory direct handler guards", () => {
 
   it("does not treat non-matching running or retrying workspaces as active", async () => {
     const root = createTestDir("ws-direct-delete");
-    await mkdir(path.join(root, "NIN-1"), { recursive: true });
+    await mkdir(path.join(root, "RIS-1"), { recursive: true });
     const response = makeJsonResponse();
 
     try {
@@ -604,7 +604,7 @@ describe("workspace inventory direct handler guards", () => {
           configStore: makeConfigStore(root) as never,
           workspaceManager: makePassThroughWorkspaceManager(),
         },
-        { params: { workspace_key: "NIN-1" } } as unknown as Request,
+        { params: { workspace_key: "RIS-1" } } as unknown as Request,
         response,
       );
 
@@ -647,7 +647,7 @@ describe("workspace inventory direct handler guards", () => {
         if (targetPath === root) {
           return [
             {
-              name: "NIN-1",
+              name: "RIS-1",
               isDirectory: () => true,
               isFile: () => false,
               isSymbolicLink: () => false,
@@ -655,7 +655,7 @@ describe("workspace inventory direct handler guards", () => {
           ];
         }
 
-        if (targetPath === path.join(root, "NIN-1")) {
+        if (targetPath === path.join(root, "RIS-1")) {
           return [oddEntry];
         }
 
@@ -681,8 +681,8 @@ describe("workspace inventory direct handler guards", () => {
     expect(response._body).toEqual({
       workspaces: [
         {
-          workspace_key: "NIN-1",
-          path: path.join(root, "NIN-1"),
+          workspace_key: "RIS-1",
+          path: path.join(root, "RIS-1"),
           status: "orphaned",
           strategy: "directory",
           issue: null,
@@ -696,7 +696,7 @@ describe("workspace inventory direct handler guards", () => {
       orphaned: 1,
     });
     expect(statMock).toHaveBeenCalledTimes(1);
-    expect(statMock).toHaveBeenCalledWith(path.join(root, "NIN-1"));
+    expect(statMock).toHaveBeenCalledWith(path.join(root, "RIS-1"));
   });
 
   it("rethrows non-ENOENT workspace stat errors during delete", async () => {
@@ -712,7 +712,7 @@ describe("workspace inventory direct handler guards", () => {
           configStore: makeConfigStore("/tmp/risoluto-root") as never,
           workspaceManager: makePassThroughWorkspaceManager(),
         },
-        { params: { workspace_key: "NIN-1" } } as unknown as Request,
+        { params: { workspace_key: "RIS-1" } } as unknown as Request,
         makeJsonResponse(),
       ),
     ).rejects.toBe(error);
@@ -731,7 +731,7 @@ describe("workspace inventory direct handler guards", () => {
         configStore: makeConfigStore("/tmp/risoluto-root") as never,
         workspaceManager: makePassThroughWorkspaceManager(),
       },
-      { params: { workspace_key: "NIN-1" } } as unknown as Request,
+      { params: { workspace_key: "RIS-1" } } as unknown as Request,
       response,
     );
 
@@ -760,12 +760,12 @@ describe("workspace inventory direct handler guards", () => {
         configStore: makeConfigStore("/tmp/risoluto-root") as never,
         workspaceManager: makePassThroughWorkspaceManager(),
       },
-      { params: { workspace_key: "NIN-1" } } as unknown as Request,
+      { params: { workspace_key: "RIS-1" } } as unknown as Request,
       response,
     );
 
-    expect(statMock).toHaveBeenCalledWith("/tmp/risoluto-root/NIN-1");
-    expect(rmMock).toHaveBeenCalledWith("/tmp/risoluto-root/NIN-1", { recursive: true, force: true });
+    expect(statMock).toHaveBeenCalledWith("/tmp/risoluto-root/RIS-1");
+    expect(rmMock).toHaveBeenCalledWith("/tmp/risoluto-root/RIS-1", { recursive: true, force: true });
     expect(response._status).toBe(204);
     expect(response._ended).toBe(true);
   });

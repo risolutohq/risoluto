@@ -1,5 +1,5 @@
 /**
- * NIN-222 — hermetic composition test for the agent-dispatch seam in `run start`.
+ * RIS-222 — hermetic composition test for the agent-dispatch seam in `run start`.
  *
  * Covers:
  *  1. Injected-dispatcher path (deps.dispatcher): createWorkflowRunAgentDispatch is composed and the
@@ -75,7 +75,7 @@ function validPlan(workflowRunId: string): Record<string, unknown> {
     version: 1,
     workflowRunId,
     createdAt: FIXED_TIME,
-    summary: "NIN-222 plan.",
+    summary: "RIS-222 plan.",
     steps: [{ id: "s1", title: "Implement", status: "ready", dependsOn: [] }],
   };
 }
@@ -85,7 +85,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("NIN-222: run-start agent-dispatch composition seam", () => {
+describe("RIS-222: run-start agent-dispatch composition seam", () => {
   it("composes createWorkflowRunAgentDispatch when deps.dispatcher is injected and calls runAttempt per role", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-nin222-data-");
@@ -115,7 +115,7 @@ describe("NIN-222: run-start agent-dispatch composition seam", () => {
       startAndDriveRunCommand(
         [
           "--title",
-          "NIN-222",
+          "RIS-222",
           "--intent",
           "Wire agent dispatch",
           "--data-dir",
@@ -164,7 +164,7 @@ describe("NIN-222: run-start agent-dispatch composition seam", () => {
       startAndDriveRunCommand(
         [
           "--title",
-          "NIN-222 default",
+          "RIS-222 default",
           "--intent",
           "Check honest block",
           "--data-dir",

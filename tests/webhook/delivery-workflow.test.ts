@@ -37,7 +37,7 @@ describe("WebhookDeliveryWorkflow", () => {
     expect(process).toHaveBeenCalledOnce();
   });
 
-  it("marks the delivery applied after successful post-ack processing (NIN-262)", async () => {
+  it("marks the delivery applied after successful post-ack processing (RIS-262)", async () => {
     const logger = createMockLogger();
     const insertVerified = vi.fn().mockResolvedValue({ isNew: true });
     const markApplied = vi.fn().mockResolvedValue(undefined);
@@ -68,7 +68,7 @@ describe("WebhookDeliveryWorkflow", () => {
     expect(markForRetry).not.toHaveBeenCalled();
   });
 
-  it("moves the delivery to a retryable state when post-ack processing fails (NIN-262)", async () => {
+  it("moves the delivery to a retryable state when post-ack processing fails (RIS-262)", async () => {
     const logger = createMockLogger();
     const insertVerified = vi.fn().mockResolvedValue({ isNew: true });
     const markApplied = vi.fn().mockResolvedValue(undefined);

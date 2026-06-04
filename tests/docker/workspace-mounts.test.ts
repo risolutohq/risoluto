@@ -21,8 +21,8 @@ afterEach(async () => {
 describe("resolveWorkspaceExtraMountPaths", () => {
   it("returns the shared git common dir for worktree-style .git files", async () => {
     const rootDir = await createTempDir();
-    const workspacePath = path.join(rootDir, "NIN-49");
-    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "NIN-49");
+    const workspacePath = path.join(rootDir, "RIS-49");
+    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "RIS-49");
     const commonDirPath = path.join(rootDir, ".base", "repo.git");
 
     await mkdir(workspacePath, { recursive: true });
@@ -35,7 +35,7 @@ describe("resolveWorkspaceExtraMountPaths", () => {
 
   it("returns an empty list for normal directories without a git pointer file", async () => {
     const rootDir = await createTempDir();
-    const workspacePath = path.join(rootDir, "NIN-49");
+    const workspacePath = path.join(rootDir, "RIS-49");
     const baseCloneDir = path.join(rootDir, ".base", "repo.git");
     await mkdir(workspacePath, { recursive: true });
 
@@ -44,7 +44,7 @@ describe("resolveWorkspaceExtraMountPaths", () => {
 
   it("ignores a .git gitdir pointer that resolves outside the trusted base clone", async () => {
     const rootDir = await createTempDir();
-    const workspacePath = path.join(rootDir, "NIN-49");
+    const workspacePath = path.join(rootDir, "RIS-49");
     const baseCloneDir = path.join(rootDir, ".base", "repo.git");
     const outsideTarget = path.join(rootDir, "outside-secret");
 
@@ -58,8 +58,8 @@ describe("resolveWorkspaceExtraMountPaths", () => {
 
   it("ignores a worktree commondir that escapes the trusted base clone", async () => {
     const rootDir = await createTempDir();
-    const workspacePath = path.join(rootDir, "NIN-49");
-    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "NIN-49");
+    const workspacePath = path.join(rootDir, "RIS-49");
+    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "RIS-49");
     const baseCloneDir = path.join(rootDir, ".base", "repo.git");
     const outsideCommon = path.join(rootDir, "outside-common");
 
@@ -74,8 +74,8 @@ describe("resolveWorkspaceExtraMountPaths", () => {
 
   it("never mounts workspace-derived paths when no trusted base clone is known", async () => {
     const rootDir = await createTempDir();
-    const workspacePath = path.join(rootDir, "NIN-49");
-    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "NIN-49");
+    const workspacePath = path.join(rootDir, "RIS-49");
+    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "RIS-49");
 
     await mkdir(workspacePath, { recursive: true });
     await mkdir(gitDirPath, { recursive: true });

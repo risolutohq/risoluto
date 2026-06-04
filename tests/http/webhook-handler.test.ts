@@ -34,7 +34,7 @@ function makePayload(overrides: Record<string, unknown> = {}): Record<string, un
 }
 
 // Deduping in-memory inbox keyed on the verified body+signature digest, matching the durable
-// store's dedupe contract so the handler's required-inbox path is exercised (NIN-263).
+// store's dedupe contract so the handler's required-inbox path is exercised (RIS-263).
 function makeInbox(): VerifiedWebhookDeliveryStore {
   const seen = new Set<string>();
   return {
@@ -419,7 +419,7 @@ describe("handleWebhookLinear", () => {
     expect(deps.recordVerifiedDelivery).toHaveBeenCalledWith("Comment:create");
   });
 
-  it("returns 503 with Retry-After when the webhook inbox is unavailable (NIN-263)", () => {
+  it("returns 503 with Retry-After when the webhook inbox is unavailable (RIS-263)", () => {
     const deps = makeDeps({ webhookInbox: undefined });
     const payload = makePayload();
     const bodyStr = JSON.stringify(payload);
@@ -434,7 +434,7 @@ describe("handleWebhookLinear", () => {
     expect(deps.requestTargetedRefresh).not.toHaveBeenCalled();
   });
 
-  it("dedupes a replayed signed delivery on the body+signature digest (NIN-263)", async () => {
+  it("dedupes a replayed signed delivery on the body+signature digest (RIS-263)", async () => {
     const deps = makeDeps();
     const payload = makePayload();
     const bodyStr = JSON.stringify(payload);

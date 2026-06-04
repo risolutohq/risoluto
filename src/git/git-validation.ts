@@ -1,5 +1,5 @@
 /**
- * Git input validation guards (NIN-241).
+ * Git input validation guards (RIS-241).
  *
  * Branch names that originate from tracker/config data and repository URLs that
  * originate from routing config are attacker-influenced. Before they reach a

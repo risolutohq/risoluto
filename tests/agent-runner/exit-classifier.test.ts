@@ -120,14 +120,14 @@ describe("classifyExitState", () => {
     expect(result.errorCode).toBe(null);
   });
 
-  it("classifies a signal-killed exit (code null, signal set) as a failure when not aborted (NIN-257)", async () => {
+  it("classifies a signal-killed exit (code null, signal set) as a failure when not aborted (RIS-257)", async () => {
     const result = await classifyExitState(makeInput(), makeState({ exitCode: null, exitSignal: "SIGKILL" }));
     expect(result.kind).toBe("failed");
     expect(result.errorCode).toBe("port_signal");
     expect(result.errorMessage).toContain("SIGKILL");
   });
 
-  it("treats a signal exit as normal when the run was intentionally aborted (NIN-257)", async () => {
+  it("treats a signal exit as normal when the run was intentionally aborted (RIS-257)", async () => {
     const result = await classifyExitState(makeInput(true), makeState({ exitCode: null, exitSignal: "SIGTERM" }));
     expect(result.kind).toBe("normal");
     expect(result.errorCode).toBe(null);

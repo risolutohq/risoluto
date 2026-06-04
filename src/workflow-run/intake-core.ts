@@ -91,7 +91,7 @@ export async function acceptWorkflowRunIntake(input: AcceptWorkflowRunIntakeInpu
   // Only dedupe to a mapping whose run record becomes durable. A concurrent intake that has claimed
   // but not yet committed is awaited (the run lands shortly); a mapping whose run never lands — a crash
   // between claim and write — times out so intake falls through and recovers instead of poisoning future
-  // duplicate intake with an ENOENT loop (NIN-261).
+  // duplicate intake with an ENOENT loop (RIS-261).
   if (delivery && (await runRecordBecomesDurable(input, delivery.workflowRunId))) {
     return toExistingOutput(input, delivery.workflowRunId, "deduplicated");
   }
@@ -146,7 +146,7 @@ async function createNewWorkflowRunIntake(
     externalObject: input.externalObject,
   });
   // A mapping is stale (overwrite + re-claim) only if its run never becomes durable. Awaiting durability
-  // keeps a concurrent intake that has claimed but not yet committed from being treated as a crash (NIN-261).
+  // keeps a concurrent intake that has claimed but not yet committed from being treated as a crash (RIS-261).
   const recoverStaleMapping = async (mapping: { readonly workflowRunId: string }): Promise<boolean> =>
     !(await runRecordBecomesDurable(input, mapping.workflowRunId));
   const externalClaim = await claimExternalMapping({
@@ -268,7 +268,7 @@ async function loadClaimedWorkflowRun(
 /**
  * Wait up to ~1s for a claimed mapping's run record to become durable. Returns true once it lands
  * (a concurrent intake committing shortly after its claim), false if it never appears (a crash between
- * claim and run write) so the caller can recover instead of looping on ENOENT forever (NIN-261).
+ * claim and run write) so the caller can recover instead of looping on ENOENT forever (RIS-261).
  */
 async function runRecordBecomesDurable(location: WorkflowRunArchiveLocation, workflowRunId: string): Promise<boolean> {
   const deadlineMs = Date.now() + 1_000;

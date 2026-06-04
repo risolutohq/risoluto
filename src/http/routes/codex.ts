@@ -16,7 +16,7 @@ function handleMissingControlPlane(res: Response): void {
 }
 
 // Upper bound for client-supplied pagination so a caller cannot request an unbounded
-// page and force the control plane to materialize an oversized result set (NIN-250).
+// page and force the control plane to materialize an oversized result set (RIS-250).
 const MAX_PAGE_LIMIT = 100;
 
 function parsePositiveInteger(value: unknown, fallback: number): number {

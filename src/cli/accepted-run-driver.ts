@@ -16,7 +16,7 @@ import type { RisolutoLogger } from "../core/types.js";
  * injection seams: tests inject hermetic fakes; production leaves them unset so the honest-block
  * default ({@link createUnconfiguredAgentRoleDispatch}) is used.
  *
- * Binding the real agent harness here is the LIVE slice (NIN-222, Omer-gated). Until that slice
+ * Binding the real agent harness here is the LIVE slice (RIS-222, Omer-gated). Until that slice
  * lands, every surface drives to a real blocked handoff instead of sitting in `accepted` forever.
  */
 export interface AcceptedRunDriverDeps {

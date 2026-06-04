@@ -128,7 +128,7 @@ describe("TypedEventBus", () => {
     expect(wildcardHandler).not.toHaveBeenCalled();
   });
 
-  // ── listener isolation + snapshot (NIN-235) ─────────────────────
+  // ── listener isolation + snapshot (RIS-235) ─────────────────────
 
   it("continues delivery to later handlers when an earlier handler throws", () => {
     const later = vi.fn();

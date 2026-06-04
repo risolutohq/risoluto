@@ -43,7 +43,7 @@ export async function classifyExitState(
 
   // A signal exit (code === null, signal !== null) is a crash (SIGKILL/SIGTERM), not a
   // normal completion. Classify it as a failure unless the run was intentionally aborted,
-  // in which case the abort path already owns the outcome (NIN-257).
+  // in which case the abort path already owns the outcome (RIS-257).
   if (exitState.signal !== null && !input.runInput.signal.aborted) {
     return {
       kind: "failed",

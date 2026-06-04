@@ -33,7 +33,7 @@ actions: [publish-pr]
 `;
 
 // Workflow without a verifier role — only validation + CI artifacts reach publish-pr.
-// Used to test assertPublishAllowedByVerification in isolation (Part A, NIN-201).
+// Used to test assertPublishAllowedByVerification in isolation (Part A, RIS-201).
 const NO_VERIFIER_WORKFLOW = `
 version: 1
 id: no-verifier-flow
@@ -165,7 +165,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("assertPublishAllowedByVerification gates ready/auto_merge (NIN-201 Part A)", () => {
+describe("assertPublishAllowedByVerification gates ready/auto_merge (RIS-201 Part A)", () => {
   it("blocks a ready publish when verification.v1 is absent, writing a handoff with VerifierPolicyError", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-vw-data-");
@@ -196,7 +196,7 @@ describe("assertPublishAllowedByVerification gates ready/auto_merge (NIN-201 Par
   });
 });
 
-describe("verifier role decision routing (NIN-207 Part B)", () => {
+describe("verifier role decision routing (RIS-207 Part B)", () => {
   it("blocks the run (retry_implementation) when the verifier produces not_satisfied", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-vw-data-");
@@ -214,7 +214,7 @@ describe("verifier role decision routing (NIN-207 Part B)", () => {
 
     const runId = (await archive.listWorkflowRuns())[0]?.id ?? "";
     // not_satisfied routes to retry_implementation, but this workflow has no implementer role to retry,
-    // so the executor honestly degrades the retry to a block (NIN-201). The implementer-retry loop itself
+    // so the executor honestly degrades the retry to a block (RIS-201). The implementer-retry loop itself
     // is covered in tests/workflow-run/executor.test.ts against a planner→implementer→reviewer→verifier flow.
     await expect(archive.loadWorkflowRun(runId)).resolves.toMatchObject({ status: "blocked" });
     // The publish-pr action must not have run (no publish_result artifact).

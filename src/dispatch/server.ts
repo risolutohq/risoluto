@@ -88,7 +88,7 @@ export function createDataPlaneServer(secret: string): DataPlaneApp {
 
       // Reject a duplicate active run instead of overwriting it — overwriting would make
       // the first run unabortable and let either run's finally delete the other's
-      // controller (NIN-258).
+      // controller (RIS-258).
       if (activeDispatches.has(runId)) {
         res.status(409).json({ error: "a run with this id is already active" });
         return;
@@ -100,7 +100,7 @@ export function createDataPlaneServer(secret: string): DataPlaneApp {
       // Abort the in-flight attempt if the control plane / client disconnects before the
       // stream completes, so a dropped connection can't leave the agent running. We listen
       // on the response stream — for an SSE response, res "close" fires on client
-      // disconnect, while req "close" fires as soon as the request body is consumed (NIN-258).
+      // disconnect, while req "close" fires as soon as the request body is consumed (RIS-258).
       let completed = false;
       const onClientDisconnect = (): void => {
         if (!completed && !abortController.signal.aborted) {

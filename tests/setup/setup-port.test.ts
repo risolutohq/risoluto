@@ -47,7 +47,7 @@ describe("setup-port", () => {
       provision: vi.fn(async (input) => {
         expect(input).toEqual({ type: "list_projects" });
         return {
-          projects: [{ id: "proj-1", name: "Ninja", slugId: "NIN", teamKey: "nin" }],
+          projects: [{ id: "proj-1", name: "Ninja", slugId: "RIS", teamKey: "ris" }],
         };
       }),
     });
@@ -61,13 +61,13 @@ describe("setup-port", () => {
     });
 
     await expect(service.getLinearProjects()).resolves.toEqual({
-      projects: [{ id: "proj-1", name: "Ninja", slugId: "NIN", teamKey: "nin" }],
+      projects: [{ id: "proj-1", name: "Ninja", slugId: "RIS", teamKey: "ris" }],
     });
   });
 
   it("routes test-issue and label provisioning through the tracker boundary", async () => {
     await secretsStore.set("LINEAR_API_KEY", "lin_test");
-    await configOverlayStore.set("tracker.project_slug", "NIN");
+    await configOverlayStore.set("tracker.project_slug", "RIS");
 
     const tracker = buildStubTracker({
       provision: vi.fn(async (input) => {
@@ -75,8 +75,8 @@ describe("setup-port", () => {
           case "create_test_issue":
             return {
               ok: true,
-              issueIdentifier: "NIN-1",
-              issueUrl: "https://tracker.example/NIN-1",
+              issueIdentifier: "RIS-1",
+              issueUrl: "https://tracker.example/RIS-1",
             };
           case "create_label":
             return {
@@ -101,8 +101,8 @@ describe("setup-port", () => {
 
     await expect(service.createTestIssue()).resolves.toEqual({
       ok: true,
-      issueIdentifier: "NIN-1",
-      issueUrl: "https://tracker.example/NIN-1",
+      issueIdentifier: "RIS-1",
+      issueUrl: "https://tracker.example/RIS-1",
     });
     await expect(service.createLabel()).resolves.toEqual({
       ok: true,

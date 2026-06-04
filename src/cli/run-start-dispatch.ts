@@ -35,7 +35,7 @@ export interface RunStartDispatchDeps {
  *   (c) Neither opt-in present → {@link createUnconfiguredAgentRoleDispatch} (honest block).
  *
  * The live-env branch (b without deps.dispatcher) is the LIVE slice: the code path exists and is
- * reachable, but it requires the full config stack that is wired in a separate step (NIN-222 live pass).
+ * reachable, but it requires the full config stack that is wired in a separate step (RIS-222 live pass).
  */
 export function resolveDispatchRole(
   deps: RunStartDispatchDeps,
@@ -68,7 +68,7 @@ export function resolveDispatchRole(
 
 /**
  * Retrieve the dispatcher, or raise a descriptive error if the live env was set but the full config
- * stack has not yet been wired to `run start` (future NIN-222 live pass).
+ * stack has not yet been wired to `run start` (future RIS-222 live pass).
  */
 function requireDispatcher(injected: RunAttemptDispatcher | undefined, liveEnvOptIn: boolean): RunAttemptDispatcher {
   if (injected !== undefined) {
@@ -86,7 +86,7 @@ function requireDispatcher(injected: RunAttemptDispatcher | undefined, liveEnvOp
 
 /**
  * Retrieve the workspace, or raise a descriptive error if the live env was set but the workspace has
- * not been prepared via the full config stack (future NIN-222 live pass).
+ * not been prepared via the full config stack (future RIS-222 live pass).
  */
 function requireWorkspace(injected: Workspace | undefined, liveEnvOptIn: boolean): Workspace {
   if (injected !== undefined) {

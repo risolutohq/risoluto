@@ -196,7 +196,7 @@ actions: []
 `.trimStart();
   }
 
-  it("rejects a symlinked workflow-definition file (NIN-265)", async () => {
+  it("rejects a symlinked workflow-definition file (RIS-265)", async () => {
     const workflowDir = await createWorkflowDir();
     // Real target kept as a non-.yaml file so readdir only surfaces the symlink itself.
     await writeWorkflowDefinition(workflowDir, "target.txt", validBody("linked"));
@@ -207,7 +207,7 @@ actions: []
     ).rejects.toThrow(/is not a regular file/);
   });
 
-  it("rejects a workflow-definition file exceeding the size cap (NIN-265)", async () => {
+  it("rejects a workflow-definition file exceeding the size cap (RIS-265)", async () => {
     const workflowDir = await createWorkflowDir();
     // The size check runs before parsing, so the bytes need not be valid YAML.
     await writeWorkflowDefinition(workflowDir, "huge.yaml", `# ${"x".repeat(300_000)}`);
@@ -217,7 +217,7 @@ actions: []
     ).rejects.toThrow(/exceeds the .* byte size cap/);
   });
 
-  it("rejects duplicate workflow definition IDs across files (NIN-265)", async () => {
+  it("rejects duplicate workflow definition IDs across files (RIS-265)", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(workflowDir, "a.yaml", validBody("dup"));
     await writeWorkflowDefinition(workflowDir, "b.yaml", validBody("dup"));
@@ -227,7 +227,7 @@ actions: []
     ).rejects.toThrow(/duplicate workflow definition id dup/);
   });
 
-  it("rejects duplicate state IDs within a definition (NIN-265)", async () => {
+  it("rejects duplicate state IDs within a definition (RIS-265)", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(
       workflowDir,
@@ -264,7 +264,7 @@ actions: []
     ).rejects.toThrow(/duplicate state id plan/);
   });
 
-  it("rejects a definition with empty states (NIN-265)", async () => {
+  it("rejects a definition with empty states (RIS-265)", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(
       workflowDir,
@@ -285,7 +285,7 @@ actions: []
     ).rejects.toThrow(/declares no states/);
   });
 
-  it("rejects a definition with states but no roles (NIN-265)", async () => {
+  it("rejects a definition with states but no roles (RIS-265)", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(
       workflowDir,
@@ -310,7 +310,7 @@ actions: []
     ).rejects.toThrow(/declares no roles/);
   });
 
-  it("rejects a role dependency cycle (NIN-266)", async () => {
+  it("rejects a role dependency cycle (RIS-266)", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(
       workflowDir,

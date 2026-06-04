@@ -39,7 +39,7 @@ interface DockerRunResult {
  * Split the configured codex command into argv tokens. The tokens are handed to the
  * container as positional parameters and executed with `exec "$@"`, so shell metacharacters
  * are never re-parsed by a shell. The command is treated as a space-separated argv —
- * shell quoting is intentionally unsupported (NIN-259).
+ * shell quoting is intentionally unsupported (RIS-259).
  */
 function parseCodexCommandArgv(command: string): string[] {
   const argv = command.split(/\s+/).filter((token) => token.length > 0);
@@ -187,7 +187,7 @@ function buildEntrypointScript(egressAllowlist: string[], options?: { unsetApiKe
 
   // Exec the codex command from the positional parameters ($@) rather than re-parsing a
   // shell string, so metacharacters in the configured command are never interpolated by a
-  // shell. buildDockerRunArgs passes the validated argv after this script (NIN-259).
+  // shell. buildDockerRunArgs passes the validated argv after this script (RIS-259).
   steps.push('echo "risoluto:container_ready"', 'exec "$@"');
 
   return steps.join("; ");

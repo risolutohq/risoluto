@@ -95,7 +95,7 @@ describe("NotificationManager", () => {
     expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 
-  it("does not suppress a retry when the first send fully fails (NIN-264)", async () => {
+  it("does not suppress a retry when the first send fully fails (RIS-264)", async () => {
     const notify = vi.fn(async () => undefined);
     notify.mockRejectedValueOnce(new Error("channel down"));
     const manager = new NotificationManager({

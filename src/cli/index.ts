@@ -314,7 +314,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     process.exitCode = await main();
   } catch (error) {
-    // Bad CLI input is user error — print one concise line, not an internal stack trace (NIN-266).
+    // Bad CLI input is user error — print one concise line, not an internal stack trace (RIS-266).
     if (error instanceof CliArgumentError) {
       console.error(`error: ${error.message}`);
     } else {

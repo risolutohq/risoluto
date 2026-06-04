@@ -46,7 +46,7 @@ describe("withRetry", () => {
     expect(vi.mocked(logger.warn).mock.calls[0][1]).toBe("write-back retry");
   });
 
-  it("re-throws the last error after max attempts (NIN-236)", async () => {
+  it("re-throws the last error after max attempts (RIS-236)", async () => {
     vi.useFakeTimers();
     const logger = createLogger();
     const fn = vi.fn(async () => {
@@ -81,7 +81,7 @@ describe("withRetry", () => {
   });
 
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
-    "rejects without invoking fn when maxAttempts is %s (NIN-236)",
+    "rejects without invoking fn when maxAttempts is %s (RIS-236)",
     async (maxAttempts) => {
       const logger = createLogger();
       const fn = vi.fn(async () => {});
@@ -91,7 +91,7 @@ describe("withRetry", () => {
     },
   );
 
-  it("caps the backoff delay at MAX_RETRY_DELAY_MS (NIN-236)", async () => {
+  it("caps the backoff delay at MAX_RETRY_DELAY_MS (RIS-236)", async () => {
     vi.useFakeTimers();
     const logger = createLogger();
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
@@ -116,7 +116,7 @@ describe("withRetry", () => {
 });
 
 describe("withNonFatalRetry", () => {
-  it("swallows error after max attempts and logs non-fatal (NIN-236)", async () => {
+  it("swallows error after max attempts and logs non-fatal (RIS-236)", async () => {
     vi.useFakeTimers();
     const logger = createLogger();
     const fn = vi.fn(async () => {
@@ -134,7 +134,7 @@ describe("withNonFatalRetry", () => {
     expect(lastCall?.[1]).toContain("non-fatal");
   });
 
-  it("validates maxAttempts before invoking fn (NIN-236)", async () => {
+  it("validates maxAttempts before invoking fn (RIS-236)", async () => {
     const logger = createLogger();
     const fn = vi.fn(async () => {});
 

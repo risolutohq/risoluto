@@ -178,7 +178,7 @@ describe("registerConfigApi", () => {
     }
   });
 
-  it("redacts secret-bearing overlay values on PUT, GET, and PATCH (NIN-249)", async () => {
+  it("redacts secret-bearing overlay values on PUT, GET, and PATCH (RIS-249)", async () => {
     const dir = await createTempDir();
     const overlayStore = new ConfigOverlayStore(path.join(dir, "config", "overlay.yaml"), createLogger());
     await overlayStore.start();

@@ -23,7 +23,7 @@ const REDACTED = "[REDACTED]";
 // Audit values are fully redacted when their key/path names a secret-like field,
 // and otherwise scanned for embedded secret patterns, so no config mutation
 // persists a webhook URL, token, API key, or $SECRET-resolved value verbatim
-// (NIN-247).
+// (RIS-247).
 const SENSITIVE_AUDIT_KEY = /secret|token|password|credential|authorization|api[_-]?key|webhook/i;
 
 function redactAuditValue(key: string, path: string | null, value: string | null): string | null {
@@ -112,7 +112,7 @@ export class AuditLogger implements AuditLoggerPort {
 
     // Link this entry to the chain tip: hash the canonical (already-redacted) fields together with
     // the prior entry's hash. better-sqlite3 is synchronous, so this read-then-insert is atomic
-    // within the process and no concurrent entry can splice between them (NIN-266).
+    // within the process and no concurrent entry can splice between them (RIS-266).
     const previousHash = this.latestEntryHash();
     const entryHash = computeAuditEntryHash({
       tableName: entry.tableName,
@@ -214,7 +214,7 @@ export class AuditLogger implements AuditLoggerPort {
 }
 
 // Canonical hash of one audit entry, chained to the previous entry's hash. Object key order is fixed
-// by the literal, so JSON.stringify is deterministic across calls (NIN-266).
+// by the literal, so JSON.stringify is deterministic across calls (RIS-266).
 function computeAuditEntryHash(fields: {
   tableName: string;
   key: string;

@@ -58,7 +58,7 @@ export const DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS: WorkflowResolutionDefaults = 
 };
 
 // Workflow definitions are small declarative YAML; cap the file at 256 KiB so a symlink-swapped or
-// runaway file can't be slurped into memory before parsing (NIN-265).
+// runaway file can't be slurped into memory before parsing (RIS-265).
 const MAX_WORKFLOW_DEFINITION_BYTES = 256 * 1024;
 
 const BUILTIN_ROLE_IDS = new Set(["planner", "implementer", "reviewer", "verifier", "ci_babysitter"]);
@@ -118,7 +118,7 @@ export async function loadWorkflowDefinitionRegistry(
   const resolvedDefinitions = new Map<string, ResolvedWorkflowDefinition>();
   for (const definition of definitions) {
     // Map.set would silently let a second file shadow the first — reject so a duplicate id can't
-    // ambiguously resolve depending on directory read order (NIN-265).
+    // ambiguously resolve depending on directory read order (RIS-265).
     if (resolvedDefinitions.has(definition.id)) {
       throw new WorkflowDefinitionRegistryError(`duplicate workflow definition id ${definition.id}`);
     }
@@ -167,7 +167,7 @@ async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinit
 // Open with O_NOFOLLOW so a symlink at the path is rejected (ELOOP), then fstat the *same* handle for the
 // regular-file + size checks and read the bytes through it. Doing the check and the read on one fd closes
 // the TOCTOU window where a regular file validated by lstat is swapped for a symlink before readFile
-// follows it (NIN-265). O_NOFOLLOW is POSIX-only: where it is undefined (e.g. Windows) the `?? 0` makes
+// follows it (RIS-265). O_NOFOLLOW is POSIX-only: where it is undefined (e.g. Windows) the `?? 0` makes
 // the open follow symlinks, which is acceptable because the production runtime is Linux-only (Node 22+).
 async function readSafeDefinitionFile(filePath: string): Promise<string> {
   const notRegularFileError = (): WorkflowDefinitionRegistryError =>
@@ -200,7 +200,7 @@ async function readSafeDefinitionFile(filePath: string): Promise<string> {
 }
 
 // Structural invariants the zod schema can't express on its own: a definition must declare at least
-// one state and one role, and every state id must be unique (NIN-265).
+// one state and one role, and every state id must be unique (RIS-265).
 function validateWorkflowDefinitionStructure(definition: WorkflowDefinition): void {
   if (definition.states.length === 0) {
     throw new WorkflowDefinitionRegistryError(`workflow definition ${definition.id} declares no states`);
@@ -268,7 +268,7 @@ function validateRoleGraph(definition: WorkflowDefinition): void {
 }
 
 // Depth-first colouring: a back-edge to a node already on the current path is a cycle. Without this a
-// definition whose roles depend on each other in a loop would deadlock the role DAG executor (NIN-266).
+// definition whose roles depend on each other in a loop would deadlock the role DAG executor (RIS-266).
 function assertAcyclicRoleGraph(roles: readonly WorkflowRoleDefinition[]): void {
   const dependenciesById = new Map(roles.map((role) => [role.id, role.dependsOn]));
   const visitState = new Map<string, "visiting" | "visited">();

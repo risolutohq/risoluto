@@ -229,9 +229,9 @@ describe("launchWorker", () => {
     );
   });
 
-  // orphan-worker re-check (NIN-239): a launch racing Orchestrator.stop() must
+  // orphan-worker re-check (RIS-239): a launch racing Orchestrator.stop() must
   // not register a running entry and must not dispatch runAttempt.
-  describe("orphan-worker re-check (NIN-239)", () => {
+  describe("orphan-worker re-check (RIS-239)", () => {
     it("does not register an entry or dispatch when the orchestrator is already stopping", async () => {
       const { ctx, issue, runAttempt } = makeLaunchWorkerHarness();
       ctx.isRunning = vi.fn(() => false);
@@ -253,14 +253,14 @@ describe("launchWorker", () => {
       expect(ctx.runningEntries.has("workflow-run-1")).toBe(false);
       expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("workflow-run-1");
       // The attempt is persisted only past this final stop check, so an aborted launch leaves no
-      // orphaned "running" attempt row for startup recovery to resurrect (NIN-258).
+      // orphaned "running" attempt row for startup recovery to resurrect (RIS-258).
       expect(ctx.deps.attemptStore.createAttempt).not.toHaveBeenCalled();
     });
   });
 
-  // settlement robustness (NIN-240): a rejecting worker-promise settlement must
+  // settlement robustness (RIS-240): a rejecting worker-promise settlement must
   // never leave an unhandled rejection and must always resolve the entry lifecycle.
-  describe("settlement robustness (NIN-240)", () => {
+  describe("settlement robustness (RIS-240)", () => {
     it("resolves the entry lifecycle and logs when settlement rejects", async () => {
       const { ctx, issue } = makeLaunchWorkerHarness();
       ctx.handleWorkerPromise = vi.fn(() => Promise.reject(new Error("settlement boom")));

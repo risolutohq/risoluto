@@ -118,7 +118,7 @@ describe("LinearClient.listWebhooks", () => {
     const client = makeClient(fetchMock);
     const webhooks = await client.listWebhooks();
 
-    // The listing never surfaces the signing secret even when the API echoes one back (NIN-263).
+    // The listing never surfaces the signing secret even when the API echoes one back (RIS-263).
     expect(webhooks).toEqual([
       {
         id: "wh-1",

@@ -1,6 +1,6 @@
 ---
 name: risoluto-sync
-description: Reconcile Linear to git reality for one PRD slug — the Risoluto pipeline's memory-layer repair pass. Use when Omer says /risoluto-sync, "sync linear", "reconcile the tracker", "why is NIN-123 still Todo when it's merged", "tick the acceptance criteria from the merged code", "report linear drift for <slug>", or after an integration/<slug> branch reaches master. For each from:prd-<slug> issue it reads git (is the issue's branch merged?) plus the issue's acceptance criteria, then — proof-only — flips a merged issue to Done, ticks the criteria it can point at, posts one idempotent back-comment, and reports every remaining drift (Done-with-empty-ACs, merged-but-Todo, ticked-without-proof, discovered issues orphaned from the wave map). It never invents Done, never edits code or git history, never opens a PR. Idempotent. Stage 4.5 of docs/research-to-shipping-pipeline.md.
+description: Reconcile Linear to git reality for one PRD slug — the Risoluto pipeline's memory-layer repair pass. Use when Omer says /risoluto-sync, "sync linear", "reconcile the tracker", "why is RIS-123 still Todo when it's merged", "tick the acceptance criteria from the merged code", "report linear drift for <slug>", or after an integration/<slug> branch reaches master. For each from:prd-<slug> issue it reads git (is the issue's branch merged?) plus the issue's acceptance criteria, then — proof-only — flips a merged issue to Done, ticks the criteria it can point at, posts one idempotent back-comment, and reports every remaining drift (Done-with-empty-ACs, merged-but-Todo, ticked-without-proof, discovered issues orphaned from the wave map). It never invents Done, never edits code or git history, never opens a PR. Idempotent. Stage 4.5 of docs/research-to-shipping-pipeline.md.
 ---
 
 # risoluto-sync
@@ -92,9 +92,9 @@ Print a table the founder can act on, plus a one-line summary:
 ```
 slug: <slug>  target: integration/<slug>  reconciled: <N> Done, <M> ACs ticked, <K> comments
 DRIFT (founder disposes):
-  NIN-212  merged-unproven   2/4 ACs unprovable: status-projection mapping has no non-test caller
-  NIN-218  merged-proven     flipped Todo → Done; ticked 3/3 ACs
-  NIN-222  discovered-orphan not in WAVES.md — re-run /risoluto-goal-prep to fold it into a wave
+  RIS-212  merged-unproven   2/4 ACs unprovable: status-projection mapping has no non-test caller
+  RIS-218  merged-proven     flipped Todo → Done; ticked 3/3 ACs
+  RIS-222  discovered-orphan not in WAVES.md — re-run /risoluto-goal-prep to fold it into a wave
 ```
 
 ## Invariants & notes

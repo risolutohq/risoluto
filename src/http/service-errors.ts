@@ -33,7 +33,7 @@ interface BodyParserError extends Error {
  * body-parser (`express.json`/`express.urlencoded`) rejects malformed or oversized
  * request bodies with an HTTP-shaped error carrying a `type` and a 4xx `status`. These
  * are client errors, so we echo the status (400 for a parse failure) instead of letting
- * them fall through to a misleading 500 (NIN-250).
+ * them fall through to a misleading 500 (RIS-250).
  */
 function bodyParserErrorStatus(error: Error): number | null {
   const candidate = error as BodyParserError;

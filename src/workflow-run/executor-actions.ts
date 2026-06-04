@@ -16,7 +16,7 @@ export interface ExecuteConfiguredWorkflowActionsInput {
   /**
    * Dedupe ledger scoped by phase/state/attempt. Global `actionId` dedupe made verifier-driven
    * retries skip `run-validation-profile` and reuse a stale validation result; scoping the key by
-   * the retry attempt lets a new attempt re-run validation (NIN-261).
+   * the retry attempt lets a new attempt re-run validation (RIS-261).
    */
   readonly actionDedupeKeys: string[];
   /** Verifier retry attempt — a new attempt re-scopes the dedupe key so validation re-runs. */
@@ -37,7 +37,7 @@ export async function executeConfiguredWorkflowActions(input: ExecuteConfiguredW
     // Dedupe per action PER ATTEMPT (not globally by actionId). Global dedupe ran each action once for
     // the whole run, so a verifier-driven retry reused a stale validation result; scoping by the retry
     // attempt re-runs run-validation-profile on the new attempt while still running each action once per
-    // attempt across the before/after phases (NIN-261).
+    // attempt across the before/after phases (RIS-261).
     const dedupeKey = `${actionId}::${input.attempt}`;
     if (input.actionDedupeKeys.includes(dedupeKey)) {
       continue;
@@ -70,7 +70,7 @@ function shouldExecuteAction(
   // before_roles key and the worktree would be re-created. Exclude it here — a worktree is setup,
   // never a post-roles step. run-validation-profile is left in: it keys by verifierRetryAttempts in
   // both before_state_gates and after_roles, so those collide and dedupe, and it must still run as a
-  // post-roles action for definitions whose state carries no validation gate (NIN-261).
+  // post-roles action for definitions whose state carries no validation gate (RIS-261).
   return actionId !== "create-worktree";
 }
 

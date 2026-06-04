@@ -98,7 +98,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("agent role dispatch adapter drives the engine from `run start` (NIN-222)", () => {
+describe("agent role dispatch adapter drives the engine from `run start` (RIS-222)", () => {
   it("runs one agent session per role with the resolved model/prompt/workspace and deposits per D1", async () => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     const dataDir = await createTempDir("risoluto-agent-data-");
