@@ -56,9 +56,14 @@ function isBlockedIpv6(host: string): boolean {
   return host === "::1" || host === "::" || host.startsWith("fe80") || host.startsWith("fc") || host.startsWith("fd");
 }
 
+/** Lowercase a hostname and strip the brackets URL parsing leaves on IPv6 literals. */
+function normalizeHost(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+}
+
 /** True when a hostname is a loopback, private, or link-local address/name. */
 export function isBlockedRequestHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[/u, "").replace(/\]$/u, "");
+  const host = normalizeHost(hostname);
   if (host === "localhost" || host.endsWith(".localhost")) {
     return true;
   }
@@ -67,7 +72,7 @@ export function isBlockedRequestHost(hostname: string): boolean {
 
 /** True when a hostname is a loopback address/name (the operator's own machine). */
 export function isLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[/u, "").replace(/\]$/u, "");
+  const host = normalizeHost(hostname);
   if (host === "localhost" || host.endsWith(".localhost") || host === "::1") {
     return true;
   }

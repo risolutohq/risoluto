@@ -3,6 +3,7 @@ import path from "node:path";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto";
 
 import { asStringRecord, isRecord, toErrorString } from "../utils/type-guards.js";
+import { createSerialChain, type SerialChain } from "../utils/serial-chain.js";
 import type { RisolutoLogger } from "../core/types.js";
 import type { SecretsPort } from "./port.js";
 
@@ -274,16 +275,7 @@ export class SecretsStore implements SecretsPort {
 
   // Serializes set()/delete() so the key check, cache mutation, persist, and audit of
   // one mutation complete before the next begins (NIN-251).
-  private mutationChain: Promise<unknown> = Promise.resolve();
-
-  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationChain.then(operation, operation);
-    this.mutationChain = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }
+  private readonly enqueueMutation: SerialChain = createSerialChain();
 
   private requiredMasterKey(): string {
     if (!this.activeMasterKey) {

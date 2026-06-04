@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { withKeyedSerialChain } from "../utils/serial-chain.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 import { parseWorkflowRunArtifact, type WorkflowRunArtifactProducer } from "./artifact-contracts.js";
 import type {
@@ -146,7 +147,7 @@ async function appendWorkflowRunEventsToRunDir(
 
   // Serialize the read-then-append per run directory so two concurrent appends can't read the same
   // next-sequence and emit duplicate sequence numbers / attempt indices (NIN-263).
-  return withSerialChain(runEventAppendChains, artifactDir, async () => {
+  return withKeyedSerialChain(runEventAppendChains, artifactDir, async () => {
     const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
     const sequencedEvents = events.map((event, index) => ({
       ...event,
@@ -219,35 +220,12 @@ async function writeWorkflowRunArtifactToArchive(
 // any further status write (NIN-255).
 const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStartRecord["status"]> = new Set(["blocked", "done", "cancelled"]);
 
-// Serializes async operations sharing a key so their read-modify-write body runs atomically against
-// concurrent callers: per-run status writes (NIN-255) and per-run-dir event-sequence assignment
-// (NIN-263).
-function withSerialChain<T>(
-  chains: Map<string, Promise<unknown>>,
-  key: string,
-  operation: () => Promise<T>,
-): Promise<T> {
-  const prior = chains.get(key) ?? Promise.resolve();
-  const result = prior.then(operation, operation);
-  const settled = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  chains.set(key, settled);
-  void settled.then(() => {
-    if (chains.get(key) === settled) {
-      chains.delete(key);
-    }
-  });
-  return result;
-}
-
 // Status writes are serialized per Workflow Run so a cancel racing a done can no longer
 // interleave (NIN-255).
 const runStatusUpdateChains = new Map<string, Promise<unknown>>();
 
 function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>): Promise<T> {
-  return withSerialChain(runStatusUpdateChains, workflowRunId, operation);
+  return withKeyedSerialChain(runStatusUpdateChains, workflowRunId, operation);
 }
 
 // Event appends are serialized per run directory so concurrent appends can't collide on the

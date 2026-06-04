@@ -99,13 +99,13 @@ export class DbSecretsStore {
     if (rows.length === 0) {
       return;
     }
-    let decrypted = 0;
+    let anyDecrypted = false;
     let lastError: unknown = null;
     for (const row of rows) {
       try {
         const decryptKey = this.resolveRowKey(masterKey, row.kdfVersion, row.kdfSalt);
         decryptValue(row.ciphertext, row.iv, row.authTag, decryptKey);
-        decrypted += 1;
+        anyDecrypted = true;
       } catch (error) {
         // A single undecryptable row is corruption, not a wrong key — a wrong key fails the auth tag on
         // every row. Log and continue so one damaged row (e.g. a V1 row migrateV1Rows had to skip) can't
@@ -114,7 +114,7 @@ export class DbSecretsStore {
         this.logger.warn({ key: row.key, error: String(error) }, "encrypted_secrets row failed to decrypt; skipping");
       }
     }
-    if (decrypted === 0) {
+    if (!anyDecrypted) {
       throw new Error("DbSecretsStore master key does not match the existing encrypted rows", {
         cause: lastError,
       });
