@@ -114,6 +114,8 @@ describe("ObservabilityHub", () => {
       metadata: { apiKey: "sk-supersecret123", path: "/api/v1/state" },
     });
 
+    await hub.drain();
+
     const serialized = JSON.stringify(observer.snapshot());
     expect(serialized).not.toContain("sk-supersecret123");
     expect(serialized).not.toContain("sk-tracetoken456");

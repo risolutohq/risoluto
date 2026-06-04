@@ -34,3 +34,6 @@ CLAUDE.local.md
 
 # Spine skill workspace — source repo clone, regenerated each /risoluto-features run
 .spine-workspace/
+
+# Local clawpatch sweep handoffs (/risoluto-clawpatch output)
+reviews/

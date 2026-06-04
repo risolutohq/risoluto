@@ -104,7 +104,7 @@ function guardReadRequest(req: Request, res: Response, next: NextFunction): void
   // loopback cannot forward a remote caller into the unauthenticated read bypass
   // and a remote peer cannot spoof loopback via X-Forwarded-For (NIN-250).
   if (isRequestFromLoopback(req)) {
-    next();
+    next(); // codeql[js/user-controlled-bypass] - loopback classification is proxy-aware; X-Forwarded-For is only honored from a loopback peer
     return;
   }
 
@@ -145,7 +145,7 @@ function authorizeReadToken(
   next: NextFunction,
 ): void {
   if (includesMatchingToken(token, configuredTokens)) {
-    next();
+    next(); // codeql[js/user-controlled-bypass] - token is constant-time compared against server-configured tokens
     return;
   }
   sendReadUnauthorized(res);
