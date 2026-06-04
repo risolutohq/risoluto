@@ -142,6 +142,30 @@ describe("DbSecretsStore", () => {
     expect(store3.get("SECRET")).toBe("hidden");
   });
 
+  it("starts with the correct key even when one row is corrupt, skipping the bad row (NIN-251)", async () => {
+    await store.set("GOOD", "readable");
+    // Inject a row whose ciphertext is corrupt — it can never decrypt with any key. migrateV1Rows skips
+    // V1 corruption; verifyRowsDecrypt must not treat this V2 corruption as a wrong-key mismatch.
+    db.insert(encryptedSecrets)
+      .values({
+        key: "CORRUPT",
+        ciphertext: Buffer.from("not-real-ciphertext").toString("base64"),
+        iv: randomBytes(12).toString("base64"),
+        authTag: randomBytes(16).toString("base64"),
+        updatedAt: new Date().toISOString(),
+        kdfVersion: 2,
+        kdfSalt: randomBytes(16).toString("base64"),
+      })
+      .run();
+
+    const store2 = new DbSecretsStore(db, createMockLogger(), { masterKey: TEST_MASTER_KEY });
+    // The correct key decrypts GOOD, so a single undecryptable row must not brick startup.
+    await store2.start();
+    expect(store2.isInitialized()).toBe(true);
+    expect(store2.get("GOOD")).toBe("readable");
+    expect(store2.get("CORRUPT")).toBeNull();
+  });
+
   it("rejects initializeWithKey when the key cannot decrypt existing rows (NIN-251)", async () => {
     await store.set("SECRET", "hidden");
 

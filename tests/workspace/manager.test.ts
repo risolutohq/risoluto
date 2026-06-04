@@ -207,6 +207,20 @@ describe("WorkspaceManager", () => {
       expect(deps.gitManager.setupWorktree).toHaveBeenCalledOnce();
     });
 
+    it("rejects a symlinked worktree workspace path before touching git (NIN-243)", async () => {
+      const config = createConfig({ strategy: "worktree" });
+      const deps = createWorktreeDeps();
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      // A pre-planted symlink whose stat() (which follows links) reports a directory must still be
+      // refused by the lstat-based guard — the worktree path must enforce it like the directory path.
+      statMock.mockResolvedValue({ isDirectory: () => true });
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
+
+      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow("symlink");
+      expect(deps.gitManager.setupWorktree).not.toHaveBeenCalled();
+    });
+
     it("returns existing worktree workspace without re-creating", async () => {
       const config = createConfig({ strategy: "worktree" });
       const deps = createWorktreeDeps();

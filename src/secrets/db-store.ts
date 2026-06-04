@@ -96,13 +96,28 @@ export class DbSecretsStore {
 
   private verifyRowsDecrypt(masterKey: string): void {
     const rows = this.db.select().from(encryptedSecrets).all();
+    if (rows.length === 0) {
+      return;
+    }
+    let decrypted = 0;
+    let lastError: unknown = null;
     for (const row of rows) {
       try {
         const decryptKey = this.resolveRowKey(masterKey, row.kdfVersion, row.kdfSalt);
         decryptValue(row.ciphertext, row.iv, row.authTag, decryptKey);
+        decrypted += 1;
       } catch (error) {
-        throw new Error("DbSecretsStore master key does not match the existing encrypted rows", { cause: error });
+        // A single undecryptable row is corruption, not a wrong key — a wrong key fails the auth tag on
+        // every row. Log and continue so one damaged row (e.g. a V1 row migrateV1Rows had to skip) can't
+        // brick startup with the correct master key; only a key that decrypts NOTHING is rejected below.
+        lastError = error;
+        this.logger.warn({ key: row.key, error: String(error) }, "encrypted_secrets row failed to decrypt; skipping");
       }
+    }
+    if (decrypted === 0) {
+      throw new Error("DbSecretsStore master key does not match the existing encrypted rows", {
+        cause: lastError,
+      });
     }
   }
 

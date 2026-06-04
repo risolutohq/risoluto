@@ -226,6 +226,11 @@ export class WorkspaceManager implements WorkspacePort {
     );
     const baseCloneDir = this.worktreeDeps.gitManager.deriveBaseCloneDir(config.workspace.root, repoMatch.repoUrl);
 
+    // Refuse a pre-planted symlink (or a path whose real location escapes the root) before any hook can
+    // run with cwd resolved through it — the worktree strategy must enforce the same guard the directory
+    // strategy got (NIN-243). pathIsDirectory() follows symlinks, so this lstat/realpath check is what
+    // actually closes the escape.
+    await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
     const worktreeExists = await pathIsDirectory(workspacePath);
     const createdNow = !worktreeExists;
 
@@ -304,6 +309,9 @@ export class WorkspaceManager implements WorkspacePort {
     if (!(await pathIsDirectory(workspacePath))) {
       return emptyRemovalResult();
     }
+    // Refuse a symlinked workspace before the before-remove hook runs with cwd resolved through it
+    // (matches removeDirectoryWorkspace) (NIN-243).
+    await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
 
     const workspace = { path: workspacePath, workspaceKey, createdNow: false };
     await this.runBeforeRemoveHook(config, workspace, issueIdentifier, workspaceKey);

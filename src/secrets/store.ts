@@ -232,8 +232,21 @@ export class SecretsStore implements SecretsPort {
       // Confirm the store is usable before touching the in-memory cache, so a write
       // attempted before start() cannot leave a value cached that never reaches disk.
       this.requiredMasterKey();
+      const previousValue = this.cache.get(key);
       this.cache.set(key, value);
-      await this.persist();
+      try {
+        await this.persist();
+      } catch (error) {
+        // Roll the cache back to its pre-set state on a failed persist. persist() serializes the whole
+        // cache, so leaving the rejected value in place would let the next successful mutation flush it
+        // to disk and make get() return a value that never durably committed (NIN-251).
+        if (previousValue === undefined) {
+          this.cache.delete(key);
+        } else {
+          this.cache.set(key, previousValue);
+        }
+        throw error;
+      }
       await this.appendAuditEntry("set", key);
       this.notify();
     });
@@ -242,12 +255,21 @@ export class SecretsStore implements SecretsPort {
   async delete(key: string): Promise<boolean> {
     return this.enqueueMutation(async () => {
       this.requiredMasterKey();
+      const previousValue = this.cache.get(key);
       const existed = this.cache.delete(key);
       if (!existed) {
         return false;
       }
 
-      await this.persist();
+      try {
+        await this.persist();
+      } catch (error) {
+        // Restore the key on a failed persist so the cache doesn't drop a secret that is still on disk.
+        if (previousValue !== undefined) {
+          this.cache.set(key, previousValue);
+        }
+        throw error;
+      }
       await this.appendAuditEntry("delete", key);
       this.notify();
       return true;

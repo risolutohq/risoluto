@@ -509,11 +509,6 @@ export async function launchWorker(
       ctx.markDirty();
       ctx.setQueuedViews(ctx.getQueuedViews().filter((view) => view.issueId !== issue.id));
 
-      if (options?.recoveredAttempt) {
-        await persistRecoveredAttempt(ctx, entry, issue, workspace, options.recoveredAttempt, modelSelection);
-      } else {
-        await persistInitialAttempt(ctx, entry, issue, workspace, attempt, modelSelection);
-      }
       ctx.detailViews.set(
         issue.identifier,
         issueView(issue, {
@@ -557,6 +552,14 @@ export async function launchWorker(
         },
       };
       ensureRunning();
+      // Persist the attempt only after this final stop check, so a launch aborted by a concurrent
+      // stop() never leaves an orphaned "running" attempt row for startup recovery to resurrect — the
+      // in-memory entry and claim are cleaned up by the catch below (NIN-239/258).
+      if (options?.recoveredAttempt) {
+        await persistRecoveredAttempt(ctx, entry, issue, workspace, options.recoveredAttempt, modelSelection);
+      } else {
+        await persistInitialAttempt(ctx, entry, issue, workspace, attempt, modelSelection);
+      }
       let promise: Promise<RunOutcome>;
       try {
         promise = ctx.deps.agentRunner.runAttempt(runAttemptInput);

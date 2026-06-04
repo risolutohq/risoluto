@@ -230,11 +230,29 @@ export class CodexControlPlane {
       if (codexConfig.auth.mode === "openai_login" && codexConfig.auth.sourceHome) {
         const srcAuth = path.join(codexConfig.auth.sourceHome, "auth.json");
         const destAuth = path.join(codexHome, "auth.json");
-        // Copy then force owner-only perms — the refreshed credential must not be
-        // group/world-readable in the per-run CODEX_HOME (NIN-251).
-        await cp(srcAuth, destAuth)
-          .then(() => chmod(destAuth, 0o600))
-          .catch(() => {});
+        // Copy then force owner-only perms — the refreshed credential must not be group/world-readable
+        // in the per-run CODEX_HOME (NIN-251). Each step is logged rather than silently swallowed: a
+        // failed chmod leaves the credential at its source permissions, which must not pass unnoticed.
+        let authCopied = false;
+        try {
+          await cp(srcAuth, destAuth);
+          authCopied = true;
+        } catch (error) {
+          this.logger.warn(
+            { error: toErrorString(error) },
+            "failed to copy codex auth.json into the per-run CODEX_HOME; continuing without refreshed credentials",
+          );
+        }
+        if (authCopied) {
+          try {
+            await chmod(destAuth, 0o600);
+          } catch (error) {
+            this.logger.warn(
+              { error: toErrorString(error) },
+              "failed to restrict codex auth.json to owner-only (0o600) in the per-run CODEX_HOME",
+            );
+          }
+        }
       }
       this.codexHome = codexHome;
 

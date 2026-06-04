@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -141,6 +141,32 @@ describe("SecretsStore", () => {
     // The plaintext cache must stay untouched — no value cached that never reached disk.
     expect(store.get("TOKEN")).toBeNull();
     expect(store.list()).toEqual([]);
+  });
+
+  it("rolls the cache back when persist fails so a rejected set never lands on disk later (NIN-251)", async () => {
+    const dir = await createTempDir();
+    process.env.MASTER_KEY = "rollback-key";
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.start();
+    await store.set("TOKEN", "good-value");
+
+    // Make the secrets dir read-only so the next persist (temp-file write) fails deterministically.
+    await chmod(dir, 0o500);
+    try {
+      await expect(store.set("TOKEN", "rejected-value")).rejects.toThrow();
+      // The cache must reflect the last durably-persisted value, not the rejected one.
+      expect(store.get("TOKEN")).toBe("good-value");
+    } finally {
+      await chmod(dir, 0o700);
+    }
+
+    // A later successful mutation persists the whole cache; the rejected value must not ride along.
+    await store.set("OTHER", "v2");
+    const restarted = new SecretsStore(dir, createLogger());
+    await restarted.start();
+    expect(restarted.get("TOKEN")).toBe("good-value");
+    expect(restarted.get("OTHER")).toBe("v2");
   });
 
   it("writes secrets.enc with owner-only 0o600 permissions (NIN-251)", async () => {

@@ -252,6 +252,9 @@ describe("launchWorker", () => {
       expect(runAttempt).not.toHaveBeenCalled();
       expect(ctx.runningEntries.has("workflow-run-1")).toBe(false);
       expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("workflow-run-1");
+      // The attempt is persisted only past this final stop check, so an aborted launch leaves no
+      // orphaned "running" attempt row for startup recovery to resurrect (NIN-258).
+      expect(ctx.deps.attemptStore.createAttempt).not.toHaveBeenCalled();
     });
   });
 
