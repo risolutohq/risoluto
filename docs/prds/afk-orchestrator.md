@@ -1,7 +1,7 @@
 ---
 slug: afk-orchestrator
 linear_project: https://linear.app/kyanite/project/afk-orchestrator-77742470e134
-synced_at: 2026-06-04T13:36:44.000Z
+synced_at: 2026-06-04T14:08:43.000Z
 source: docs/roadmap.md#afk-orchestrator
 status: draft
 ---
@@ -76,7 +76,7 @@ The observable seam: an operator promotes a PRD, walks away, and returns to an `
 
 **DAG source (D5).** `dag.ts` calls Linear GraphQL directly (`LINEAR_API_KEY`) for `from:prd-<slug>` issues and their `blockedBy`; waves by dependency depth (port the `readyIn` logic from the existing `conductor.workflow.mjs`); cycles throw.
 
-**Models (D6).** `coder`, `reviewer`, `diagnoser` are config-only, no defaults, fail-fast if unset. The reviewer is a *different* model from the coder (cross-model review).
+**Agents & models (D6).** `coder`, `reviewer`, and `diagnoser` are **opencode agents** defined in `.opencode/agents/` (role prompt + tool permissions + `reasoningEffort`), each pinning an operator-assigned **model** — no defaults, the daemon fails fast if a role's model is unset, and models are interchangeable across roles. The reviewer's model **must differ** from the coder's (the cross-model review gate). `reasoningEffort` (`minimal|low|medium|high|xhigh`) is set per agent natively (opencode passes it through to the provider). opencode has **no native per-agent fallback model**, so the daemon owns fallback: each role carries an operator-set fallback model the orchestrator fails over to on a provider/rate-limit error (best-effort, journaled). The coder follows `skills/references/coder-discipline/` and commits-before-idle; the reviewer is read-only and emits a `NONE|LOW|MEDIUM|HIGH` verdict; the diagnoser is a cheap one-shot retry-prompt. `config` validates all three agents resolve and have a model set before any session spawns.
 
 **Done predicate (D7).** `done = session idle AND a new commit on slice/<id> beyond the integration base`. No "working-tree diff non-empty" clause — the commit-before-idle contract makes the working tree empty by design.
 
