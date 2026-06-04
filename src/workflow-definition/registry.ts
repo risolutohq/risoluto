@@ -169,23 +169,23 @@ async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinit
 // the TOCTOU window where a regular file validated by lstat is swapped for a symlink before readFile
 // follows it (NIN-265).
 async function readSafeDefinitionFile(filePath: string): Promise<string> {
+  const notRegularFileError = (): WorkflowDefinitionRegistryError =>
+    new WorkflowDefinitionRegistryError(
+      `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
+    );
   let handle: FileHandle;
   try {
     handle = await open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ELOOP") {
-      throw new WorkflowDefinitionRegistryError(
-        `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
-      );
+      throw notRegularFileError();
     }
     throw error;
   }
   try {
     const stats = await handle.stat();
     if (!stats.isFile()) {
-      throw new WorkflowDefinitionRegistryError(
-        `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
-      );
+      throw notRegularFileError();
     }
     if (stats.size > MAX_WORKFLOW_DEFINITION_BYTES) {
       throw new WorkflowDefinitionRegistryError(

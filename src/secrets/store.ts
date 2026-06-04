@@ -234,19 +234,7 @@ export class SecretsStore implements SecretsPort {
       this.requiredMasterKey();
       const previousValue = this.cache.get(key);
       this.cache.set(key, value);
-      try {
-        await this.persist();
-      } catch (error) {
-        // Roll the cache back to its pre-set state on a failed persist. persist() serializes the whole
-        // cache, so leaving the rejected value in place would let the next successful mutation flush it
-        // to disk and make get() return a value that never durably committed (NIN-251).
-        if (previousValue === undefined) {
-          this.cache.delete(key);
-        } else {
-          this.cache.set(key, previousValue);
-        }
-        throw error;
-      }
+      await this.persistOrRollback(key, previousValue);
       await this.appendAuditEntry("set", key);
       this.notify();
     });
@@ -261,19 +249,27 @@ export class SecretsStore implements SecretsPort {
         return false;
       }
 
-      try {
-        await this.persist();
-      } catch (error) {
-        // Restore the key on a failed persist so the cache doesn't drop a secret that is still on disk.
-        if (previousValue !== undefined) {
-          this.cache.set(key, previousValue);
-        }
-        throw error;
-      }
+      await this.persistOrRollback(key, previousValue);
       await this.appendAuditEntry("delete", key);
       this.notify();
       return true;
     });
+  }
+
+  // Persist the cache, restoring `key` to its pre-mutation value if the write fails, so a rejected
+  // mutation never leaves the cache ahead of disk — persist() serializes the whole cache, so a later
+  // successful mutation would otherwise flush the rejected value (NIN-251).
+  private async persistOrRollback(key: string, previousValue: string | undefined): Promise<void> {
+    try {
+      await this.persist();
+    } catch (error) {
+      if (previousValue === undefined) {
+        this.cache.delete(key);
+      } else {
+        this.cache.set(key, previousValue);
+      }
+      throw error;
+    }
   }
 
   // Serializes set()/delete() so the key check, cache mutation, persist, and audit of
