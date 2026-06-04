@@ -42,10 +42,13 @@ const RESEARCH_DIR = path.join(REPO_ROOT, "research");
 const TARGETS_DIR = path.join(RESEARCH_DIR, "targets");
 const RESEARCH_SCRIPT = path.join(SCRIPT_DIR, "research.mjs");
 const TURNDOWN_PATH = path.join(SCRIPT_DIR, "vendor", "turndown.js");
+const GFM_PATH = path.join(SCRIPT_DIR, "vendor", "turndown-plugin-gfm.js");
 const RECIPES_PATH = path.join(SCRIPT_DIR, "site-recipes.json");
 
 const MAX_MARKDOWN = 300_000; // hard cap so a pathological page can't bloat the corpus
 const THIN_TEXT = 200; // below this many chars of extracted text, warn (likely a failed render)
+const STATIC_TEXT_MIN = 1500; // raw-HTML visible-text length above which the page is already rendered (static)
+const PREFLIGHT_UA = "Mozilla/5.0 (compatible; risoluto-researcher/1.0; +https://github.com/risolutohq)";
 
 const BASE_JUNK =
   "script,style,noscript,svg,iframe,nav,header,footer,aside,form,button,template," +
@@ -75,6 +78,7 @@ export function buildExtractorJS(contentSelector, removeSelectors, keepSelectors
   Array.prototype.forEach.call(clone.querySelectorAll("a[href]"), function (a) { a.setAttribute("href", a.href); });
   Array.prototype.forEach.call(clone.querySelectorAll("img[src]"), function (i) { i.setAttribute("src", i.src); });
   var td = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-", hr: "---", emDelimiter: "_" });
+  if (typeof turndownPluginGfm !== "undefined") { td.use(turndownPluginGfm.gfm); }
   var markdown = td.turndown(clone.innerHTML).trim();
   var links = Array.prototype.slice.call(clone.querySelectorAll("a[href]"))
     .map(function (a) { return a.href; })
@@ -154,6 +158,115 @@ export function stripLeadingTitle(markdown) {
   return md;
 }
 
+/**
+ * Normalise Turndown's raw markdown into something a human actually wants to read. A
+ * heavily-designed landing page flattens its visual chrome — hero stat counters, step-cards,
+ * the cells of a CSS-grid "table" that was never a real `<table>` — into one-token-per-line
+ * soup, and Turndown backslash-escapes punctuation that needed no escaping. This deterministic
+ * pass repairs the common damage without touching prose. It is fence-aware (code blocks pass
+ * through verbatim) and table-aware (pipe rows are structural, so they are never swept into a
+ * join), so it composes safely with the GFM table rule.
+ *
+ * The passes:
+ *   1. unescape Turndown's backslash escapes (`\_` `\*` `\[` → `_` `*` `[`) + trim hard-break ws
+ *   2. merge a heading with its immediately-following whole-line italic subtitle, and drop
+ *      standalone decorative lines (a lone emoji, an "01 Eyebrow" section label, a bare stat or
+ *      year token left behind when its animated counter was pruned)
+ *   3. collapse runs of >=2 short orphan lines into one " · "-joined row, bridging the single
+ *      blank lines a card/grid layout leaves between its cells — a real sentence (one ending in
+ *      `.` `:` `!` `?`) is never swept in, so prose paragraphs are safe
+ *   4. collapse 3+ blank lines to one
+ * @param {string} markdown
+ * @returns {string}
+ */
+export function normalizeMarkdown(markdown) {
+  const SHORT_MAX = 46;
+  const EMOJI = /\p{Extended_Pictographic}/u;
+  const STRUCT = /^\s*(#{1,6}\s|>|\||[-*+]\s|\d+\.\s|```|!?\[)/;
+  const isFence = (line) => /^\s*```/.test(line);
+  const unescape = (line) => line.replace(/\\([_*[\]()#+\-.!`~>{}])/g, "$1");
+  const isDecorative = (t) => {
+    if (!t) return false;
+    if (/^[\p{Extended_Pictographic}\s★☆●○◆▪•]+$/u.test(t)) return true; // lone symbol(s)
+    if (/^\d{2}\s+[A-Z][a-z]/.test(t) && t.length <= 40) return true; // "01 Attack strategy"
+    if (/^\d+[+%]?$/.test(t)) return true; // bare counter "6" "500+"
+    return /^\d+(\.\d+)?[KMB]\+?$/.test(t); // "50M+" "38k"
+  };
+  const isShortOrphan = (t) => {
+    if (!t || t.length > SHORT_MAX) return false;
+    if (STRUCT.test(t)) return false;
+    return !(/[.:!?]$/.test(t) && !EMOJI.test(t)); // a real sentence ending is not an orphan
+  };
+
+  const raw = String(markdown || "").split(/\r?\n/);
+
+  // Pass 1.
+  let inFence = false;
+  const p1 = raw.map((line) => {
+    if (isFence(line)) inFence = !inFence;
+    return inFence ? line : unescape(line).replace(/[ \t]+$/g, "");
+  });
+
+  // Pass 2.
+  const p2 = [];
+  inFence = false;
+  for (let i = 0; i < p1.length; i++) {
+    const line = p1[i];
+    if (isFence(line)) inFence = !inFence;
+    if (inFence) {
+      p2.push(line);
+      continue;
+    }
+    if (/^\|[\s|]*$/.test(line.trim())) continue; // empty/pure-pipe row — a colspan-cell artifact
+    const h = /^(#{2,6})\s+(.+)$/.exec(line);
+    const sub = h && /^_(.+)_$/.exec((p1[i + 1] || "").trim());
+    if (sub) {
+      p2.push(`${h[1]} ${h[2].trim()} — ${sub[1].trim()}`);
+      i++;
+      continue;
+    }
+    const t = line.trim();
+    const prevBlank = (p2[p2.length - 1] ?? "") === "";
+    const nextBlank = (p1[i + 1] ?? "").trim() === "";
+    if (prevBlank && nextBlank && isDecorative(t)) continue;
+    p2.push(line);
+  }
+
+  // Pass 3.
+  const p3 = [];
+  inFence = false;
+  for (let i = 0; i < p2.length; i++) {
+    const line = p2[i];
+    if (isFence(line)) {
+      inFence = !inFence;
+      p3.push(line);
+      continue;
+    }
+    if (!inFence && isShortOrphan(line.trim())) {
+      const run = [line.trim()];
+      let j = i + 1;
+      let end = j; // index past the last consumed token (excludes a trailing bridge blank)
+      while (j < p2.length) {
+        if (isShortOrphan((p2[j] || "").trim())) {
+          run.push(p2[j].trim());
+          end = ++j;
+        } else if ((p2[j] ?? "").trim() === "" && isShortOrphan((p2[j + 1] || "").trim())) {
+          j += 1; // bridge a single blank line between two card/grid cells
+        } else break;
+      }
+      if (run.length >= 2) {
+        p3.push(run.join(" · "));
+        i = end - 1;
+        continue;
+      }
+    }
+    p3.push(line);
+  }
+
+  // Pass 4.
+  return p3.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").trimEnd();
+}
+
 /** Cross-site links (different host than the page) — internal nav is not a discovery target. */
 export function externalLinks(links, pageUrl) {
   const pageHost = (/https?:\/\/(?:www\.)?([^/]+)/.exec(pageUrl || "") || [])[1] || "";
@@ -169,9 +282,75 @@ export function externalLinks(links, pageUrl) {
   return out;
 }
 
-/** Compose the source body: provenance line, the converted markdown, references, why-it-matters. */
+/** Approximate visible-text length of raw HTML: drop script/style/svg, strip tags, collapse ws. */
+export function approxTextLen(html) {
+  return String(html || "")
+    .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+
+/**
+ * Classify a URL's GitHub-Pages backing from its host + the response `server` header. A
+ * `<owner>.github.io/<repo>` host maps deterministically to `owner/repo` (provenance for free); a
+ * custom domain served by Pages (`server: GitHub.com`) is repo-backed but the repo is not
+ * derivable from headers alone, so `repo` is "" and the caller records it as a custom domain.
+ * @param {string} url    the post-redirect canonical URL
+ * @param {string} server the `server` response header
+ * @returns {{ isGithubPages: boolean, repo: string }}
+ */
+export function githubPagesInfo(url, server) {
+  const host = (/https?:\/\/(?:www\.)?([^/]+)/.exec(url || "") || [])[1] || "";
+  const ghIo = /^([a-z0-9-]+)\.github\.io$/i.exec(host);
+  if (ghIo) {
+    const owner = ghIo[1].toLowerCase();
+    const seg = (/https?:\/\/[^/]+\/([^/?#]+)/.exec(url || "") || [])[1] || "";
+    return { isGithubPages: true, repo: seg ? `${owner}/${seg}` : `${owner}/${owner}.github.io` };
+  }
+  return { isGithubPages: /github\.com/i.test(server || ""), repo: "" };
+}
+
+/**
+ * Cheap pre-flight before driving a browser: one HTTP GET (Node fetch, redirects followed) to
+ * learn three things the renderer can't tell us up front. (1) The canonical URL — a 301 alias
+ * (web-scraping-guide.com is itself a GitHub-Pages site) is resolved so we capture the real page
+ * under its real identity, not the alias. (2) Static-ness — if the prose is already in the raw
+ * HTML, JS rendering is overkill, so the settle wait is cut (the render still runs, just faster;
+ * a true no-browser path is documented in references/webpage-capture.md §8). (3) GitHub-Pages /
+ * repo backing — provenance, because the authoritative source may be a repo worth a `repo`
+ * capture. Best-effort: any network error degrades to "render the original URL, default wait".
+ * @param {string} url
+ * @returns {Promise<{ ok: boolean, canonicalUrl: string, server: string, isGithubPages: boolean, repo: string, isStatic: boolean, textLen: number, error: string }>}
+ */
+export async function preflight(url) {
+  try {
+    const res = await fetch(url, { redirect: "follow", headers: { "user-agent": PREFLIGHT_UA } });
+    const html = await res.text();
+    const canonicalUrl = res.url || url;
+    const server = res.headers.get("server") || "";
+    const textLen = approxTextLen(html);
+    const gh = githubPagesInfo(canonicalUrl, server);
+    return { ok: res.ok, canonicalUrl, server, isStatic: textLen >= STATIC_TEXT_MIN, textLen, ...gh, error: "" };
+  } catch (error) {
+    return { ok: false, canonicalUrl: url, server: "", isGithubPages: false, repo: "", isStatic: false, textLen: 0, error: error.message };
+  }
+}
+
+/** Provenance one-liner for the body header when the page is GitHub-Pages/repo-backed. */
+export function hostingNote(pre) {
+  if (!pre?.isGithubPages) return "";
+  const kind = `GitHub Pages${pre.isStatic ? " (static)" : ""}`;
+  return pre.repo
+    ? `Hosting: ${kind} · source repo: ${pre.repo} (capture the canonical source with \`--source-type repo\`)`
+    : `Hosting: ${kind} · custom domain — source repo not derivable from headers`;
+}
+
+/** Compose the source body: provenance line(s), the converted markdown, references, why-it-matters. */
 export function composeBody(meta, markdown, refs) {
-  const lines = [`> Web capture from ${meta.host}${meta.byline ? ` · by ${meta.byline}` : ""}`, ""];
+  const lines = [`> Web capture from ${meta.host}${meta.byline ? ` · by ${meta.byline}` : ""}`];
+  if (meta.hosting) lines.push(`> ${meta.hosting}`);
+  lines.push("");
   lines.push(stripLeadingTitle(markdown).trim() || "_(no extractable content)_");
 
   if (refs.length) {
@@ -267,6 +446,7 @@ function checkPreconditions(args) {
   if (!args.url && !args.fromJson) fail("usage: webpage-capture.mjs --url <url>");
   if (!args.fromJson) {
     if (!existsSync(TURNDOWN_PATH)) fail(`vendored Turndown missing at ${TURNDOWN_PATH}`);
+    if (!existsSync(GFM_PATH)) fail(`vendored turndown-plugin-gfm missing at ${GFM_PATH}`);
     try {
       execFileSync("browser-harness", ["--version"], { stdio: "ignore" });
     } catch {
@@ -302,6 +482,8 @@ function buildDriver(url, recipe, wait) {
     wait: Number.isFinite(wait) ? wait : 1.5,
     waitForSelector: recipe.waitForSelector || "",
     clickSelectors: recipe.clickSelectors || [],
+    expandAll: !!recipe.expandAll,
+    expandSelectors: recipe.expandSelectors || [],
     scrollToBottom: !!recipe.scrollToBottom,
   };
   const extractor = buildExtractorJS(recipe.contentSelector, recipe.removeSelectors, recipe.keepSelectors);
@@ -309,6 +491,7 @@ function buildDriver(url, recipe, wait) {
 URL = ${JSON.stringify(url)}
 OPTS = json.loads(${JSON.stringify(JSON.stringify(opts))})
 TD = open(${JSON.stringify(TURNDOWN_PATH)}).read()
+GFM = open(${JSON.stringify(GFM_PATH)}).read()
 EXT = ${JSON.stringify(extractor)}
 new_tab(URL)
 wait_for_load(20)
@@ -316,6 +499,17 @@ for sel in OPTS["clickSelectors"]:
     try:
         js("(function(){var e=document.querySelector(" + json.dumps(sel) + ");if(e){e.click();return true}return false})()")
         time.sleep(0.5)
+    except Exception:
+        pass
+if OPTS["expandAll"]:
+    try:
+        js("(function(){var d=document.querySelectorAll('details');for(var i=0;i<d.length;i++){d[i].open=true}return d.length})()")
+    except Exception:
+        pass
+for sel in OPTS["expandSelectors"]:
+    try:
+        js("(function(){var n=document.querySelectorAll(" + json.dumps(sel) + ");for(var i=0;i<n.length;i++){try{n[i].click()}catch(e){}}return n.length})()")
+        time.sleep(0.3)
     except Exception:
         pass
 if OPTS["waitForSelector"]:
@@ -331,6 +525,7 @@ if OPTS["scrollToBottom"]:
         pass
 time.sleep(OPTS["wait"])
 js(TD)
+js("(function(){" + GFM + ";globalThis.turndownPluginGfm=turndownPluginGfm;})()")
 out = js(EXT)
 info = page_info()
 try:
@@ -393,13 +588,17 @@ function loadPage(args, recipe, wait) {
   return parseBHResult(stdout);
 }
 
-function writeSource(payload, slugs, args) {
+function writeSource(payload, slugs, args, pre) {
   const data = payload.data || {};
   const url = payload.finalUrl || args.url;
   const host = (/https?:\/\/(?:www\.)?([^/]+)/.exec(url) || [])[1] || slugs.target;
   const refs = externalLinks(data.links, url);
-  const markdown = String(data.markdown || "").slice(0, MAX_MARKDOWN);
-  const body = composeBody({ host, byline: data.byline }, markdown, refs);
+  if (pre?.repo) {
+    const repoUrl = `https://github.com/${pre.repo}`; // the canonical source — a follow-on `repo` capture
+    if (!refs.some((r) => r.toLowerCase() === repoUrl.toLowerCase())) refs.unshift(repoUrl);
+  }
+  const markdown = normalizeMarkdown(String(data.markdown || "")).slice(0, MAX_MARKDOWN);
+  const body = composeBody({ host, byline: data.byline, hosting: hostingNote(pre) }, markdown, refs);
 
   const bodyFile = path.join(tmpdir(), `webpage-${slugs.source}.md`);
   writeFileSync(bodyFile, body);
@@ -452,12 +651,30 @@ function writeDiscoveryQueue(refs, targetSlug, dryRun) {
   return rows.length;
 }
 
-function main() {
+/** Report what the pre-flight learned: canonical redirect, static-ness, GitHub-Pages/repo backing. */
+function reportPreflight(pre, requestedUrl) {
+  if (!pre) return;
+  if (pre.error) {
+    console.error(`webpage-capture: preflight skipped (${pre.error}) — rendering the requested URL`);
+    return;
+  }
+  const parts = [pre.isStatic ? `static (${pre.textLen} chars raw text — JS render not needed)` : `dynamic (${pre.textLen} chars raw text)`];
+  if (pre.canonicalUrl !== requestedUrl) parts.push(`canonical ${pre.canonicalUrl}`);
+  if (pre.isGithubPages) parts.push(pre.repo ? `GitHub Pages → source repo ${pre.repo}` : "GitHub Pages (custom domain)");
+  console.error(`webpage-capture: preflight — ${parts.join(", ")}`);
+}
+
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   checkPreconditions(args);
 
   const recipe = args.fromJson ? {} : loadRecipe(args.url);
-  const wait = Number.isFinite(args.wait) ? args.wait : (recipe.wait ?? 1.5);
+  const pre = args.fromJson ? null : await preflight(args.url);
+  reportPreflight(pre, args.url);
+  if (pre?.ok && pre.canonicalUrl !== args.url) args.url = pre.canonicalUrl; // capture the real page, not a 301 alias
+
+  // A static page needs no settle for JS; an explicit --wait or a recipe wait still wins.
+  const wait = Number.isFinite(args.wait) ? args.wait : (recipe.wait ?? (pre?.isStatic ? 0.4 : 1.5));
   const payload = loadPage(args, recipe, wait);
   if (!payload?.data?.ok) fail(`extraction failed for ${args.url} — page returned no content`);
 
@@ -472,7 +689,7 @@ function main() {
     fail(`already captured: ${sourcePath} (use --force to overwrite)`);
   }
 
-  const { refs, textLen } = writeSource(payload, slugs, args);
+  const { refs, textLen } = writeSource(payload, slugs, args, pre);
   const discoveryRows = writeDiscoveryQueue(refs, slugs.target, args.dryRun);
 
   const recipeNote = Object.keys(recipe).length ? " [recipe applied]" : "";
@@ -486,5 +703,5 @@ function main() {
 }
 
 if (isMainEntry(import.meta.url)) {
-  main();
+  main().catch((error) => fail(error?.message || String(error)));
 }

@@ -8,10 +8,12 @@
       "keepSelectors": [
         "base-prune tags to spare when the site puts content in them, e.g. button for accordion guides"
       ],
-      "clickSelectors": ["CSS selectors clicked before extraction, e.g. #accept-cookies"],
+      "clickSelectors": ["CSS selectors — the FIRST match of each is clicked before extraction, e.g. #accept-cookies (cookie/consent walls)"],
+      "expandAll": "true to force every <details> element open before extracting (reveals native click-to-expand content)",
+      "expandSelectors": ["CSS selectors — ALL matches of each are clicked before extraction, e.g. .show-more (expand-all buttons / ARIA accordions)"],
       "waitForSelector": "CSS selector to wait for before extracting (late SPA render)",
       "scrollToBottom": "true to scroll to the page bottom before extracting (lazy-load)",
-      "wait": "settle seconds after load (number) — overrides the 1.5s default"
+      "wait": "settle seconds after load (number) — overrides the static/1.5s default"
     }
   },
   "recipes": {
