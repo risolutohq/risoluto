@@ -89,7 +89,7 @@ export async function composeLiveDispatch(input: ComposeLiveDispatchInput): Prom
     modelForProfile: () => modelFromConfig(config),
     publishDraftPr: async () => {
       liveEnv[LIVE_GITHUB_TOKEN_ENV] = await mintGithubInstallationToken(env);
-      return executeGitPostRun(gitManager, workspace, prepIssue, repoMatch, undefined, true);
+      return executeGitPostRun(gitManager, workspace, prepIssue, repoMatch, true);
     },
     dispose: () => removeWorktree(gitManager, workspace, logger),
   };
