@@ -2,17 +2,17 @@ dist/
 node_modules/
 coverage/
 
-# Obsidian Templater templates use EJS-style <%* ... %> tags that prettier mangles.
+# Obsidian Templater templates use EJS-style <%* ... %> tags that oxfmt mangles.
 research/templates/
 skills/risoluto-vault/assets/templates/
 
-# Generated whole-project review artifact. Prettier is non-idempotent on its underscore-heavy
+# Generated whole-project review artifact. oxfmt is non-idempotent on its underscore-heavy
 # inline text (e.g. RISOLUTO_STATUS), oscillating between _ and * emphasis, so it can never
 # converge under --check; leave it as authored.
 CODE-REVIEW-FINDINGS.md
 
 # PRD docs mirror their Linear project — the prd-drift pre-push check is their source of truth.
-# Prettier reformatting would diverge from the Linear content and fail that check, so leave PRDs
+# oxfmt reformatting would diverge from the Linear content and fail that check, so leave PRDs
 # formatted as authored/synced.
 docs/prds/
 

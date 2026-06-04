@@ -12,8 +12,6 @@ skills/
 # Config & docs (keep tsconfig.json — needed by Docker build)
 *.md
 !WORKFLOW.docker.md
-.eslintrc*
-.prettierrc*
 .oxlintrc*
 .oxfmtrc*
 .jscpd.json

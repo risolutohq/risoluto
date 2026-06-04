@@ -137,7 +137,7 @@ export function setStatus(model, slug, status, link = null) {
   return setCell(model, slug, "Status", value);
 }
 
-/** Render a GFM table with prettier-compatible column alignment (padded to max width). */
+/** Render a GFM table with oxfmt-compatible column alignment (padded to max width). */
 function renderTable(rows) {
   const data = rows.length > 0 ? rows.map((r) => r.cells) : [ROADMAP_HEADERS.map(() => "")];
   const widths = ROADMAP_HEADERS.map((h, i) => Math.max(h.length, ...data.map((cells) => (cells[i] ?? "").length), 3));

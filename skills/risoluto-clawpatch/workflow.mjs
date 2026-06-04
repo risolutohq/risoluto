@@ -85,7 +85,7 @@ const TRUST_BOUNDARIES = [
 const FP_GUARDS = `Repo-specific FALSE-POSITIVE guards (this repo historically runs 34-50% FP - respect them):
 - Express 5.2.1: async route-handler promise rejections ARE framework-handled. Do NOT flag "unhandled rejection in an async Express handler".
 - "No tests just for coverage" is a hard repo rule. A test-gap is valid ONLY if it leaves a real, currently-unprotected behavior with a falsifiable failure mode - never coverage padding. If a test would only pad coverage, drop the finding and set suggestedRegressionTest to null.
-- type-coverage >= 95% and ESLint complexity <= 15 are already gate-enforced. Do NOT raise findings about missing types or high cyclomatic complexity that the gate already governs.
+- type-coverage >= 95% and OXLint complexity <= 15 are already gate-enforced. Do NOT raise findings about missing types or high cyclomatic complexity that the gate already governs.
 - issueId / issue_id is a LEGITIMATE tracker coordinate, not a bug. Only flag it where a WorkflowRun id is semantically required and a tracker id is wrongly substituted.
 - Known deferred-as-UNSAFE (do NOT re-raise as actionable; if seen, severity low + note "known-deferred"): (a) src/workflow-run/intake-core.ts "write-before-claim" reorder - the claim IS the dedup gate, reordering breaks concurrent-duplicate idempotency; (b) src/workflow-run/drive-done-handoff.ts making budget elapsedMs/costUsd nullable - breaks the persisted handoff.v1 on-disk contract.`;
 
