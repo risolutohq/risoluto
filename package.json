@@ -29,7 +29,6 @@
     "test:integration:live": "vitest run --config vitest.live.config.ts",
     "live:preflight": "tsx scripts/live-preflight.ts",
     "validate:research": "tsx scripts/validate-research.ts",
-    "prd:drift-check": "tsx scripts/prd-drift-check.ts",
     "prd:reconcile": "tsx scripts/prd-reconcile.ts",
     "slug:check": "node scripts/slug-consistency-check.mjs",
     "test:all": "pnpm test && pnpm run test:integration",

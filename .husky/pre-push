@@ -31,10 +31,8 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 done < "$refs_file"
 
-# ── PRD drift check (unconditional — not affected by SKIP_HOOKS) ────
+# ── Slug consistency check (unconditional — not affected by SKIP_HOOKS) ────
 if [ "$all_deletes" = false ]; then
-  echo "📋 Checking PRD drift..."
-  pnpm run prd:drift-check < "$refs_file"
   echo "🔑 Checking slug consistency..."
   pnpm run slug:check
 fi

@@ -9,15 +9,13 @@ Linear has two relevant Project fields:
 
 ## Editing a PRD
 
-Open a PR against `docs/prds/<slug>.md`. The pre-push drift hook and the `prd-drift` GitHub Action will reject pushes where the Linear Project content body has been edited outside this git-canonical path.
+Git stays the canonical source: edit `docs/prds/<slug>.md` and mirror it to Linear with `/risoluto-to-prd <slug>`. Keeping the Linear Project content body in sync is a **convention, not an enforced gate** — the former pre-push drift hook and `prd-drift` GitHub Action were removed, so the Linear Project may be edited directly when that is more convenient.
 
-Do **not** edit the Linear Project Description body in the Linear UI. The drift hook is intentional friction — treat Linear content as generated from git. Editing the short overview is okay only when it remains a summary, not the PRD body.
+## Reconciling git ↔ Linear
 
-## Resolving drift
+When a PRD and its Linear Project have diverged and you want them back in sync:
 
-When the pre-push hook blocks because a PRD and its Linear Project have diverged:
-
-- **Git is right (reject the Linear edit):** re-run `/risoluto-to-prd <slug>`. The skill is idempotent and overwrites the Linear Project content from the current PRD file.
+- **Git is right (overwrite Linear):** re-run `/risoluto-to-prd <slug>`. The skill is idempotent and overwrites the Linear Project content from the current PRD file.
 - **Linear is right (adopt the UI edit):** run `pnpm prd:reconcile <slug>`. This pulls the Linear content body back into `docs/prds/<slug>.md`, creates a branch, and prints a `gh pr create` command. Merge the PR to accept.
 
 ## Frontmatter
