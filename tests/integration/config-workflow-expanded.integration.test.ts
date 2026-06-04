@@ -230,6 +230,21 @@ describe("config API — PUT overlay validation", () => {
     const overlay = body.overlay as Record<string, unknown>;
     expect((overlay.polling as Record<string, unknown>)?.interval_ms).toBe(5000);
   });
+
+  // A raw JSON string is used so the literal __proto__ key survives as an own
+  // property (an object literal would set the prototype instead). Both the dotted
+  // and non-dotted branch of normalizeOverlayPatch must reject it (CodeQL #37).
+  it("rejects a __proto__ key in a patch with 400 and does not pollute Object.prototype", async () => {
+    const res = await fetch(`${ctx.baseUrl}/api/v1/config/overlay`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: '{"patch":{"__proto__":{"polluted":true}}}',
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, { code: string }>;
+    expect(body.error.code).toBe("invalid_overlay_payload");
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

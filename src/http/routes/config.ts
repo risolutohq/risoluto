@@ -46,12 +46,10 @@ function normalizeOverlayPatch(patch: Record<string, unknown>): Record<string, u
   for (const [key, rawValue] of Object.entries(patch)) {
     const value = isRecord(rawValue) ? normalizeOverlayPatch(rawValue) : structuredClone(rawValue);
 
-    if (!key.includes(".")) {
-      normalized[key] = value;
-      continue;
-    }
-
-    const segments = normalizePathExpression(key);
+    // Both branches route through setOverlayPathValue so a dangerous key (__proto__,
+    // constructor, prototype) is rejected whether or not it is dotted — a literal
+    // non-dotted key is a single-segment path (NIN: config overlay proto-pollution guard).
+    const segments = key.includes(".") ? normalizePathExpression(key) : [key];
     if (segments.length === 0) {
       continue;
     }
@@ -109,7 +107,19 @@ export function registerConfigApi(app: Express, deps: ConfigApiDeps): void {
         return;
       }
 
-      const patch = isRecord(body.patch) ? normalizeOverlayPatch(body.patch) : body;
+      let patch: Record<string, unknown>;
+      try {
+        patch = isRecord(body.patch) ? normalizeOverlayPatch(body.patch) : body;
+      } catch {
+        // normalizeOverlayPatch throws on a dangerous key (__proto__/constructor/prototype).
+        response.status(400).json({
+          error: {
+            code: "invalid_overlay_payload",
+            message: "overlay patch contains a disallowed key",
+          },
+        });
+        return;
+      }
       const updated = await deps.configOverlayStore.applyPatch(patch);
       response.json({
         updated,
