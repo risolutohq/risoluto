@@ -8,6 +8,7 @@
 import type { ServiceConfig } from "../core/types.js";
 import type { WorkflowRunStatus } from "../workflow-run/contracts.js";
 import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
+import { RUN_STATUS_VALUES } from "../workflow-run/run-status.js";
 import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../state/topology.js";
 import { asBoolean, asNumber, asNumberMap, asRecord, asString, asLooseStringArray, asStringArray } from "./coercion.js";
 import {
@@ -105,15 +106,7 @@ export function deriveTrackerConfig(
   };
 }
 
-const WORKFLOW_RUN_STATUS_KEYS = new Set<WorkflowRunStatus>([
-  "accepted",
-  "queued",
-  "running",
-  "waiting_for_operator",
-  "blocked",
-  "done",
-  "cancelled",
-]);
+const WORKFLOW_RUN_STATUS_KEYS: ReadonlySet<WorkflowRunStatus> = new Set(RUN_STATUS_VALUES);
 
 function buildStatusMappingField(raw: unknown): { statusMapping?: WorkflowRunStatusMapping } {
   const record = asRecord(raw);

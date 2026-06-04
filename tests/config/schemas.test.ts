@@ -54,6 +54,21 @@ describe("trackerConfigSchema", () => {
     expect(result.owner).toBe("my-org");
     expect(result.repo).toBe("my-repo");
   });
+
+  it("rejects statusMapping with a non-canonical key", () => {
+    expect(() =>
+      trackerConfigSchema.parse({
+        statusMapping: { in_progress: "In Progress" },
+      }),
+    ).toThrow();
+  });
+
+  it("accepts statusMapping with all canonical keys", () => {
+    const result = trackerConfigSchema.parse({
+      statusMapping: { running: "In Progress", done: "Done", cancelled: "Cancelled" },
+    });
+    expect(result.statusMapping).toEqual({ running: "In Progress", done: "Done", cancelled: "Cancelled" });
+  });
 });
 
 describe("workspaceConfigSchema", () => {

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -142,5 +142,25 @@ describe("completeAutoMergeForRun (NIN-272)", () => {
 
     expect(result).toEqual({ status: "merge_requested", approvalNonce: "nonce-abc" });
     expect(requestAutoMerge).toHaveBeenCalledWith({ ...pullRequest, mergeMethod: "squash" });
+  });
+
+  it("resolves to blocked (does not throw) when a present artifact has malformed data that fails schema validation", async () => {
+    // A present-but-corrupt artifact (valid JSON, but data fails its contract). The validating writer
+    // rejects garbage, so the only way this exists on disk is external corruption — written directly here.
+    // Previously parseWorkflowRunArtifact threw out of the read path; now it must resolve to blocked.
+    const artifactsDir = join(dataDir, "archives", "workflow-runs", workflowRunId, "artifacts");
+    await mkdir(artifactsDir, { recursive: true });
+    await writeFile(
+      join(artifactsDir, "publish_result.json"),
+      `${JSON.stringify({ contractId: "publish_result.v1", data: { garbage: true } }, null, 2)}\n`,
+      "utf8",
+    );
+    const requestAutoMerge = vi.fn(async () => {});
+
+    await expect(completeAutoMergeForRun({ dataDir, workflowRunId, pullRequest, requestAutoMerge })).resolves.toEqual({
+      status: "blocked",
+      reason: "auto_merge_publish_not_ready",
+    });
+    expect(requestAutoMerge).not.toHaveBeenCalled();
   });
 });

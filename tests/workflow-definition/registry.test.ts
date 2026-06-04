@@ -343,6 +343,68 @@ actions: []
     ).rejects.toThrow(/role dependency cycle detected/);
   });
 
+  it("rejects council verifierMode with empty councillors", async () => {
+    const workflowDir = await createWorkflowDir();
+    await writeWorkflowDefinition(
+      workflowDir,
+      "empty-council.yaml",
+      `
+version: 1
+id: empty-council
+defaults:
+  modelProfile: balanced
+  validationProfile: node-pnpm-standard
+states:
+  - id: verify
+    roles:
+      - id: verifier
+        consumes: [review.v1]
+        produces: [verification.v1]
+        dependsOn: []
+        verifierMode: council
+        councillors: []
+    gates: []
+    hooks: []
+actions: []
+`.trimStart(),
+    );
+
+    await expect(
+      loadWorkflowDefinitionRegistry({ workflowDir, globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS }),
+    ).rejects.toThrow(/requires at least one councillor/);
+  });
+
+  it("rejects workflow-level statusMapping with an invalid (non-canonical) key", async () => {
+    const workflowDir = await createWorkflowDir();
+    await writeWorkflowDefinition(
+      workflowDir,
+      "bad-status-key.yaml",
+      `
+version: 1
+id: bad-status-key
+defaults:
+  modelProfile: balanced
+  validationProfile: node-pnpm-standard
+states:
+  - id: plan
+    roles:
+      - id: planner
+        consumes: [intent.v1]
+        produces: [plan.v1]
+        dependsOn: []
+    gates: []
+    hooks: []
+actions: []
+statusMapping:
+  in_progress: "In Progress"
+`.trimStart(),
+    );
+
+    await expect(
+      loadWorkflowDefinitionRegistry({ workflowDir, globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS }),
+    ).rejects.toThrow(/statusMapping/);
+  });
+
   it("rejects definitions without a version field", async () => {
     const workflowDir = await createWorkflowDir();
     await writeWorkflowDefinition(

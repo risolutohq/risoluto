@@ -7,6 +7,7 @@ import { z, ZodError } from "zod";
 
 import { isWorkflowRunArtifactContractId } from "../workflow-run/artifact-contracts.js";
 import type { WorkflowRunResolvedDefinitionConfig } from "../workflow-run/contracts.js";
+import { RUN_STATUS_VALUES } from "../workflow-run/run-status.js";
 import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 import type { CouncilVerifier } from "../workflow-run/verifier.js";
 
@@ -82,6 +83,8 @@ const BUILTIN_ACTION_IDS = new Set([
 const BUILTIN_MODEL_PROFILE_IDS = new Set(["balanced", "fast", "strong", "verifier"]);
 const BUILTIN_VALIDATION_PROFILE_IDS = new Set(["node-pnpm-standard", "offline-smoke"]);
 
+const workflowRunStatusKeySchema = z.enum(RUN_STATUS_VALUES);
+
 const councillorSchema = z
   .object({
     id: z.string().min(1),
@@ -102,7 +105,16 @@ const roleSchema = z
     verifierMode: z.enum(["single", "council"]).optional(),
     councillors: z.array(councillorSchema).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.verifierMode === "council" && (val.councillors == null || val.councillors.length === 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["councillors"],
+        message: `verifierMode "council" requires at least one councillor`,
+      });
+    }
+  });
 
 const workflowDefinitionSchema = z
   .object({
@@ -127,7 +139,7 @@ const workflowDefinitionSchema = z
     actions: z.array(z.string().min(1)),
     // Optional workflow-level status mapping override (NIN-270). Keys are canonical Run Status values;
     // present keys beat the workspace-level tracker.statusMapping during projection.
-    statusMapping: z.record(z.string(), z.string()).optional(),
+    statusMapping: z.partialRecord(workflowRunStatusKeySchema, z.string()).optional(),
   })
   .strict();
 

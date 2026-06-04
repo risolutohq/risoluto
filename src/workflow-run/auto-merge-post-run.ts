@@ -77,9 +77,8 @@ export async function completeAutoMergeForRun(input: CompleteAutoMergeForRunInpu
 }
 
 /**
- * Read one archived artifact back and parse it through its contract. A missing artifact resolves to null
- * (the gate then blocks); a present-but-invalid artifact propagates a contract error rather than silently
- * passing the gate.
+ * Read one archived artifact back and parse it through its contract. A missing or malformed artifact
+ * resolves to null (the gate then blocks), which is the safe default.
  */
 async function readRunArtifact<T>(
   archive: WorkflowRunArchive,
@@ -87,14 +86,16 @@ async function readRunArtifact<T>(
   artifactId: string,
   contractId: string,
 ): Promise<T | null> {
-  let data: unknown;
   try {
     const payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId });
-    data = payload.data;
+    return parseWorkflowRunArtifact({
+      contractId,
+      data: payload.data,
+      producer: { type: "action", id: "auto-merge-completion" },
+    }) as T;
   } catch {
     return null;
   }
-  return parseWorkflowRunArtifact({ contractId, data, producer: { type: "action", id: "auto-merge-completion" } }) as T;
 }
 
 function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveLocation {

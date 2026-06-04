@@ -3,7 +3,10 @@
  */
 
 import { z } from "zod";
+import { RUN_STATUS_VALUES } from "../../workflow-run/run-status.js";
 import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../../state/topology.js";
+
+const workflowRunStatusKeySchema = z.enum(RUN_STATUS_VALUES);
 
 export const trackerConfigSchema = z.object({
   kind: z.string().default("linear"),
@@ -17,5 +20,5 @@ export const trackerConfigSchema = z.object({
   // Workspace-level canonical Run Status → external board state mapping (NIN-270). Keys are canonical
   // Run Status values; an unknown/missing key surfaces a clear projection error at mirror time rather
   // than silently choosing a state.
-  statusMapping: z.record(z.string(), z.string()).optional(),
+  statusMapping: z.partialRecord(workflowRunStatusKeySchema, z.string()).optional(),
 });

@@ -32,7 +32,7 @@ export interface CreateRetryRunAttemptInput {
   readonly attemptId: string;
 }
 
-const RUN_STATUS_VALUES = [
+export const RUN_STATUS_VALUES = [
   "accepted",
   "queued",
   "running",
