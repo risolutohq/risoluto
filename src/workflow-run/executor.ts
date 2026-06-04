@@ -24,7 +24,17 @@ import {
   stateForRole,
   storeProducedArtifacts,
 } from "./executor-roles.js";
-import { routeSingleVerifierDecision } from "./verifier.js";
+import {
+  buildSingleVerifierInput,
+  routeSingleVerifierDecision,
+  runCouncilVerifier,
+  type CouncilSynthesizerInput,
+  type CouncilSynthesizerResult,
+  type CouncilVerifier,
+  type CouncilVerifierResult,
+  type RunCouncilVerifierResult,
+  type SingleVerifierInput,
+} from "./verifier.js";
 
 export { WorkflowExecutorError } from "./executor-errors.js";
 
@@ -35,6 +45,18 @@ export interface ExecuteWorkflowDefinitionInput {
   readonly evaluateGate?: (input: WorkflowGateEvaluationInput) => Promise<WorkflowGateEvaluationResult>;
   readonly runHook?: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;
   readonly runRole: (input: WorkflowRoleExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
+  /**
+   * Council verifier dispatch (NIN-271). When the verifier role is `verifierMode: "council"` and both
+   * callbacks are present, the executor routes that role through `runCouncilVerifier` instead of `runRole`:
+   * `runCouncillor` runs one councillor session, `synthesizeCouncil` reconciles the completed verdicts, and
+   * `councilClock` stamps the council `verification.v1`. Absent these, a council role degrades to single mode.
+   */
+  readonly runCouncillor?: (input: {
+    readonly input: SingleVerifierInput;
+    readonly councillor: CouncilVerifier;
+  }) => Promise<CouncilVerifierResult>;
+  readonly synthesizeCouncil?: (input: CouncilSynthesizerInput) => Promise<CouncilSynthesizerResult>;
+  readonly councilClock?: () => string;
   readonly runAction?: (input: WorkflowActionExecutionInput) => Promise<Readonly<Record<string, unknown>>>;
   readonly recordStatus?: (input: WorkflowStatusRecordInput) => Promise<void>;
   readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
@@ -89,7 +111,11 @@ export async function executeWorkflowDefinition(
     if (appendBudgetEvent(state.events, input.budget, role.id, input.workflowRunId)) {
       return finishWorkflowExecution(input, "blocked", state);
     }
-    currentStateId = await runOrderedRole(input, state, role, currentStateId);
+    const roleOutcome = await runOrderedRole(input, state, role, currentStateId);
+    currentStateId = roleOutcome.nextStateId;
+    if (roleOutcome.blocked) {
+      return finishWorkflowExecution(input, "blocked", state);
+    }
     if (role.id === "planner" && plannerBlocked(state.artifacts["plan.v1"])) {
       return finishWorkflowExecution(input, "blocked", state);
     }
@@ -125,23 +151,83 @@ export async function executeWorkflowDefinition(
  * Fire state-entry hooks, assert required inputs, dispatch one role session, and store its produced
  * artifacts. Returns the (possibly new) current state id so the caller can track state transitions.
  */
+interface RoleDispatchOutcome {
+  readonly nextStateId: string | undefined;
+  readonly blocked: boolean;
+}
+
 async function runOrderedRole(
   input: ExecuteWorkflowDefinitionInput,
   state: WorkflowExecutionState,
   role: ResolvedWorkflowRole,
   currentStateId: string | undefined,
-): Promise<string | undefined> {
+): Promise<RoleDispatchOutcome> {
   const nextStateId = await fireHooksForNewState(input, state.artifacts, state.events, role, currentStateId);
   assertRequiredArtifacts(role, state.artifacts, input.definition.roles);
   rememberState(state.statesVisited, role.stateId);
+  const dispatch = await dispatchRoleSession(input, role, state.artifacts);
+  if (dispatch.blocked) {
+    return { nextStateId, blocked: true };
+  }
+  storeProducedArtifacts(state.artifacts, role, dispatch.produced);
+  state.roleExecutions.push(role.id);
+  return { nextStateId, blocked: false };
+}
+
+/**
+ * Run one role session and return its produced artifacts. A council-mode verifier role (NIN-271) routes
+ * through `runCouncilVerifier`, persisting the council `verification.v1` (councillor evidence + synthesizer
+ * decision); when every councillor fails it produces no verdict and the run blocks. All other roles run
+ * via the generic `runRole` session.
+ */
+async function dispatchRoleSession(
+  input: ExecuteWorkflowDefinitionInput,
+  role: ResolvedWorkflowRole,
+  artifacts: Readonly<Record<string, unknown>>,
+): Promise<{ readonly produced: Readonly<Record<string, unknown>>; readonly blocked: boolean }> {
+  if (isCouncilVerifierRole(role) && input.runCouncillor && input.synthesizeCouncil) {
+    const result = await runCouncilVerifierForRole(
+      input,
+      role,
+      artifacts,
+      input.runCouncillor,
+      input.synthesizeCouncil,
+    );
+    return result.status === "completed"
+      ? { produced: { "verification.v1": result.artifact }, blocked: false }
+      : { produced: {}, blocked: true };
+  }
   const produced = await input.runRole({
     workflowRunId: input.workflowRunId,
     role,
-    artifacts: pickArtifacts(state.artifacts, role.consumes),
+    artifacts: pickArtifacts(artifacts, role.consumes),
   });
-  storeProducedArtifacts(state.artifacts, role, produced);
-  state.roleExecutions.push(role.id);
-  return nextStateId;
+  return { produced, blocked: false };
+}
+
+function isCouncilVerifierRole(role: ResolvedWorkflowRole): boolean {
+  return role.verifierMode === "council" && (role.councillors?.length ?? 0) > 0;
+}
+
+async function runCouncilVerifierForRole(
+  input: ExecuteWorkflowDefinitionInput,
+  role: ResolvedWorkflowRole,
+  artifacts: Readonly<Record<string, unknown>>,
+  runCouncillor: NonNullable<ExecuteWorkflowDefinitionInput["runCouncillor"]>,
+  synthesize: NonNullable<ExecuteWorkflowDefinitionInput["synthesizeCouncil"]>,
+): Promise<RunCouncilVerifierResult> {
+  return runCouncilVerifier({
+    workflowRunId: input.workflowRunId,
+    createdAt: (input.councilClock ?? defaultCouncilClock)(),
+    input: buildSingleVerifierInput({ artifacts, evidenceLinks: [] }),
+    councillors: role.councillors ?? [],
+    runCouncillor,
+    synthesize,
+  });
+}
+
+function defaultCouncilClock(): string {
+  return new Date().toISOString();
 }
 
 async function finishWorkflowExecution(
