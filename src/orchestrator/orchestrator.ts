@@ -192,6 +192,13 @@ export class Orchestrator implements OrchestratorPort {
         if (retry.timer) clearTimeout(retry.timer);
       }
       this._state.retryEntries.clear();
+      // Startup recovery may have resumed workers via launchWorker before the failing step. Abort and drop
+      // them so a rolled-back start doesn't leak live workers with active abort controllers running outside
+      // the now-stopped loop, where only a later stop() would ever reap them (NIN-266).
+      for (const entry of this._state.runningEntries.values()) {
+        entry.abortController.abort("startup rollback");
+      }
+      this._state.runningEntries.clear();
       this._state.running = false;
       this.markStateDirty();
       this.deps.observability?.getComponent("orchestrator").setHealth({

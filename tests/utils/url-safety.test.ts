@@ -13,6 +13,10 @@ describe("isBlockedRequestHost", () => {
     "169.254.169.254",
     "::1",
     "fe80::1",
+    // Link-local is fe80::/10, so the whole fe80–febf first-hextet range is blocked, not just fe80::.
+    "fe90::1",
+    "fea0::1",
+    "febf::1",
     "fc00::1",
     // IPv4-mapped / IPv4-compatible IPv6, in the hex form Node's URL parser normalizes to.
     "::ffff:7f00:1", // ::ffff:127.0.0.1
@@ -32,6 +36,8 @@ describe("isBlockedRequestHost", () => {
     "example.com",
     "::ffff:808:808", // ::ffff:8.8.8.8 — a mapped *public* IPv4 stays allowed
     "2606:4700::1111", // public IPv6 is unaffected
+    "fe7f::1", // just below the fe80::/10 link-local range
+    "fec0::1", // just above the range (deprecated site-local, not link-local)
   ])("allows %s", (host) => {
     expect(isBlockedRequestHost(host)).toBe(false);
   });

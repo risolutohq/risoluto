@@ -136,11 +136,13 @@ async function dispatchModalSubmission(
       id: deps.id,
     });
   } catch (error) {
-    // Only an intake failure routes to retry. Marking the durable record applied happens afterwards
-    // and is best-effort, so a markApplied storage error can't re-enter this catch and move a run that
-    // actually started into retry (mirrors WebhookDeliveryWorkflow.transitionApplied/forRetry) (NIN-263).
+    // Intake failed: drop the dedup row so Slack's at-least-once redelivery re-drives intake instead of
+    // being swallowed as a duplicate tombstone. acceptSlackModalWorkflowRun is idempotent on the view id,
+    // so a redelivery can't double-create the run. Discarding runs only on the intake-failure path —
+    // marking the durable record applied happens after a successful intake and is best-effort, so a
+    // markApplied storage error can't re-enter this catch and discard a run that actually started (NIN-263).
     deps.logger.error({ error: String(error) }, "slack modal intake failed");
-    await markSlackModalForRetry(deps, modal.viewId, error);
+    await discardSlackModal(deps, modal.viewId);
     sendError(res, 500, "slack_intake_failed", "Slack modal intake failed");
     return;
   }
@@ -194,15 +196,15 @@ async function markSlackModalApplied(deps: SlackWebhookHandlerDeps, viewId: stri
   }
 }
 
-// A modal recorded before its intake ran is moved to a retryable state on failure so the durable
-// record isn't stranded as a dedupe tombstone that would silently swallow Slack's own retry (NIN-263).
-// Wrapped so a storage failure while marking retry can't escape the handler's catch unanswered.
-async function markSlackModalForRetry(deps: SlackWebhookHandlerDeps, viewId: string, error: unknown): Promise<void> {
+// A modal recorded before its intake ran is dropped from the inbox on failure so the durable record
+// isn't stranded as a dedupe tombstone that would silently swallow Slack's own retry — the row is keyed
+// on the view id, which Slack reuses on redelivery, so leaving it would dedupe the retry away (NIN-263).
+// Wrapped so a storage failure while discarding can't escape the handler's catch unanswered.
+async function discardSlackModal(deps: SlackWebhookHandlerDeps, viewId: string): Promise<void> {
   try {
-    const nextAttemptAt = new Date(Date.now() + 60_000).toISOString();
-    await deps.webhookInbox?.markForRetry?.(slackModalDeliveryId(viewId), String(error), 1, nextAttemptAt);
-  } catch (retryError) {
-    deps.logger.error({ error: String(retryError) }, "failed to mark slack modal for retry");
+    await deps.webhookInbox?.discardVerified?.(slackModalDeliveryId(viewId));
+  } catch (discardError) {
+    deps.logger.error({ error: String(discardError) }, "failed to discard slack modal inbox record");
   }
 }
 

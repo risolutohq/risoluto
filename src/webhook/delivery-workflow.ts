@@ -24,6 +24,8 @@ export interface VerifiedWebhookDeliveryStore {
   markApplied?(deliveryId: string): Promise<void>;
   /** Move a delivery to a durable retryable state when its side effects fail after the ack. */
   markForRetry?(deliveryId: string, error: string, attemptCount: number, nextAttemptAt: string): Promise<void>;
+  /** Drop a durably-recorded delivery so the source's redelivery is reprocessed instead of deduped. */
+  discardVerified?(deliveryId: string): Promise<void>;
 }
 
 /** Backoff before a failed delivery's first retry becomes due. */

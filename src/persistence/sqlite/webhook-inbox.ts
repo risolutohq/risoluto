@@ -75,6 +75,9 @@ export interface WebhookInboxStore {
   /** Move a delivery to the dead-letter queue. */
   markDeadLetter(deliveryId: string, error: string): Promise<void>;
 
+  /** Remove a delivery row so a redelivery is reprocessed instead of treated as a duplicate. */
+  discardVerified(deliveryId: string): Promise<void>;
+
   /** Fetch deliveries due for retry. */
   fetchDueForRetry(): Promise<WebhookDeliveryRecord[]>;
 
@@ -188,6 +191,10 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
       })
       .where(eq(webhookInbox.deliveryId, deliveryId))
       .run();
+  }
+
+  async discardVerified(deliveryId: string): Promise<void> {
+    this.db.delete(webhookInbox).where(eq(webhookInbox.deliveryId, deliveryId)).run();
   }
 
   async fetchDueForRetry(): Promise<WebhookDeliveryRecord[]> {

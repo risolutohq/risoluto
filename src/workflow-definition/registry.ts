@@ -167,7 +167,8 @@ async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinit
 // Open with O_NOFOLLOW so a symlink at the path is rejected (ELOOP), then fstat the *same* handle for the
 // regular-file + size checks and read the bytes through it. Doing the check and the read on one fd closes
 // the TOCTOU window where a regular file validated by lstat is swapped for a symlink before readFile
-// follows it (NIN-265).
+// follows it (NIN-265). O_NOFOLLOW is POSIX-only: where it is undefined (e.g. Windows) the `?? 0` makes
+// the open follow symlinks, which is acceptable because the production runtime is Linux-only (Node 22+).
 async function readSafeDefinitionFile(filePath: string): Promise<string> {
   const notRegularFileError = (): WorkflowDefinitionRegistryError =>
     new WorkflowDefinitionRegistryError(

@@ -147,6 +147,54 @@ describe("handleWebhookSlack", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
+  it("discards the dedup row on intake failure so Slack's redelivery re-drives intake (NIN-263)", async () => {
+    const dataDir = await createTempDir();
+    const rawBody = slackInteractionBody({
+      type: "view_submission",
+      team: { id: "T_OK" },
+      user: { id: "U_OK" },
+      view: {
+        id: "V_MODAL",
+        private_metadata: JSON.stringify({
+          title: "Ship Slack intake",
+          body: "Wire the inbound route.",
+          workflowDefinitionId: "single-operator-afk-coder",
+          workspaceKey: "risoluto",
+        }),
+      },
+    });
+    const signature = signSlack(rawBody);
+    const inbox = fakeInbox();
+    // The first intake throws (transient id failure); the redelivery succeeds.
+    let idCalls = 0;
+    const handlerDeps: SlackWebhookHandlerDeps = {
+      ...deps({ dataDir }),
+      webhookInbox: inbox.store,
+      id: () => {
+        idCalls += 1;
+        if (idCalls === 1) {
+          throw new Error("transient id failure");
+        }
+        return "wr_slack_route";
+      },
+    };
+
+    const first = makeReqRes(rawBody, signature);
+    await handleWebhookSlack(handlerDeps, first.req, first.res);
+    const second = makeReqRes(rawBody, signature);
+    await handleWebhookSlack(handlerDeps, second.req, second.res);
+
+    expect(first.capture.status).toBe(500);
+    // The failed delivery was discarded, so Slack's redelivery is treated as new and intake re-runs to
+    // completion rather than being swallowed as a duplicate; the row is never parked for a phantom retry.
+    expect(second.capture.status).toBe(200);
+    expect(second.capture.body).toEqual({ response_action: "clear" });
+    expect(inbox.store.insertVerified).toHaveBeenCalledTimes(2);
+    expect(inbox.store.discardVerified).toHaveBeenCalledTimes(1);
+    expect(inbox.store.markForRetry).not.toHaveBeenCalled();
+    await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
+  });
+
   it("rejects a request whose timestamp is outside the replay window", async () => {
     const dataDir = await createTempDir();
     const rawBody = slackInteractionBody({ type: "view_submission" });
@@ -182,15 +230,24 @@ function deps(overrides: { dataDir: string; nowEpochSeconds?: () => number }): S
 
 function fakeInbox(): { store: VerifiedWebhookDeliveryStore } {
   const seen = new Set<string>();
+  const keyByDeliveryId = new Map<string, string>();
   const store: VerifiedWebhookDeliveryStore = {
     insertVerified: vi.fn(async (delivery: VerifiedWebhookDelivery) => {
       const key = delivery.bodyDigest ?? delivery.deliveryId;
       if (seen.has(key)) return { isNew: false };
       seen.add(key);
+      keyByDeliveryId.set(delivery.deliveryId, key);
       return { isNew: true };
     }),
     markApplied: vi.fn(async () => undefined),
     markForRetry: vi.fn(async () => undefined),
+    discardVerified: vi.fn(async (deliveryId: string) => {
+      const key = keyByDeliveryId.get(deliveryId);
+      if (key !== undefined) {
+        seen.delete(key);
+        keyByDeliveryId.delete(deliveryId);
+      }
+    }),
   };
   return { store };
 }

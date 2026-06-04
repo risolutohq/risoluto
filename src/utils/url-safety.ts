@@ -53,7 +53,16 @@ function isBlockedIpv6(host: string): boolean {
   if (embedded !== null) {
     return isBlockedIpv4(embedded);
   }
-  return host === "::1" || host === "::" || host.startsWith("fe80") || host.startsWith("fc") || host.startsWith("fd");
+  // Link-local is fe80::/10, so the first hextet spans fe80–febf (not just the fe80::/16 prefix);
+  // /^fe[89ab][0-9a-f]:/ matches that whole range. fc/fd cover unique-local fc00::/7; ::1 is loopback
+  // and :: is the unspecified address.
+  return (
+    host === "::1" ||
+    host === "::" ||
+    /^fe[89ab][0-9a-f]:/u.test(host) ||
+    host.startsWith("fc") ||
+    host.startsWith("fd")
+  );
 }
 
 /** Lowercase a hostname and strip the brackets URL parsing leaves on IPv6 literals. */
