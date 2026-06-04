@@ -65,7 +65,13 @@ function shouldExecuteAction(
   if (phase === "before_state_gates") {
     return actionId === "run-validation-profile" && (state?.gates.includes("validation-passed") ?? false);
   }
-  return true;
+  // create-worktree is owned by before_roles (dedupe key attempt=0). after_roles keys by
+  // attempt=verifierRetryAttempts, so on a verifier retry (>0) its key no longer collides with the
+  // before_roles key and the worktree would be re-created. Exclude it here — a worktree is setup,
+  // never a post-roles step. run-validation-profile is left in: it keys by verifierRetryAttempts in
+  // both before_state_gates and after_roles, so those collide and dedupe, and it must still run as a
+  // post-roles action for definitions whose state carries no validation gate (NIN-261).
+  return actionId !== "create-worktree";
 }
 
 function storeActionArtifacts(

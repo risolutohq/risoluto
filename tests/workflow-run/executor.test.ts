@@ -551,6 +551,40 @@ describe("executeWorkflowDefinition", () => {
     expect(validationRuns).toBeGreaterThanOrEqual(2);
   });
 
+  it("creates the worktree exactly once even across a verifier-driven retry (NIN-261)", async () => {
+    let worktreeRuns = 0;
+    let verifyCount = 0;
+    const definition: ResolvedWorkflowDefinition = {
+      ...createVerifierDefinition(),
+      actions: ["create-worktree"],
+    };
+
+    const result = await executeWorkflowDefinition({
+      definition,
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      runRole: async ({ role }) => {
+        if (role.id === "verifier") {
+          verifyCount += 1;
+          return { "verification.v1": verificationArtifact(verifyCount >= 2 ? "satisfied" : "not_satisfied") };
+        }
+        return roleOutput(role.id);
+      },
+      runAction: async ({ actionId }) => {
+        if (actionId === "create-worktree") {
+          worktreeRuns += 1;
+        }
+        return {};
+      },
+    });
+
+    expect(result.status).toBe("done");
+    // create-worktree is a before_roles setup action. A verifier retry must not re-create it — the
+    // after_roles phase (which keys by the retry attempt) previously re-ran it because its
+    // before_roles dedupe key used attempt 0.
+    expect(worktreeRuns).toBe(1);
+  });
+
   it("blocks once the verifier retry budget is exhausted (default one retry) (NIN-201)", async () => {
     const roleRuns: string[] = [];
 

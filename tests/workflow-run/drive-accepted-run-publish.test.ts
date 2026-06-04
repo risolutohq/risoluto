@@ -65,11 +65,14 @@ async function buildInput(
 describe("driveAcceptedWorkflowRun publish-before-done", () => {
   it("moves the run to blocked with a handoff when publishOnDone fails (NIN-260)", async () => {
     const { archiveDir, workflowRunId, input } = await acceptedRun();
-    vi.mocked(driveWorkflowRun).mockResolvedValue({
-      status: "done",
-      events: [],
-      roleExecutions: ["planner"],
-      artifacts: {},
+    // Reproduce the production executor: it persists "running" then the terminal "done" through the
+    // recordStatus the driver wires to the archive. Earlier this suite stubbed driveWorkflowRun with
+    // mockResolvedValue, so recordStatus never ran and the archive never reached "done" — which is
+    // exactly why the terminal-guard regression slipped through. Drive recordStatus for real here.
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return { status: "done", events: [], roleExecutions: ["planner"], artifacts: {} };
     });
 
     const result = await driveAcceptedWorkflowRun({
@@ -93,12 +96,11 @@ describe("driveAcceptedWorkflowRun publish-before-done", () => {
   });
 
   it("marks the run done and threads the PR url when publishOnDone succeeds", async () => {
-    const { input } = await acceptedRun();
-    vi.mocked(driveWorkflowRun).mockResolvedValue({
-      status: "done",
-      events: [],
-      roleExecutions: ["planner"],
-      artifacts: {},
+    const { archiveDir, workflowRunId, input } = await acceptedRun();
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return { status: "done", events: [], roleExecutions: ["planner"], artifacts: {} };
     });
 
     const result = await driveAcceptedWorkflowRun({
@@ -108,5 +110,10 @@ describe("driveAcceptedWorkflowRun publish-before-done", () => {
 
     expect(result.outcome).toBe("done");
     expect(result.pullRequestUrl).toBe("https://example.test/pr/7");
+
+    // The deferred terminal write still lands: a successful publish finalizes the run as done.
+    const archive = createWorkflowRunArchive({ archiveDir });
+    const run = await archive.loadWorkflowRun(workflowRunId);
+    expect(run.status).toBe("done");
   });
 });

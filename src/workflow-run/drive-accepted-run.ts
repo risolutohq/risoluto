@@ -77,6 +77,15 @@ export async function driveAcceptedWorkflowRun(
       ...(input.retryGate ? { retryGate: input.retryGate } : {}),
       ...(input.maxGateRetries === undefined ? {} : { maxGateRetries: input.maxGateRetries }),
       ...(input.budget ? { budget: input.budget } : {}),
+      // Defer the terminal "done" persistence until after publishOnDone (in finishDrivenRun). If the
+      // executor wrote "done" here, the archive's terminal-status guard would reject the later
+      // done -> blocked transition when a PR publish fails, stranding a "done" run with no PR
+      // (NIN-260). "running"/"blocked" still persist immediately.
+      recordStatus: async ({ workflowRunId, status }) => {
+        if (status !== "done") {
+          await archive.updateWorkflowRunStatus(workflowRunId, status);
+        }
+      },
     });
     const evidenceRefs = getEvidenceRefs();
     const memoryRecord = await writeAttemptMemory(input, location, now, result.status, evidenceRefs);
@@ -117,6 +126,10 @@ async function finishDrivenRun(
         return await finishPublishFailedRun(archive, input, result.roleExecutions, toErrorString(error));
       }
     }
+    // The PR is published (or there was no publish step) — only now finalize the run as done. The
+    // executor's terminal "done" write was deferred (see recordStatus above) so the publish-failure
+    // path above could still route to blocked past the archive's terminal guard (NIN-260).
+    await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
     const handoff = await writeDoneHandoff(
       archive,
       { workflowRunId: input.workflowRun.id, createdAt, ...(input.budget ? { budget: input.budget } : {}) },
