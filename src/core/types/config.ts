@@ -3,6 +3,7 @@ import type { AlertConfig, AutomationConfig, NotificationConfig, TriggerConfig }
 import type { CodexConfig } from "./codex.js";
 import type { OperatorPermission } from "../../workflow-run/operator-approval-contract.js";
 import type { WorkflowRunIntakeRule } from "../../workflow-run/intake-rules.js";
+import type { WorkflowRunStatusMapping } from "../../workflow-run/status-projection.js";
 
 export interface TrackerConfig {
   kind: string;
@@ -13,6 +14,12 @@ export interface TrackerConfig {
   repo?: string;
   activeStates: string[];
   terminalStates: string[];
+  /**
+   * Workspace-level canonical Run Status → external board state mapping. Consumed by
+   * `mirrorWorkflowRunStatusToTracker`; a workflow-level override beats it. Absent/empty means status
+   * projection is not configured and the legacy `agent.successState` transition is used instead.
+   */
+  statusMapping?: WorkflowRunStatusMapping;
 }
 
 export interface GitHubConfig {

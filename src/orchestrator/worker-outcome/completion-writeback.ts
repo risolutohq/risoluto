@@ -3,6 +3,12 @@ import type { RunningEntry } from "../runtime-types.js";
 import type { OutcomeContext } from "../context.js";
 import { computeAttemptCostUsd } from "../../core/model-pricing.js";
 import { toErrorString } from "../../utils/type-guards.js";
+import { DEFAULT_WORKFLOW_DEFINITION_ID, type WorkflowRunStatus } from "../../workflow-run/contracts.js";
+import {
+  type StatusProjectionProvider,
+  WorkflowRunStatusProjectionError,
+} from "../../workflow-run/status-projection.js";
+import { mirrorWorkflowRunStatusToTracker } from "../../workflow-run/status-mirror.js";
 
 export type CompletionWritebackContext = Pick<OutcomeContext, "getConfig"> & {
   deps: Pick<OutcomeContext["deps"], "tracker" | "logger">;
@@ -89,16 +95,79 @@ async function transitionToSuccessState(
   }
 }
 
+function statusProjectionProvider(kind: string): StatusProjectionProvider {
+  return kind === "github" ? "github" : "linear";
+}
+
+/**
+ * Mirror the run outcome to the board through `projectWorkflowRunStatus` (NIN-270). Active only when
+ * `tracker.statusMapping` is configured; otherwise returns `configured: false` so the caller keeps the
+ * legacy `agent.successState` transition. An unmapped Run Status surfaces a clear projection error and
+ * does NOT silently choose a state.
+ */
+async function mirrorOutcomeViaProjection(
+  ctx: CompletionWritebackContext,
+  input: CompletionWritebackInput,
+  runStatus: WorkflowRunStatus,
+): Promise<{ configured: boolean; externalStatus: string | null }> {
+  const trackerConfig = ctx.getConfig().tracker;
+  const workspaceMapping = trackerConfig.statusMapping;
+  if (!workspaceMapping || Object.keys(workspaceMapping).length === 0) {
+    return { configured: false, externalStatus: null };
+  }
+
+  try {
+    const result = await mirrorWorkflowRunStatusToTracker({
+      tracker: ctx.deps.tracker,
+      workflowRunId: input.issue.workflowRunId ?? input.issue.id,
+      workflowDefinitionId: DEFAULT_WORKFLOW_DEFINITION_ID,
+      provider: statusProjectionProvider(trackerConfig.kind),
+      issueId: input.issue.id,
+      runStatus,
+      workspaceMapping,
+      logger: ctx.deps.logger,
+    });
+    if (result.applied) {
+      ctx.deps.logger.info(
+        { issue_identifier: input.issue.identifier, run_status: runStatus, external_status: result.externalStatus },
+        "workflow run status projected to tracker",
+      );
+    }
+    return { configured: true, externalStatus: result.applied ? result.externalStatus : null };
+  } catch (error) {
+    const unmapped = error instanceof WorkflowRunStatusProjectionError;
+    ctx.deps.logger.warn(
+      { issue_identifier: input.issue.identifier, run_status: runStatus, error: toErrorString(error) },
+      unmapped
+        ? "status projection blocked — run status is unmapped; skipping tracker mirror"
+        : "status projection mirror failed (non-fatal)",
+    );
+    return { configured: true, externalStatus: null };
+  }
+}
+
+async function transitionViaSuccessState(
+  ctx: CompletionWritebackContext,
+  input: CompletionWritebackInput,
+): Promise<string | null> {
+  const successState = ctx.getConfig().agent.successState;
+  return successState ? transitionToSuccessState(ctx, input, successState) : null;
+}
+
 async function postSuccessWriteback(
   ctx: CompletionWritebackContext,
   input: CompletionWritebackInput,
   durationSeconds: number,
 ): Promise<string | null> {
   const commentBody = buildSuccessCommentBody(input, durationSeconds);
-  const successState = ctx.getConfig().agent.successState;
 
-  // State transition and comment are independent — failure of one must not block the other.
-  const transitionedState = successState ? await transitionToSuccessState(ctx, input, successState) : null;
+  // Prefer the canonical Run Status → board projection when configured; otherwise fall back to the
+  // legacy single-success-state transition. State transition and comment are independent — failure of
+  // one must not block the other.
+  const projection = await mirrorOutcomeViaProjection(ctx, input, "done");
+  const transitionedState = projection.configured
+    ? projection.externalStatus
+    : await transitionViaSuccessState(ctx, input);
 
   try {
     await ctx.deps.tracker.createComment(input.issue.id, commentBody);
@@ -123,6 +192,10 @@ async function postBlockedWriteback(
     `- **Attempts:** ${input.attempt ?? 1}`,
     `- **Duration:** ${durationSeconds}s`,
   ].join("\n");
+
+  // Mirror the blocked Run Status to the board when projection is configured (no-op otherwise, which
+  // preserves the prior "blocked posts a comment but does not transition" behavior).
+  await mirrorOutcomeViaProjection(ctx, input, "blocked");
 
   try {
     await ctx.deps.tracker.createComment(input.issue.id, commentBody);

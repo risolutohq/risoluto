@@ -6,6 +6,8 @@
  */
 
 import type { ServiceConfig } from "../core/types.js";
+import type { WorkflowRunStatus } from "../workflow-run/contracts.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 import { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "../state/topology.js";
 import { asBoolean, asNumber, asNumberMap, asRecord, asString, asLooseStringArray, asStringArray } from "./coercion.js";
 import {
@@ -97,7 +99,31 @@ export function deriveTrackerConfig(
     repo: asString(tracker.repo, "") || (secretResolver?.("GITHUB_REPO") ?? ""),
     activeStates: asStringArray(tracker.active_states, DEFAULT_ACTIVE_STATES),
     terminalStates: asStringArray(tracker.terminal_states, DEFAULT_TERMINAL_STATES),
+    // Only attach statusMapping when configured so an install without it keeps the exact prior shape
+    // (and falls back to the legacy agent.successState transition). NIN-270.
+    ...buildStatusMappingField(tracker.status_mapping),
   };
+}
+
+const WORKFLOW_RUN_STATUS_KEYS = new Set<WorkflowRunStatus>([
+  "accepted",
+  "queued",
+  "running",
+  "waiting_for_operator",
+  "blocked",
+  "done",
+  "cancelled",
+]);
+
+function buildStatusMappingField(raw: unknown): { statusMapping?: WorkflowRunStatusMapping } {
+  const record = asRecord(raw);
+  const mapping: WorkflowRunStatusMapping = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (WORKFLOW_RUN_STATUS_KEYS.has(key as WorkflowRunStatus) && typeof value === "string" && value.length > 0) {
+      mapping[key as WorkflowRunStatus] = value;
+    }
+  }
+  return Object.keys(mapping).length > 0 ? { statusMapping: mapping } : {};
 }
 
 function deriveMergePolicyConfig(raw: Record<string, unknown>): ServiceConfig["agent"]["autoMerge"] {

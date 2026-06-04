@@ -7,6 +7,7 @@ import { z, ZodError } from "zod";
 
 import { isWorkflowRunArtifactContractId } from "../workflow-run/artifact-contracts.js";
 import type { WorkflowRunResolvedDefinitionConfig } from "../workflow-run/contracts.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 
 export interface WorkflowResolutionDefaults {
   readonly modelProfile: string;
@@ -39,6 +40,8 @@ export interface ResolvedWorkflowDefinition {
   readonly states: readonly ResolvedWorkflowState[];
   readonly roles: readonly ResolvedWorkflowRole[];
   readonly actions: readonly string[];
+  /** Workflow-level status mapping override (NIN-270); beats the workspace-level tracker mapping. */
+  readonly statusMapping?: WorkflowRunStatusMapping;
 }
 
 export interface WorkflowDefinitionRegistry {
@@ -105,6 +108,9 @@ const workflowDefinitionSchema = z
         .strict(),
     ),
     actions: z.array(z.string().min(1)),
+    // Optional workflow-level status mapping override (NIN-270). Keys are canonical Run Status values;
+    // present keys beat the workspace-level tracker.statusMapping during projection.
+    statusMapping: z.record(z.string(), z.string()).optional(),
   })
   .strict();
 
@@ -140,6 +146,7 @@ export function toWorkflowRunResolvedDefinitionConfig(
     workflowDefinitionId: definition.id,
     validationProfile: definition.validationProfile,
     modelProfiles,
+    ...(definition.statusMapping ? { statusMapping: definition.statusMapping } : {}),
   };
 }
 
@@ -315,6 +322,7 @@ function resolveWorkflowDefinition(
       })),
     ),
     actions: definition.actions,
+    ...(definition.statusMapping ? { statusMapping: definition.statusMapping } : {}),
   };
 }
 
