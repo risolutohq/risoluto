@@ -51,17 +51,36 @@ export class TypedEventBus<TEventMap extends Record<string, any>> {
     this.anyListeners.delete(handler);
   }
 
-  /** Synchronously emit a payload to all handlers on the given channel. */
+  /**
+   * Synchronously emit a payload to all handlers on the given channel.
+   *
+   * Listeners are snapshotted before dispatch so a handler that subscribes or
+   * unsubscribes during emission does not affect the current delivery. Each
+   * handler is isolated: a throwing listener is logged and delivery continues
+   * to the remaining channel and wildcard listeners.
+   */
   emit<K extends keyof TEventMap>(channel: K, payload: TEventMap[K]): void {
     const set = this.listeners.get(channel);
     if (set) {
-      for (const handler of set) {
-        (handler as Handler<TEventMap[K]>)(payload);
+      for (const handler of [...set]) {
+        try {
+          (handler as Handler<TEventMap[K]>)(payload);
+        } catch (error) {
+          this.reportListenerError(channel, error);
+        }
       }
     }
-    for (const handler of this.anyListeners) {
-      handler(channel, payload);
+    for (const handler of [...this.anyListeners]) {
+      try {
+        handler(channel, payload);
+      } catch (error) {
+        this.reportListenerError(channel, error);
+      }
     }
+  }
+
+  private reportListenerError(channel: keyof TEventMap, error: unknown): void {
+    console.error(`[event-bus] listener for "${String(channel)}" threw:`, error);
   }
 
   /** Remove all listeners and reset the bus. */

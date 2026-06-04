@@ -174,6 +174,20 @@ describe("GitHubIssuesClient", () => {
     expect(result[0].number).toBe(42);
   });
 
+  it("fetchOpenIssues drops pull-request-backed records (NIN-263)", async () => {
+    const issues = [
+      makeRawIssue({ number: 42 }),
+      makeRawIssue({ number: 99, pull_request: { url: "https://api.github.com/repos/acme/awesome/pulls/99" } }),
+    ];
+    fetchMock.mockResolvedValue(createJsonResponse(200, issues));
+
+    const client = createClient();
+    const result = await client.fetchOpenIssues();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].number).toBe(42);
+  });
+
   it("fetchOpenIssues includes labels param when provided", async () => {
     fetchMock.mockResolvedValue(createJsonResponse(200, []));
 
@@ -189,6 +203,42 @@ describe("GitHubIssuesClient", () => {
 
     const client = createClient();
     await expect(client.fetchOpenIssues()).rejects.toThrow(GitHubIssuesClientError);
+  });
+
+  it("maps a 429 response to a distinct github_rate_limited error (NIN-266)", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: "rate limited" }), {
+        status: 429,
+        headers: { "retry-after": "42", "content-type": "application/json" },
+      }),
+    );
+
+    const client = createClient();
+    try {
+      await client.fetchOpenIssues();
+      throw new Error("expected fetchOpenIssues to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(GitHubIssuesClientError);
+      expect((error as GitHubIssuesClientError).code).toBe("github_rate_limited");
+      expect((error as GitHubIssuesClientError).message).toContain("retry after 42s");
+    }
+  });
+
+  it("maps a 403 with exhausted rate-limit budget to github_rate_limited (NIN-266)", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: "forbidden" }), {
+        status: 403,
+        headers: { "x-ratelimit-remaining": "0", "content-type": "application/json" },
+      }),
+    );
+
+    const client = createClient();
+    try {
+      await client.fetchOpenIssues();
+      throw new Error("expected fetchOpenIssues to reject");
+    } catch (error) {
+      expect((error as GitHubIssuesClientError).code).toBe("github_rate_limited");
+    }
   });
 
   it("throws GitHubIssuesClientError with github_http_error code on non-ok response", async () => {

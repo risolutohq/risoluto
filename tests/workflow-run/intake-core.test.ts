@@ -81,6 +81,33 @@ describe("workflow-run intake core", () => {
     await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
+  it("recovers from a crash mid-claim instead of poisoning future duplicate intake (NIN-261)", async () => {
+    const dataDir = await createTempDir();
+    const rules: WorkflowRunIntakeRule[] = [trackerRule({ id: "afk" })];
+    const externalObject = { provider: "linear" as const, id: "lin_issue_1", url: "https://linear.example/RIS-1" };
+
+    // Simulate a crash: a prior intake claimed the external mapping but never wrote the run record.
+    await claimExternalMapping({ location: { dataDir }, externalObject, workflowRunId: "wr_ghost", ruleId: null });
+
+    // A fresh intake for the same external object must recover by creating a real run, not ENOENT-loop.
+    const recovered = await acceptLinearIssue({ dataDir, rules, id: () => "wr_recovered" });
+    expect(recovered.action).toBe("created");
+    expect(recovered.workflowRun.id).toBe("wr_recovered");
+    await expect(createWorkflowRunArchive({ dataDir }).loadWorkflowRun("wr_recovered")).resolves.toMatchObject({
+      id: "wr_recovered",
+    });
+
+    // The recovered mapping is healthy: a later duplicate dedupes to the recovered run, not the ghost.
+    const duplicate = await acceptLinearIssue({
+      dataDir,
+      rules,
+      deliveryId: "delivery-2",
+      id: () => "wr_should_not_create",
+    });
+    expect(duplicate.action).toBe("deduplicated");
+    expect(duplicate.workflowRun.id).toBe("wr_recovered");
+  });
+
   it("normalizes every intake source to the same intent.v1 shape", () => {
     const common = {
       workflowRunId: "wr_shape",

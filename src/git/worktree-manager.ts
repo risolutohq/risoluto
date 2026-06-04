@@ -6,8 +6,12 @@
  * these functions for worktree strategy operations.
  */
 
+import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import path from "node:path";
+
 import type { GitRunner } from "./git-types.js";
 import type { RisolutoLogger } from "../core/types.js";
+import { assertAllowedRepoUrl } from "./git-validation.js";
 
 export interface WorktreeContext {
   runGit: GitRunner;
@@ -58,17 +62,61 @@ export function deriveRepoKey(repoUrl: string): string {
   return result || "repo";
 }
 
-/** Ensure a bare clone exists at baseDir. Fetches if already present. */
-export async function ensureBaseClone(ctx: WorktreeContext, repoUrl: string, baseDir: string): Promise<void> {
-  const { stdout } = await ctx.runGit(["rev-parse", "--git-dir"], { cwd: baseDir, env: ctx.env }).catch(() => ({
-    stdout: "",
-  }));
-  if (stdout.trim().length > 0) {
-    // Already a git dir — fetch latest refs.
-    await ctx.runGit(["fetch", "origin", "--prune"], { cwd: baseDir, env: ctx.env });
-    return;
+/**
+ * Per-baseDir lock so concurrent setups of the same repo do not race the clone.
+ * Shared across all callers in the process (mirrors the workspace lock pattern).
+ */
+const baseCloneLocks = new Map<string, Promise<void>>();
+
+async function withBaseCloneLock<T>(baseDir: string, task: () => Promise<T>): Promise<T> {
+  const previous = baseCloneLocks.get(baseDir) ?? Promise.resolve();
+  let release: (() => void) | undefined;
+  const lock = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  baseCloneLocks.set(baseDir, lock);
+  try {
+    await previous.catch(() => undefined);
+    return await task();
+  } finally {
+    release?.();
+    if (baseCloneLocks.get(baseDir) === lock) {
+      baseCloneLocks.delete(baseDir);
+    }
   }
-  await ctx.runGit(["clone", "--bare", repoUrl, baseDir], { cwd: ".", env: ctx.env });
+}
+
+/**
+ * Ensure a bare clone exists at baseDir. Fetches if already present. Concurrent
+ * setups of the same repo are serialized by a per-baseDir lock, and a fresh
+ * clone is finalized via atomic rename so a half-cloned baseDir is never
+ * observed by another worker.
+ */
+export async function ensureBaseClone(ctx: WorktreeContext, repoUrl: string, baseDir: string): Promise<void> {
+  await withBaseCloneLock(baseDir, async () => {
+    const { stdout } = await ctx.runGit(["rev-parse", "--git-dir"], { cwd: baseDir, env: ctx.env }).catch(() => ({
+      stdout: "",
+    }));
+    if (stdout.trim().length > 0) {
+      // Already a git dir — fetch latest refs.
+      await ctx.runGit(["fetch", "origin", "--prune"], { cwd: baseDir, env: ctx.env });
+      return;
+    }
+    assertAllowedRepoUrl(repoUrl);
+    // Clone into a temp dir on the same parent, then atomically rename, so a
+    // concurrent observer never sees a partially-cloned baseDir.
+    const parent = path.dirname(baseDir);
+    await mkdir(parent, { recursive: true });
+    const tempDir = await mkdtemp(path.join(parent, ".clone-"));
+    try {
+      await ctx.runGit(["clone", "--bare", "--", repoUrl, tempDir], { cwd: ".", env: ctx.env });
+      await rm(baseDir, { recursive: true, force: true });
+      await rename(tempDir, baseDir);
+    } catch (error) {
+      await rm(tempDir, { recursive: true, force: true });
+      throw error;
+    }
+  });
 }
 
 /** Fetch latest refs into the bare clone. Never mutates worktrees. */
@@ -113,6 +161,11 @@ export async function removeWorktree(
   await ctx.runGit(["worktree", "prune"], { cwd: baseDir, env: ctx.env });
 }
 
+/** Prune stale worktree registrations from a bare clone. */
+export async function pruneWorktrees(ctx: WorktreeContext, baseDir: string): Promise<void> {
+  await ctx.runGit(["worktree", "prune"], { cwd: baseDir, env: ctx.env });
+}
+
 /** List worktrees from a bare clone. */
 export async function listWorktrees(ctx: WorktreeContext, baseDir: string): Promise<WorktreeEntry[]> {
   const { stdout } = await ctx.runGit(["worktree", "list", "--porcelain"], { cwd: baseDir, env: ctx.env });
@@ -125,14 +178,21 @@ export async function isWorktreeClean(ctx: WorktreeContext, worktreePath: string
   return stdout.trim().length === 0;
 }
 
-/** Check if a branch exists in the base clone. */
+/**
+ * Check if a branch exists in the base clone — locally or as a remote-tracking
+ * ref. Checking `refs/remotes/origin/<branch>` makes worktree setup aware of an
+ * existing remote PR branch instead of forking a fresh branch from default.
+ */
 export async function branchExists(ctx: WorktreeContext, baseDir: string, branchName: string): Promise<boolean> {
-  try {
-    await ctx.runGit(["rev-parse", "--verify", `refs/heads/${branchName}`], { cwd: baseDir, env: ctx.env });
-    return true;
-  } catch {
-    return false;
+  for (const ref of [`refs/heads/${branchName}`, `refs/remotes/origin/${branchName}`]) {
+    try {
+      await ctx.runGit(["rev-parse", "--verify", ref], { cwd: baseDir, env: ctx.env });
+      return true;
+    } catch {
+      // Ref not found under this namespace — try the next one.
+    }
   }
+  return false;
 }
 
 /** Parse `git worktree list --porcelain` output into structured entries. */

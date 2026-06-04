@@ -1,4 +1,5 @@
 import type { RisolutoLogger } from "./types.js";
+import { redactSensitiveValue } from "./content-sanitizer.js";
 
 /**
  * Error tracking interface — all error tracking implementations must
@@ -50,16 +51,16 @@ class LoggerErrorTracker implements ErrorTracker {
   }
 
   captureException(error: Error, context?: Record<string, unknown>): void {
-    this.logger.error(
-      {
-        error: error.message,
-        stack: error.stack,
-        breadcrumbs: this.breadcrumbs.slice(-10),
-        contexts: this.contexts,
-        ...context,
-      },
-      "Captured exception",
-    );
+    // Redact message/stack/breadcrumbs/contexts (key names + embedded secret
+    // patterns) before anything is persisted by the logger (NIN-247).
+    const payload = redactSensitiveValue({
+      error: error.message,
+      stack: error.stack,
+      breadcrumbs: this.breadcrumbs.slice(-10),
+      contexts: this.contexts,
+      ...context,
+    }) as Record<string, unknown>;
+    this.logger.error(payload, "Captured exception");
     // When @sentry/node is installed:
     // Sentry.captureException(error, { extra: context, contexts: this.contexts });
   }

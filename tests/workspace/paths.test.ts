@@ -178,4 +178,10 @@ describe("resolveWorkspacePath", () => {
     expect(result.workspaceKey).toBe("MT-42_wr_run_1");
     expect(isWithinRoot("/workspaces", result.workspacePath)).toBe(true);
   });
+
+  it("rejects an empty identifier so the path can never resolve to the workspace root", () => {
+    // An empty sanitized key would make path.resolve(root, "") === root, letting a
+    // later removal target the entire workspace root (NIN-243).
+    expect(() => resolveWorkspacePath("/workspaces", "")).toThrow(/empty|root/);
+  });
 });

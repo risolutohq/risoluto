@@ -22,6 +22,16 @@ describe("MetricsCollector", () => {
     expect(output).toContain('risoluto_http_requests_total{method="POST",status="202"} 1');
   });
 
+  it("escapes backslash, double-quote, and newline in label values (NIN-264)", () => {
+    const metrics = new MetricsCollector();
+    metrics.httpRequestsTotal.increment({ route: 'a"b\\c\nd' });
+
+    const output = metrics.serialize();
+    // Per the Prometheus text format, the value's backslash, quote, and newline must be escaped so
+    // an attacker-influenced value cannot break out of the quotes and inject fake label pairs.
+    expect(output).toContain('risoluto_http_requests_total{route="a\\"b\\\\c\\nd"} 1');
+  });
+
   it("records histogram observations with buckets", () => {
     const metrics = new MetricsCollector();
     metrics.httpRequestDurationSeconds.observe(0.05);

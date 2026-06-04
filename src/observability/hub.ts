@@ -1,3 +1,4 @@
+import { redactSensitiveValue } from "../core/content-sanitizer.js";
 import { summarizeHealthSurfaces, type ObservabilityHealthStatus, type ObservabilityHealthSurface } from "./health.js";
 import { recordMetricCounter } from "./metrics.js";
 import type { ObservabilityMetricCounter } from "./metrics.js";
@@ -57,6 +58,9 @@ export class ComponentObserver {
       buildTraceRecord(this.component, {
         ...input,
         endedAt,
+        // The trace data bag is caller-controlled and is persisted to disk + exposed over HTTP —
+        // redact secret-bearing keys/values before it is stored (NIN-264).
+        data: sanitizeBag(input.data),
       }),
       ...this.traces,
     ].slice(0, this.maxTraces);
@@ -76,7 +80,7 @@ export class ComponentObserver {
       status: input.status,
       updatedAt,
       reason: input.reason,
-      details: input.details,
+      details: sanitizeBag(input.details),
     });
     this.touch(updatedAt);
   }
@@ -92,7 +96,7 @@ export class ComponentObserver {
       status: input.status,
       updatedAt,
       correlationId: input.correlationId ?? null,
-      metadata: input.metadata,
+      metadata: sanitizeBag(input.metadata),
     });
     this.trimSessions();
     this.touch(updatedAt);
@@ -202,6 +206,15 @@ export class ObservabilityHub {
       rawMetrics: input.rawMetrics,
     };
   }
+}
+
+// Deep-redact a caller-controlled metadata/details/data bag (secret-bearing keys + secret-like
+// scalar values) before it is persisted to disk or exposed over HTTP (NIN-264).
+function sanitizeBag(bag: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!bag) {
+    return undefined;
+  }
+  return redactSensitiveValue(bag) as Record<string, unknown>;
 }
 
 export function createObservabilityHub(options: ObservabilityHubOptions = {}): ObservabilityHub {

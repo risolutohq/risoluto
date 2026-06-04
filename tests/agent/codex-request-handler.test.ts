@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { handleCodexRequest } from "../../src/agent/codex-request-handler.js";
+import { acceptForSessionApprovalPolicy } from "../../src/codex/approval-gate.js";
 import type { JsonRpcRequest } from "../../src/codex/protocol.js";
 import type { GithubApiToolClient } from "../../src/git/github-api-tool.js";
 import type { TrackerToolProvider } from "../../src/tracker/tool-provider.js";
@@ -42,24 +43,79 @@ function mockGithubClient(): GithubApiToolClient {
 }
 
 describe("handleCodexRequest", () => {
-  describe("approval auto-accept", () => {
-    it("accepts commandExecution approval for session", async () => {
+  describe("approval gating — deny by default", () => {
+    it("denies commandExecution approval when no approval policy is configured", async () => {
       const result = await handleCodexRequest(makeRequest("item/commandExecution/requestApproval"), makeNullProvider());
       expect(result.fatalFailure).toBeNull();
-      expect(result.response).toEqual({ decision: "acceptForSession" });
+      expect(result.response).toEqual({ decision: "reject" });
     });
 
-    it("accepts fileChange approval for session", async () => {
+    it("denies fileChange approval when no approval policy is configured", async () => {
       const result = await handleCodexRequest(makeRequest("item/fileChange/requestApproval"), makeNullProvider());
       expect(result.fatalFailure).toBeNull();
-      expect(result.response).toEqual({ decision: "acceptForSession" });
+      expect(result.response).toEqual({ decision: "reject" });
     });
 
-    it("echoes back permissionProfile for permissions approval", async () => {
+    it("denies permissions approval (null permissions) when no approval policy is configured", async () => {
       const params = { permissionProfile: "full-auto" };
       const result = await handleCodexRequest(
         makeRequest("item/permissions/requestApproval", params),
         makeNullProvider(),
+      );
+      expect(result.fatalFailure).toBeNull();
+      expect(result.response).toEqual({ permissions: null, scope: "session" });
+    });
+
+    it("emits a tool_approval_denied side-channel event with a denial reason", async () => {
+      const sideChannel = vi.fn();
+      await handleCodexRequest(
+        makeRequest("item/commandExecution/requestApproval"),
+        makeNullProvider(),
+        undefined,
+        sideChannel,
+      );
+      expect(sideChannel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "tool_approval_denied",
+          metadata: expect.objectContaining({ denialReason: expect.any(String) }),
+        }),
+      );
+    });
+  });
+
+  describe("approval gating — opt-in auto-accept", () => {
+    it("accepts commandExecution approval for session when policy approves", async () => {
+      const result = await handleCodexRequest(
+        makeRequest("item/commandExecution/requestApproval"),
+        makeNullProvider(),
+        undefined,
+        undefined,
+        acceptForSessionApprovalPolicy,
+      );
+      expect(result.fatalFailure).toBeNull();
+      expect(result.response).toEqual({ decision: "acceptForSession" });
+    });
+
+    it("accepts fileChange approval for session when policy approves", async () => {
+      const result = await handleCodexRequest(
+        makeRequest("item/fileChange/requestApproval"),
+        makeNullProvider(),
+        undefined,
+        undefined,
+        acceptForSessionApprovalPolicy,
+      );
+      expect(result.fatalFailure).toBeNull();
+      expect(result.response).toEqual({ decision: "acceptForSession" });
+    });
+
+    it("echoes back permissionProfile for permissions approval when policy approves", async () => {
+      const params = { permissionProfile: "full-auto" };
+      const result = await handleCodexRequest(
+        makeRequest("item/permissions/requestApproval", params),
+        makeNullProvider(),
+        undefined,
+        undefined,
+        acceptForSessionApprovalPolicy,
       );
       expect(result.fatalFailure).toBeNull();
       expect(result.response).toEqual({ permissions: "full-auto", scope: "session" });
@@ -70,6 +126,9 @@ describe("handleCodexRequest", () => {
       const result = await handleCodexRequest(
         makeRequest("item/permissions/requestApproval", params),
         makeNullProvider(),
+        undefined,
+        undefined,
+        acceptForSessionApprovalPolicy,
       );
       expect(result.fatalFailure).toBeNull();
       expect(result.response).toEqual({
@@ -79,7 +138,13 @@ describe("handleCodexRequest", () => {
     });
 
     it("returns null permissions when neither field is present", async () => {
-      const result = await handleCodexRequest(makeRequest("item/permissions/requestApproval", {}), makeNullProvider());
+      const result = await handleCodexRequest(
+        makeRequest("item/permissions/requestApproval", {}),
+        makeNullProvider(),
+        undefined,
+        undefined,
+        acceptForSessionApprovalPolicy,
+      );
       expect(result.response).toEqual({ permissions: null, scope: "session" });
     });
 
@@ -87,6 +152,9 @@ describe("handleCodexRequest", () => {
       const result = await handleCodexRequest(
         makeRequest("item/permissions/requestApproval", "not-an-object"),
         makeNullProvider(),
+        undefined,
+        undefined,
+        acceptForSessionApprovalPolicy,
       );
       expect(result.fatalFailure).toBeNull();
       expect(result.response).toEqual({ permissions: null, scope: "session" });

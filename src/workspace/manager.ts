@@ -1,4 +1,4 @@
-import { rm, mkdir, stat } from "node:fs/promises";
+import { rm, mkdir, stat, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
@@ -32,6 +32,33 @@ async function pathExists(pathname: string): Promise<boolean> {
   }
 }
 
+/**
+ * Reject an existing workspace path that is a symlink or whose real path escapes
+ * the workspace root (NIN-243). `stat()` follows symlinks, so a pre-planted
+ * symlink at the workspace path could let hooks and cleanup operate outside the
+ * root; `lstat()` + `realpath()` close that gap. A no-op when the path does not
+ * yet exist (ENOENT) — creation is handled by the caller.
+ */
+async function assertExistingWorkspaceDirSafe(workspaceRoot: string, workspacePath: string): Promise<void> {
+  const linkInfo = await lstat(workspacePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  });
+  if (linkInfo === null) {
+    return;
+  }
+  if (linkInfo.isSymbolicLink()) {
+    throw new Error(`workspace path is a symlink and was refused: ${workspacePath}`);
+  }
+  const realRoot = await realpath(workspaceRoot);
+  const realWorkspacePath = await realpath(workspacePath);
+  if (!isWithinRoot(realRoot, realWorkspacePath)) {
+    throw new Error(`workspace path resolves outside the workspace root: ${workspacePath}`);
+  }
+}
+
 export interface WorkspaceManagerWorktreeDeps {
   gitManager: {
     hasUncommittedChanges: (workspaceDir: string) => Promise<boolean>;
@@ -44,6 +71,7 @@ export interface WorkspaceManagerWorktreeDeps {
       branchPrefix?: string,
     ) => Promise<{ branchName: string }>;
     removeWorktree: (baseCloneDir: string, worktreePath: string, force?: boolean) => Promise<void>;
+    pruneWorktrees: (baseCloneDir: string) => Promise<void>;
     deriveBaseCloneDir: (workspaceRoot: string, repoUrl: string) => string;
   };
   repoRouter: {
@@ -143,6 +171,7 @@ export class WorkspaceManager implements WorkspacePort {
 
     let createdNow = false;
     try {
+      await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
       try {
         const info = await stat(workspacePath);
         if (!info.isDirectory()) {
@@ -197,6 +226,11 @@ export class WorkspaceManager implements WorkspacePort {
     );
     const baseCloneDir = this.worktreeDeps.gitManager.deriveBaseCloneDir(config.workspace.root, repoMatch.repoUrl);
 
+    // Refuse a pre-planted symlink (or a path whose real location escapes the root) before any hook can
+    // run with cwd resolved through it — the worktree strategy must enforce the same guard the directory
+    // strategy got (NIN-243). pathIsDirectory() follows symlinks, so this lstat/realpath check is what
+    // actually closes the escape.
+    await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
     const worktreeExists = await pathIsDirectory(workspacePath);
     const createdNow = !worktreeExists;
 
@@ -246,6 +280,7 @@ export class WorkspaceManager implements WorkspacePort {
     if (!(await pathIsDirectory(workspacePath))) {
       return emptyRemovalResult();
     }
+    await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
 
     await this.runBeforeRemoveHook(config, workspace, issueIdentifier, workspaceKey);
     const protection = await this.enforcePreCleanupCommit(workspace, issueIdentifier);
@@ -274,6 +309,9 @@ export class WorkspaceManager implements WorkspacePort {
     if (!(await pathIsDirectory(workspacePath))) {
       return emptyRemovalResult();
     }
+    // Refuse a symlinked workspace before the before-remove hook runs with cwd resolved through it
+    // (matches removeDirectoryWorkspace) (NIN-243).
+    await assertExistingWorkspaceDirSafe(config.workspace.root, workspacePath);
 
     const workspace = { path: workspacePath, workspaceKey, createdNow: false };
     await this.runBeforeRemoveHook(config, workspace, issueIdentifier, workspaceKey);
@@ -282,6 +320,7 @@ export class WorkspaceManager implements WorkspacePort {
       return protection;
     }
 
+    let baseCloneToPrune: string | null = null;
     if (issue) {
       const repoMatch = this.worktreeDeps.repoRouter.matchIssue(issue);
       if (repoMatch) {
@@ -298,11 +337,22 @@ export class WorkspaceManager implements WorkspacePort {
             },
             "git worktree remove failed; falling back to rm",
           );
+          baseCloneToPrune = baseCloneDir;
         }
       }
     }
 
     await rm(workspacePath, { recursive: true, force: true });
+    if (baseCloneToPrune) {
+      // The git worktree registration now references a deleted dir; prune it so
+      // the base clone does not accumulate stale worktree metadata (NIN-244).
+      await this.worktreeDeps.gitManager.pruneWorktrees(baseCloneToPrune).catch((error: unknown) => {
+        this.logger.warn(
+          { workspacePath, issueIdentifier, error: toErrorString(error) },
+          "git worktree prune after fallback rm failed",
+        );
+      });
+    }
     return { ...protection, removed: true };
   }
 
@@ -367,6 +417,9 @@ export class WorkspaceManager implements WorkspacePort {
         child.once("exit", () => clearTimeout(killTimer));
         reject(new Error(`hook timed out after ${timeoutMs}ms`));
       }, timeoutMs);
+
+      // Drain stdout so a chatty hook cannot fill the pipe buffer and deadlock.
+      child.stdout.on("data", () => {});
 
       let stderr = "";
       child.stderr.on("data", (chunk) => {

@@ -3,6 +3,13 @@ import type { GithubApiToolClient } from "../git/github-api-tool.js";
 import { handleGithubApiToolCall } from "../git/github-api-tool.js";
 import type { TrackerToolProvider } from "../tracker/tool-provider.js";
 import type { JsonRpcRequest } from "../codex/protocol.js";
+import {
+  CODEX_APPROVE_DECISION,
+  CODEX_DENY_DECISION,
+  decideCodexApproval,
+  resolveCodexApprovalPolicy,
+  type CodexApprovalPolicy,
+} from "../codex/approval-gate.js";
 
 export interface CodexRequestSideChannelEvent {
   event: string;
@@ -22,12 +29,16 @@ function fatalResult(code: string, message: string): CodexRequestResult {
   return { fatalFailure: { code, message } };
 }
 
-function buildApprovalMetadata(method: string, params: Record<string, unknown>): Record<string, unknown> {
+function buildApprovalMetadata(
+  method: string,
+  params: Record<string, unknown>,
+  decision: string,
+): Record<string, unknown> {
   const itemId = asString(params["itemId"]);
   const reason = asString(params["reason"]);
   const command = params["command"];
   const cwd = asString(params["cwd"]);
-  const metadata: Record<string, unknown> = { method, decision: "acceptForSession" };
+  const metadata: Record<string, unknown> = { method, decision };
   if (itemId) metadata["itemId"] = itemId;
   if (reason) metadata["reason"] = reason;
   if (typeof command === "string" || Array.isArray(command)) metadata["command"] = command;
@@ -51,6 +62,12 @@ function describeApproval(method: string, params: Record<string, unknown>): stri
     return "Approved shell command";
   }
   return "Approved sandboxed action";
+}
+
+function describeDenial(method: string): string {
+  if (method === "item/fileChange/requestApproval") return "Denied file change";
+  if (method === "item/commandExecution/requestApproval") return "Denied shell command";
+  return "Denied sandboxed action";
 }
 
 function toolErrorResponse(errorMessage: string): CodexRequestResult {
@@ -100,19 +117,34 @@ async function handleToolCall(
 function handleApprovalRequest(
   method: string,
   params: Record<string, unknown>,
+  policy: CodexApprovalPolicy,
   sideChannel?: CodexRequestSideChannel,
 ): CodexRequestResult {
+  const decision = decideCodexApproval({ method, params }, policy);
+  if (decision.approved) {
+    sideChannel?.({
+      event: "tool_approval_granted",
+      message: describeApproval(method, params),
+      metadata: buildApprovalMetadata(method, params, CODEX_APPROVE_DECISION),
+    });
+    return { response: { decision: CODEX_APPROVE_DECISION }, fatalFailure: null };
+  }
   sideChannel?.({
-    event: "tool_approval_granted",
-    message: describeApproval(method, params),
-    metadata: buildApprovalMetadata(method, params),
+    event: "tool_approval_denied",
+    message: describeDenial(method),
+    metadata: {
+      ...buildApprovalMetadata(method, params, CODEX_DENY_DECISION),
+      denialReason: decision.reason,
+    },
   });
-  return { response: { decision: "acceptForSession" }, fatalFailure: null };
+  return { response: { decision: CODEX_DENY_DECISION }, fatalFailure: null };
 }
 
-function handlePermissionsRequest(params: Record<string, unknown>): CodexRequestResult {
+function handlePermissionsRequest(params: Record<string, unknown>, policy: CodexApprovalPolicy): CodexRequestResult {
+  const decision = decideCodexApproval({ method: "item/permissions/requestApproval", params }, policy);
+  const permissions = decision.approved ? (params.permissionProfile ?? params.permissions ?? null) : null;
   return {
-    response: { permissions: params.permissionProfile ?? params.permissions ?? null, scope: "session" },
+    response: { permissions, scope: "session" },
     fatalFailure: null,
   };
 }
@@ -158,14 +190,15 @@ export async function handleCodexRequest(
   trackerToolProvider: TrackerToolProvider,
   githubToolClient?: GithubApiToolClient,
   sideChannel?: CodexRequestSideChannel,
+  approvalPolicy: CodexApprovalPolicy = resolveCodexApprovalPolicy(),
 ): Promise<CodexRequestResult> {
   const { method } = request;
 
   if (method === "item/commandExecution/requestApproval" || method === "item/fileChange/requestApproval") {
-    return handleApprovalRequest(method, asRecord(request.params), sideChannel);
+    return handleApprovalRequest(method, asRecord(request.params), approvalPolicy, sideChannel);
   }
   if (method === "item/permissions/requestApproval") {
-    return handlePermissionsRequest(asRecord(request.params));
+    return handlePermissionsRequest(asRecord(request.params), approvalPolicy);
   }
   if (method === "item/tool/call") {
     return handleToolCall(asRecord(request.params), trackerToolProvider, githubToolClient);

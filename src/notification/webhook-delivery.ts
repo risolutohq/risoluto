@@ -31,8 +31,11 @@ export async function deliverWebhookJson(options: WebhookDeliveryOptions): Promi
       signal: abortController.signal,
     });
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(`${options.failureLabel} request failed with status ${response.status}: ${body}`);
+      // Status only — never read or log the upstream body, which can echo
+      // secrets/payloads back into logs (NIN-248).
+      throw new Error(
+        `${options.failureLabel} request failed with status ${response.status} ${response.statusText}`.trim(),
+      );
     }
   } catch (error) {
     options.logger?.error(

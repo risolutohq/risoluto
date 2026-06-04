@@ -64,14 +64,15 @@ describe("handlePostMasterKey", () => {
     await handler(makeRequest({}), res);
 
     expect(res._status).toBe(200);
-    const body = res._body as { key: string };
-    expect(body.key).toMatch(/^[a-f0-9]{64}$/u);
+    expect(res._body).toEqual({ ok: true });
+    const persistedKey = mocks.writeFileMock.mock.calls[0]?.[1] as string;
+    expect(persistedKey).toMatch(/^[a-f0-9]{64}$/u);
     expect(mocks.mkdirMock).toHaveBeenCalledWith("/archive-root", { recursive: true });
-    expect(mocks.writeFileMock).toHaveBeenCalledWith("/archive-root/master.key", body.key, {
+    expect(mocks.writeFileMock).toHaveBeenCalledWith("/archive-root/master.key", persistedKey, {
       encoding: "utf8",
       mode: 0o600,
     });
-    expect(deps.secretsStore.initializeWithKey).toHaveBeenCalledWith(body.key);
+    expect(deps.secretsStore.initializeWithKey).toHaveBeenCalledWith(persistedKey);
   });
 
   it("uses a provided key when given in the request body", async () => {
@@ -82,12 +83,24 @@ describe("handlePostMasterKey", () => {
     await handler(makeRequest({ key: "my-custom-key-1234" }), res);
 
     expect(res._status).toBe(200);
-    expect(res._body).toEqual({ key: "my-custom-key-1234" });
+    expect(res._body).toEqual({ ok: true });
     expect(mocks.writeFileMock).toHaveBeenCalledWith("/archive-root/master.key", "my-custom-key-1234", {
       encoding: "utf8",
       mode: 0o600,
     });
     expect(deps.secretsStore.initializeWithKey).toHaveBeenCalledWith("my-custom-key-1234");
+  });
+
+  it("never echoes the key material in the response body (NIN-249)", async () => {
+    const deps = makeDeps();
+    const handler = handlePostMasterKey(deps);
+    const res = makeMockResponse();
+
+    await handler(makeRequest({ key: "super-secret-provided-master-key" }), res);
+
+    expect(res._status).toBe(200);
+    expect(res._body).toEqual({ ok: true });
+    expect(JSON.stringify(res._body)).not.toContain("super-secret-provided-master-key");
   });
 
   it("returns 409 when secrets store is already initialized", async () => {
@@ -158,8 +171,9 @@ describe("handlePostMasterKey", () => {
     await handler(makeRequest({ key: 42 }), res);
 
     expect(res._status).toBe(200);
-    const body = res._body as { key: string };
-    expect(body.key).toMatch(/^[a-f0-9]{64}$/u);
+    expect(res._body).toEqual({ ok: true });
+    const persistedKey = mocks.writeFileMock.mock.calls[0]?.[1] as string;
+    expect(persistedKey).toMatch(/^[a-f0-9]{64}$/u);
   });
 
   it("generates a random key when body.key is an empty string", async () => {
@@ -170,7 +184,8 @@ describe("handlePostMasterKey", () => {
     await handler(makeRequest({ key: "" }), res);
 
     expect(res._status).toBe(200);
-    const body = res._body as { key: string };
-    expect(body.key).toMatch(/^[a-f0-9]{64}$/u);
+    expect(res._body).toEqual({ ok: true });
+    const persistedKey = mocks.writeFileMock.mock.calls[0]?.[1] as string;
+    expect(persistedKey).toMatch(/^[a-f0-9]{64}$/u);
   });
 });

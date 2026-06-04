@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lookupModelPrice } from "../../src/core/model-pricing.js";
+import { lookupModelPrice, computeAttemptCostUsd } from "../../src/core/model-pricing.js";
 
 describe("lookupModelPrice", () => {
   it("returns the correct price for a known OpenAI model", () => {
@@ -52,5 +52,41 @@ describe("lookupModelPrice", () => {
       expect(price!.inputUsd).toBeGreaterThan(0);
       expect(price!.outputUsd).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("computeAttemptCostUsd (NIN-235)", () => {
+  it("computes a valid cost for finite non-negative token counts", () => {
+    const cost = computeAttemptCostUsd({
+      model: "gpt-4o",
+      tokenUsage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+    });
+    expect(cost).toBeCloseTo(12.5);
+  });
+
+  it("returns null when token usage is absent", () => {
+    expect(computeAttemptCostUsd({ model: "gpt-4o", tokenUsage: null })).toBeNull();
+  });
+
+  it("returns null for an unknown model", () => {
+    expect(computeAttemptCostUsd({ model: "unknown-xyz", tokenUsage: { inputTokens: 1, outputTokens: 1 } })).toBeNull();
+  });
+
+  it("returns null (not NaN) for NaN token counts", () => {
+    expect(computeAttemptCostUsd({ model: "gpt-4o", tokenUsage: { inputTokens: NaN, outputTokens: 5 } })).toBeNull();
+  });
+
+  it("returns null for infinite token counts", () => {
+    expect(
+      computeAttemptCostUsd({ model: "gpt-4o", tokenUsage: { inputTokens: Infinity, outputTokens: 5 } }),
+    ).toBeNull();
+  });
+
+  it("returns null for negative token counts", () => {
+    expect(computeAttemptCostUsd({ model: "gpt-4o", tokenUsage: { inputTokens: -1, outputTokens: 5 } })).toBeNull();
+  });
+
+  it("returns null for non-integer token counts", () => {
+    expect(computeAttemptCostUsd({ model: "gpt-4o", tokenUsage: { inputTokens: 1.5, outputTokens: 5 } })).toBeNull();
   });
 });

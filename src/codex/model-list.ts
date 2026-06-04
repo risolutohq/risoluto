@@ -32,8 +32,12 @@ const QUERY_TIMEOUT_MS = 15_000;
  * `codex app-server` and querying `model/list` via JSON-RPC.
  *
  * Results are cached per API key for 5 minutes. Falls back to the
- * static pricing table if the Codex binary is unavailable or errors.
+ * static pricing table only when the Codex binary is unavailable; all other
+ * failures (auth, protocol, timeout, malformed response) are rethrown.
  */
+function isCodexBinaryUnavailable(error: unknown): boolean {
+  return error instanceof Error && error.message === "codex binary not found";
+}
 export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry[]> {
   const cacheKey = apiKey ?? "";
   const entry = cacheByKey.get(cacheKey);
@@ -54,8 +58,14 @@ export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry
       slot.cached = result;
       slot.expiry = Date.now() + CACHE_TTL_MS;
       return result;
-    } catch {
-      return getAvailableModelIds().map((id) => ({ id, displayName: id, isDefault: false }));
+    } catch (error) {
+      // Only fall back to the static list when Codex is genuinely unavailable
+      // locally (binary missing). Auth/protocol/timeout failures must surface to
+      // the caller rather than be masked as a successful static response.
+      if (isCodexBinaryUnavailable(error)) {
+        return getAvailableModelIds().map((id) => ({ id, displayName: id, isDefault: false }));
+      }
+      throw error;
     } finally {
       slot.inflight = null;
     }

@@ -12,6 +12,7 @@ import {
 } from "../codex/protocol.js";
 import type { RisolutoLogger } from "../core/types.js";
 import { toErrorString } from "../utils/type-guards.js";
+import { redactSensitiveValue, sanitizeContent } from "../core/content-sanitizer.js";
 
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
 
@@ -50,7 +51,7 @@ export class JsonRpcConnection {
       this.onChunk(chunk);
     });
     child.stderr.on("data", (chunk: Buffer) => {
-      this.logger.warn({ stderr: chunk.toString().trim() || null }, "codex stderr");
+      this.logger.warn({ stderr: sanitizeContent(chunk.toString().trim()) || null }, "codex stderr");
     });
     child.stdin.on("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "EPIPE" || error.code === "ERR_STREAM_DESTROYED") {
@@ -187,7 +188,10 @@ export class JsonRpcConnection {
     }
 
     if (isJsonRpcNotification(parsed)) {
-      this.logger.debug({ method: parsed.method, params: parsed.params ?? null }, "codex notification");
+      this.logger.debug(
+        { method: parsed.method, params: redactSensitiveValue(parsed.params ?? null) },
+        "codex notification",
+      );
       this.onNotification?.(parsed);
     }
   }

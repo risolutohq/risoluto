@@ -19,6 +19,7 @@ export type WebhookInboxStatus = "received" | "processing" | "applied" | "ignore
 
 export interface WebhookDeliveryRecord {
   deliveryId: string;
+  bodyDigest: string | null;
   receivedAt: string;
   type: string;
   action: string;
@@ -43,9 +44,10 @@ export interface WebhookInboxStats {
 }
 
 export interface WebhookInboxStore {
-  /** Insert a verified delivery. Returns true if new, false if duplicate. */
+  /** Insert a verified delivery. Returns true if new, false if duplicate (by delivery id or body digest). */
   insertVerified(delivery: {
     deliveryId: string;
+    bodyDigest?: string | null;
     type: string;
     action: string;
     entityId: string | null;
@@ -64,11 +66,17 @@ export interface WebhookInboxStore {
   /** Mark a delivery as ignored (unsupported type, no-op). */
   markIgnored(deliveryId: string): Promise<void>;
 
-  /** Schedule a delivery for retry with backoff. */
+  /**
+   * Schedule a delivery for retry with backoff. `attemptCount` is a floor: the stored counter is
+   * `max(currentAttemptCount + 1, attemptCount)`, so repeated retries always advance the count.
+   */
   markForRetry(deliveryId: string, error: string, attemptCount: number, nextAttemptAt: string): Promise<void>;
 
   /** Move a delivery to the dead-letter queue. */
   markDeadLetter(deliveryId: string, error: string): Promise<void>;
+
+  /** Remove a delivery row so a redelivery is reprocessed instead of treated as a duplicate. */
+  discardVerified(deliveryId: string): Promise<void>;
 
   /** Fetch deliveries due for retry. */
   fetchDueForRetry(): Promise<WebhookDeliveryRecord[]>;
@@ -97,6 +105,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
 
   async insertVerified(delivery: {
     deliveryId: string;
+    bodyDigest?: string | null;
     type: string;
     action: string;
     entityId: string | null;
@@ -111,6 +120,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
         .insert(webhookInbox)
         .values({
           deliveryId: delivery.deliveryId,
+          bodyDigest: delivery.bodyDigest ?? null,
           receivedAt: now,
           type: delivery.type,
           action: delivery.action,
@@ -161,7 +171,10 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
       .update(webhookInbox)
       .set({
         status: "retry",
-        attemptCount,
+        // Increment the stored counter on every retry so it actually tracks attempts; the passed
+        // count is a floor. A bare assignment would pin the column at the caller's literal (the
+        // call sites pass 1), so the counter never climbs and attempt-based escalation can't fire.
+        attemptCount: sql`max(${webhookInbox.attemptCount} + 1, ${attemptCount})`,
         nextAttemptAt,
         lastError: truncateError(error),
       })
@@ -180,19 +193,31 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
       .run();
   }
 
+  async discardVerified(deliveryId: string): Promise<void> {
+    this.db.delete(webhookInbox).where(eq(webhookInbox.deliveryId, deliveryId)).run();
+  }
+
   async fetchDueForRetry(): Promise<WebhookDeliveryRecord[]> {
     const now = new Date().toISOString();
-    const rows = this.db
-      .select()
-      .from(webhookInbox)
-      .where(
-        and(
-          eq(webhookInbox.status, "retry"),
-          or(isNull(webhookInbox.nextAttemptAt), lt(webhookInbox.nextAttemptAt, now)),
-        ),
-      )
-      .all();
-    return rows.map(toRecord);
+    // Atomically claim due retries: select the due 'retry' rows and flip them to
+    // 'processing' inside one transaction, so two concurrent pollers sharing the
+    // connection can never both claim the same delivery (NIN-255).
+    return this.db.transaction((tx) => {
+      const rows = tx
+        .select()
+        .from(webhookInbox)
+        .where(
+          and(
+            eq(webhookInbox.status, "retry"),
+            or(isNull(webhookInbox.nextAttemptAt), lt(webhookInbox.nextAttemptAt, now)),
+          ),
+        )
+        .all();
+      for (const row of rows) {
+        tx.update(webhookInbox).set({ status: "processing" }).where(eq(webhookInbox.deliveryId, row.deliveryId)).run();
+      }
+      return rows.map((row) => ({ ...toRecord(row), status: "processing" as const }));
+    });
   }
 
   async getStats(): Promise<WebhookInboxStats> {
@@ -252,6 +277,7 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
 function toRecord(row: typeof webhookInbox.$inferSelect): WebhookDeliveryRecord {
   return {
     deliveryId: row.deliveryId,
+    bodyDigest: row.bodyDigest,
     receivedAt: row.receivedAt,
     type: row.type,
     action: row.action,

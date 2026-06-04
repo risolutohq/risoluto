@@ -501,4 +501,72 @@ Done.`;
       });
     });
   });
+
+  describe("broad assignment-key redaction (NIN-234)", () => {
+    it("redacts any REDACT_KEYS identifier assignment, not just the legacy list", () => {
+      expect(sanitizeContent("credential=topsecret done")).toBe("credential=[REDACTED] done");
+      expect(sanitizeContent("webhook=https://hooks.example.com/x done")).toBe("webhook=[REDACTED] done");
+      expect(sanitizeContent("SECRET_KEY=abc123 done")).toBe("SECRET_KEY=[REDACTED] done");
+      expect(sanitizeContent("SLACK_SIGNING_SECRET=zzz done")).toBe("SLACK_SIGNING_SECRET=[REDACTED] done");
+    });
+
+    it("leaves non-secret identifier assignments untouched", () => {
+      expect(sanitizeContent("name: test")).toBe("name: test");
+      expect(sanitizeContent("count=5 done")).toBe("count=5 done");
+      expect(sanitizeContent("token abc123 done")).toBe("token abc123 done");
+    });
+
+    it("consumes the full credential after an Authorization scheme", () => {
+      expect(sanitizeContent("Authorization: Basic dXNlcjpwYXNz")).toBe("Authorization: [REDACTED]");
+      expect(sanitizeContent("Proxy-Authorization: Basic AbC123==")).toBe("Proxy-Authorization: [REDACTED]");
+    });
+  });
+
+  describe("non-plain container redaction (NIN-234)", () => {
+    it("redacts secrets inside a Map", () => {
+      expect(
+        redactSensitiveValue(
+          new Map<string, unknown>([
+            ["password", "pw"],
+            ["public", "data"],
+          ]),
+        ),
+      ).toEqual({ password: "[REDACTED]", public: "data" });
+    });
+
+    it("redacts secret-looking strings inside a Set", () => {
+      expect(redactSensitiveValue(new Set(["Bearer a.b.c", "safe"]))).toEqual(["[REDACTED]", "safe"]);
+    });
+
+    it("redacts secret headers in a Headers object", () => {
+      const headers = new Headers({ Authorization: "Bearer top-secret", "Content-Type": "application/json" });
+      expect(redactSensitiveValue(headers)).toEqual({
+        authorization: "[REDACTED]",
+        "content-type": "application/json",
+      });
+    });
+
+    it("redacts secret params in URLSearchParams", () => {
+      expect(redactSensitiveValue(new URLSearchParams("token=abc&page=1"))).toEqual({
+        token: "[REDACTED]",
+        page: "1",
+      });
+    });
+
+    it("redacts secret patterns inside an Error message", () => {
+      const result = redactSensitiveValue(new Error("failed with Bearer top-secret-token")) as {
+        name: string;
+        message: string;
+      };
+      expect(result.name).toBe("Error");
+      expect(result.message).not.toContain("top-secret-token");
+      expect(result.message).toContain("[REDACTED]");
+    });
+
+    it("redacts a Map nested inside a plain object", () => {
+      expect(redactSensitiveValue({ box: new Map([["password", "pw"]]) })).toEqual({
+        box: { password: "[REDACTED]" },
+      });
+    });
+  });
 });

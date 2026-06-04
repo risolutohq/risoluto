@@ -4,6 +4,7 @@ import type { AlertRuleConfig, NotificationDeliverySummary, RisolutoLogger } fro
 import type { ConfigStore } from "../config/store.js";
 import type { NotificationManager } from "../notification/manager.js";
 import { toErrorString } from "../utils/type-guards.js";
+import { sanitizeContent } from "../core/content-sanitizer.js";
 
 type EventPayload = RisolutoEventMap[keyof RisolutoEventMap];
 
@@ -48,12 +49,18 @@ export class AlertPipeline {
       });
       return;
     }
+    // Reserve the cooldown before sending so a concurrent duplicate is suppressed, then release it
+    // if the delivery genuinely failed — a failed notify must not suppress this rule's retry within
+    // the cooldown window (NIN-264). A manager-level dedupe (skippedDuplicate) counts as a recent
+    // delivery, so the reservation is kept in that case.
     this.recentDeliveries.set(cooldownKey, now);
-
     const notificationEvent = buildNotificationEvent(rule, eventType, payload);
     const deliverySummary = await this.options.notificationManager.notify(notificationEvent, {
       channelNames: rule.channels.length > 0 ? rule.channels : undefined,
     });
+    if (deliverySummary.deliveredChannels.length === 0 && !deliverySummary.skippedDuplicate) {
+      this.recentDeliveries.delete(cooldownKey);
+    }
     await this.recordHistory(rule, eventType, summarizeStatus(deliverySummary), payload, deliverySummary);
   }
 
@@ -135,8 +142,22 @@ function buildNotificationEvent(rule: AlertRuleConfig, eventType: string, payloa
     metadata: {
       eventType,
       ruleName: rule.name,
-      payload,
+      summary: buildAlertSummary(payload),
     },
+  };
+}
+
+/**
+ * Allowlisted, redacted per-event summary for alert notifications — replaces the
+ * raw event payload so secrets in error/message/context are never embedded
+ * verbatim in the persisted/sent notification metadata (NIN-247).
+ */
+function buildAlertSummary(payload: EventPayload): Record<string, string | null> {
+  return {
+    issueIdentifier: extractString(payload, ["identifier", "issueIdentifier"]),
+    issueId: extractString(payload, ["issueId"]),
+    status: extractString(payload, ["status"]),
+    error: sanitizeContent(extractString(payload, ["error", "message"])),
   };
 }
 

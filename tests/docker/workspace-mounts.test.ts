@@ -30,11 +30,58 @@ describe("resolveWorkspaceExtraMountPaths", () => {
     await writeFile(path.join(workspacePath, ".git"), `gitdir: ${gitDirPath}\n`, "utf8");
     await writeFile(path.join(gitDirPath, "commondir"), "../..\n", "utf8");
 
-    await expect(resolveWorkspaceExtraMountPaths(workspacePath)).resolves.toEqual([commonDirPath]);
+    await expect(resolveWorkspaceExtraMountPaths(workspacePath, commonDirPath)).resolves.toEqual([commonDirPath]);
   });
 
   it("returns an empty list for normal directories without a git pointer file", async () => {
-    const workspacePath = await createTempDir();
-    await expect(resolveWorkspaceExtraMountPaths(workspacePath)).resolves.toEqual([]);
+    const rootDir = await createTempDir();
+    const workspacePath = path.join(rootDir, "NIN-49");
+    const baseCloneDir = path.join(rootDir, ".base", "repo.git");
+    await mkdir(workspacePath, { recursive: true });
+
+    await expect(resolveWorkspaceExtraMountPaths(workspacePath, baseCloneDir)).resolves.toEqual([]);
+  });
+
+  it("ignores a .git gitdir pointer that resolves outside the trusted base clone", async () => {
+    const rootDir = await createTempDir();
+    const workspacePath = path.join(rootDir, "NIN-49");
+    const baseCloneDir = path.join(rootDir, ".base", "repo.git");
+    const outsideTarget = path.join(rootDir, "outside-secret");
+
+    await mkdir(workspacePath, { recursive: true });
+    await mkdir(outsideTarget, { recursive: true });
+    // Malicious pointer at an arbitrary host path outside the base clone.
+    await writeFile(path.join(workspacePath, ".git"), `gitdir: ${outsideTarget}\n`, "utf8");
+
+    await expect(resolveWorkspaceExtraMountPaths(workspacePath, baseCloneDir)).resolves.toEqual([]);
+  });
+
+  it("ignores a worktree commondir that escapes the trusted base clone", async () => {
+    const rootDir = await createTempDir();
+    const workspacePath = path.join(rootDir, "NIN-49");
+    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "NIN-49");
+    const baseCloneDir = path.join(rootDir, ".base", "repo.git");
+    const outsideCommon = path.join(rootDir, "outside-common");
+
+    await mkdir(workspacePath, { recursive: true });
+    await mkdir(gitDirPath, { recursive: true });
+    await writeFile(path.join(workspacePath, ".git"), `gitdir: ${gitDirPath}\n`, "utf8");
+    // commondir resolves to an arbitrary host path outside the base clone.
+    await writeFile(path.join(gitDirPath, "commondir"), `${outsideCommon}\n`, "utf8");
+
+    await expect(resolveWorkspaceExtraMountPaths(workspacePath, baseCloneDir)).resolves.toEqual([]);
+  });
+
+  it("never mounts workspace-derived paths when no trusted base clone is known", async () => {
+    const rootDir = await createTempDir();
+    const workspacePath = path.join(rootDir, "NIN-49");
+    const gitDirPath = path.join(rootDir, ".base", "repo.git", "worktrees", "NIN-49");
+
+    await mkdir(workspacePath, { recursive: true });
+    await mkdir(gitDirPath, { recursive: true });
+    await writeFile(path.join(workspacePath, ".git"), `gitdir: ${gitDirPath}\n`, "utf8");
+    await writeFile(path.join(gitDirPath, "commondir"), "../..\n", "utf8");
+
+    await expect(resolveWorkspaceExtraMountPaths(workspacePath, undefined)).resolves.toEqual([]);
   });
 });

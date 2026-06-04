@@ -140,11 +140,13 @@ describe("setup reconfigure flow", () => {
     expect(secretsStore.isInitialized()).toBe(false);
 
     const masterKeyResponse = await postJson(baseUrl, "/api/v1/setup/master-key", {});
-    const body = (await masterKeyResponse.json()) as { key: string };
 
     expect(masterKeyResponse.status).toBe(200);
-    expect(body.key).toMatch(/^[a-f0-9]{64}$/u);
-    expect(mocks.writeFileMock).toHaveBeenNthCalledWith(2, "/archive-root/master.key", body.key, {
+    expect(await masterKeyResponse.json()).toEqual({ ok: true });
+    // The freshly generated key is persisted, never echoed in the response (NIN-249).
+    const regeneratedKey = mocks.writeFileMock.mock.calls[1]?.[1] as string;
+    expect(regeneratedKey).toMatch(/^[a-f0-9]{64}$/u);
+    expect(mocks.writeFileMock).toHaveBeenNthCalledWith(2, "/archive-root/master.key", regeneratedKey, {
       encoding: "utf8",
       mode: 0o600,
     });

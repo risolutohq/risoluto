@@ -37,7 +37,15 @@ export function resolveWorkspacePath(
   // When a Workflow Run id is supplied, key the workspace on it so retries of the same issue get isolated
   // worktrees instead of reusing the prior one. Without it, fall back to the legacy issue-keyed behavior.
   const workspaceKey = workflowRunId ? `${baseKey}_${sanitizeIdentifier(workflowRunId)}` : baseKey;
+  // An empty key resolves to the workspace root itself, so a later removal would
+  // target the whole root. Reject it (NIN-243).
+  if (workspaceKey.length === 0) {
+    throw new Error(`workspace key resolved to empty for issue identifier: ${JSON.stringify(issueIdentifier)}`);
+  }
   const workspacePath = path.resolve(workspaceRoot, workspaceKey);
+  if (workspacePath === path.resolve(workspaceRoot)) {
+    throw new Error(`workspace path resolves to the workspace root and was refused: ${workspacePath}`);
+  }
   if (!isWithinRoot(workspaceRoot, workspacePath)) {
     throw new Error(`workspace path escaped root: ${workspacePath}`);
   }

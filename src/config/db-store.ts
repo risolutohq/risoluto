@@ -14,6 +14,7 @@ import type { ConfigOverlayPort } from "./overlay.js";
 import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { config, promptTemplates } from "../persistence/sqlite/schema.js";
 import type { RisolutoLogger, WorkflowRuntimeConfig, ServiceConfig, ValidationError } from "../core/types.js";
+import { toErrorString } from "../utils/type-guards.js";
 import { deriveServiceConfig } from "./derivation-pipeline.js";
 import { validateDispatch } from "./validators.js";
 import { DEFAULT_PROMPT_TEMPLATE } from "./defaults.js";
@@ -31,15 +32,16 @@ import {
  * Read all section rows and reconstruct a flat config map that
  * looks identical to what YAML front matter would produce.
  */
-function readConfigMap(db: RisolutoDatabase, logger: RisolutoLogger): Record<string, unknown> {
+function readConfigMap(db: RisolutoDatabase): Record<string, unknown> {
   const rows = db.select().from(config).all();
   const map: Record<string, unknown> = {};
   for (const row of rows) {
     try {
       map[row.key] = JSON.parse(row.value);
-    } catch {
-      logger.warn({ key: row.key }, "config section JSON parse failed — using empty fallback");
-      map[row.key] = {};
+    } catch (error) {
+      // Corrupt persisted JSON is treated as unsafe — the caller (refresh) keeps the
+      // last-known-good config rather than silently running on an empty section (NIN-252).
+      throw new Error(`config section "${row.key}" contains invalid JSON`, { cause: error });
     }
   }
   return map;
@@ -93,18 +95,47 @@ export class DbConfigStore implements ConfigOverlayPort {
    * and after every mutation.
    */
   refresh(): void {
-    const configMap = readConfigMap(this.db, this.logger);
-    const promptTemplate = readActiveTemplate(this.db, this.logger);
+    let next: { configMap: Record<string, unknown>; workflow: WorkflowRuntimeConfig; serviceConfig: ServiceConfig };
+    try {
+      const configMap = readConfigMap(this.db);
+      next = { configMap, ...this.deriveFromMap(configMap) };
+    } catch (error) {
+      // Corrupt JSON or a config that fails derivation must not blow away a working
+      // runtime: retain the last-known-good config if we have one, otherwise (startup)
+      // fail loudly rather than run on a half-built config (NIN-252).
+      if (this.cachedConfig) {
+        this.logger.error({ error: toErrorString(error) }, "config refresh failed — retaining last-known-good config");
+        return;
+      }
+      throw error;
+    }
 
+    this.cachedMap = next.configMap;
+    this.cachedConfig = next.serviceConfig;
+    this.cachedWorkflow = next.workflow;
+    this.logger.info("config refreshed from DB");
+  }
+
+  private deriveFromMap(configMap: Record<string, unknown>): {
+    workflow: WorkflowRuntimeConfig;
+    serviceConfig: ServiceConfig;
+  } {
+    const promptTemplate = readActiveTemplate(this.db, this.logger);
     const workflow: WorkflowRuntimeConfig = { config: configMap, promptTemplate };
     const serviceConfig = deriveServiceConfig(workflow, {
       secretResolver: (name) => this.deps?.secretsStore?.get(name) ?? undefined,
     });
+    return { workflow, serviceConfig };
+  }
 
-    this.cachedMap = configMap;
-    this.cachedConfig = serviceConfig;
-    this.cachedWorkflow = workflow;
-    this.logger.info("config refreshed from DB");
+  // Derive + validate the candidate BEFORE writing, so a config that fails derivation
+  // never lands in the DB. After a successful write, refresh() re-reads the persisted
+  // (dangerous-key-sanitized) sections so the cache matches disk exactly (NIN-252).
+  private commit(candidateMap: Record<string, unknown>): void {
+    this.deriveFromMap(candidateMap);
+    this.writeSections(candidateMap);
+    this.refresh();
+    this.notify();
   }
 
   getWorkflow(): WorkflowRuntimeConfig {
@@ -135,9 +166,7 @@ export class DbConfigStore implements ConfigOverlayPort {
 
     if (stableStringify(merged) === stableStringify(currentMap)) return false;
 
-    this.writeSections(merged);
-    this.refresh();
-    this.notify();
+    this.commit(merged);
     return true;
   }
 
@@ -150,9 +179,7 @@ export class DbConfigStore implements ConfigOverlayPort {
     setOverlayPathValue(after, segments, value);
     if (stableStringify(after) === stableStringify(before)) return false;
 
-    this.writeSections(after);
-    this.refresh();
-    this.notify();
+    this.commit(after);
     return true;
   }
 
@@ -164,9 +191,7 @@ export class DbConfigStore implements ConfigOverlayPort {
     const removed = removeOverlayPathValue(currentMap, segments);
     if (!removed) return false;
 
-    this.writeSections(currentMap);
-    this.refresh();
-    this.notify();
+    this.commit(currentMap);
     return true;
   }
 

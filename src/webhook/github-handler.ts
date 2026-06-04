@@ -10,7 +10,7 @@ import { asRecord, asStringOrNull } from "../utils/type-guards.js";
 import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 import type { VerifiedWebhookDeliveryStore } from "./delivery-workflow.js";
 import { WebhookDeliveryWorkflow } from "./delivery-workflow.js";
-import { verifyGitHubSignature } from "./signature.js";
+import { computeWebhookBodyDigest, verifyGitHubSignature } from "./signature.js";
 
 const SUPPORTED_GITHUB_ISSUE_ACTIONS = new Set(["opened", "edited", "reopened", "closed", "labeled", "unlabeled"]);
 
@@ -28,6 +28,7 @@ export interface GitHubWebhookHandlerDeps {
 
 interface GitHubWebhookContext {
   action: string;
+  bodyDigest: string;
   config: ServiceConfig | undefined;
   deliveryId: string;
   event: string;
@@ -45,7 +46,7 @@ function validateGitHubWebhookRequest(
   deps: GitHubWebhookHandlerDeps,
   req: WebhookRequest,
   res: Response,
-): { config: ServiceConfig | undefined; event: string } | null {
+): { config: ServiceConfig | undefined; event: string; bodyDigest: string } | null {
   const config = deps.configStore?.getConfig();
   const secret = config?.triggers?.githubSecret ?? null;
   if (!secret) {
@@ -87,12 +88,12 @@ function validateGitHubWebhookRequest(
     return null;
   }
 
-  return { config, event };
+  return { config, event, bodyDigest: computeWebhookBodyDigest(req.rawBody, signature) };
 }
 
 function buildGitHubWebhookContext(
   req: WebhookRequest,
-  validated: { config: ServiceConfig | undefined; event: string },
+  validated: { config: ServiceConfig | undefined; event: string; bodyDigest: string },
 ): GitHubWebhookContext {
   const payload = asRecord(req.body);
   const action = asStringOrNull(payload.action) ?? "unknown";
@@ -106,6 +107,7 @@ function buildGitHubWebhookContext(
 
   return {
     action,
+    bodyDigest: validated.bodyDigest,
     config: validated.config,
     deliveryId: req.get("x-github-delivery")?.trim() ?? "",
     event: validated.event,
@@ -127,6 +129,7 @@ export function handleWebhookGitHub(deps: GitHubWebhookHandlerDeps, req: Webhook
   workflow.respondAccepted(res, {
     delivery: {
       deliveryId: context.deliveryId,
+      bodyDigest: context.bodyDigest,
       type: context.event,
       action: context.action,
       entityId: context.issueId,

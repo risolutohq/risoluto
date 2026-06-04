@@ -151,19 +151,80 @@ describe("registerConfigApi", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           patch: {
-            "webhook.webhookUrl": "https://hooks.example.com/linear",
-            "webhook.healthCheckIntervalMs": 60000,
+            "server.publicHost": "linear.example.com",
+            "server.healthCheckIntervalMs": 60000,
           },
         }),
       });
 
       expect(response.status).toBe(200);
       expect((await response.json()).overlay).toEqual({
-        webhook: {
-          webhookUrl: "https://hooks.example.com/linear",
+        server: {
+          publicHost: "linear.example.com",
           healthCheckIntervalMs: 60000,
         },
       });
+    } finally {
+      await overlayStore.stop();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
+  it("redacts secret-bearing overlay values on PUT, GET, and PATCH (NIN-249)", async () => {
+    const dir = await createTempDir();
+    const overlayStore = new ConfigOverlayStore(path.join(dir, "config", "overlay.yaml"), createLogger());
+    await overlayStore.start();
+
+    const app = express();
+    app.use(express.json());
+    registerConfigApi(app, {
+      getEffectiveConfig: () => ({}),
+      configOverlayStore: overlayStore,
+    });
+
+    const { server, baseUrl } = await startServer(app);
+    try {
+      const putResponse = await fetch(`${baseUrl}/api/v1/config/overlay`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          codex: { apiKey: "sk-supersecretapikeyvalue1234567890" },
+          github: { githubSecret: "ghs_supersecretgithubsecretvalue" },
+          tokens: { linear: "lin_api_supersecrettokenvalue" },
+          webhooks: { url: "https://hooks.example.com/x" },
+        }),
+      });
+      expect(putResponse.status).toBe(200);
+      const putBody = await putResponse.json();
+      expect(putBody.overlay.codex.apiKey).toBe("[REDACTED]");
+      expect(putBody.overlay.github.githubSecret).toBe("[REDACTED]");
+      expect(putBody.overlay.tokens).toEqual({ linear: "[REDACTED]" });
+      expect(putBody.overlay.webhooks).toEqual({ url: "[REDACTED]" });
+      expect(JSON.stringify(putBody)).not.toContain("supersecret");
+
+      const getResponse = await fetch(`${baseUrl}/api/v1/config/overlay`);
+      expect(getResponse.status).toBe(200);
+      const getBody = await getResponse.json();
+      expect(getBody.overlay.codex.apiKey).toBe("[REDACTED]");
+      expect(JSON.stringify(getBody)).not.toContain("supersecret");
+
+      const patchResponse = await fetch(`${baseUrl}/api/v1/config/overlay/codex.apiKey`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ value: "sk-anothersecretapikeyvalue0987654321" }),
+      });
+      expect(patchResponse.status).toBe(200);
+      const patchBody = await patchResponse.json();
+      expect(patchBody.overlay.codex.apiKey).toBe("[REDACTED]");
+      expect(JSON.stringify(patchBody)).not.toContain("anothersecret");
     } finally {
       await overlayStore.stop();
       await new Promise<void>((resolve, reject) => {

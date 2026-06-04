@@ -37,6 +37,52 @@ describe("WorkflowRunArchive", () => {
     await expect(archive.listWorkflowRuns()).resolves.toEqual([workflowRun]);
   });
 
+  it("refuses status writes from a terminal state so done cannot overwrite a cancel (NIN-255)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "Terminal status guard",
+      intent: "Once cancelled, a run stays cancelled.",
+      source: "cli",
+      id: () => "wr_terminal_guard",
+      now: () => "2026-05-26T17:30:00.000Z",
+    });
+    await archive.storeWorkflowRun(workflowRun);
+
+    await archive.updateWorkflowRunStatus(workflowRun.id, "running");
+    const cancelled = await archive.updateWorkflowRunStatus(workflowRun.id, "cancelled");
+    expect(cancelled.status).toBe("cancelled");
+
+    // A done write after cancel is refused — the run stays cancelled on disk too.
+    const afterDone = await archive.updateWorkflowRunStatus(workflowRun.id, "done");
+    expect(afterDone.status).toBe("cancelled");
+    await expect(archive.loadWorkflowRun(workflowRun.id)).resolves.toMatchObject({ status: "cancelled" });
+  });
+
+  it("serializes concurrent status updates under a per-run lock so the first terminal wins (NIN-255)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "Concurrent status guard",
+      intent: "A cancel racing a done must not be clobbered.",
+      source: "cli",
+      id: () => "wr_concurrent_guard",
+      now: () => "2026-05-26T17:35:00.000Z",
+    });
+    await archive.storeWorkflowRun(workflowRun);
+    await archive.updateWorkflowRunStatus(workflowRun.id, "running");
+
+    const [first, second] = await Promise.all([
+      archive.updateWorkflowRunStatus(workflowRun.id, "cancelled"),
+      archive.updateWorkflowRunStatus(workflowRun.id, "done"),
+    ]);
+
+    // The lock serializes the two writes: cancelled lands first, done is then refused.
+    expect(first.status).toBe("cancelled");
+    expect(second.status).toBe("cancelled");
+    await expect(archive.loadWorkflowRun(workflowRun.id)).resolves.toMatchObject({ status: "cancelled" });
+  });
+
   it("appends and reads sequenced Run Log events through the archive interface", async () => {
     const dataDir = await createTempDir();
     const archive = createWorkflowRunArchive({ dataDir });
@@ -72,6 +118,40 @@ describe("WorkflowRunArchive", () => {
       { sequence: 2, eventType: "operator.note", message: "First archive-owned append." },
       { sequence: 3, eventType: "operator.decision", message: "Second archive-owned append." },
     ]);
+  });
+
+  it("assigns event sequences atomically under concurrent appends (NIN-263)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const workflowRun = archive.createWorkflowRunRecord({
+      title: "Concurrent event sequencing",
+      intent: "Two concurrent appends must not collide on the next sequence.",
+      source: "cli",
+      id: () => "wr_concurrent_events",
+      now: () => "2026-05-26T17:25:00.000Z",
+    });
+    await archive.storeWorkflowRun(workflowRun);
+
+    const appendCount = 10;
+    await Promise.all(
+      Array.from({ length: appendCount }, (_unused, index) =>
+        archive.appendWorkflowRunEvents(workflowRun.id, [
+          {
+            at: "2026-05-26T17:26:00.000Z",
+            eventType: "operator.note",
+            workflowRunId: workflowRun.id,
+            source: "cli",
+            message: `concurrent append ${index}`,
+          },
+        ]),
+      ),
+    );
+
+    const events = await archive.readWorkflowRunEvents(workflowRun.id);
+    const sequences = events.map((event) => event.sequence);
+    // 1 accepted event + 10 appends, each sequence assigned exactly once and contiguous.
+    expect(sequences).toEqual(Array.from({ length: appendCount + 1 }, (_unused, index) => index + 1));
+    expect(new Set(sequences).size).toBe(appendCount + 1);
   });
 
   it("stores and reads Workflow Run artifacts through the archive interface", async () => {

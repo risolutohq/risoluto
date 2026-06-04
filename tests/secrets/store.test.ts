@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -111,6 +111,74 @@ describe("SecretsStore", () => {
     const verifyStore = new SecretsStore(dir, createLogger());
     await verifyStore.start();
     expect(verifyStore.get("TOKEN")).toBe("safe-value");
+  });
+
+  it("clears activeMasterKey on a failed start so the store is left uninitialized (NIN-251)", async () => {
+    const dir = await createTempDir();
+    process.env.MASTER_KEY = "key-a";
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.start();
+    await store.set("TOKEN", "value-1");
+
+    process.env.MASTER_KEY = "key-b";
+    const wrongKeyStore = new SecretsStore(dir, createLogger());
+    await expect(wrongKeyStore.start()).rejects.toThrow("MASTER_KEY may not match");
+
+    // Failed start must not leave the wrong key active — the store is unusable, and a
+    // later write throws instead of clobbering secrets.enc with the wrong key.
+    expect(wrongKeyStore.isInitialized()).toBe(false);
+    await expect(wrongKeyStore.set("TOKEN", "poison")).rejects.toThrow("has not been started");
+  });
+
+  it("checks the master key before mutating the cache when set() runs before start (NIN-251)", async () => {
+    const dir = await createTempDir();
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.startDeferred();
+
+    await expect(store.set("TOKEN", "value")).rejects.toThrow("has not been started");
+    // The plaintext cache must stay untouched — no value cached that never reached disk.
+    expect(store.get("TOKEN")).toBeNull();
+    expect(store.list()).toEqual([]);
+  });
+
+  it("rolls the cache back when persist fails so a rejected set never lands on disk later (NIN-251)", async () => {
+    const dir = await createTempDir();
+    process.env.MASTER_KEY = "rollback-key";
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.start();
+    await store.set("TOKEN", "good-value");
+
+    // Make the secrets dir read-only so the next persist (temp-file write) fails deterministically.
+    await chmod(dir, 0o500);
+    try {
+      await expect(store.set("TOKEN", "rejected-value")).rejects.toThrow();
+      // The cache must reflect the last durably-persisted value, not the rejected one.
+      expect(store.get("TOKEN")).toBe("good-value");
+    } finally {
+      await chmod(dir, 0o700);
+    }
+
+    // A later successful mutation persists the whole cache; the rejected value must not ride along.
+    await store.set("OTHER", "v2");
+    const restarted = new SecretsStore(dir, createLogger());
+    await restarted.start();
+    expect(restarted.get("TOKEN")).toBe("good-value");
+    expect(restarted.get("OTHER")).toBe("v2");
+  });
+
+  it("writes secrets.enc with owner-only 0o600 permissions (NIN-251)", async () => {
+    const dir = await createTempDir();
+    process.env.MASTER_KEY = "perm-master-key";
+
+    const store = new SecretsStore(dir, createLogger());
+    await store.start();
+    await store.set("TOKEN", "value");
+
+    const mode = (await stat(path.join(dir, "secrets.enc"))).mode & 0o777;
+    expect(mode).toBe(0o600);
   });
 
   it("writes V2 scrypt envelope and survives restart — regression for fnd_sig-feat-library-6005595fef-6964", async () => {

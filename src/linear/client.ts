@@ -1,5 +1,5 @@
 import { asArray, asBooleanOrNull, asRecord, asStringOrNull, toErrorString } from "../utils/type-guards.js";
-import { withRetry, withRetryReturn } from "../utils/retry.js";
+import { withNonFatalRetry, withRetryReturn } from "../utils/retry.js";
 import { normalizeIssue } from "./issue-parser.js";
 import type { Issue, ServiceConfig, RisolutoLogger } from "../core/types.js";
 import {
@@ -266,11 +266,12 @@ export class LinearClient {
       url: string;
       enabled: boolean;
       label: string | null;
-      secret: string | null;
       resourceTypes: string[];
       teamIds: string[];
     }>
   > {
+    // The listing never carries the signing secret — it is omitted from the query and the result so
+    // health/registration code can't accidentally leak it (NIN-263).
     const payload = await this.runGraphQL(buildWebhooksQuery());
     const nodes = asArray(asRecord(asRecord(payload.data).webhooks).nodes);
     return nodes.map((node) => {
@@ -280,7 +281,6 @@ export class LinearClient {
         url: asStringOrNull(n.url) ?? "",
         enabled: n.enabled === true,
         label: asStringOrNull(n.label),
-        secret: asStringOrNull(n.secret),
         resourceTypes: asArray(n.resourceTypes).map(String),
         teamIds: asArray(n.teamIds).map(String),
       };
@@ -328,7 +328,7 @@ export class LinearClient {
       secret?: string;
     },
   ): Promise<void> {
-    await withRetry(this.logger, "updateWebhook", async () => {
+    await withNonFatalRetry(this.logger, "updateWebhook", async () => {
       await this.runGraphQL(buildWebhookUpdateMutation(), { id, ...input });
     });
   }
@@ -338,7 +338,7 @@ export class LinearClient {
    * Retries up to 3 times with exponential backoff.
    */
   async deleteWebhook(id: string): Promise<void> {
-    await withRetry(this.logger, "deleteWebhook", async () => {
+    await withNonFatalRetry(this.logger, "deleteWebhook", async () => {
       await this.runGraphQL(buildWebhookDeleteMutation(), { id });
     });
   }
@@ -348,7 +348,7 @@ export class LinearClient {
    * Retries up to 3 times with exponential backoff. Non-blocking on failure.
    */
   async updateIssueState(issueId: string, stateId: string): Promise<void> {
-    await withRetry(this.logger, "updateIssueState", async () => {
+    await withNonFatalRetry(this.logger, "updateIssueState", async () => {
       await this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
     });
   }
@@ -371,7 +371,7 @@ export class LinearClient {
    * Retries up to 3 times with exponential backoff. Non-blocking on failure.
    */
   async createComment(issueId: string, body: string): Promise<void> {
-    await withRetry(this.logger, "createComment", async () => {
+    await withNonFatalRetry(this.logger, "createComment", async () => {
       await this.runGraphQL(buildIssueCommentMutation(), { issueId, body });
     });
   }
@@ -575,7 +575,7 @@ export class LinearClient {
       iconUrl?: string | null;
     },
   ): Promise<void> {
-    await withRetry(this.logger, "updateAttachment", async () => {
+    await withNonFatalRetry(this.logger, "updateAttachment", async () => {
       await this.runGraphQL(buildAttachmentUpdateMutation(), {
         id,
         title: input.title ?? null,

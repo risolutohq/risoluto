@@ -529,4 +529,33 @@ describe("JsonRpcConnection", () => {
       );
     });
   });
+
+  describe("secret redaction (NIN-246)", () => {
+    it("redacts secrets in codex stderr before logging", () => {
+      const mock = makeMockChild();
+      createConnection(mock);
+
+      mock.stderr.emit("data", Buffer.from("fatal: token=sk-abcdef1234567890SECRET rejected"));
+
+      const warnCall = logger.warn.mock.calls.find((call) => call[1] === "codex stderr");
+      expect(warnCall).toBeDefined();
+      expect(JSON.stringify(warnCall?.[0])).not.toContain("sk-abcdef1234567890SECRET");
+    });
+
+    it("redacts secrets in codex notification params before logging", () => {
+      const mock = makeMockChild();
+      createConnection(mock);
+
+      mock.sendLine({
+        jsonrpc: "2.0",
+        method: "codex/event/agent_message",
+        params: { token: "sk-abcdef1234567890SECRET", note: "hello" },
+      });
+
+      const debugCall = logger.debug.mock.calls.find((call) => call[1] === "codex notification");
+      expect(debugCall).toBeDefined();
+      expect(JSON.stringify(debugCall?.[0])).not.toContain("sk-abcdef1234567890SECRET");
+      expect(onNotification).toHaveBeenCalled();
+    });
+  });
 });

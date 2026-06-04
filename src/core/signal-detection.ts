@@ -22,11 +22,14 @@ function normalizeForDetection(content: string): string {
 
 /**
  * Compiles markers into boundary-aware patterns: a marker matches only when it
- * is not immediately followed by another word character, so `...: done` is not
- * found inside `...: done_uploading`. Matched against normalized text.
+ * is neither immediately preceded nor followed by another word character, so
+ * `...: done` is not found inside `...: done_uploading` and `risoluto_status`
+ * is not found inside `notrisoluto_status`. Matched against normalized text.
  */
 function compileMarkerPatterns(markers: readonly string[]): RegExp[] {
-  return markers.map((marker) => new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9_])`));
+  return markers.map(
+    (marker) => new RegExp(`(?<![a-z0-9_])${marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9_])`),
+  );
 }
 
 const DONE_PATTERNS = compileMarkerPatterns(DONE_MARKERS);

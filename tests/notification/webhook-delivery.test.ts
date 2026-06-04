@@ -52,8 +52,10 @@ describe("deliverWebhookJson", () => {
     );
   });
 
-  it("keeps labeled status errors and logs delivery context", async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response("down", { status: 503 }));
+  it("logs status only, never the upstream body, on failure (NIN-248)", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("error: token=sk-upstreamsecret123", { status: 503 }));
     const logger = { error: vi.fn() };
 
     await expect(
@@ -67,17 +69,11 @@ describe("deliverWebhookJson", () => {
         fetchImpl,
         logger,
       }),
-    ).rejects.toThrow("webhook request failed with status 503: down");
+    ).rejects.toThrow("webhook request failed with status 503");
 
-    expect(logger.error).toHaveBeenCalledWith(
-      {
-        channel: "ops",
-        eventType: "worker_failed",
-        issueIdentifier: "NIN-42",
-        error: "webhook request failed with status 503: down",
-      },
-      "notification delivery failed",
-    );
+    const loggedError = logger.error.mock.calls[0][0].error as string;
+    expect(loggedError).not.toContain("sk-upstreamsecret123");
+    expect(loggedError).not.toContain("token=");
   });
 
   it("aborts delivery after the configured timeout", async () => {

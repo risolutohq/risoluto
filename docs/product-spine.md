@@ -61,7 +61,7 @@ Risoluto's domain vocabulary. Every doc, symbol, and ADR uses those names; where
 concept differently, the code is wrong. `CONTEXT.md` separates runtime terms (Workflow Run, Agent
 Role, Validation Gate, …) from build-time planning vocabulary (Research Wiki, Idea Engine, Candidate
 Feature) — the latter are operator tooling, not Workflow Run primitives, consistent with principle
-#9 (LLMs propose; the founder disposes).
+\#9 (LLMs propose; the founder disposes).
 
 ## Architecture principles (non-negotiable)
 

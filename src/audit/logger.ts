@@ -6,16 +6,41 @@
  * and newValue.
  */
 
+import { createHash } from "node:crypto";
+
 import type { TypedEventBus } from "../core/event-bus.js";
 import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { configHistory } from "../persistence/sqlite/schema.js";
 import type { AuditLoggerPort } from "./port.js";
 import type { AuditEntry, AuditQueryOptions, AuditRecord } from "./types.js";
+import { redactSensitiveValue, sanitizeContent } from "../core/content-sanitizer.js";
 
 export type { AuditEntry, AuditQueryOptions, AuditRecord };
 
 const REDACTED = "[REDACTED]";
+
+// Audit values are fully redacted when their key/path names a secret-like field,
+// and otherwise scanned for embedded secret patterns, so no config mutation
+// persists a webhook URL, token, API key, or $SECRET-resolved value verbatim
+// (NIN-247).
+const SENSITIVE_AUDIT_KEY = /secret|token|password|credential|authorization|api[_-]?key|webhook/i;
+
+function redactAuditValue(key: string, path: string | null, value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (SENSITIVE_AUDIT_KEY.test(key) || (path !== null && SENSITIVE_AUDIT_KEY.test(path))) {
+    return REDACTED;
+  }
+  // Preserve the stored value's shape (audit values are usually serialized
+  // config) while redacting any secret-bearing sub-value.
+  try {
+    return JSON.stringify(redactSensitiveValue(JSON.parse(value)));
+  } catch {
+    return sanitizeContent(value, { maxLength: 100_000 });
+  }
+}
 
 interface WhereResult {
   where: string;
@@ -82,6 +107,25 @@ export class AuditLogger implements AuditLoggerPort {
     const path = entry.path ?? null;
     const actor = entry.actor ?? "operator";
     const timestamp = new Date().toISOString();
+    const previousValue = isSecret ? REDACTED : redactAuditValue(entry.key, path, entry.previousValue ?? null);
+    const newValue = isSecret ? REDACTED : redactAuditValue(entry.key, path, entry.newValue ?? null);
+
+    // Link this entry to the chain tip: hash the canonical (already-redacted) fields together with
+    // the prior entry's hash. better-sqlite3 is synchronous, so this read-then-insert is atomic
+    // within the process and no concurrent entry can splice between them (NIN-266).
+    const previousHash = this.latestEntryHash();
+    const entryHash = computeAuditEntryHash({
+      tableName: entry.tableName,
+      key: entry.key,
+      path,
+      operation: entry.operation,
+      previousValue,
+      newValue,
+      actor,
+      requestId: entry.requestId ?? null,
+      timestamp,
+      previousHash,
+    });
 
     this.db
       .insert(configHistory)
@@ -90,11 +134,13 @@ export class AuditLogger implements AuditLoggerPort {
         key: entry.key,
         path,
         operation: entry.operation,
-        previousValue: isSecret ? REDACTED : (entry.previousValue ?? null),
-        newValue: isSecret ? REDACTED : (entry.newValue ?? null),
+        previousValue,
+        newValue,
         actor,
         requestId: entry.requestId ?? null,
         timestamp,
+        entryHash,
+        previousHash,
       })
       .run();
 
@@ -138,6 +184,13 @@ export class AuditLogger implements AuditLoggerPort {
     });
   }
 
+  private latestEntryHash(): string | null {
+    const row = this.db.$client.prepare("SELECT entry_hash FROM config_history ORDER BY id DESC LIMIT 1").get() as
+      | { entry_hash: string | null }
+      | undefined;
+    return row?.entry_hash ?? null;
+  }
+
   query(options?: AuditQueryOptions): AuditRecord[] {
     const { where, params } = buildWhereClause(options);
     const limit = options?.limit ?? 50;
@@ -160,6 +213,23 @@ export class AuditLogger implements AuditLoggerPort {
   }
 }
 
+// Canonical hash of one audit entry, chained to the previous entry's hash. Object key order is fixed
+// by the literal, so JSON.stringify is deterministic across calls (NIN-266).
+function computeAuditEntryHash(fields: {
+  tableName: string;
+  key: string;
+  path: string | null;
+  operation: string;
+  previousValue: string | null;
+  newValue: string | null;
+  actor: string;
+  requestId: string | null;
+  timestamp: string;
+  previousHash: string | null;
+}): string {
+  return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
+}
+
 function rowToAuditRecord(row: Record<string, unknown>): AuditRecord {
   return {
     id: row.id as number,
@@ -172,5 +242,7 @@ function rowToAuditRecord(row: Record<string, unknown>): AuditRecord {
     actor: (row.actor as string) ?? "operator",
     requestId: (row.request_id as string) ?? null,
     timestamp: row.timestamp as string,
+    entryHash: (row.entry_hash as string) ?? null,
+    previousHash: (row.previous_hash as string) ?? null,
   };
 }

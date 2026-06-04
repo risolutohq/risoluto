@@ -454,4 +454,15 @@ describe("migrateFromJsonl", () => {
     expect(attemptRows).toHaveLength(result.attemptCount);
     expect(eventRows).toHaveLength(result.eventCount);
   });
+
+  it("hard-fails on a non-ENOENT scan error instead of reporting an empty archive (NIN-254)", async () => {
+    const archiveDir = await createTempDir();
+    // The attempts path is a regular file, not a directory → readdir raises ENOTDIR.
+    // safeReaddir must rethrow that (only ENOENT yields an empty list), so the caller
+    // does not mark the migration complete on a permission/I-O failure.
+    await writeFile(path.join(archiveDir, "attempts"), "not a directory", "utf8");
+
+    db = openDatabase(":memory:");
+    await expect(migrateFromJsonl(db, archiveDir, createMockLogger())).rejects.toThrow();
+  });
 });

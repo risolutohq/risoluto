@@ -350,7 +350,7 @@ async function renderPromptTemplate(
   turnId: string | null,
   turnCount: number,
 ): Promise<SessionInitSuccess | EarlyOutcome> {
-  let parsedTemplate;
+  let parsedTemplate: ReturnType<Liquid["parse"]>;
   try {
     validatePromptTemplate(input.promptTemplate);
     parsedTemplate = liquid.parse(input.promptTemplate);
@@ -369,7 +369,7 @@ async function renderPromptTemplate(
   try {
     prompt = await liquid.render(parsedTemplate, {
       workflowRun: buildWorkflowRunPromptContext(input),
-      issue: input.issue,
+      issue: buildIssuePromptContext(input.issue),
       attempt: input.attempt,
       workspace: input.workspace,
     });
@@ -387,6 +387,34 @@ async function renderPromptTemplate(
   return { threadId, prompt };
 }
 
+/**
+ * Neutralise Liquid delimiter tokens embedded in user-origin free-text fields
+ * (issue / workflow-run title and description) before they are interpolated
+ * into a prompt. The renderer runs with `strictVariables` so interpolated
+ * values are never re-parsed as template syntax, but fencing the delimiters is
+ * defense-in-depth: it guarantees that an injected directive carried in a user
+ * field cannot reconstruct template structure in any downstream re-render.
+ * Delimiter-free text (the overwhelmingly common case) is returned unchanged.
+ */
+function fenceUntrustedPromptText<T extends string | null>(value: T): T {
+  if (typeof value !== "string") {
+    return value;
+  }
+  return value.replace(/\{\{/g, "{ {").replace(/\}\}/g, "} }").replace(/\{%/g, "{ %").replace(/%\}/g, "% }") as T;
+}
+
+/**
+ * Build the issue context exposed to prompt templates with its user-origin
+ * free-text fields fenced. All other issue fields are preserved verbatim.
+ */
+function buildIssuePromptContext(issue: Issue): Issue {
+  return {
+    ...issue,
+    title: fenceUntrustedPromptText(issue.title),
+    description: fenceUntrustedPromptText(issue.description),
+  };
+}
+
 function buildWorkflowRunPromptContext(
   input: Pick<SessionInitInput, "issue" | "workflowRun">,
 ): WorkflowRunPromptContext {
@@ -394,8 +422,8 @@ function buildWorkflowRunPromptContext(
   return {
     id: workflowRun?.id ?? input.issue.id,
     identifier: workflowRun?.identifier ?? input.issue.identifier,
-    title: workflowRun?.title ?? input.issue.title,
-    description: workflowRun?.description ?? input.issue.description,
+    title: fenceUntrustedPromptText(workflowRun?.title ?? input.issue.title),
+    description: fenceUntrustedPromptText(workflowRun?.description ?? input.issue.description),
     url: workflowRun?.url ?? input.issue.url,
   };
 }

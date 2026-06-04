@@ -6,6 +6,7 @@ import YAML from "yaml";
 
 import type { RisolutoLogger } from "../core/types.js";
 import { isRecord, toErrorString } from "../utils/type-guards.js";
+import { createSerialChain, type SerialChain } from "../utils/serial-chain.js";
 import {
   mergeOverlayMaps,
   normalizePathExpression,
@@ -34,7 +35,7 @@ export class ConfigOverlayStore implements ConfigOverlayPort {
   private overlay: Record<string, unknown> = {};
   private readonly listeners = new Set<() => void>();
   private watcher: FSWatcher | null = null;
-  private mutationChain: Promise<void> = Promise.resolve();
+  private readonly enqueueMutation: SerialChain = createSerialChain();
   private persistSequence = 0;
 
   constructor(
@@ -121,15 +122,6 @@ export class ConfigOverlayStore implements ConfigOverlayPort {
       await this.commit(next, `delete:${pathExpression}`);
       return true;
     });
-  }
-
-  private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationChain.then(operation, operation);
-    this.mutationChain = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
   }
 
   private async commit(nextMap: Record<string, unknown>, reason: string): Promise<boolean> {

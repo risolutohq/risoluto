@@ -57,7 +57,7 @@ function scheduleStreamEmit(input: StreamEmitInput, delta: string): void {
       sessionId: composeSessionId(input.threadId, input.turnId),
       event: input.event,
       message: input.message,
-      content: buffer.content,
+      content: sanitizeContent(buffer.content, { maxLength: MAX_LIVE_BUFFER_CHARS }),
       metadata: { itemId: input.itemId, streaming: true },
     });
   }, STREAM_DEBOUNCE_MS);

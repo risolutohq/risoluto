@@ -32,17 +32,27 @@ export function lookupModelPrice(model: string): ModelPrice | null {
   return PRICES[model] ?? null;
 }
 
-/** Computes cost in USD for a single attempt. Returns `null` when token usage or pricing is unavailable. */
+/** A token count must be a finite, non-negative safe integer to yield a valid cost. */
+function isValidTokenCount(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
+ * Computes cost in USD for a single attempt. Returns `null` when token usage or
+ * pricing is unavailable, or when reported token counts are not finite,
+ * non-negative safe integers (guards against NaN/Infinity/negative propagating
+ * into invalid totals).
+ */
 export function computeAttemptCostUsd(attempt: {
   model: string;
   tokenUsage: { inputTokens: number; outputTokens: number } | null;
 }): number | null {
   if (!attempt.tokenUsage) return null;
+  const { inputTokens, outputTokens } = attempt.tokenUsage;
+  if (!isValidTokenCount(inputTokens) || !isValidTokenCount(outputTokens)) return null;
   const price = lookupModelPrice(attempt.model);
   if (!price) return null;
-  return (
-    (attempt.tokenUsage.inputTokens * price.inputUsd + attempt.tokenUsage.outputTokens * price.outputUsd) / 1_000_000
-  );
+  return (inputTokens * price.inputUsd + outputTokens * price.outputUsd) / 1_000_000;
 }
 
 /** Returns all model IDs present in the pricing table. */

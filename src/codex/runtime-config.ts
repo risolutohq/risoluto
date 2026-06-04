@@ -84,6 +84,45 @@ function providerDisplayName(provider: CodexProviderConfig, providerId: string):
   return providerId;
 }
 
+/**
+ * Header/query-parameter names that carry credentials. A literal value for any
+ * of these would bake a secret into the generated Codex config TOML, so they
+ * must be supplied via env-var indirection (`env_http_headers`) instead.
+ */
+const SENSITIVE_LITERAL_KEYS = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "api-key",
+  "apikey",
+  "openai-api-key",
+  "x-auth-token",
+  "access-token",
+  "secret",
+  "token",
+  "password",
+]);
+
+export class SensitiveLiteralConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SensitiveLiteralConfigError";
+  }
+}
+
+function assertNoSensitiveLiteralKeys(values: Record<string, string>, tableLabel: string): void {
+  for (const key of Object.keys(values)) {
+    if (SENSITIVE_LITERAL_KEYS.has(key.trim().toLowerCase())) {
+      throw new SensitiveLiteralConfigError(
+        `Refusing to write literal secret "${key}" into Codex ${tableLabel}; ` +
+          `use env_http_headers indirection so the value is read from an environment variable.`,
+      );
+    }
+  }
+}
+
 function appendStringMap(lines: string[], tableName: string, values: Record<string, string>): void {
   const entries = Object.entries(values);
   if (entries.length === 0) {
@@ -113,6 +152,8 @@ function appendProviderFields(lines: string[], provider: CodexProviderConfig, pr
   if (provider.requiresOpenaiAuth) {
     lines.push("requires_openai_auth = true");
   }
+  assertNoSensitiveLiteralKeys(provider.httpHeaders, "http_headers");
+  assertNoSensitiveLiteralKeys(provider.queryParams, "query_params");
   appendStringMap(lines, `[model_providers.${formatTomlKey(providerId)}.http_headers]`, provider.httpHeaders);
   appendStringMap(lines, `[model_providers.${formatTomlKey(providerId)}.env_http_headers]`, provider.envHttpHeaders);
   appendStringMap(lines, `[model_providers.${formatTomlKey(providerId)}.query_params]`, provider.queryParams);

@@ -138,6 +138,53 @@ describe("SqliteWebhookInbox", () => {
     }
   });
 
+  it("dedupes a replay on the body+signature digest even under a fresh delivery id (NIN-262)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      const first = await store.inbox.insertVerified({
+        ...createDelivery({ deliveryId: "gh-delivery-1" }),
+        bodyDigest: "digest-aaa",
+      });
+      // The same signed body replayed under a NEW X-GitHub-Delivery → same digest → deduped.
+      const replay = await store.inbox.insertVerified({
+        ...createDelivery({ deliveryId: "gh-delivery-2" }),
+        bodyDigest: "digest-aaa",
+      });
+      // A genuinely different body → different digest → new.
+      const distinct = await store.inbox.insertVerified({
+        ...createDelivery({ deliveryId: "gh-delivery-3" }),
+        bodyDigest: "digest-bbb",
+      });
+
+      expect(first).toEqual({ isNew: true });
+      expect(replay).toEqual({ isNew: false });
+      expect(distinct).toEqual({ isNew: true });
+      expect(store.db.select().from(webhookInbox).all()).toHaveLength(2);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("dedupes digest-less deliveries only by delivery id (null digests are distinct) (NIN-262)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      // Two digest-less deliveries with distinct ids both insert — NULL digests don't collide.
+      const a = await store.inbox.insertVerified(createDelivery({ deliveryId: "linear-1" }));
+      const b = await store.inbox.insertVerified(createDelivery({ deliveryId: "linear-2" }));
+      const dupId = await store.inbox.insertVerified(createDelivery({ deliveryId: "linear-1" }));
+
+      expect(a).toEqual({ isNew: true });
+      expect(b).toEqual({ isNew: true });
+      expect(dupId).toEqual({ isNew: false });
+    } finally {
+      store.close();
+    }
+  });
+
   it("transitions deliveries through processing, applied, and ignored states with exact timestamps", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);
@@ -206,6 +253,28 @@ describe("SqliteWebhookInbox", () => {
       });
       expect(row?.lastError).toBe(longError.slice(0, 500));
       expect(row?.lastError).toHaveLength(500);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("increments the stored attempt count on each retry even when callers pass a fixed floor (NIN-263)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      await store.inbox.insertVerified(createDelivery({ deliveryId: "delivery-retry-count" }));
+
+      // The production call sites pass a hardcoded floor of 1; the stored counter must still climb
+      // across repeated retries so any attempt-based dead-letter escalation can eventually fire.
+      await store.inbox.markForRetry("delivery-retry-count", "boom", 1, "2026-04-01T10:15:00.000Z");
+      expect(getRow(store.db, "delivery-retry-count")?.attemptCount).toBe(1);
+
+      await store.inbox.markForRetry("delivery-retry-count", "boom again", 1, "2026-04-01T10:16:00.000Z");
+      expect(getRow(store.db, "delivery-retry-count")?.attemptCount).toBe(2);
+
+      await store.inbox.markForRetry("delivery-retry-count", "boom thrice", 1, "2026-04-01T10:17:00.000Z");
+      expect(getRow(store.db, "delivery-retry-count")?.attemptCount).toBe(3);
     } finally {
       store.close();
     }
@@ -304,7 +373,12 @@ describe("SqliteWebhookInbox", () => {
       const due = await store.inbox.fetchDueForRetry();
       expect(due.map((delivery) => delivery.deliveryId).sort()).toEqual(["retry-null", "retry-past"]);
       expect(due.map((delivery) => delivery.attemptCount).sort((left, right) => left - right)).toEqual([1, 2]);
-      expect(due.every((delivery) => delivery.status === "retry")).toBe(true);
+      // fetchDueForRetry atomically claims the rows, so they come back as 'processing' (NIN-255).
+      expect(due.every((delivery) => delivery.status === "processing")).toBe(true);
+
+      // A second poll returns nothing — the due rows are already claimed (no double-claim).
+      const secondPoll = await store.inbox.fetchDueForRetry();
+      expect(secondPoll).toHaveLength(0);
     } finally {
       store.close();
     }

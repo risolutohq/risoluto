@@ -8,6 +8,7 @@ import {
   buildConfigToml,
   getRequiredProviderEnvNames,
   prepareCodexRuntimeConfig,
+  SensitiveLiteralConfigError,
 } from "../../src/codex/runtime-config.js";
 import type { CodexConfig } from "../../src/core/types.js";
 
@@ -98,6 +99,72 @@ describe("buildConfigToml", () => {
     expect(configToml).toContain('base_url = "http://host.docker.internal:8317/v1"');
     expect(configToml).toContain("requires_openai_auth = true");
     expect(configToml).toContain('cli_auth_credentials_store = "file"');
+  });
+
+  it("rejects a literal Authorization header in provider http_headers", () => {
+    expect(() =>
+      buildConfigToml(
+        baseConfig({
+          auth: { mode: "openai_login", sourceHome: "/tmp/test-home" },
+          provider: {
+            id: "cliproxyapi",
+            name: "CLIProxyAPI",
+            baseUrl: "https://api.example.com/v1",
+            envKey: null,
+            envKeyInstructions: null,
+            wireApi: "responses",
+            requiresOpenaiAuth: false,
+            httpHeaders: { Authorization: "Bearer sk-secret-literal" },
+            envHttpHeaders: {},
+            queryParams: {},
+          },
+        }),
+      ),
+    ).toThrow(SensitiveLiteralConfigError);
+  });
+
+  it("rejects a literal api_key query parameter in provider query_params", () => {
+    expect(() =>
+      buildConfigToml(
+        baseConfig({
+          auth: { mode: "openai_login", sourceHome: "/tmp/test-home" },
+          provider: {
+            id: "cliproxyapi",
+            name: "CLIProxyAPI",
+            baseUrl: "https://api.example.com/v1",
+            envKey: null,
+            envKeyInstructions: null,
+            wireApi: "responses",
+            requiresOpenaiAuth: false,
+            httpHeaders: {},
+            envHttpHeaders: {},
+            queryParams: { "api-key": "sk-secret-literal" },
+          },
+        }),
+      ),
+    ).toThrow(/use env_http_headers indirection/);
+  });
+
+  it("allows sensitive header names when supplied via env_http_headers indirection", () => {
+    const configToml = buildConfigToml(
+      baseConfig({
+        auth: { mode: "openai_login", sourceHome: "/tmp/test-home" },
+        provider: {
+          id: "cliproxyapi",
+          name: "CLIProxyAPI",
+          baseUrl: "https://api.example.com/v1",
+          envKey: null,
+          envKeyInstructions: null,
+          wireApi: "responses",
+          requiresOpenaiAuth: false,
+          httpHeaders: {},
+          envHttpHeaders: { authorization: "PROVIDER_AUTH_TOKEN" },
+          queryParams: {},
+        },
+      }),
+    );
+
+    expect(configToml).toContain('authorization = "PROVIDER_AUTH_TOKEN"');
   });
 
   it("falls back to the provider id when a custom provider omits name", () => {

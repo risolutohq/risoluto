@@ -158,6 +158,75 @@ describe("createReadGuard", () => {
     expect(response.status).not.toHaveBeenCalled();
   });
 
+  it("rejects a valid ?read_token= on non-SSE protected reads (NIN-250)", () => {
+    vi.stubEnv("RISOLUTO_WRITE_TOKEN", "write-secret");
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/state",
+      socket: { remoteAddress: "10.0.0.5" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: { read_token: "write-secret" },
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(401);
+  });
+
+  it("rejects a non-loopback protected read that spoofs X-Forwarded-For: 127.0.0.1 (NIN-250)", () => {
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/api/v1/state",
+      socket: { remoteAddress: "203.0.113.10" },
+      get: vi.fn((header: string) => (header.toLowerCase() === "x-forwarded-for" ? "127.0.0.1" : undefined)),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(403);
+  });
+
+  it("protects /metrics from remote callers without a token (NIN-250)", () => {
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/metrics",
+      socket: { remoteAddress: "203.0.113.10" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(403);
+  });
+
+  it("allows /metrics from loopback without a token", () => {
+    const next = vi.fn();
+    const response = createResponse();
+    const request = {
+      method: "GET",
+      path: "/metrics",
+      socket: { remoteAddress: "127.0.0.1" },
+      get: vi.fn().mockReturnValue(undefined),
+      query: {},
+    };
+
+    createReadGuard()(request as never, response as never, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(response.status).not.toHaveBeenCalled();
+  });
+
   it.each([
     "/api/v1/prs",
     "/api/v1/observability",

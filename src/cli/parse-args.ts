@@ -6,6 +6,17 @@ import { createLogger } from "../core/logger.js";
 import { initErrorTracking } from "../core/error-tracking.js";
 import type { RisolutoLogger } from "../core/types.js";
 
+/**
+ * Bad CLI input (unknown flag, malformed --port). The top-level handler renders this as a single
+ * concise line instead of a full stack trace, since it's user error not an internal fault (NIN-266).
+ */
+export class CliArgumentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CliArgumentError";
+  }
+}
+
 function parsePortValue(rawPort: string | undefined): number | undefined {
   if (rawPort === undefined) return undefined;
   // Reject empty, non-digit, and leading-zero forms (e.g. "00000004000")
@@ -13,15 +24,32 @@ function parsePortValue(rawPort: string | undefined): number | undefined {
   // enforce a real TCP port range (1–65535) — 0 means "any free port" and
   // must be explicit, not inherited from a parent process unintentionally.
   if (!/^[1-9]\d*$/.test(rawPort)) {
-    throw new TypeError(
+    throw new CliArgumentError(
       `invalid --port value: ${rawPort}. Expected an integer between 1 and 65535 with no leading zeros.`,
     );
   }
   const value = Number(rawPort);
   if (value < 1 || value > 65535) {
-    throw new TypeError(`invalid --port value: ${rawPort}. Expected an integer between 1 and 65535.`);
+    throw new CliArgumentError(`invalid --port value: ${rawPort}. Expected an integer between 1 and 65535.`);
   }
   return value;
+}
+
+// Wrap node:util parseArgs so its TypeError for an unknown/malformed flag becomes a CliArgumentError
+// (concise top-level rendering), while preserving the precisely-inferred values type (NIN-266).
+function parseRawCliArgs(argv: string[]) {
+  try {
+    return parseArgs({
+      args: argv,
+      allowPositionals: false,
+      options: {
+        port: { type: "string" },
+        "data-dir": { type: "string" },
+      },
+    });
+  } catch (error) {
+    throw new CliArgumentError(error instanceof Error ? error.message : String(error));
+  }
 }
 
 export function parseCliArgs(argv: string[]): {
@@ -30,14 +58,7 @@ export function parseCliArgs(argv: string[]): {
   selectedPort: number | undefined;
   logger: RisolutoLogger;
 } {
-  const parsed = parseArgs({
-    args: argv,
-    allowPositionals: false,
-    options: {
-      port: { type: "string" },
-      "data-dir": { type: "string" },
-    },
-  });
+  const parsed = parseRawCliArgs(argv);
 
   const logger = createLogger();
   initErrorTracking(logger.child({ component: "error-tracking" }));

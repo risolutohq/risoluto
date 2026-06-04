@@ -164,6 +164,7 @@ type LaunchContext = {
     | "resolveTemplate"
     | "observability"
   >;
+  isRunning: () => boolean;
   runningEntries: Map<string, RunningEntry>;
   completedViews: Map<string, ReturnType<typeof issueView>>;
   detailViews: Map<string, ReturnType<typeof issueView>>;
@@ -451,6 +452,18 @@ function buildOnEventHandler(
   };
 }
 
+/**
+ * Sentinel thrown inside the workspace lock when the orchestrator has begun
+ * stopping. It signals launchWorker's own catch to clean up and return quietly
+ * rather than propagating a failure for what is an intentional shutdown race.
+ */
+class OrchestratorStoppingError extends Error {
+  constructor() {
+    super("orchestrator is stopping; launch aborted");
+    this.name = "OrchestratorStoppingError";
+  }
+}
+
 export async function launchWorker(
   ctx: LaunchContext,
   issue: Issue,
@@ -471,6 +484,17 @@ export async function launchWorker(
   // early failure, unblocking any observer (e.g. stop()) that captured the
   // entry between runningEntries.set and the worker-promise hand-off.
   let resolveLifecycle: (() => void) | undefined;
+  // Re-checked inside the workspace lock at both points where this launch would
+  // become observable to a concurrent stop(): right before the running entry is
+  // registered, and again right before runAttempt is invoked. A stop() flips
+  // isRunning() to false and then snapshots runningEntries; without these guards
+  // a launch mid-flight during stop()'s async drain could register an entry or
+  // start a worker after that snapshot, stranding an orphan worker past shutdown.
+  const ensureRunning = (): void => {
+    if (!ctx.isRunning()) {
+      throw new OrchestratorStoppingError();
+    }
+  };
   try {
     await ctx.deps.workspaceManager.withLock(sanitizeIdentifier(issue.identifier), async () => {
       const workspace = await prepareWorkspace(ctx, issue);
@@ -479,16 +503,12 @@ export async function launchWorker(
       const entry = built.entry;
       resolveLifecycle = built.resolveLifecycle;
 
+      ensureRunning();
       ctx.runningEntries.set(issue.id, entry);
       ctx.completedViews.delete(issue.identifier);
       ctx.markDirty();
       ctx.setQueuedViews(ctx.getQueuedViews().filter((view) => view.issueId !== issue.id));
 
-      if (options?.recoveredAttempt) {
-        await persistRecoveredAttempt(ctx, entry, issue, workspace, options.recoveredAttempt, modelSelection);
-      } else {
-        await persistInitialAttempt(ctx, entry, issue, workspace, attempt, modelSelection);
-      }
       ctx.detailViews.set(
         issue.identifier,
         issueView(issue, {
@@ -531,6 +551,15 @@ export async function launchWorker(
           entry.steerTurn = steerFn;
         },
       };
+      ensureRunning();
+      // Persist the attempt only after this final stop check, so a launch aborted by a concurrent
+      // stop() never leaves an orphaned "running" attempt row for startup recovery to resurrect — the
+      // in-memory entry and claim are cleaned up by the catch below (NIN-239/258).
+      if (options?.recoveredAttempt) {
+        await persistRecoveredAttempt(ctx, entry, issue, workspace, options.recoveredAttempt, modelSelection);
+      } else {
+        await persistInitialAttempt(ctx, entry, issue, workspace, attempt, modelSelection);
+      }
       let promise: Promise<RunOutcome>;
       try {
         promise = ctx.deps.agentRunner.runAttempt(runAttemptInput);
@@ -541,16 +570,29 @@ export async function launchWorker(
       }
       const workerPromise = ctx.handleWorkerPromise(promise, issue, workspace, entry, attempt);
       promiseHandedOff = true;
-      // Resolve the deferred entry.promise once the worker promise settles
-      // and the terminal checkpoint write has been kicked off. Both errors
-      // are swallowed — checkpoint failure must not block cleanup, and the
-      // deferred is signal-only (no rejection path).
-      workerPromise.finally(() => {
-        writeCheckpoint(ctx, entry, "terminal_completion").catch(() => {
-          /* intentionally ignored */
-        });
-        built.resolveLifecycle();
-      });
+      // Resolve the deferred entry.promise once the worker promise settles and
+      // the terminal checkpoint write has been kicked off. A rejecting
+      // workerPromise is logged rather than left unhandled, and the deferred is
+      // ALWAYS resolved (in finally) so shutdown can never hang on it even when
+      // settlement or checkpointing throws.
+      void (async () => {
+        try {
+          await workerPromise;
+        } catch (error) {
+          ctx.deps.logger.error(
+            { issueId: issue.id, issueIdentifier: issue.identifier, error: toErrorString(error) },
+            "worker promise rejected during settlement",
+          );
+        } finally {
+          try {
+            void writeCheckpoint(ctx, entry, "terminal_completion").catch(() => {
+              /* intentionally ignored */
+            });
+          } finally {
+            built.resolveLifecycle();
+          }
+        }
+      })();
     });
   } catch (error) {
     if (!promiseHandedOff) {
@@ -558,6 +600,12 @@ export async function launchWorker(
       ctx.releaseIssueClaim(issue.id);
       ctx.markDirty();
       resolveLifecycle?.();
+    }
+    // A launch aborted because the orchestrator is stopping is not a failure:
+    // the cleanup above has already released the claim and removed any entry,
+    // so swallow the sentinel instead of surfacing it to the caller.
+    if (error instanceof OrchestratorStoppingError) {
+      return;
     }
     throw error;
   }

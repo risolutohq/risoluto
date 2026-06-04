@@ -1,5 +1,7 @@
 const REDACT_KEYS = /secret|token|key|password|credential|authorization|auth|webhook/i;
-const GENERIC_SECRET_KEYS = ["api_key", "api-key", "apikey", "authorization", "password", "secret", "token"] as const;
+// Keys whose value is a scheme + credential segment (e.g. `Authorization: Basic <b64>`)
+// must consume the whole segment, not stop at the first whitespace after the scheme.
+const FULL_SEGMENT_KEYS = /authorization|password/i;
 
 function redaction(): string {
   return "[REDACTED]";
@@ -315,43 +317,87 @@ function isGenericAssignmentTerminator(char: string | undefined): boolean {
   }
 }
 
+// A full-segment value (e.g. an Authorization credential) may contain spaces, so it
+// runs to a line break or a structural delimiter rather than the first whitespace.
+function isSegmentTerminator(char: string | undefined): boolean {
+  switch (char) {
+    case undefined:
+    case "\n":
+    case "\r":
+    case ",":
+    case "}":
+    case '"':
+    case "'":
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Assignment keys are identifiers: letters, digits, underscores and hyphens
+// (covers `api_key`, `api-key`, `SLACK_SIGNING_SECRET`, `Proxy-Authorization`, …).
+function isAssignmentKeyChar(char: string | undefined): boolean {
+  return char !== undefined && /[\w-]/.test(char);
+}
+
+function findValueEnd(text: string, valueStart: number, quoteChar: string | undefined, fullSegment: boolean): number {
+  let valueEnd = valueStart;
+  if (quoteChar !== undefined) {
+    while (text[valueEnd] !== undefined && text[valueEnd] !== quoteChar) {
+      valueEnd += 1;
+    }
+  } else if (fullSegment) {
+    while (!isSegmentTerminator(text[valueEnd])) {
+      valueEnd += 1;
+    }
+  } else {
+    while (!isGenericAssignmentTerminator(text[valueEnd])) {
+      valueEnd += 1;
+    }
+  }
+  return valueEnd;
+}
+
 function redactGenericSecretAssignments(text: string): string {
-  const lowerText = text.toLowerCase();
   let index = 0;
   let redacted = "";
 
   while (index < text.length) {
-    const matchedKey = GENERIC_SECRET_KEYS.find((key) => lowerText.startsWith(key, index));
-    if (!matchedKey) {
+    // Only attempt a key match at an identifier boundary so mid-word matches don't
+    // create spurious assignments.
+    const atBoundary = !isAssignmentKeyChar(text[index - 1]);
+    if (!atBoundary || !isAssignmentKeyChar(text[index])) {
       redacted += text[index];
       index += 1;
       continue;
     }
 
-    const separatorIndex = index + matchedKey.length;
-    const separator = text[separatorIndex];
-    if (separator !== ":" && separator !== "=") {
-      redacted += text[index];
-      index += 1;
+    let keyEnd = index;
+    while (isAssignmentKeyChar(text[keyEnd])) {
+      keyEnd += 1;
+    }
+    const key = text.slice(index, keyEnd);
+    const separator = text[keyEnd];
+    if ((separator !== ":" && separator !== "=") || !REDACT_KEYS.test(key)) {
+      redacted += text.slice(index, keyEnd);
+      index = keyEnd;
       continue;
     }
 
-    let valueStart = separatorIndex + 1;
+    let valueStart = keyEnd + 1;
     while (isAssignmentWhitespace(text[valueStart])) {
       valueStart += 1;
     }
+    let quoteChar: string | undefined;
     if (text[valueStart] === '"' || text[valueStart] === "'") {
+      quoteChar = text[valueStart];
       valueStart += 1;
     }
 
-    let valueEnd = valueStart;
-    while (!isGenericAssignmentTerminator(text[valueEnd])) {
-      valueEnd += 1;
-    }
-
+    const valueEnd = findValueEnd(text, valueStart, quoteChar, FULL_SEGMENT_KEYS.test(key));
     if (valueEnd === valueStart) {
-      redacted += text[index];
-      index += 1;
+      redacted += text.slice(index, keyEnd);
+      index = keyEnd;
       continue;
     }
 
@@ -360,6 +406,44 @@ function redactGenericSecretAssignments(text: string): string {
   }
 
   return redacted;
+}
+
+// Non-plain container types (Map/Set/Headers/URLSearchParams/Error) survive a
+// structuredClone but expose nothing through Object.entries, so the normal payload
+// walk would leave any embedded secret intact. Normalize them to plain
+// objects/arrays here so the standard redaction pass can reach the values.
+function toPlainContainer(value: object): { handled: boolean; value?: unknown } {
+  if (value instanceof Map) {
+    const obj: Record<string, unknown> = {};
+    for (const [key, nested] of value.entries()) {
+      obj[String(key)] = nested;
+    }
+    return { handled: true, value: obj };
+  }
+  if (value instanceof Set) {
+    return { handled: true, value: Array.from(value.values()) };
+  }
+  if (typeof Headers !== "undefined" && value instanceof Headers) {
+    const obj: Record<string, unknown> = {};
+    for (const [key, nested] of value.entries()) {
+      obj[key] = nested;
+    }
+    return { handled: true, value: obj };
+  }
+  if (typeof URLSearchParams !== "undefined" && value instanceof URLSearchParams) {
+    const obj: Record<string, unknown> = {};
+    for (const [key, nested] of value.entries()) {
+      obj[key] = nested;
+    }
+    return { handled: true, value: obj };
+  }
+  if (value instanceof Error) {
+    return {
+      handled: true,
+      value: { name: value.name, message: value.message, stack: value.stack },
+    };
+  }
+  return { handled: false };
 }
 
 function cloneValueFallback(value: unknown, seen = new WeakSet<object>()): unknown {
@@ -414,6 +498,11 @@ function cloneAndRedactValue(value: unknown): unknown {
     return value;
   }
 
+  const container = toPlainContainer(value);
+  if (container.handled) {
+    return cloneAndRedactValue(container.value);
+  }
+
   const cloned = cloneObjectForRedaction(value as Record<string, unknown>);
   redactObjectPayload(cloned);
   return cloned;
@@ -458,7 +547,12 @@ function truncateSanitizedContent(text: string, maxLength: number, isDiff: boole
 function redactArrayItems(arr: unknown[]): void {
   arr.forEach((current, i) => {
     if (typeof current === "object" && current !== null) {
-      redactObjectPayload(current as Record<string, unknown> | unknown[]);
+      const container = toPlainContainer(current);
+      if (container.handled) {
+        arr[i] = redactSensitiveValue(container.value);
+      } else {
+        redactObjectPayload(current as Record<string, unknown> | unknown[]);
+      }
     } else if (typeof current === "string") {
       arr[i] = redactSecretPatterns(current);
     }
@@ -486,7 +580,12 @@ function redactObjectEntries(obj: Record<string, unknown>): void {
     if (REDACT_KEYS.test(key)) {
       redactMatchingKeyValue(obj, key, value);
     } else if (typeof value === "object" && value !== null) {
-      redactObjectPayload(value as Record<string, unknown> | unknown[]);
+      const container = toPlainContainer(value);
+      if (container.handled) {
+        obj[key] = redactSensitiveValue(container.value);
+      } else {
+        redactObjectPayload(value as Record<string, unknown> | unknown[]);
+      }
     } else if (typeof value === "string") {
       obj[key] = redactSecretPatterns(value);
     }

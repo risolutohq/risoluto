@@ -8,5 +8,6 @@ pnpm exec prettier --write 'src/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' '*.ts
 
 # Stage any formatting fixes so they don't show as dirty working tree
 git diff --quiet || {
-  echo "⚠️  Formatting drift detected and fixed. Review with 'git diff'."
+  git add 'src/**/*.ts' 'tests/**/*.ts' 'scripts/**/*.ts' '*.ts' '*.json' '*.md' 2>/dev/null
+  echo "⚠️  Formatting drift detected and staged. Run: git commit -m \"style: auto-format after merge\" && git push"
 }

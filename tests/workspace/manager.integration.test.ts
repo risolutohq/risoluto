@@ -66,6 +66,7 @@ function createWorktreeDeps(root: string, options?: { removeShouldFail?: boolean
         }
         await rm(worktreePath, { recursive: true, force: true });
       },
+      pruneWorktrees: async () => {},
       deriveBaseCloneDir: () => path.join(root, ".bare-clones", "repo"),
     },
     repoRouter: {

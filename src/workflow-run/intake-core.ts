@@ -88,12 +88,16 @@ export async function acceptWorkflowRunIntake(input: AcceptWorkflowRunIntakeInpu
     provider: input.source,
     deliveryId: input.deliveryId,
   });
-  if (delivery) {
+  // Only dedupe to a mapping whose run record becomes durable. A concurrent intake that has claimed
+  // but not yet committed is awaited (the run lands shortly); a mapping whose run never lands — a crash
+  // between claim and write — times out so intake falls through and recovers instead of poisoning future
+  // duplicate intake with an ENOENT loop (NIN-261).
+  if (delivery && (await runRecordBecomesDurable(input, delivery.workflowRunId))) {
     return toExistingOutput(input, delivery.workflowRunId, "deduplicated");
   }
 
   const existing = await readExternalMapping({ location: input, externalObject: input.externalObject });
-  if (existing) {
+  if (existing && (await runRecordBecomesDurable(input, existing.workflowRunId))) {
     const action = input.mode === "retry" ? "retried" : "deduplicated";
     return acceptExistingWorkflowRunIntake(input, existing.workflowRunId, tryResolveWorkflowRunIntake(input), action);
   }
@@ -141,11 +145,16 @@ async function createNewWorkflowRunIntake(
     body: input.body,
     externalObject: input.externalObject,
   });
+  // A mapping is stale (overwrite + re-claim) only if its run never becomes durable. Awaiting durability
+  // keeps a concurrent intake that has claimed but not yet committed from being treated as a crash (NIN-261).
+  const recoverStaleMapping = async (mapping: { readonly workflowRunId: string }): Promise<boolean> =>
+    !(await runRecordBecomesDurable(input, mapping.workflowRunId));
   const externalClaim = await claimExternalMapping({
     location: input,
     externalObject: input.externalObject,
     workflowRunId: workflowRun.id,
     ruleId: resolved.rule?.id ?? null,
+    recoverStaleMapping,
   });
   if (externalClaim.status === "existing") {
     const action = input.mode === "retry" ? "retried" : "deduplicated";
@@ -157,6 +166,7 @@ async function createNewWorkflowRunIntake(
     deliveryId: input.deliveryId,
     workflowRunId: workflowRun.id,
     ruleId: resolved.rule?.id ?? null,
+    recoverStaleMapping,
   });
   if (deliveryClaim.status === "existing") {
     const action = input.mode === "retry" ? "retried" : "deduplicated";
@@ -249,6 +259,30 @@ async function loadClaimedWorkflowRun(
     } catch (error) {
       if (!isErrorCode(error, "ENOENT") || Date.now() >= deadlineMs) {
         throw error;
+      }
+      await setTimeout(10);
+    }
+  }
+}
+
+/**
+ * Wait up to ~1s for a claimed mapping's run record to become durable. Returns true once it lands
+ * (a concurrent intake committing shortly after its claim), false if it never appears (a crash between
+ * claim and run write) so the caller can recover instead of looping on ENOENT forever (NIN-261).
+ */
+async function runRecordBecomesDurable(location: WorkflowRunArchiveLocation, workflowRunId: string): Promise<boolean> {
+  const deadlineMs = Date.now() + 1_000;
+  const archive = createWorkflowRunArchive(location);
+  while (true) {
+    try {
+      await archive.loadWorkflowRun(workflowRunId);
+      return true;
+    } catch (error) {
+      if (!isErrorCode(error, "ENOENT")) {
+        throw error;
+      }
+      if (Date.now() >= deadlineMs) {
+        return false;
       }
       await setTimeout(10);
     }

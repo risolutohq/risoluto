@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtemp, writeFile, cp, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, cp, chmod, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -12,6 +12,14 @@ import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { CodexConfig } from "../core/types/codex.js";
 import type { RisolutoLogger } from "../core/types.js";
 import { asRecord, asStringOrNull as asString, toErrorString } from "../utils/type-guards.js";
+import {
+  CODEX_APPROVE_DECISION,
+  CODEX_DENY_DECISION,
+  decideCodexApproval,
+  resolveCodexApprovalPolicy,
+  type CodexApprovalPolicy,
+} from "./approval-gate.js";
+import { projectCodexNotificationParams } from "./notification-projection.js";
 
 type CapabilityState = "supported" | "unsupported" | "unknown";
 
@@ -120,6 +128,7 @@ export class CodexControlPlane {
     private readonly getCodexConfig: () => CodexConfig,
     private readonly logger: RisolutoLogger,
     private readonly eventBus?: TypedEventBus<RisolutoEventMap>,
+    private readonly approvalPolicy: CodexApprovalPolicy = resolveCodexApprovalPolicy(),
   ) {}
 
   async getCapabilities(): Promise<CapabilityRegistry> {
@@ -220,7 +229,30 @@ export class CodexControlPlane {
       await writeFile(path.join(codexHome, "config.toml"), trustedProjectConfig);
       if (codexConfig.auth.mode === "openai_login" && codexConfig.auth.sourceHome) {
         const srcAuth = path.join(codexConfig.auth.sourceHome, "auth.json");
-        await cp(srcAuth, path.join(codexHome, "auth.json")).catch(() => {});
+        const destAuth = path.join(codexHome, "auth.json");
+        // Copy then force owner-only perms — the refreshed credential must not be group/world-readable
+        // in the per-run CODEX_HOME (NIN-251). Each step is logged rather than silently swallowed: a
+        // failed chmod leaves the credential at its source permissions, which must not pass unnoticed.
+        let authCopied = false;
+        try {
+          await cp(srcAuth, destAuth);
+          authCopied = true;
+        } catch (error) {
+          this.logger.warn(
+            { error: toErrorString(error) },
+            "failed to copy codex auth.json into the per-run CODEX_HOME; continuing without refreshed credentials",
+          );
+        }
+        if (authCopied) {
+          try {
+            await chmod(destAuth, 0o600);
+          } catch (error) {
+            this.logger.warn(
+              { error: toErrorString(error) },
+              "failed to restrict codex auth.json to owner-only (0o600) in the per-run CODEX_HOME",
+            );
+          }
+        }
       }
       this.codexHome = codexHome;
 
@@ -317,7 +349,7 @@ export class CodexControlPlane {
           method,
           threadId: asString(params.threadId),
           turnId: asString(params.turnId),
-          params,
+          params: projectCodexNotificationParams(params),
           createdAt: new Date().toISOString(),
         });
       });
@@ -327,12 +359,21 @@ export class CodexControlPlane {
     let response: unknown;
     switch (method) {
       case "item/commandExecution/requestApproval":
-      case "item/fileChange/requestApproval":
-        response = { decision: "acceptForSession" };
+      case "item/fileChange/requestApproval": {
+        const decision = decideCodexApproval({ method, params }, this.approvalPolicy);
+        response = {
+          decision: decision.approved ? CODEX_APPROVE_DECISION : CODEX_DENY_DECISION,
+        };
         break;
-      case "item/permissions/requestApproval":
-        response = { permissions: params.permissionProfile ?? params.permissions ?? null, scope: "session" };
+      }
+      case "item/permissions/requestApproval": {
+        const decision = decideCodexApproval({ method, params }, this.approvalPolicy);
+        response = {
+          permissions: decision.approved ? (params.permissionProfile ?? params.permissions ?? null) : null,
+          scope: "session",
+        };
         break;
+      }
       default:
         response = { error: { code: -32601, message: `unsupported host-side codex request: ${method}` } };
         break;
@@ -354,7 +395,7 @@ export class CodexControlPlane {
 
     this.emitCodexEvent("codex.event", {
       method,
-      params,
+      params: projectCodexNotificationParams(params),
       receivedAt: new Date().toISOString(),
     });
   }

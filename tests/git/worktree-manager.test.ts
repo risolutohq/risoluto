@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createLogger } from "../../src/core/logger.js";
 import {
@@ -13,7 +13,27 @@ import {
   syncBaseClone,
   type WorktreeContext,
 } from "../../src/git/worktree-manager.js";
+import { InvalidRepoUrlError } from "../../src/git/git-validation.js";
 import type { GitRunner } from "../../src/git/manager.js";
+
+const mkdirMock = vi.fn();
+const mkdtempMock = vi.fn();
+const renameMock = vi.fn();
+const rmMock = vi.fn();
+
+vi.mock("node:fs/promises", () => ({
+  mkdir: (...args: unknown[]) => mkdirMock(...args),
+  mkdtemp: (...args: unknown[]) => mkdtempMock(...args),
+  rename: (...args: unknown[]) => renameMock(...args),
+  rm: (...args: unknown[]) => rmMock(...args),
+}));
+
+beforeEach(() => {
+  mkdirMock.mockReset().mockResolvedValue(undefined);
+  mkdtempMock.mockReset().mockImplementation((prefix: string) => Promise.resolve(`${prefix}tmp`));
+  renameMock.mockReset().mockResolvedValue(undefined);
+  rmMock.mockReset().mockResolvedValue(undefined);
+});
 
 function createContext(runGit: GitRunner): WorktreeContext {
   return {
@@ -33,7 +53,7 @@ describe("worktree-manager", () => {
     expect(deriveRepoKey(repoUrl)).toBe(expected);
   });
 
-  it("clones a base repo when it does not exist", async () => {
+  it("clones a base repo into a temp dir then atomically renames it", async () => {
     const calls: string[][] = [];
     const runGit: GitRunner = async (args) => {
       calls.push(args);
@@ -47,8 +67,50 @@ describe("worktree-manager", () => {
 
     expect(calls).toEqual([
       ["rev-parse", "--git-dir"],
-      ["clone", "--bare", "https://github.com/acme/backend.git", "/tmp/base/backend.git"],
+      ["clone", "--bare", "--", "https://github.com/acme/backend.git", "/tmp/base/.clone-tmp"],
     ]);
+    expect(renameMock).toHaveBeenCalledWith("/tmp/base/.clone-tmp", "/tmp/base/backend.git");
+  });
+
+  it("serializes concurrent base clones of the same dir via a per-repo lock", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const runGit: GitRunner = async (args) => {
+      if (args[0] === "rev-parse") {
+        throw new Error("missing git dir");
+      }
+      if (args[0] === "clone") {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active -= 1;
+      }
+      return { stdout: "", stderr: "" };
+    };
+    const ctx = createContext(runGit);
+
+    await Promise.all([
+      ensureBaseClone(ctx, "https://github.com/acme/backend.git", "/tmp/base/concurrent.git"),
+      ensureBaseClone(ctx, "https://github.com/acme/backend.git", "/tmp/base/concurrent.git"),
+    ]);
+
+    expect(maxActive).toBe(1);
+  });
+
+  it.each(["-x", "ext::sh -c id"])("refuses to clone a base repo from a dangerous URL (%s)", async (repoUrl) => {
+    const calls: string[][] = [];
+    const runGit: GitRunner = async (args) => {
+      calls.push(args);
+      if (args[0] === "rev-parse") {
+        throw new Error("missing git dir");
+      }
+      return { stdout: "", stderr: "" };
+    };
+
+    await expect(ensureBaseClone(createContext(runGit), repoUrl, "/tmp/base/backend.git")).rejects.toThrow(
+      InvalidRepoUrlError,
+    );
+    expect(calls.some((args) => args[0] === "clone")).toBe(false);
   });
 
   it("fetches an existing base repo instead of cloning", async () => {
@@ -187,5 +249,22 @@ describe("worktree-manager", () => {
     });
 
     await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/nin-42")).resolves.toBe(false);
+  });
+
+  it("detects a branch that exists only as a remote-tracking ref", async () => {
+    const calls: string[][] = [];
+    const runGit: GitRunner = async (args) => {
+      calls.push(args);
+      if (args[2] === "refs/heads/risoluto/nin-42") {
+        throw new Error("no local branch");
+      }
+      return { stdout: "refs/remotes/origin/risoluto/nin-42\n", stderr: "" };
+    };
+
+    await expect(branchExists(createContext(runGit), "/tmp/base/backend.git", "risoluto/nin-42")).resolves.toBe(true);
+    expect(calls).toEqual([
+      ["rev-parse", "--verify", "refs/heads/risoluto/nin-42"],
+      ["rev-parse", "--verify", "refs/remotes/origin/risoluto/nin-42"],
+    ]);
   });
 });

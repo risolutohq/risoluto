@@ -3,7 +3,11 @@ import { GitHubTransport } from "./transport.js";
 import { toErrorString } from "../utils/type-guards.js";
 import { withRetry as sharedWithRetry, withRetryReturn as sharedWithRetryReturn } from "../utils/retry.js";
 
-type GitHubErrorCode = "github_transport_error" | "github_http_error" | "github_unknown_payload";
+type GitHubErrorCode =
+  | "github_transport_error"
+  | "github_http_error"
+  | "github_rate_limited"
+  | "github_unknown_payload";
 
 export class GitHubIssuesClientError extends Error {
   constructor(
@@ -25,6 +29,11 @@ export interface RawGitHubIssue {
   html_url: string;
   created_at: string;
   updated_at: string;
+  /**
+   * Present only when the record is a pull request. The GitHub `/issues` endpoint returns PRs
+   * alongside issues, so this field is used to filter PR-backed records out (NIN-263).
+   */
+  pull_request?: unknown;
 }
 
 interface RawGitHubLabel {
@@ -134,16 +143,30 @@ export class GitHubIssuesClient {
     }
   }
 
+  // Distinguish a rate-limit response (429, or 403 with the rate-limit budget exhausted) from a
+  // generic HTTP error so callers can back off on the reported window instead of hard-failing (NIN-266).
+  private httpError(response: Response): GitHubIssuesClientError {
+    const rateLimited =
+      response.status === 429 || (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0");
+    if (rateLimited) {
+      const retryAfter = response.headers.get("retry-after");
+      const reset = response.headers.get("x-ratelimit-reset");
+      const detail = retryAfter ? `retry after ${retryAfter}s` : reset ? `resets at epoch ${reset}` : "no retry hint";
+      return new GitHubIssuesClientError(
+        "github_rate_limited",
+        `github api rate limited (status ${response.status}; ${detail})`,
+      );
+    }
+    return new GitHubIssuesClientError("github_http_error", `github api request failed with status ${response.status}`);
+  }
+
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const url = `${this.getApiBaseUrl()}${path}`;
     const response = await this.send(path, options);
 
     if (!response.ok) {
       this.logger.error({ status: response.status, statusText: response.statusText, url }, "github api request failed");
-      throw new GitHubIssuesClientError(
-        "github_http_error",
-        `github api request failed with status ${response.status}`,
-      );
+      throw this.httpError(response);
     }
 
     if (response.status === 204) {
@@ -170,7 +193,12 @@ export class GitHubIssuesClient {
   async fetchOpenIssues(labels?: string[]): Promise<RawGitHubIssue[]> {
     const { owner, repo } = this.getOwnerRepo();
     const labelParam = labels && labels.length > 0 ? `&labels=${encodeURIComponent(labels.join(","))}` : "";
-    return this.paginate<RawGitHubIssue>(`/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`);
+    const records = await this.paginate<RawGitHubIssue>(
+      `/repos/${owner}/${repo}/issues?state=open&per_page=100${labelParam}`,
+    );
+    // GitHub's /issues endpoint returns pull requests too; drop PR-backed records so they are
+    // never treated as Tracker Issues (NIN-263).
+    return records.filter((record) => record.pull_request === undefined);
   }
 
   /** Follows GitHub `Link` rel="next" pagination, accumulating every page. */
@@ -181,10 +209,7 @@ export class GitHubIssuesClient {
       const response = await this.send(`${basePath}&page=${page}`);
       if (!response.ok) {
         this.logger.error({ status: response.status, statusText: response.statusText }, "github api request failed");
-        throw new GitHubIssuesClientError(
-          "github_http_error",
-          `github api request failed with status ${response.status}`,
-        );
+        throw this.httpError(response);
       }
       try {
         all.push(...((await response.json()) as T[]));
@@ -218,6 +243,21 @@ export class GitHubIssuesClient {
     await this.request<unknown>(`/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`, {
       method: "DELETE",
     });
+  }
+
+  /**
+   * Remove a label, treating a 404 (the label isn't on the issue) as a no-op. Used to clear stale
+   * state labels during a transition without first fetching the issue's current labels (NIN-263).
+   */
+  async removeLabelIfPresent(issueNumber: number, label: string): Promise<void> {
+    const { owner, repo } = this.getOwnerRepo();
+    const response = await this.send(
+      `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok && response.status !== 404) {
+      throw this.httpError(response);
+    }
   }
 
   async closeIssue(issueNumber: number): Promise<void> {

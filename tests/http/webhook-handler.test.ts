@@ -11,6 +11,7 @@ import {
   type WebhookHandlerDeps,
 } from "../../src/webhook/linear-handler.js";
 import type { WebhookRequest } from "../../src/http/webhook-types.js";
+import type { VerifiedWebhookDelivery, VerifiedWebhookDeliveryStore } from "../../src/webhook/delivery-workflow.js";
 
 /* ------------------------------------------------------------------ */
 /*  Test helpers                                                       */
@@ -32,6 +33,22 @@ function makePayload(overrides: Record<string, unknown> = {}): Record<string, un
   };
 }
 
+// Deduping in-memory inbox keyed on the verified body+signature digest, matching the durable
+// store's dedupe contract so the handler's required-inbox path is exercised (NIN-263).
+function makeInbox(): VerifiedWebhookDeliveryStore {
+  const seen = new Set<string>();
+  return {
+    insertVerified: vi.fn(async (delivery: VerifiedWebhookDelivery) => {
+      const key = delivery.bodyDigest ?? delivery.deliveryId;
+      if (seen.has(key)) return { isNew: false };
+      seen.add(key);
+      return { isNew: true };
+    }),
+    markApplied: vi.fn(async () => undefined),
+    markForRetry: vi.fn(async () => undefined),
+  };
+}
+
 function makeDeps(overrides: Partial<WebhookHandlerDeps> = {}): WebhookHandlerDeps {
   return {
     getWebhookSecret: vi.fn().mockReturnValue(TEST_SECRET),
@@ -40,6 +57,7 @@ function makeDeps(overrides: Partial<WebhookHandlerDeps> = {}): WebhookHandlerDe
     requestTargetedRefresh: vi.fn(),
     stopWorkerForIssue: vi.fn(),
     recordVerifiedDelivery: vi.fn(),
+    webhookInbox: makeInbox(),
     logger: {
       debug: vi.fn(),
       info: vi.fn(),
@@ -399,6 +417,44 @@ describe("handleWebhookLinear", () => {
 
     expect(res._status).toBe(200);
     expect(deps.recordVerifiedDelivery).toHaveBeenCalledWith("Comment:create");
+  });
+
+  it("returns 503 with Retry-After when the webhook inbox is unavailable (NIN-263)", () => {
+    const deps = makeDeps({ webhookInbox: undefined });
+    const payload = makePayload();
+    const bodyStr = JSON.stringify(payload);
+    const req = makeRequest(payload, { "linear-signature": sign(bodyStr) }, Buffer.from(bodyStr));
+    const res = makeResponse();
+
+    handleWebhookLinear(deps, req, res);
+
+    expect(res._status).toBe(503);
+    expect(res._headers["Retry-After"]).toBe("5");
+    expect((res._body as { error: { code: string } }).error.code).toBe("webhook_inbox_unavailable");
+    expect(deps.requestTargetedRefresh).not.toHaveBeenCalled();
+  });
+
+  it("dedupes a replayed signed delivery on the body+signature digest (NIN-263)", async () => {
+    const deps = makeDeps();
+    const payload = makePayload();
+    const bodyStr = JSON.stringify(payload);
+    const rawBody = Buffer.from(bodyStr);
+    const signature = sign(bodyStr);
+
+    handleWebhookLinear(deps, makeRequest(payload, { "linear-signature": signature }, rawBody), makeResponse());
+    await flushMicrotasks();
+    // Replay the same signed body under a fresh delivery id — still recognized as a duplicate.
+    const replay = makeResponse();
+    handleWebhookLinear(
+      deps,
+      makeRequest(payload, { "linear-signature": signature, "linear-delivery": "linear-delivery-2" }, rawBody),
+      replay,
+    );
+    await flushMicrotasks();
+
+    expect(replay._status).toBe(200);
+    // The side effects ran only once; the replay was deduped before processing.
+    expect(deps.requestTargetedRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("accepts previous secret during rotation window", async () => {

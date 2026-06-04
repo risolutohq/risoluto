@@ -15,12 +15,20 @@ function handleMissingControlPlane(res: Response): void {
   });
 }
 
+// Upper bound for client-supplied pagination so a caller cannot request an unbounded
+// page and force the control plane to materialize an oversized result set (NIN-250).
+const MAX_PAGE_LIMIT = 100;
+
 function parsePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "string") {
     return fallback;
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoundedLimit(value: unknown, fallback: number): number {
+  return Math.min(parsePositiveInteger(value, fallback), MAX_PAGE_LIMIT);
 }
 
 function sendCodexError(error: unknown, res: Response): void {
@@ -99,7 +107,7 @@ export function registerCodexRoutes(app: Express, deps: HttpRouteDeps): void {
     .get(
       withControlPlane(deps, async (controlPlane, req, res) => {
         const result = await adminService(controlPlane).readFeatures(
-          parsePositiveInteger(req.query.limit, 50),
+          parseBoundedLimit(req.query.limit, 50),
           typeof req.query.cursor === "string" ? req.query.cursor : null,
         );
         res.json(result);
@@ -121,7 +129,7 @@ export function registerCodexRoutes(app: Express, deps: HttpRouteDeps): void {
     .get(
       withControlPlane(deps, async (controlPlane, req, res) => {
         const result = await adminService(controlPlane).readMcpServers(
-          parsePositiveInteger(req.query.limit, 50),
+          parseBoundedLimit(req.query.limit, 50),
           typeof req.query.cursor === "string" ? req.query.cursor : null,
         );
         res.json(result);
@@ -169,7 +177,7 @@ export function registerCodexRoutes(app: Express, deps: HttpRouteDeps): void {
         const archived = req.query.archived === "true" ? true : req.query.archived === "false" ? false : undefined;
         const result = await adminService(controlPlane).readThreads({
           cursor: typeof req.query.cursor === "string" ? req.query.cursor : null,
-          limit: parsePositiveInteger(req.query.limit, 25),
+          limit: parseBoundedLimit(req.query.limit, 25),
           sortKey: req.query.sortKey === "updated_at" ? "updated_at" : "created_at",
           archived,
           cwd: undefined,

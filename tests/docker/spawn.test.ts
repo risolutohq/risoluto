@@ -6,6 +6,7 @@ import {
   buildInitCacheVolumeArgs as _buildInitCacheVolumeArgs,
   type DockerRunInput,
 } from "../../src/docker/spawn.js";
+import { InvalidDockerImageRefError } from "../../src/docker/image-ref.js";
 import { PathRegistry } from "../../src/workspace/path-registry.js";
 import type { SandboxConfig } from "../../src/core/types.js";
 
@@ -38,6 +39,12 @@ function baseInput(overrides?: Partial<DockerRunInput>): DockerRunInput {
     runtimeConfigToml: 'model = "gpt-5.4"\n',
     ...overrides,
   };
+}
+
+/** The entrypoint script is the arg right after `bash -lc`; the codex argv now follows it. */
+function entrypointScript(args: string[]): string {
+  const bashIdx = args.indexOf("bash");
+  return args[bashIdx + 2];
 }
 
 describe("buildDockerRunArgs", () => {
@@ -92,9 +99,36 @@ describe("buildDockerRunArgs", () => {
         "HOME=/home/agent",
         "CODEX_HOME=/home/agent/.codex-runtime",
         'RISOLUTO_CODEX_CONFIG_TOML=model = "gpt-5.4"\n\n[projects."/tmp/workspaces/MT-1"]\ntrust_level = "trusted"\n',
-        "RISOLUTO_CODEX_COMMAND=codex app-server",
       ]),
     );
+    // The codex command is passed as argv, never as a shell-interpolated env var (NIN-259).
+    expect(envArgs).not.toEqual(expect.arrayContaining([expect.stringContaining("RISOLUTO_CODEX_COMMAND")]));
+  });
+
+  it("passes the codex command as positional argv after the entrypoint script (NIN-259)", () => {
+    const result = buildDockerRunArgs(baseInput());
+    const script = entrypointScript(result.args);
+    // The entrypoint execs the positional params and never references a command env var.
+    expect(script).toContain('exec "$@"');
+    expect(script).not.toContain("RISOLUTO_CODEX_COMMAND");
+    // The args after the script are the $0 placeholder followed by the command argv.
+    const bashIdx = result.args.indexOf("bash");
+    expect(result.args.slice(bashIdx + 3)).toEqual(["risoluto-codex-entry", "codex", "app-server"]);
+  });
+
+  it("does not shell-interpolate metacharacters in the codex command (NIN-259)", () => {
+    const result = buildDockerRunArgs(baseInput({ command: "codex app-server; rm -rf /" }));
+    const script = entrypointScript(result.args);
+    // The command string is never embedded in the shell-evaluated entrypoint script, so its
+    // metacharacters can't be interpolated by a shell.
+    expect(script).not.toContain("app-server");
+    // They survive as separate literal argv elements handed to exec "$@".
+    const bashIdx = result.args.indexOf("bash");
+    expect(result.args.slice(bashIdx + 3)).toEqual(["risoluto-codex-entry", "codex", "app-server;", "rm", "-rf", "/"]);
+  });
+
+  it("rejects an empty codex command (NIN-259)", () => {
+    expect(() => buildDockerRunArgs(baseInput({ command: "   " }))).toThrow(/at least one argument/);
   });
 
   it("does not include --rm", () => {
@@ -154,21 +188,39 @@ describe("buildDockerRunArgs", () => {
       'printf "%s" "$RISOLUTO_CODEX_CONFIG_TOML" > "$CODEX_HOME/config.toml"',
     );
     expect(result.args[imageIdx + 3]).toContain('echo "risoluto:container_ready"');
-    expect(result.args[imageIdx + 3]).toContain('exec bash -lc "$RISOLUTO_CODEX_COMMAND"');
+    expect(result.args[imageIdx + 3]).toContain('exec "$@"');
+  });
+
+  it("rejects an image reference that could be parsed as a docker flag", () => {
+    const cfg = baseSandboxConfig();
+    cfg.image = "--privileged";
+    expect(() => buildDockerRunArgs(baseInput({ sandboxConfig: cfg }))).toThrow(InvalidDockerImageRefError);
+  });
+
+  it("rejects an image reference containing whitespace or shell metacharacters", () => {
+    const cfg = baseSandboxConfig();
+    cfg.image = "alpine; rm -rf /";
+    expect(() => buildDockerRunArgs(baseInput({ sandboxConfig: cfg }))).toThrow(InvalidDockerImageRefError);
+  });
+
+  it("accepts a fully-qualified registry image reference", () => {
+    const cfg = baseSandboxConfig();
+    cfg.image = "registry.example.com:5000/ns/img:1.2.3";
+    expect(() => buildDockerRunArgs(baseInput({ sandboxConfig: cfg }))).not.toThrow();
   });
 
   it("emits risoluto:container_ready marker before exec in entrypoint", () => {
     const result = buildDockerRunArgs(baseInput());
-    const entrypoint = result.args.at(-1)!;
+    const entrypoint = entrypointScript(result.args);
     const readyIdx = entrypoint.indexOf('echo "risoluto:container_ready"');
-    const execIdx = entrypoint.indexOf('exec bash -lc "$RISOLUTO_CODEX_COMMAND"');
+    const execIdx = entrypoint.indexOf('exec "$@"');
     expect(readyIdx).toBeGreaterThan(-1);
     expect(execIdx).toBeGreaterThan(readyIdx);
   });
 
   it("disables bwrap sandbox in container config to avoid double-sandboxing", () => {
     const result = buildDockerRunArgs(baseInput());
-    const entrypoint = result.args.at(-1)!;
+    const entrypoint = entrypointScript(result.args);
     expect(entrypoint).toContain("use_linux_sandbox_bwrap = false");
   });
 
@@ -309,7 +361,7 @@ describe("buildDockerRunArgs", () => {
     const envArgs = result.args.filter((_, i) => result.args[i - 1] === "-e");
     expect(envArgs).toContain("RISOLUTO_EGRESS_ALLOWLIST=api.openai.com api.linear.app");
     // Entrypoint should contain iptables rules
-    const bashScript = result.args.at(-1);
+    const bashScript = entrypointScript(result.args);
     expect(bashScript).toContain("iptables -A OUTPUT");
     expect(bashScript).toContain("RISOLUTO_EGRESS_ALLOWLIST");
   });
@@ -319,7 +371,7 @@ describe("buildDockerRunArgs", () => {
     expect(result.args).not.toContain("--cap-add=NET_ADMIN");
     const envArgs = result.args.filter((_, i) => result.args[i - 1] === "-e");
     expect(envArgs).not.toEqual(expect.arrayContaining([expect.stringContaining("RISOLUTO_EGRESS_ALLOWLIST")]));
-    const bashScript = result.args.at(-1);
+    const bashScript = entrypointScript(result.args);
     expect(bashScript).not.toContain("iptables");
   });
 });

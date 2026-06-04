@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { withKeyedSerialChain } from "../utils/serial-chain.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 import { parseWorkflowRunArtifact, type WorkflowRunArtifactProducer } from "./artifact-contracts.js";
 import type {
@@ -144,17 +145,21 @@ async function appendWorkflowRunEventsToRunDir(
     return [];
   }
 
-  const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
-  const sequencedEvents = events.map((event, index) => ({
-    ...event,
-    sequence: firstSequence + index,
-  }));
-  await appendFile(
-    runLogPathForRunDir(artifactDir),
-    `${sequencedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
-    "utf8",
-  );
-  return sequencedEvents;
+  // Serialize the read-then-append per run directory so two concurrent appends can't read the same
+  // next-sequence and emit duplicate sequence numbers / attempt indices (NIN-263).
+  return withKeyedSerialChain(runEventAppendChains, artifactDir, async () => {
+    const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
+    const sequencedEvents = events.map((event, index) => ({
+      ...event,
+      sequence: firstSequence + index,
+    }));
+    await appendFile(
+      runLogPathForRunDir(artifactDir),
+      `${sequencedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
+      "utf8",
+    );
+    return sequencedEvents;
+  });
 }
 
 async function appendWorkflowRunEventsToArchive(
@@ -211,15 +216,39 @@ async function writeWorkflowRunArtifactToArchive(
   return artifact;
 }
 
+// blocked / done / cancelled are terminal: a run that has reached one of them refuses
+// any further status write (NIN-255).
+const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStartRecord["status"]> = new Set(["blocked", "done", "cancelled"]);
+
+// Status writes are serialized per Workflow Run so a cancel racing a done can no longer
+// interleave (NIN-255).
+const runStatusUpdateChains = new Map<string, Promise<unknown>>();
+
+function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>): Promise<T> {
+  return withKeyedSerialChain(runStatusUpdateChains, workflowRunId, operation);
+}
+
+// Event appends are serialized per run directory so concurrent appends can't collide on the
+// next event sequence (NIN-263).
+const runEventAppendChains = new Map<string, Promise<unknown>>();
+
 async function updateWorkflowRunStatusInArchive(
   archiveRoot: string,
   workflowRunId: string,
   status: WorkflowRunStartRecord["status"],
 ): Promise<WorkflowRunStartRecord> {
-  const workflowRun = await readWorkflowRunMetadataFromDir(workflowRunDir(archiveRoot, workflowRunId));
-  const updated = { ...workflowRun, status };
-  await writeFile(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`, "utf8");
-  return updated;
+  return withRunStatusLock(workflowRunId, async () => {
+    const workflowRun = await readWorkflowRunMetadataFromDir(workflowRunDir(archiveRoot, workflowRunId));
+    // Terminal states are final — refuse the write (return the run unchanged) so a
+    // concurrent done/blocked can never overwrite a cancel, and no write lands on an
+    // already-terminal run (NIN-255).
+    if (TERMINAL_RUN_STATUSES.has(workflowRun.status) && workflowRun.status !== status) {
+      return workflowRun;
+    }
+    const updated = { ...workflowRun, status };
+    await writeFile(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+    return updated;
+  });
 }
 
 async function readWorkflowRunArtifactFromArchive(

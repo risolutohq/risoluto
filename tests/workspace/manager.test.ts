@@ -10,11 +10,15 @@ import { createMockLogger } from "../helpers.js";
 // ---------------------------------------------------------------------------
 
 const statMock = vi.fn();
+const lstatMock = vi.fn();
+const realpathMock = vi.fn();
 const mkdirMock = vi.fn<typeof import("node:fs/promises").mkdir>();
 const rmMock = vi.fn<typeof import("node:fs/promises").rm>();
 
 vi.mock("node:fs/promises", () => ({
   stat: (...args: Parameters<typeof import("node:fs/promises").stat>) => statMock(...args),
+  lstat: (...args: Parameters<typeof import("node:fs/promises").lstat>) => lstatMock(...args),
+  realpath: (...args: Parameters<typeof import("node:fs/promises").realpath>) => realpathMock(...args),
   mkdir: (...args: Parameters<typeof import("node:fs/promises").mkdir>) => mkdirMock(...args),
   rm: (...args: Parameters<typeof import("node:fs/promises").rm>) => rmMock(...args),
 }));
@@ -22,6 +26,7 @@ vi.mock("node:fs/promises", () => ({
 vi.mock("node:child_process", () => ({
   spawn: vi.fn().mockReturnValue({
     on: vi.fn(),
+    stdout: { on: vi.fn() },
     stderr: { on: vi.fn() },
     kill: vi.fn(),
   }),
@@ -50,6 +55,7 @@ function createWorktreeDeps(): WorkspaceManagerWorktreeDeps {
       autoCommit: vi.fn().mockResolvedValue("auto-commit-sha"),
       setupWorktree: vi.fn().mockResolvedValue({ branchName: "risoluto/NIN-1" }),
       removeWorktree: vi.fn().mockResolvedValue(undefined),
+      pruneWorktrees: vi.fn().mockResolvedValue(undefined),
       deriveBaseCloneDir: vi.fn().mockReturnValue("/tmp/workspaces/.bare-clones/repo"),
     },
     repoRouter: {
@@ -89,6 +95,9 @@ describe("WorkspaceManager", () => {
     vi.clearAllMocks();
     mkdirMock.mockResolvedValue(undefined as never);
     rmMock.mockResolvedValue(undefined as never);
+    // Default: workspace path is a real, non-symlink directory inside the root.
+    lstatMock.mockResolvedValue({ isSymbolicLink: () => false, isDirectory: () => true });
+    realpathMock.mockImplementation((p: string) => Promise.resolve(p));
   });
 
   afterEach(() => {
@@ -131,6 +140,28 @@ describe("WorkspaceManager", () => {
       statMock.mockResolvedValue({ isDirectory: () => false });
 
       await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("not a directory");
+    });
+
+    it("rejects an existing workspace path that is a symlink", async () => {
+      const config = createConfig();
+      const manager = new WorkspaceManager(() => config, logger);
+
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
+
+      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("symlink");
+      expect(mkdirMock).not.toHaveBeenCalledWith(path.resolve("/tmp/workspaces", "NIN-1"), expect.anything());
+    });
+
+    it("rejects an existing workspace dir whose real path escapes the root", async () => {
+      const config = createConfig();
+      const manager = new WorkspaceManager(() => config, logger);
+
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => false, isDirectory: () => true });
+      realpathMock.mockImplementation((p: string) =>
+        Promise.resolve(p === "/tmp/workspaces" ? "/tmp/workspaces" : "/etc"),
+      );
+
+      await expect(manager.ensureWorkspace("NIN-1")).rejects.toThrow("outside the workspace root");
     });
   });
 
@@ -176,6 +207,20 @@ describe("WorkspaceManager", () => {
       expect(deps.gitManager.setupWorktree).toHaveBeenCalledOnce();
     });
 
+    it("rejects a symlinked worktree workspace path before touching git (NIN-243)", async () => {
+      const config = createConfig({ strategy: "worktree" });
+      const deps = createWorktreeDeps();
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      // A pre-planted symlink whose stat() (which follows links) reports a directory must still be
+      // refused by the lstat-based guard — the worktree path must enforce it like the directory path.
+      statMock.mockResolvedValue({ isDirectory: () => true });
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
+
+      await expect(manager.ensureWorkspace("NIN-1", createIssue())).rejects.toThrow("symlink");
+      expect(deps.gitManager.setupWorktree).not.toHaveBeenCalled();
+    });
+
     it("returns existing worktree workspace without re-creating", async () => {
       const config = createConfig({ strategy: "worktree" });
       const deps = createWorktreeDeps();
@@ -210,6 +255,7 @@ describe("WorkspaceManager", () => {
         on: (event: string, cb: (...args: unknown[]) => void) => {
           if (event === "exit") cb(1);
         },
+        stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         kill: vi.fn(),
       } as never);
@@ -334,6 +380,26 @@ describe("WorkspaceManager", () => {
       // rm should not be called
       expect(rmMock).not.toHaveBeenCalled();
     });
+
+    it("refuses to remove a workspace path that is a symlink", async () => {
+      const config = createConfig();
+      const deps = createWorktreeDeps();
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      statMock.mockResolvedValue({ isDirectory: () => true });
+      lstatMock.mockResolvedValue({ isSymbolicLink: () => true, isDirectory: () => true });
+
+      await expect(manager.removeWorkspace("NIN-1")).rejects.toThrow("symlink");
+      expect(rmMock).not.toHaveBeenCalled();
+    });
+
+    it("refuses removal for an empty identifier so it cannot target the workspace root", async () => {
+      const config = createConfig();
+      const manager = new WorkspaceManager(() => config, logger);
+
+      await expect(manager.removeWorkspace("")).rejects.toThrow();
+      expect(rmMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("removeWorkspace (worktree strategy)", () => {
@@ -366,6 +432,20 @@ describe("WorkspaceManager", () => {
         expect.stringContaining("NIN-1"),
         expect.objectContaining({ recursive: true }),
       );
+    });
+
+    it("prunes stale worktree metadata after falling back to rm", async () => {
+      const config = createConfig({ strategy: "worktree" });
+      const deps = createWorktreeDeps();
+      vi.mocked(deps.gitManager.removeWorktree).mockRejectedValue(new Error("git error"));
+      const manager = new WorkspaceManager(() => config, logger, deps);
+
+      statMock.mockResolvedValue({ isDirectory: () => true });
+
+      await manager.removeWorkspace("NIN-1", createIssue());
+
+      expect(rmMock).toHaveBeenCalled();
+      expect(deps.gitManager.pruneWorktrees).toHaveBeenCalledWith("/tmp/workspaces/.bare-clones/repo");
     });
 
     it("preserves worktree cleanup when dirty-state detection itself fails", async () => {
@@ -409,6 +489,31 @@ describe("WorkspaceManager", () => {
 
       // The sanitize function replaces non-alphanum + dash + dot + underscore with underscore
       expect(workspace.workspaceKey).toBe("FOO_BAR_123");
+    });
+  });
+
+  describe("hook stdout draining", () => {
+    it("drains hook stdout so a chatty hook cannot deadlock the child", async () => {
+      const config = createConfig({
+        hooks: { afterCreate: null, beforeRun: "echo hi", afterRun: null, beforeRemove: null, timeoutMs: 5000 },
+      });
+      const manager = new WorkspaceManager(() => config, logger);
+
+      const stdoutOn = vi.fn();
+      const { spawn } = await import("node:child_process");
+      vi.mocked(spawn).mockReturnValueOnce({
+        on: (event: string, cb: (...args: unknown[]) => void) => {
+          if (event === "exit") cb(0);
+        },
+        stdout: { on: stdoutOn },
+        stderr: { on: vi.fn() },
+        kill: vi.fn(),
+      } as never);
+
+      const workspace = { path: "/tmp/workspaces/NIN-1", workspaceKey: "NIN-1", createdNow: false };
+      await manager.runBeforeRun(workspace, "NIN-1");
+
+      expect(stdoutOn).toHaveBeenCalledWith("data", expect.any(Function));
     });
   });
 });

@@ -61,8 +61,15 @@ export class GitHubTrackerAdapter implements TrackerPort {
   async updateIssueState(issueId: string, stateId: string): Promise<void> {
     const number = Number(issueId);
     const config = this.getConfig();
-    const isTerminal = config.tracker.terminalStates.includes(stateId);
+    const { activeStates, terminalStates } = config.tracker;
+    const isTerminal = terminalStates.includes(stateId);
     await this.client.withRetry("addLabel", () => this.client.addLabel(number, stateId));
+    // Clear the other configured state labels so the board reflects exactly one state instead of
+    // accumulating every state it ever passed through (NIN-263).
+    const staleStateLabels = [...activeStates, ...terminalStates].filter((label) => label !== stateId);
+    for (const label of staleStateLabels) {
+      await this.client.withRetry("removeStaleStateLabel", () => this.client.removeLabelIfPresent(number, label));
+    }
     if (isTerminal) {
       await this.client.withRetry("closeIssue", () => this.client.closeIssue(number));
     } else {

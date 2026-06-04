@@ -8,7 +8,7 @@ import type { TypedEventBus } from "../core/event-bus.js";
 import { HttpServer } from "../http/server.js";
 import type { RisolutoLogger } from "../core/types.js";
 import { getErrorTracker } from "../core/error-tracking.js";
-import { parseCliArgs } from "./parse-args.js";
+import { parseCliArgs, CliArgumentError } from "./parse-args.js";
 import type { OrchestratorPort } from "../orchestrator/port.js";
 import type { PersistenceRuntime } from "../persistence/sqlite/runtime.js";
 import { initPersistenceRuntime } from "../persistence/sqlite/runtime.js";
@@ -185,7 +185,7 @@ async function initializeConfigStores(
   return { overlayStore, secretsStore, configStore, persistence, needsSetup };
 }
 
-export { parseCliArgs };
+export { parseCliArgs, CliArgumentError };
 
 export async function readMasterKeyFile(archiveDir: string): Promise<string | null> {
   try {
@@ -314,7 +314,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     process.exitCode = await main();
   } catch (error) {
-    console.error(error);
+    // Bad CLI input is user error — print one concise line, not an internal stack trace (NIN-266).
+    if (error instanceof CliArgumentError) {
+      console.error(`error: ${error.message}`);
+    } else {
+      console.error(error);
+    }
     process.exitCode = 1;
   }
 }

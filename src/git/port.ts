@@ -26,6 +26,8 @@ export interface GitWorktreePort {
   ): Promise<GitCloneResult>;
   syncWorktree(baseCloneDir: string): Promise<void>;
   removeWorktree(baseCloneDir: string, worktreePath: string, force?: boolean): Promise<void>;
+  /** Prune stale worktree registrations from the base clone (best-effort cleanup). */
+  pruneWorktrees(baseCloneDir: string): Promise<void>;
   cloneInto(
     route: RepoMatch,
     workspaceDir: string,

@@ -94,13 +94,25 @@ if [ "$need_gate" = false ]; then
 fi
 
 # ── Fast 80/20 gate (default) ────────────────────────────────────────
+# Run build, tests, and format:check in parallel — they're independent.
+# Drop `pnpm run typecheck` (redundant with `build`: tsconfig has
+# noEmitOnError:true so build already fails on type errors, and the
+# CI Quality job now runs `typecheck:coverage` to enforce the >=95% gate).
+echo "🎨 Checking formatting..."
+pnpm run format:check &
+fmt_pid=$!
+
 echo "🔨 Building..."
-pnpm run build
+pnpm run build &
+build_pid=$!
 
 echo "🧪 Running tests..."
-pnpm test
+pnpm test &
+test_pid=$!
 
-echo "🔎 Type-checking..."
-pnpm run typecheck
+# Surface the first non-zero exit code from any backgrounded gate.
+wait $fmt_pid || exit 1
+wait $build_pid || exit 1
+wait $test_pid || exit 1
 
 echo "✅ Pre-push checks passed! (use FULL_CHECK=1 for the full suite)"

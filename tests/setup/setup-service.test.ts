@@ -175,6 +175,94 @@ describe("setup-service", () => {
     });
   });
 
+  it("rejects an invalid defaultBranch that fails git ref-format rules (NIN-253)", async () => {
+    const service = createSetupService({
+      secretsStore,
+      configOverlayStore,
+      orchestrator,
+      archiveDir: tmpDir,
+      tracker,
+    });
+
+    await expect(
+      service.saveRepoRoute({
+        repoUrl: "https://github.com/org/repo",
+        defaultBranch: "-dangerous..branch",
+        identifierPrefix: "NIN",
+      }),
+    ).rejects.toThrow("not a valid git branch name");
+
+    // Nothing persisted for the rejected route.
+    expect(service.getRepoRoutes()).toEqual({ routes: [] });
+  });
+
+  it("rolls back the secret and codex overlay when an OpenAI key write fails (NIN-253)", async () => {
+    const initializedSecrets = new SecretsStore(tmpDir, buildSilentLogger(), { masterKey: MASTER_KEY });
+    await initializedSecrets.start();
+
+    const overlayStub = {
+      toMap: () => ({}),
+      set: vi.fn(async (pathExpr: string) => {
+        if (pathExpr === "codex.provider.base_url") throw new Error("disk full");
+        return true;
+      }),
+      delete: vi.fn(async () => true),
+      applyPatch: vi.fn(async () => true),
+      subscribe: vi.fn(() => () => {}),
+    };
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
+
+    const service = createSetupService({
+      secretsStore: initializedSecrets,
+      configOverlayStore: overlayStub as never,
+      orchestrator,
+      archiveDir: tmpDir,
+      tracker,
+    });
+
+    await expect(
+      service.saveOpenaiKey("sk-key", { supplied: true, baseUrl: "http://127.0.0.1:8080/v1", name: null }),
+    ).rejects.toThrow("Failed to persist the OpenAI key configuration");
+
+    // Secret rolled back (no prior value → deleted) and the codex section reverted.
+    expect(initializedSecrets.get("OPENAI_API_KEY")).toBeNull();
+    expect(overlayStub.delete).toHaveBeenCalledWith("codex");
+  });
+
+  it("rolls back the project slug when orchestrator.start fails (NIN-253)", async () => {
+    orchestrator.start.mockRejectedValueOnce(new Error("startup boom"));
+    const service = createSetupService({
+      secretsStore,
+      configOverlayStore,
+      orchestrator,
+      archiveDir: tmpDir,
+      tracker,
+    });
+
+    await expect(service.selectLinearProject("NIN")).rejects.toThrow("Failed to start after selecting the project");
+
+    const trackerSection = configOverlayStore.toMap().tracker as Record<string, unknown> | undefined;
+    expect(trackerSection?.project_slug).toBeUndefined();
+  });
+
+  it("surfaces a GitHub auth failure distinctly when a token is present (NIN-253)", async () => {
+    process.env.GITHUB_TOKEN = "ghtok";
+    const service = createSetupService({
+      secretsStore,
+      configOverlayStore,
+      orchestrator,
+      archiveDir: tmpDir,
+      tracker,
+    });
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("forbidden", { status: 403 }));
+
+    await expect(service.detectDefaultBranch("https://github.com/openai/risoluto")).rejects.toThrow(
+      /invalid or expired/,
+    );
+  });
+
   it("detects the default branch and falls back to main through the shared setup boundary", async () => {
     const service = createSetupService({
       secretsStore,

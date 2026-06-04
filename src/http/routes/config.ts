@@ -2,6 +2,7 @@ import type { Express } from "express";
 
 import type { ConfigOverlayPort } from "../../config/overlay.js";
 import { mergeOverlayMaps, normalizePathExpression, setOverlayPathValue } from "../../config/overlay-helpers.js";
+import { redactSensitiveValue } from "../../core/content-sanitizer.js";
 import { methodNotAllowed } from "../errors.js";
 import { isRecord } from "../../utils/type-guards.js";
 
@@ -63,6 +64,13 @@ function normalizeOverlayPatch(patch: Record<string, unknown>): Record<string, u
   return normalized;
 }
 
+// Overlay values can hold provider keys, webhook secrets, and tokens. The store
+// keeps them in clear for effective-config resolution, but every HTTP echo of the
+// overlay must redact them so the API never hands a stored secret back out (NIN-249).
+function redactedOverlay(store: ConfigOverlayPort): unknown {
+  return redactSensitiveValue(store.toMap());
+}
+
 export function registerConfigApi(app: Express, deps: ConfigApiDeps): void {
   app
     .route("/api/v1/config")
@@ -86,7 +94,7 @@ export function registerConfigApi(app: Express, deps: ConfigApiDeps): void {
     .route("/api/v1/config/overlay")
     .get((_request, response) => {
       response.json({
-        overlay: deps.configOverlayStore.toMap(),
+        overlay: redactedOverlay(deps.configOverlayStore),
       });
     })
     .put(async (request, response) => {
@@ -105,7 +113,7 @@ export function registerConfigApi(app: Express, deps: ConfigApiDeps): void {
       const updated = await deps.configOverlayStore.applyPatch(patch);
       response.json({
         updated,
-        overlay: deps.configOverlayStore.toMap(),
+        overlay: redactedOverlay(deps.configOverlayStore),
       });
     })
     .all((_request, response) => {
@@ -140,7 +148,7 @@ export function registerConfigApi(app: Express, deps: ConfigApiDeps): void {
       const updated = await deps.configOverlayStore.set(pathExpression, body.value);
       response.json({
         updated,
-        overlay: deps.configOverlayStore.toMap(),
+        overlay: redactedOverlay(deps.configOverlayStore),
       });
     })
     .delete(async (request, response) => {

@@ -37,6 +37,70 @@ describe("WebhookDeliveryWorkflow", () => {
     expect(process).toHaveBeenCalledOnce();
   });
 
+  it("marks the delivery applied after successful post-ack processing (NIN-262)", async () => {
+    const logger = createMockLogger();
+    const insertVerified = vi.fn().mockResolvedValue({ isNew: true });
+    const markApplied = vi.fn().mockResolvedValue(undefined);
+    const markForRetry = vi.fn().mockResolvedValue(undefined);
+    const process = vi.fn().mockResolvedValue(undefined);
+    const res = makeMockResponse();
+    const workflow = new WebhookDeliveryWorkflow(logger, { insertVerified, markApplied, markForRetry });
+
+    workflow.respondAccepted(res, {
+      delivery: {
+        deliveryId: "delivery-ok",
+        type: "issues",
+        action: "opened",
+        entityId: null,
+        issueId: "7",
+        issueIdentifier: "acme/app#7",
+        webhookTimestamp: null,
+        payloadJson: '{"action":"opened"}',
+      },
+      process,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(res._status).toBe(200);
+    expect(process).toHaveBeenCalledOnce();
+    expect(markApplied).toHaveBeenCalledWith("delivery-ok");
+    expect(markForRetry).not.toHaveBeenCalled();
+  });
+
+  it("moves the delivery to a retryable state when post-ack processing fails (NIN-262)", async () => {
+    const logger = createMockLogger();
+    const insertVerified = vi.fn().mockResolvedValue({ isNew: true });
+    const markApplied = vi.fn().mockResolvedValue(undefined);
+    const markForRetry = vi.fn().mockResolvedValue(undefined);
+    const process = vi.fn().mockRejectedValue(new Error("intake exploded"));
+    const res = makeMockResponse();
+    const workflow = new WebhookDeliveryWorkflow(logger, { insertVerified, markApplied, markForRetry });
+
+    workflow.respondAccepted(res, {
+      delivery: {
+        deliveryId: "delivery-fail",
+        type: "issues",
+        action: "opened",
+        entityId: null,
+        issueId: "7",
+        issueIdentifier: "acme/app#7",
+        webhookTimestamp: null,
+        payloadJson: '{"action":"opened"}',
+      },
+      process,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // The durable record was inserted and the delivery acked BEFORE processing ran...
+    expect(insertVerified).toHaveBeenCalledOnce();
+    expect(res._status).toBe(200);
+    // ...so a post-ack failure is moved to a durable retryable state, not silently dropped.
+    expect(markForRetry).toHaveBeenCalledWith("delivery-fail", "intake exploded", 1, expect.any(String));
+    expect(markApplied).not.toHaveBeenCalled();
+  });
+
   it("skips duplicate deliveries without recording or processing", async () => {
     const logger = createMockLogger();
     const insertVerified = vi.fn().mockResolvedValue({ isNew: false });

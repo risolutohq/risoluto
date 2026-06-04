@@ -640,4 +640,119 @@ describe("Orchestrator", () => {
 
     await orchestrator.stop();
   });
+
+  it("rolls back a half-started instance when startup recovery throws (NIN-240)", async () => {
+    const runningAttempt = {
+      attemptId: "attempt-1",
+      issueId: "issue-1",
+      issueIdentifier: "MT-42",
+      title: "Recover me",
+      workspaceKey: "MT-42",
+      workspacePath: "/tmp/missing",
+      status: "running",
+      attemptNumber: 1,
+      startedAt: "2026-04-03T10:00:00.000Z",
+      endedAt: null,
+      model: "gpt-5.4",
+      reasoningEffort: "high",
+      modelSource: "default",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      turnCount: 1,
+      errorCode: null,
+      errorMessage: null,
+      tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      pullRequestUrl: null,
+      stopSignal: null,
+      summary: null,
+    };
+    const attemptStore = createAttemptStore();
+    attemptStore.getAllAttempts = vi.fn(() => [runningAttempt]) as never;
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => []),
+      fetchIssueStatesByIds: vi.fn(async () => {
+        throw new Error("recovery boom");
+      }),
+      fetchIssuesByStates: vi.fn(async () => []),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async (identifier: string) => ({
+        path: `/tmp/risoluto/${identifier}`,
+        workspaceKey: identifier,
+        createdNow: true,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+    const agentRunner = {
+      runAttempt: vi.fn(async () => ({
+        kind: "cancelled",
+        errorCode: "shutdown",
+        errorMessage: "shutdown",
+        threadId: null,
+        turnId: null,
+        turnCount: 0,
+      })),
+    } as unknown as AgentRunner;
+
+    const orchestrator = new Orchestrator({
+      attemptStore,
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await expect(orchestrator.start()).rejects.toThrow("recovery boom");
+    expect(orchestrator.getSnapshot().running).toHaveLength(0);
+  });
+
+  it("bounds shutdown with a timeout and force-cleans stuck workers (NIN-240)", async () => {
+    vi.useFakeTimers();
+    const issue = { ...createIssue(), id: "issue-1", identifier: "MT-42" };
+    const tracker = {
+      fetchCandidateIssues: vi.fn(async () => [issue]),
+      fetchIssueStatesByIds: vi.fn(async (ids: string[]) => [issue].filter((i) => ids.includes(i.id))),
+      fetchIssuesByStates: vi.fn(async () => []),
+    } as unknown as TrackerPort;
+    const workspaceManager = {
+      ensureWorkspace: vi.fn(async (identifier: string) => ({
+        path: `/tmp/risoluto/${identifier}`,
+        workspaceKey: identifier,
+        createdNow: true,
+      })),
+      removeWorkspace: vi.fn(async () => undefined),
+      withLock: passThroughWithLock,
+    } as unknown as WorkspaceManager;
+    const agentRunner = {
+      runAttempt: vi.fn(() => new Promise<RunOutcome>(() => {})),
+    } as unknown as AgentRunner;
+
+    const orchestrator = new Orchestrator({
+      attemptStore: createAttemptStore(),
+      costSampleStore: createCostSampleStore(),
+      configStore: createConfigStore(createConfig()),
+      tracker,
+      workspaceManager,
+      agentRunner,
+      issueConfigStore: createIssueConfigStore(),
+      logger: createLogger(),
+      resolveTemplate: createResolveTemplate(),
+    });
+
+    await orchestrator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+    expect(orchestrator.getSnapshot().running).toHaveLength(1);
+
+    const stopPromise = orchestrator.stop();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await stopPromise;
+
+    expect(orchestrator.getSnapshot().running).toHaveLength(0);
+  });
 });

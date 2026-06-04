@@ -43,6 +43,53 @@ export function isLoopbackAddress(remoteAddress: string | undefined): boolean {
   return remoteAddress === "::1" || remoteAddress.startsWith("127.") || remoteAddress.startsWith("::ffff:127.");
 }
 
+/** Strip surrounding brackets / a trailing port so a forwarded address can be classified. */
+function normalizeForwardedIp(value: string): string {
+  const trimmed = value.trim().replace(/^"|"$/g, "");
+  if (trimmed.startsWith("[")) {
+    const end = trimmed.indexOf("]");
+    return end === -1 ? trimmed : trimmed.slice(1, end);
+  }
+  // IPv4 with a port has a single colon; bare IPv6 has several and keeps them.
+  return (trimmed.match(/:/g)?.length ?? 0) === 1 ? (trimmed.split(":")[0] ?? trimmed) : trimmed;
+}
+
+/** The originating client IP from a proxy hop, if any (`X-Forwarded-For` left-most, then `Forwarded`). */
+function forwardedClientIp(req: Request): string | undefined {
+  const xForwardedFor = req.get("x-forwarded-for");
+  if (xForwardedFor?.trim()) {
+    return normalizeForwardedIp(xForwardedFor.split(",")[0] ?? "");
+  }
+  const forwarded = req.get("forwarded");
+  const match = forwarded ? /for=([^;,]+)/i.exec(forwarded) : null;
+  return match ? normalizeForwardedIp(match[1] ?? "") : undefined;
+}
+
+/**
+ * A bare loopback TCP peer is not proof of a local client: a reverse proxy or
+ * tunnel terminates on loopback while forwarding a remote caller. When the TCP
+ * peer is itself loopback (a trusted local proxy) we classify by the forwarded
+ * client, so a proxied non-loopback request cannot ride the loopback write
+ * bypass (NIN-250).
+ *
+ * A forwarding header is only trusted from a loopback peer. A non-loopback peer
+ * can set `X-Forwarded-For: 127.0.0.1` itself, so trusting that header would let
+ * a direct remote caller spoof loopback and bypass the write gate — we classify
+ * such a peer by its socket address and ignore its forwarding header.
+ */
+export function isRequestFromLoopback(req: Request): boolean {
+  // Only a loopback TCP peer may be a trusted local proxy whose forwarding header
+  // we honor; a non-loopback peer's header is unauthenticated and must be ignored.
+  if (!isLoopbackAddress(req.socket.remoteAddress)) {
+    return false;
+  }
+  const forwarded = forwardedClientIp(req);
+  if (forwarded !== undefined) {
+    return isLoopbackAddress(forwarded);
+  }
+  return true;
+}
+
 export interface WriteGuardOptions {
   /** Optional audit log to record all mutating requests. */
   auditLog?: WriteAuditLog;
@@ -72,8 +119,7 @@ export function createWriteGuard(
       return;
     }
 
-    const remote = req.socket.remoteAddress;
-    const fromLoopback = isLoopbackAddress(remote);
+    const fromLoopback = isRequestFromLoopback(req);
 
     if (writeToken) {
       const suppliedToken = parseBearerToken(req.get("authorization"));

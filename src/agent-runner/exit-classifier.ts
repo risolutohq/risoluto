@@ -41,6 +41,20 @@ export async function classifyExitState(
     };
   }
 
+  // A signal exit (code === null, signal !== null) is a crash (SIGKILL/SIGTERM), not a
+  // normal completion. Classify it as a failure unless the run was intentionally aborted,
+  // in which case the abort path already owns the outcome (NIN-257).
+  if (exitState.signal !== null && !input.runInput.signal.aborted) {
+    return {
+      kind: "failed",
+      errorCode: "port_signal",
+      errorMessage: `codex subprocess was killed by signal ${exitState.signal}`,
+      threadId: state.threadId,
+      turnId: state.turnId,
+      turnCount: state.turnCount,
+    };
+  }
+
   return {
     kind: "normal",
     errorCode: null,

@@ -501,6 +501,30 @@ describe("SqliteAttemptStore", () => {
     closeDatabase(db2);
   });
 
+  it("keeps checkpoints that differ only in eventCursor or token usage (full-field dedupe) (NIN-254)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    await store.createAttempt(createAttempt());
+
+    const shared = { trigger: "cursor_advanced" as const, turnCount: 1, threadId: "t1", turnId: "u1" };
+    await store.appendCheckpoint(createCheckpoint({ ...shared, eventCursor: "cursor-1" }));
+    await store.appendCheckpoint(createCheckpoint({ ...shared, eventCursor: "cursor-2" }));
+    await store.appendCheckpoint(
+      createCheckpoint({
+        ...shared,
+        eventCursor: "cursor-2",
+        tokenUsage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      }),
+    );
+
+    const checkpoints = await store.listCheckpoints("attempt-1");
+    // The old dedupe ignored eventCursor/tokenUsage and would have collapsed these to one.
+    expect(checkpoints).toHaveLength(3);
+    expect(checkpoints.map((checkpoint) => checkpoint.eventCursor)).toEqual(["cursor-1", "cursor-2", "cursor-2"]);
+    store.close();
+  });
+
   it("assigns checkpoint ordinals and preserves token usage plus metadata", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);

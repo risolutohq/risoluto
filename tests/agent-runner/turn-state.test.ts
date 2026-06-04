@@ -87,6 +87,24 @@ describe("turn state", () => {
     expect(state.turnCompletionResolvers.has("turn-abort")).toBe(false);
   });
 
+  it("rejects immediately when the signal is already aborted before waiting (NIN-259)", async () => {
+    const state = createTurnState();
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      waitForTurnCompletion(state, {
+        turnId: "turn-pre-aborted",
+        signal: controller.signal,
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({ message: "turn completion interrupted" });
+
+    // A late completion notification for the aborted turn must be discarded, not buffered.
+    recordCompletedTurn(state, "turn-pre-aborted", { ok: true });
+    expect(state.completedTurnNotifications.has("turn-pre-aborted")).toBe(false);
+  });
+
   it("registers the abort listener with once semantics", () => {
     vi.useFakeTimers();
     const state = createTurnState();

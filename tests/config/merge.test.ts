@@ -67,6 +67,20 @@ describe("deepMerge", () => {
     deepMerge(base, { b: { x: 99 }, c: "new" });
     expect(base).toEqual(baseCopy);
   });
+
+  it("drops __proto__/constructor/prototype keys without polluting Object.prototype (NIN-252)", () => {
+    const malicious = JSON.parse('{"__proto__": {"polluted": "yes"}, "constructor": {"polluted": "yes"}, "safe": 1}');
+    const nestedMalicious = JSON.parse('{"a": {"__proto__": {"polluted": "yes"}}}');
+
+    const result = deepMerge({}, malicious) as Record<string, unknown>;
+    deepMerge({}, nestedMalicious);
+
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
+    // The dangerous keys are dropped; only the safe key survives.
+    expect(result.safe).toBe(1);
+    expect(Object.prototype.hasOwnProperty.call(result, "polluted")).toBe(false);
+  });
 });
 
 describe("cloneConfigMap", () => {

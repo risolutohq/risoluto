@@ -20,6 +20,10 @@ function startApp(): Promise<{ port: number; server: http.Server }> {
     res.json({ ok: true });
   });
 
+  app.post("/api/test/echo", (req, res) => {
+    res.json({ received: req.body });
+  });
+
   app.use(serviceErrorHandler);
 
   return new Promise((resolve) => {
@@ -71,6 +75,23 @@ describe("serviceErrorHandler", () => {
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("service_error");
     expect(body.error.message).toBe("Internal server error");
+
+    await closeServer(s);
+    server = null;
+  });
+
+  it("converts a malformed JSON body to 400 invalid_request_body (NIN-250)", async () => {
+    const { port, server: s } = await startApp();
+    server = s;
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/test/echo`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{ not valid json",
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("invalid_request_body");
 
     await closeServer(s);
     server = null;

@@ -155,6 +155,10 @@ export const configHistory = sqliteTable("config_history", {
   actor: text("actor").notNull().default("operator"),
   requestId: text("request_id"),
   timestamp: text("timestamp").notNull(),
+  // Tamper-evident hash chain: entryHash = sha256(canonical fields + previousHash); previousHash is
+  // the prior entry's entryHash. A broken link reveals an inserted/edited/removed entry (NIN-266).
+  entryHash: text("entry_hash"),
+  previousHash: text("previous_hash"),
 });
 
 /**
@@ -327,6 +331,12 @@ export const costSamples = sqliteTable("cost_samples", {
 export const webhookInbox = sqliteTable("webhook_inbox", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   deliveryId: text("delivery_id").notNull().unique(),
+  /**
+   * SHA-256 digest of the verified raw body + signature. Replay protection dedupes on this rather
+   * than the spoofable provider delivery id, so a captured signed body replayed under a new delivery
+   * id is still recognized as a duplicate. Null for providers that don't supply a digest (NIN-262).
+   */
+  bodyDigest: text("body_digest"),
   receivedAt: text("received_at").notNull(),
   type: text("type").notNull(),
   action: text("action").notNull(),

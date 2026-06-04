@@ -90,38 +90,23 @@ describe("detect-default-branch helpers", () => {
     expect(resolveToken({ secretsStore })).toBeNull();
   });
 
-  it("fetches default branch with auth first and falls back to public when needed", async () => {
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: null }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(githubRepoResponse("public-main"));
+  it("uses the authenticated request and does not fall back to public when a token is present (NIN-253)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(githubRepoResponse("private-main"));
 
-    await expect(fetchDefaultBranch("openai", "risoluto", "ghp_token", fetchImpl)).resolves.toBe("public-main");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await expect(fetchDefaultBranch("openai", "risoluto", "ghp_token", fetchImpl)).resolves.toBe("private-main");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("https://api.github.com/repos/openai/risoluto");
     expect(fetchImpl.mock.calls[0]?.[1]?.method).toBe("GET");
     expect((fetchImpl.mock.calls[0]?.[1]?.headers as Record<string, string>).authorization).toBe("Bearer ghp_token");
-    expect((fetchImpl.mock.calls[1]?.[1]?.headers as Record<string, string>).authorization).toBeUndefined();
   });
 
-  it("ignores default_branch in non-ok authenticated responses and retries publicly", async () => {
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ default_branch: "private-main" }), {
-          status: 401,
-          headers: { "content-type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(githubRepoResponse("public-main"));
+  it("throws a distinct auth error on a 401 authenticated response without retrying publicly (NIN-253)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
 
-    await expect(fetchDefaultBranch("openai", "risoluto", "ghp_token", fetchImpl)).resolves.toBe("public-main");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await expect(fetchDefaultBranch("openai", "risoluto", "ghp_token", fetchImpl)).rejects.toThrow(
+      /authentication failed/i,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("throws a GitHub API status error for failed unauthenticated responses", async () => {
@@ -269,7 +254,7 @@ describe("detect-default-branch handler", () => {
     expect(body.defaultBranch).toBe("main");
   });
 
-  it("falls back to main when the authenticated GitHub response has no default_branch string", async () => {
+  it("falls back to main when the authenticated response has no default_branch (no public retry) (NIN-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_partial_token" : null));
 
@@ -280,7 +265,6 @@ describe("detect-default-branch handler", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    fetchMock.mockResolvedValueOnce(githubRepoResponse("fallback-public"));
 
     const { baseUrl } = await startSetupApiServer({ secretsStore });
     const response = await postJson(baseUrl, "/api/v1/setup/detect-default-branch", {
@@ -288,8 +272,8 @@ describe("detect-default-branch handler", () => {
     });
 
     expect(response.status).toBe(200);
-    expect((await response.json()).defaultBranch).toBe("fallback-public");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((await response.json()).defaultBranch).toBe("main");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects missing repoUrl with 400", async () => {
@@ -457,55 +441,47 @@ describe("detect-default-branch handler", () => {
     expect(headers.authorization).toBeUndefined();
   });
 
-  it("falls back to main when the unauthenticated request also fails after an auth miss", async () => {
+  it("surfaces a distinct 401 auth error instead of retrying unauthenticated on a 401 (NIN-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_bad_token" : null));
 
     const fetchMock = getExternalFetchMock();
     fetchMock.mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
-    fetchMock.mockResolvedValueOnce(new Response("not found", { status: 404 }));
 
     const { baseUrl } = await startSetupApiServer({ secretsStore });
     const response = await postJson(baseUrl, "/api/v1/setup/detect-default-branch", {
       repoUrl: "https://github.com/org/missing-public-repo",
     });
 
-    expect(response.status).toBe(200);
-    expect((await response.json()).defaultBranch).toBe("main");
+    expect(response.status).toBe(401);
+    expect((await response.json()).error.code).toBe("github_auth_failed");
+    // No silent unauthenticated retry — the bad token surfaces directly.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to unauthenticated when authenticated request fails", async () => {
+  it("surfaces a distinct 401 auth error for a forbidden (403) authenticated response (NIN-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_bad_token" : null));
 
     const fetchMock = getExternalFetchMock();
-    // First call (authenticated) fails
-    fetchMock.mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
-    // Second call (unauthenticated) succeeds
-    fetchMock.mockResolvedValueOnce(githubRepoResponse("master"));
+    fetchMock.mockResolvedValueOnce(new Response("forbidden", { status: 403 }));
 
     const { baseUrl } = await startSetupApiServer({ secretsStore });
     const response = await postJson(baseUrl, "/api/v1/setup/detect-default-branch", {
       repoUrl: "https://github.com/org/public-repo",
     });
 
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.defaultBranch).toBe("master");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const firstHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    expect(firstHeaders.authorization).toBe("Bearer ghp_bad_token");
-    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
-    expect(secondHeaders.authorization).toBeUndefined();
+    expect(response.status).toBe(401);
+    expect((await response.json()).error.code).toBe("github_auth_failed");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to unauthenticated when the authenticated request throws", async () => {
+  it("falls back to main (no public retry) when the authenticated request throws a network error (NIN-253)", async () => {
     const secretsStore = createSecretsStoreMock();
     vi.spyOn(secretsStore, "get").mockImplementation((key) => (key === "GITHUB_TOKEN" ? "ghp_throwing_token" : null));
 
     const fetchMock = getExternalFetchMock();
     fetchMock.mockRejectedValueOnce(new Error("socket hang up"));
-    fetchMock.mockResolvedValueOnce(githubRepoResponse("resilient"));
 
     const { baseUrl } = await startSetupApiServer({ secretsStore });
     const response = await postJson(baseUrl, "/api/v1/setup/detect-default-branch", {
@@ -513,9 +489,7 @@ describe("detect-default-branch handler", () => {
     });
 
     expect(response.status).toBe(200);
-    expect((await response.json()).defaultBranch).toBe("resilient");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
-    expect(secondHeaders.authorization).toBeUndefined();
+    expect((await response.json()).defaultBranch).toBe("main");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -46,6 +46,34 @@ describe("AuditLogger", () => {
     expect(entries[0].newValue).toBe("new body");
   });
 
+  it("links audit entries in a tamper-evident hash chain (NIN-266)", () => {
+    audit.logConfigChange("a", null, "1");
+    audit.logConfigChange("b", null, "2");
+    audit.logConfigChange("c", null, "3");
+
+    const entries = [...audit.query()].sort((left, right) => left.id - right.id);
+    expect(entries).toHaveLength(3);
+    // Genesis entry has no predecessor; every later entry links to the prior entry's hash.
+    expect(entries[0].previousHash).toBeNull();
+    expect(entries[0].entryHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(entries[1].previousHash).toBe(entries[0].entryHash);
+    expect(entries[2].previousHash).toBe(entries[1].entryHash);
+    expect(new Set(entries.map((entry) => entry.entryHash)).size).toBe(3);
+  });
+
+  it("redacts a config mutation whose key names a secret (NIN-247)", () => {
+    audit.logConfigChange("tracker.api_key", null, "sk-supersecret123");
+    const entries = audit.query();
+    expect(entries[0].newValue).toBe("[REDACTED]");
+  });
+
+  it("redacts a secret embedded in a config value while preserving JSON shape (NIN-247)", () => {
+    audit.logConfigChange("codex.provider", null, '{"token":"sk-supersecret123","wireApi":"responses"}');
+    const entries = audit.query();
+    expect(entries[0].newValue).not.toContain("sk-supersecret123");
+    expect(entries[0].newValue).toContain("responses");
+  });
+
   it("filters by tableName", () => {
     audit.logConfigChange("tracker", null, "{}");
     audit.logSecretChange("KEY", "set");

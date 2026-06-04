@@ -8,6 +8,7 @@ import type { PrStatusResponse } from "./github-pr-client.js";
 import type { GitIntegrationPort } from "./port.js";
 import type { RepoMatch } from "./repo-router.js";
 import type { GitRunner, PrCreateResult } from "./git-types.js";
+import { assertValidBranchName, assertAllowedRepoUrl } from "./git-validation.js";
 export type { GitCommandOptions, GitRunResult, GitRunner } from "./git-types.js";
 import {
   ensureBaseClone,
@@ -15,6 +16,7 @@ import {
   addWorktree,
   attachWorktree,
   removeWorktree as removeWorktreePrimitive,
+  pruneWorktrees as pruneWorktreesPrimitive,
   branchExists,
   deriveRepoKey,
   type WorktreeContext,
@@ -45,10 +47,13 @@ function deriveBranchName(issue: Pick<Issue, "identifier" | "branchName">, branc
   // Reject tracker-supplied names starting with "-" to prevent flag injection
   // into git commands (e.g. a branchName of "--force" becomes a flag arg).
   if (provided && provided.length > 0 && !provided.startsWith("-")) {
+    assertValidBranchName(provided);
     return provided;
   }
   const slug = sanitizeBranchSegment(issue.identifier) || "issue";
-  return `${branchPrefix}${slug}`;
+  const derived = `${branchPrefix}${slug}`;
+  assertValidBranchName(derived);
+  return derived;
 }
 
 interface CloneResult {
@@ -134,6 +139,10 @@ export class GitManager implements GitIntegrationPort {
     await syncBaseClone(ctx, baseCloneDir);
 
     const branchName = deriveBranchName(issue, branchPrefix);
+    // route.defaultBranch is attacker-influenceable routing config and reaches git as a ref / start
+    // point; validate it at the point of use too — setup validates at write time, but a config written
+    // by an older build (or edited directly) must not slip an option-like ref into git (NIN-241).
+    assertValidBranchName(route.defaultBranch);
     const startPoint = route.defaultBranch;
 
     if (await branchExists(ctx, baseCloneDir, branchName)) {
@@ -154,6 +163,11 @@ export class GitManager implements GitIntegrationPort {
     await removeWorktreePrimitive(ctx, baseCloneDir, worktreePath, force);
   }
 
+  async pruneWorktrees(baseCloneDir: string): Promise<void> {
+    const ctx = this.getWorktreeContext();
+    await pruneWorktreesPrimitive(ctx, baseCloneDir);
+  }
+
   async cloneInto(
     route: RepoMatch,
     workspaceDir: string,
@@ -161,7 +175,9 @@ export class GitManager implements GitIntegrationPort {
     branchPrefix?: string,
   ): Promise<CloneResult> {
     const branchName = deriveBranchName(issue, branchPrefix);
-    await this.runGit(["clone", "--branch", route.defaultBranch, "--single-branch", route.repoUrl, "."], {
+    assertAllowedRepoUrl(route.repoUrl);
+    assertValidBranchName(route.defaultBranch);
+    await this.runGit(["clone", "--branch", route.defaultBranch, "--single-branch", "--", route.repoUrl, "."], {
       cwd: workspaceDir,
       env: this.env,
     });

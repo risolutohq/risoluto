@@ -11,7 +11,10 @@ export function handlePostMasterKey(deps: SetupApiDeps | SetupService) {
     const providedKey = isRecord(body) && typeof body.key === "string" && body.key ? body.key : null;
 
     try {
-      res.json(await service.createMasterKey(providedKey));
+      // The key is persisted to archiveDir/master.key (mode 0600) inside the service;
+      // the HTTP response must never echo the key material back (NIN-249).
+      await service.createMasterKey(providedKey);
+      res.json({ ok: true });
     } catch (error) {
       if (error instanceof SetupServiceError) {
         res.status(error.status).json({ error: { code: error.code, message: error.message } });

@@ -42,10 +42,16 @@ export interface RecordSlackOperatorResponseInput extends WorkflowRunArchiveLoca
   readonly now: () => string;
 }
 
-export interface SlackOperatorResponseResult {
-  readonly response: OperatorResponseArtifact;
-  readonly artifact: WorkflowRunArtifactReference;
-}
+export type SlackOperatorResponseResult =
+  | {
+      readonly type: "slack_operator_response.recorded";
+      readonly response: OperatorResponseArtifact;
+      readonly artifact: WorkflowRunArtifactReference;
+    }
+  | {
+      readonly type: "slack_operator_response.duplicate";
+      readonly questionId: string;
+    };
 
 export interface UnansweredSlackClarificationInput {
   readonly workflowRunId: string;
@@ -106,14 +112,24 @@ export async function recordSlackOperatorResponse(
   input: RecordSlackOperatorResponseInput,
 ): Promise<SlackOperatorResponseResult> {
   const response = toOperatorResponseArtifact(input);
-  const artifact = await createWorkflowRunArchive(input).writeWorkflowRunArtifact({
-    workflowRunId: input.workflowRunId,
-    artifactId: operatorResponseArtifactId(input.questionId),
-    contractId: "operator_response.v1",
-    data: response,
-    producer: { type: "action", id: "slack-operator-response" },
-  });
-  return { response, artifact };
+  try {
+    // ifNotExists makes the per-questionId artifact write exclusive: a second reply to the same
+    // question loses the race (EEXIST) instead of overwriting the first operator's answer (NIN-263).
+    const artifact = await createWorkflowRunArchive(input).writeWorkflowRunArtifact({
+      workflowRunId: input.workflowRunId,
+      artifactId: operatorResponseArtifactId(input.questionId),
+      contractId: "operator_response.v1",
+      data: response,
+      producer: { type: "action", id: "slack-operator-response" },
+      ifNotExists: true,
+    });
+    return { type: "slack_operator_response.recorded", response, artifact };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      return { type: "slack_operator_response.duplicate", questionId: input.questionId };
+    }
+    throw error;
+  }
 }
 
 export function decideUnansweredSlackClarification(
