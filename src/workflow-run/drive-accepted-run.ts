@@ -39,6 +39,13 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
    * PR. Its `pullRequestUrl` is threaded into `handoff.output` and the result so callers can surface it.
    */
   readonly publishOnDone?: () => Promise<{ pullRequestUrl: string | null }>;
+  /**
+   * Run on the DONE path AFTER the PR is published (NIN-272): route the run's archived gates through
+   * `completeAutoMerge` (see `completeAutoMergeForRun`). Only invoked when a PR URL was published. Must not
+   * throw — it owns its own result handling and logging; a blocked or failed auto-merge never un-does the
+   * already-finalized run.
+   */
+  readonly completeAutoMergeOnDone?: (input: { pullRequestUrl: string }) => Promise<void>;
 }
 
 export interface DriveAcceptedWorkflowRunResult {
@@ -130,6 +137,11 @@ async function finishDrivenRun(
     // executor's terminal "done" write was deferred (see recordStatus above) so the publish-failure
     // path above could still route to blocked past the archive's terminal guard (NIN-260).
     await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
+    // The run is finalized done and the PR is published — now run the auto-merge completion gate (NIN-272).
+    // Post-finalization and best-effort: the callback owns its result/errors, so it can never un-do the run.
+    if (published?.pullRequestUrl && input.completeAutoMergeOnDone) {
+      await input.completeAutoMergeOnDone({ pullRequestUrl: published.pullRequestUrl });
+    }
     const handoff = await writeDoneHandoff(
       archive,
       { workflowRunId: input.workflowRun.id, createdAt, ...(input.budget ? { budget: input.budget } : {}) },
