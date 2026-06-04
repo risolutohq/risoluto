@@ -38,7 +38,12 @@ function countOperations(query: string): number {
 // secret-bearing field (e.g. Linear's Webhook.secret), so the agent tool cannot
 // mutate state or exfiltrate credentials (NIN-248).
 const MUTATING_OPERATION = /\b(mutation|subscription)\b/i;
-const SECRET_BEARING_FIELD = /\b(secret|apiKey|api_key|accessToken|refreshToken|password)\b/i;
+// Substring (not \b-anchored) match: the old word-boundary form let camelCase/compound field names slip
+// through (e.g. `authToken`, `apiKeys`, `clientSecret` have no boundary before the secret word) and
+// omitted `token`/`credential` entirely. Match the credential-bearing word anywhere in the field name,
+// but require the `api`/`private` prefix before `key` so a plain identifier field like Linear's
+// `Team.key` is still readable (NIN-248).
+const SECRET_BEARING_FIELD = /secret|token|password|credential|api[_-]?key|private[_-]?key/i;
 
 function assertReadOnlyQuery(query: string): void {
   if (MUTATING_OPERATION.test(query)) {

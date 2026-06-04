@@ -82,6 +82,30 @@ describe("handleLinearGraphqlToolCall", () => {
     expect(runGraphQL).not.toHaveBeenCalled();
   });
 
+  it("rejects camelCase/compound secret fields the word-boundary regex missed (NIN-248)", async () => {
+    const runGraphQL = vi.fn();
+    const client = { runGraphQL } as unknown as LinearClient;
+
+    for (const field of ["authToken", "apiKeys", "personalApiToken", "clientSecret", "credential"]) {
+      const response = await handleLinearGraphqlToolCall(client, { query: `query Leak { foo { ${field} } }` });
+      expect(response.success).toBe(false);
+      expect(JSON.parse(response.contentItems[0].text).error).toContain("secret-bearing");
+    }
+    expect(runGraphQL).not.toHaveBeenCalled();
+  });
+
+  it("still allows a non-secret field that merely contains 'key' such as Team.key (NIN-248)", async () => {
+    const runGraphQL = vi.fn(async () => ({ data: { teams: { nodes: [{ key: "NIN" }] } } }));
+    const client = { runGraphQL } as unknown as LinearClient;
+
+    const response = await handleLinearGraphqlToolCall(client, {
+      query: "query Teams { teams { nodes { key } } }",
+    });
+
+    expect(response.success).toBe(true);
+    expect(runGraphQL).toHaveBeenCalledOnce();
+  });
+
   it("returns success=false when the GraphQL payload contains top-level errors", async () => {
     const client = {
       runGraphQL: vi.fn(async () => ({ data: null, errors: [{ message: "boom" }] })),
