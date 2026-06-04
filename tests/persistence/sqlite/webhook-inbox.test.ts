@@ -258,6 +258,28 @@ describe("SqliteWebhookInbox", () => {
     }
   });
 
+  it("increments the stored attempt count on each retry even when callers pass a fixed floor (NIN-263)", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      await store.inbox.insertVerified(createDelivery({ deliveryId: "delivery-retry-count" }));
+
+      // The production call sites pass a hardcoded floor of 1; the stored counter must still climb
+      // across repeated retries so any attempt-based dead-letter escalation can eventually fire.
+      await store.inbox.markForRetry("delivery-retry-count", "boom", 1, "2026-04-01T10:15:00.000Z");
+      expect(getRow(store.db, "delivery-retry-count")?.attemptCount).toBe(1);
+
+      await store.inbox.markForRetry("delivery-retry-count", "boom again", 1, "2026-04-01T10:16:00.000Z");
+      expect(getRow(store.db, "delivery-retry-count")?.attemptCount).toBe(2);
+
+      await store.inbox.markForRetry("delivery-retry-count", "boom thrice", 1, "2026-04-01T10:17:00.000Z");
+      expect(getRow(store.db, "delivery-retry-count")?.attemptCount).toBe(3);
+    } finally {
+      store.close();
+    }
+  });
+
   it("preserves retry errors that are already within the storage limit", async () => {
     const dir = await createTempDir();
     const store = createStore(dir);

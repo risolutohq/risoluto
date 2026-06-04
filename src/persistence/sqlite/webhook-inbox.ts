@@ -66,7 +66,10 @@ export interface WebhookInboxStore {
   /** Mark a delivery as ignored (unsupported type, no-op). */
   markIgnored(deliveryId: string): Promise<void>;
 
-  /** Schedule a delivery for retry with backoff. */
+  /**
+   * Schedule a delivery for retry with backoff. `attemptCount` is a floor: the stored counter is
+   * `max(currentAttemptCount + 1, attemptCount)`, so repeated retries always advance the count.
+   */
   markForRetry(deliveryId: string, error: string, attemptCount: number, nextAttemptAt: string): Promise<void>;
 
   /** Move a delivery to the dead-letter queue. */
@@ -165,7 +168,10 @@ export class SqliteWebhookInbox implements WebhookInboxStore {
       .update(webhookInbox)
       .set({
         status: "retry",
-        attemptCount,
+        // Increment the stored counter on every retry so it actually tracks attempts; the passed
+        // count is a floor. A bare assignment would pin the column at the caller's literal (the
+        // call sites pass 1), so the counter never climbs and attempt-based escalation can't fire.
+        attemptCount: sql`max(${webhookInbox.attemptCount} + 1, ${attemptCount})`,
         nextAttemptAt,
         lastError: truncateError(error),
       })
