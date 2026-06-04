@@ -303,12 +303,16 @@ describe("Abort race conditions", () => {
     const stopWorkerForIssue = vi.fn();
 
     const orchestrator = buildStubOrchestrator({ abortIssue });
+    // The Linear webhook now requires a durable inbox before it will ack (NIN-263); provide one so the
+    // concurrent "done" webhook is accepted (200) instead of rejected as inbox-unavailable (503).
+    const inbox = new SqliteWebhookInbox(openDatabase(":memory:"), logger);
 
     ctx = await startTestServer({
       withDatabase: true,
       webhookDeps: buildWebhookDeps({
         getWebhookSecret: vi.fn().mockReturnValue(WEBHOOK_SECRET),
         stopWorkerForIssue,
+        webhookInbox: inbox,
       }),
       orchestrator,
     });
