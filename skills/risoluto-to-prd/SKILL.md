@@ -82,16 +82,38 @@ query FindTeam($key: String!) {
 }
 ```
 
+Then resolve the project **lead** — the founder who owns this PRD is the user behind `LINEAR_API_KEY`:
+
+```graphql
+query Me {
+  viewer {
+    id
+    name
+  }
+}
+```
+
 Then call `projectCreate` with:
 
 - `name`: `<slug>` (or a humanised variant; the slug is the stable join key)
 - `teamIds`: `[<Ninetech team id>]` (the default team; only one exists in this workspace — do not ask)
 - `description`: a clean one-sentence summary, max 255 chars
 - `content`: the PRD body composed in Step 2 (literal markdown, real newlines — no escape sequences)
+- `leadId`: the `viewer.id` resolved above — a minted PRD project is **born owned**, never an orphaned, unassigned Backlog container. An unowned + No-priority project reads as a planning-only design doc, not actionable work, which is exactly what an execution review flags.
+- `priority`: `2` (High) — promoting a roadmap row to a PRD means it is real, active work. Stamp the priority at birth instead of leaving it at "No priority" for someone to notice and fix later.
 
 ```graphql
-mutation CreateProject($name: String!, $teamIds: [String!]!, $description: String!, $content: String!) {
-  projectCreate(input: { name: $name, teamIds: $teamIds, description: $description, content: $content }) {
+mutation CreateProject(
+  $name: String!
+  $teamIds: [String!]!
+  $description: String!
+  $content: String!
+  $leadId: String!
+  $priority: Int!
+) {
+  projectCreate(
+    input: { name: $name, teamIds: $teamIds, description: $description, content: $content, leadId: $leadId, priority: $priority }
+  ) {
     success
     project {
       id
@@ -99,6 +121,11 @@ mutation CreateProject($name: String!, $teamIds: [String!]!, $description: Strin
       url
       description
       content
+      lead {
+        id
+        name
+      }
+      priority
     }
   }
 }
@@ -223,6 +250,7 @@ shape, not file path.]
 ## Notes for the agent
 
 - **Default to the `Ninetech` Linear team without asking.** Only one team exists in this workspace.
+- **Minted projects are born owned and prioritized.** CREATE always sets `leadId` (the `LINEAR_API_KEY` user) and `priority: 2` (High) on `projectCreate`. A project with no lead and No priority looks like a planning-only container, not active work — the structural gap that makes a strong PRD read as an un-actionable design doc. SYNC mode (Step 3') deliberately does **not** re-assert lead or priority: once the project exists, ownership and priority are operator-owned, and a re-sync must not clobber a reassignment.
 - **Linear API errors are operator concerns, not skill bugs.** If Linear GraphQL returns an auth or provider error, surface it verbatim to Omer and stop.
 - **The PRD body in git is canon.** Linear's `content` is a generated mirror. If Omer asks "is the Linear edit kept or the git edit?", the answer is always git.
 - **`pipeline/<slug>-prd` branch namespace** is reserved for this skill. If it already exists locally on a re-run of CREATE, the write script refuses — delete the stale branch first.

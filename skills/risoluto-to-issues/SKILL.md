@@ -16,7 +16,7 @@ For one `<prd-slug>` per invocation:
 1. An LLM-inferred slice graph: a set of vertical slices with **two edge types** — hard `blocked-by` dependencies and soft `related` couplings — extracted from the full PRD body (no explicit `## Slices` section required — the LLM reads the whole PRD).
 2. Operator review of the proposed graph (accept, reject with feedback, or edit).
 3. The five required labels, verified-or-created before any issue exists (Step 2.5).
-4. Build-wave milestones on the PRD's Linear Project, one per dependency layer (Step 2.6).
+4. Build-wave milestones on the PRD's Linear Project — mirroring the PRD's own named waves when it defines them, else one per dependency layer (Step 2.6).
 5. Flat Linear Issues created on the same Project as the PRD (resolved from `docs/prds/<slug>.md` frontmatter `linear_project`), each with:
    - Linear "blocked-by" relations matching the approved dependency graph
    - Linear "related" relations for the soft couplings
@@ -107,7 +107,9 @@ Before creating any issue, make sure the labels it will reference exist — Line
 
 ### Step 2.6 — Derive build-wave milestones
 
-Group the approved slices into 3–6 **build waves** by dependency depth (roots first, capstone last) and create one Linear milestone per wave (save-milestone operation) on the PRD's project. Name them `Wave N - <theme>` and give each a short theme description first; the issue IDs do not exist yet. Each issue created in Step 3 gets its wave's `milestone`. After issue creation, update each milestone description with the member issue IDs/URLs.
+**Prefer the PRD's own wave structure when it defines one.** Many PRDs name an explicit sequencing — a "Sequencing" / "Further Notes" / "Waves" section that already groups the work (e.g. a `Wave 0 — Capability spike` that gates everything, then `Wave 1` minimal end-to-end, `Wave 2` robustness, `Wave 3` quality). When the PRD names waves, **mirror them**: one milestone per named wave, the PRD's exact names, the PRD's membership — so a dependency-shallow slice the PRD deliberately elevates to a gate (a capability spike, a doctor probe) becomes its own wave instead of being lumped with other roots by a blind depth pass. The PRD author already did the thematic grouping; re-deriving it by topology throws that signal away. Only when the PRD defines **no** explicit wave plan, fall back to deriving 3–6 build waves by dependency depth (roots first, capstone last) and name them `Wave N - <theme>`.
+
+Either way, create one Linear milestone per wave (save-milestone operation) on the PRD's project, giving each a short theme/exit-criterion description first; the issue IDs do not exist yet. Each issue created in Step 3 gets its wave's `milestone`. After issue creation, update each milestone description with the member issue IDs/URLs.
 
 Milestones here are a **visual build-order aid, not a ready-set gate.** A slice can be dependency-shallow yet sit in a late wave because it is thematically "readiness" (e.g. an offline doctor probe that only needs the registry). The live ready-set — what is startable _now_ — is whatever has no open `blocked-by`, which `risoluto-next-bundle` computes dynamically. Say this to Omer when you present the waves so a late-wave-but-shallow slice isn't mistaken for "blocked."
 
