@@ -21,10 +21,37 @@ function isBlockedIpv4(host: string): boolean {
   return first === 172 && second >= 16 && second <= 31;
 }
 
-/** True when an IPv6 literal is loopback, unique-local, or link-local. */
+/**
+ * Decode the IPv4 embedded in an IPv4-mapped (`::ffff:…`) or IPv4-compatible (`::…`)
+ * IPv6 literal to dotted form, else null. Node's URL parser normalizes the embedded
+ * octets to two hex groups (`::ffff:127.0.0.1` -> `::ffff:7f00:1`), so both the dotted
+ * and the hex spelling must be recognized.
+ */
+function embeddedIpv4(host: string): string | null {
+  const dotted = /^::(?:ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/u.exec(host);
+  if (dotted) {
+    return dotted[1] ?? null;
+  }
+  const hex = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/u.exec(host);
+  if (hex) {
+    const high = parseInt(hex[1] ?? "", 16);
+    const low = parseInt(hex[2] ?? "", 16);
+    return `${(high >>> 8) & 0xff}.${high & 0xff}.${(low >>> 8) & 0xff}.${low & 0xff}`;
+  }
+  return null;
+}
+
+/** True when an IPv6 literal is loopback, unique-local, link-local, or an embedded private IPv4. */
 function isBlockedIpv6(host: string): boolean {
   if (!host.includes(":")) {
     return false;
+  }
+  // An IPv4-mapped/compatible IPv6 literal carries an IPv4 address; classify by that
+  // address so a loopback/private/link-local IPv4 cannot slip the guard in IPv6 syntax
+  // (e.g. ::ffff:127.0.0.1, or ::ffff:a9fe:a9fe for the cloud metadata endpoint).
+  const embedded = embeddedIpv4(host);
+  if (embedded !== null) {
+    return isBlockedIpv4(embedded);
   }
   return host === "::1" || host === "::" || host.startsWith("fe80") || host.startsWith("fc") || host.startsWith("fd");
 }

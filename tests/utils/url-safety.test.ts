@@ -14,11 +14,25 @@ describe("isBlockedRequestHost", () => {
     "::1",
     "fe80::1",
     "fc00::1",
+    // IPv4-mapped / IPv4-compatible IPv6, in the hex form Node's URL parser normalizes to.
+    "::ffff:7f00:1", // ::ffff:127.0.0.1
+    "::ffff:a9fe:a9fe", // ::ffff:169.254.169.254 (cloud metadata)
+    "::ffff:c0a8:101", // ::ffff:192.168.1.1
+    "::ffff:a00:1", // ::ffff:10.0.0.1
+    "::7f00:1", // ::127.0.0.1 (IPv4-compatible)
   ])("blocks %s", (host) => {
     expect(isBlockedRequestHost(host)).toBe(true);
   });
 
-  it.each(["api.github.com", "github.enterprise.test", "8.8.8.8", "172.32.0.1", "example.com"])("allows %s", (host) => {
+  it.each([
+    "api.github.com",
+    "github.enterprise.test",
+    "8.8.8.8",
+    "172.32.0.1",
+    "example.com",
+    "::ffff:808:808", // ::ffff:8.8.8.8 — a mapped *public* IPv4 stays allowed
+    "2606:4700::1111", // public IPv6 is unaffected
+  ])("allows %s", (host) => {
     expect(isBlockedRequestHost(host)).toBe(false);
   });
 });
@@ -34,6 +48,15 @@ describe("isSafeOutboundHttpsUrl", () => {
 
   it("rejects a private host", () => {
     expect(isSafeOutboundHttpsUrl("https://127.0.0.1/v1")).toBe(false);
+  });
+
+  it.each([
+    "https://[::ffff:127.0.0.1]/v1",
+    "https://[::ffff:169.254.169.254]/latest/meta-data",
+    "https://[::ffff:192.168.1.1]/v1",
+    "https://[::127.0.0.1]/v1",
+  ])("rejects IPv4-mapped IPv6 loopback/private host %s", (url) => {
+    expect(isSafeOutboundHttpsUrl(url)).toBe(false);
   });
 
   it("rejects an unparseable url", () => {
