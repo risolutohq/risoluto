@@ -583,8 +583,8 @@ describe("GitManager", () => {
     vi.doMock("node:child_process", () => ({ execFile: execFileMock }));
     vi.doMock("node:util", () => ({ promisify: promisifyMock }));
 
-    const { GitManager: ReimportedGitManager } = await import("../../src/git/manager.js");
-    const manager = new ReimportedGitManager({ env: { CUSTOM_ENV: "1" } });
+    const { GitManager: reimportedGitManager } = await import("../../src/git/manager.js");
+    const manager = new reimportedGitManager({ env: { CUSTOM_ENV: "1" } });
 
     await expect(manager.hasUncommittedChanges("/tmp/ws")).resolves.toBe(false);
     await expect(
