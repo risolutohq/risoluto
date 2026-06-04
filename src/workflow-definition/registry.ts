@@ -1,4 +1,5 @@
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { open, readdir, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 import { parse as parseYaml } from "yaml";
@@ -149,8 +150,7 @@ async function loadWorkflowDefinitions(workflowDir: string): Promise<WorkflowDef
 }
 
 async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinition> {
-  await assertSafeDefinitionFile(filePath);
-  const parsed = parseYaml(await readFile(filePath, "utf8"));
+  const parsed = parseYaml(await readSafeDefinitionFile(filePath));
   try {
     const definition = workflowDefinitionSchema.parse(parsed);
     validateWorkflowDefinitionStructure(definition);
@@ -164,19 +164,37 @@ async function loadWorkflowDefinition(filePath: string): Promise<WorkflowDefinit
   }
 }
 
-// Reject anything that isn't a plain regular file (a symlink, fifo, device, or directory entry that
-// happens to end in .yaml) and anything over the size cap — before its bytes are read (NIN-265).
-async function assertSafeDefinitionFile(filePath: string): Promise<void> {
-  const stats = await lstat(filePath);
-  if (!stats.isFile()) {
-    throw new WorkflowDefinitionRegistryError(
-      `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
-    );
+// Open with O_NOFOLLOW so a symlink at the path is rejected (ELOOP), then fstat the *same* handle for the
+// regular-file + size checks and read the bytes through it. Doing the check and the read on one fd closes
+// the TOCTOU window where a regular file validated by lstat is swapped for a symlink before readFile
+// follows it (NIN-265).
+async function readSafeDefinitionFile(filePath: string): Promise<string> {
+  let handle: FileHandle;
+  try {
+    handle = await open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") {
+      throw new WorkflowDefinitionRegistryError(
+        `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
+      );
+    }
+    throw error;
   }
-  if (stats.size > MAX_WORKFLOW_DEFINITION_BYTES) {
-    throw new WorkflowDefinitionRegistryError(
-      `workflow definition ${filePath} exceeds the ${MAX_WORKFLOW_DEFINITION_BYTES} byte size cap (${stats.size} bytes)`,
-    );
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) {
+      throw new WorkflowDefinitionRegistryError(
+        `workflow definition ${filePath} is not a regular file (symlinks and special files are rejected)`,
+      );
+    }
+    if (stats.size > MAX_WORKFLOW_DEFINITION_BYTES) {
+      throw new WorkflowDefinitionRegistryError(
+        `workflow definition ${filePath} exceeds the ${MAX_WORKFLOW_DEFINITION_BYTES} byte size cap (${stats.size} bytes)`,
+      );
+    }
+    return await handle.readFile("utf8");
+  } finally {
+    await handle.close();
   }
 }
 

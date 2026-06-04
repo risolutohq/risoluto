@@ -40,6 +40,10 @@ const DOCKER_CLI_ENV_ALLOWLIST = [
   "PATH",
   "HOME",
   "DOCKER_HOST",
+  // DOCKER_CONTEXT selects a non-default daemon when the operator uses `docker context use` and relies
+  // on the env override; without it the main session targets the default context while the init
+  // container (which inherits the full host env) targets the configured one — an asymmetric failure.
+  "DOCKER_CONTEXT",
   "DOCKER_CONFIG",
   "DOCKER_CERT_PATH",
   "DOCKER_TLS_VERIFY",
