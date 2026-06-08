@@ -28,6 +28,7 @@ const config: UserConfig = {
         "orchestrator",
         "persistence",
         "prompt",
+        "reachability",
         "release",
         "secrets",
         "setup",
