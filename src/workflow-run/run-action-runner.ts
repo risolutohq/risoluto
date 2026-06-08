@@ -3,6 +3,7 @@ import type { WriteWorkflowRunArtifactInput } from "./archive.js";
 import { evaluateCiBabysitter, type CiCheckResult } from "./ci-babysitter.js";
 import type { WorkflowRunArtifactReference } from "./contracts.js";
 import type { WorkflowActionExecutionInput } from "./executor-actions.js";
+import type { MergePolicyResultArtifact } from "./merge-policy-result-contract.js";
 import type { OperatorPermission } from "./operator-approval-contract.js";
 import { evaluatePrPublishPolicy, type PrPublishMode, type PrPublishPolicyInput } from "./publish-policy.js";
 import {
@@ -37,10 +38,23 @@ export type WorkflowRunCiPoller = (input: {
   readonly provider: "github_actions";
 }) => Promise<WorkflowRunCiPollResult>;
 
+/** Merge-policy verdict type returned by the evaluator seam. */
+export interface MergePolicyEvaluation {
+  readonly status: "failed" | "passed";
+  readonly mergeMethod: "merge" | "rebase" | "squash";
+}
+
 export interface WorkflowRunActionEffects {
   readonly prepareWorkspace?: WorkflowRunWorkspacePreparer;
   readonly runValidationCommand?: WorkflowRunValidationCommandRunner;
   readonly pollCi?: WorkflowRunCiPoller;
+  /**
+   * Evaluate the merge policy at PR publish time (NIN-75). Called only when `publishMode` is
+   * `auto_merge`; the result is persisted as `merge_policy_result.v1` and fed into the publish
+   * policy check. Absent → merge policy check stays null (blocked at merge_policy_not_satisfied).
+   * Production binds real git-diff logic; hermetic tests inject a fake.
+   */
+  readonly evaluateMergePolicy?: (workflowRunId: string) => Promise<MergePolicyEvaluation | null>;
 }
 
 export class WorkflowRunActionError extends Error {
@@ -160,8 +174,10 @@ type VerifierDecision = (typeof VERIFIER_DECISIONS)[number];
 /**
  * Deterministic PR publishing-mode policy reachable from `run start`. Reads the validation / verifier /
  * CI / operator-approval artifacts the prior roles and actions deposited, applies the requested mode
- * (default draft), and persists the resulting `publish_result.v1`. Live PR creation is a separate slice;
- * this action only records the policy decision.
+ * (default draft), and persists the resulting `publish_result.v1`. When `publishMode` is `auto_merge`
+ * and an `evaluateMergePolicy` effect is configured, evaluates the merge policy and persists
+ * `merge_policy_result.v1` so the post-run auto-merge gate can read it back (NIN-75). Live PR creation
+ * is a separate slice; this action only records the policy decision.
  */
 async function publishPrAction(
   deps: CreateWorkflowRunActionRunnerDeps,
@@ -178,6 +194,7 @@ async function publishPrAction(
       throw error;
     }
   }
+  const mergePolicy = await evaluateAndPersistMergePolicy(deps, input.workflowRunId, effectiveMode);
   const artifact = evaluatePrPublishPolicy({
     workflowRunId: input.workflowRunId,
     createdAt: deps.now(),
@@ -186,7 +203,7 @@ async function publishPrAction(
     verification: readVerification(input.artifacts),
     ci: readCiResult(input.artifacts),
     operatorApproval: readOperatorApproval(input.artifacts),
-    mergePolicy: null,
+    mergePolicy,
   });
   await deps.writeArtifact({
     workflowRunId: input.workflowRunId,
@@ -196,6 +213,41 @@ async function publishPrAction(
     producer: { type: "action", id: input.actionId },
   });
   return { "publish_result.v1": artifact };
+}
+
+/**
+ * Evaluate the merge policy for an `auto_merge` publish and persist `merge_policy_result.v1`. Returns
+ * the verdict (for the publish policy check) or null when the mode is not `auto_merge` or no evaluator
+ * is configured. Failure to persist is non-fatal only in the sense that the publish check will block
+ * at `merge_policy_not_satisfied` — by design; the run is never silently promoted past a failing gate.
+ */
+async function evaluateAndPersistMergePolicy(
+  deps: CreateWorkflowRunActionRunnerDeps,
+  workflowRunId: string,
+  mode: PrPublishMode,
+): Promise<{ readonly status: "failed" | "passed" } | null> {
+  if (mode !== "auto_merge" || !deps.effects.evaluateMergePolicy) {
+    return null;
+  }
+  const evaluation = await deps.effects.evaluateMergePolicy(workflowRunId);
+  if (!evaluation) {
+    return null;
+  }
+  const artifact: MergePolicyResultArtifact = {
+    version: 1,
+    workflowRunId,
+    createdAt: deps.now(),
+    status: evaluation.status,
+    mergeMethod: evaluation.mergeMethod,
+  };
+  await deps.writeArtifact({
+    workflowRunId,
+    contractId: "merge_policy_result.v1",
+    artifactId: "merge_policy_result",
+    data: artifact,
+    producer: { type: "action", id: "publish-pr" },
+  });
+  return { status: evaluation.status };
 }
 
 // Absence of an artifact is read as "not green / not present" (never fabricated as passing): ready and

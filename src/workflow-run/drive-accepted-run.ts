@@ -170,6 +170,12 @@ async function finishDrivenRun(
     // executor's terminal "done" write was deferred (see recordStatus above) so the publish-failure
     // path above could still route to blocked past the archive's terminal guard (RIS-260).
     await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
+    // Update publish_result.v1 with the actual PR URL now that it is known (NIN-75). The action runner
+    // writes pullRequestUrl: null at policy evaluation time; this stamps the real URL so the post-run
+    // auto-merge gate reads an artifact that passes isPublishReadyForAutoMerge.
+    if (published?.pullRequestUrl) {
+      await updatePublishResultUrl(archive, input.workflowRun.id, published.pullRequestUrl);
+    }
     // Post-publish verification reconfirm (NIN-103): update the archived verification artifact with
     // post-publish evidence so the auto-merge gate reads the reconfirmed decision.
     if (published) {
@@ -473,6 +479,35 @@ function extractCiStatus(artifacts: Readonly<Record<string, unknown>>): { status
   if (raw["status"] === "passed") return { status: "passed" };
   if (raw["status"] === "failed") return { status: "failed" };
   return null;
+}
+
+/**
+ * Stamp the real PR URL into the archived `publish_result.v1` after `publishOnDone` succeeds (NIN-75).
+ * The action runner records `pullRequestUrl: null` at policy time (the URL is unknown then); this
+ * overwrites only that field so the post-run auto-merge gate passes `isPublishReadyForAutoMerge`.
+ * Silently skips when the artifact is absent or when `pullRequestUrl` is already non-null.
+ */
+async function updatePublishResultUrl(
+  archive: WorkflowRunArchive,
+  workflowRunId: string,
+  pullRequestUrl: string,
+): Promise<void> {
+  let payload: { contractId: string; data: unknown };
+  try {
+    payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "publish_result" });
+  } catch {
+    return;
+  }
+  if (!isRecord(payload.data) || payload.data["pullRequestUrl"] !== null) {
+    return;
+  }
+  await archive.writeWorkflowRunArtifact({
+    workflowRunId,
+    contractId: "publish_result.v1",
+    artifactId: "publish_result",
+    data: { ...payload.data, pullRequestUrl },
+    producer: { type: "action", id: "publish-pr" },
+  });
 }
 
 function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveLocation {
