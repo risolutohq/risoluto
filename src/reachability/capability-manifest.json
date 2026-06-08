@@ -54,5 +54,12 @@
     "module": "src/workflow-run/intake-rules.ts",
     "intakeAdapters": ["cli", "http"],
     "reason": "Production intake call sites now load real intake rules from config (cli loadCliIntakeRules; http deps.intakeRules) and thread them through intake-core into resolveWorkflowRunIntake, so ambiguous intake is rejected with a disambiguation error, invalid intake is rejected before any run record is created, and an explicit retry signal resumes the existing run instead of duplicating it (NIN-107/202)."
+  },
+  {
+    "name": "unanswered-clarification-timeout",
+    "symbol": "decideUnansweredSlackClarification",
+    "module": "src/workflow-run/slack-interactions.ts",
+    "intakeAdapters": ["slack"],
+    "reason": "The run driver (workflow-run-driver.ts) passes decideUnansweredSlackClarification into executeWorkflowDefinition; when a verifier returns uncertain the engine's wait-for-operator loop (resolveClarificationStep) consults it to retry the implementer state while clarification budget remains, then routes the run to blocked once exhausted (NIN-105/213)."
   }
 ]
