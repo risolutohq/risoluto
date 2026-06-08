@@ -75,5 +75,12 @@
     "module": "src/workflow-run/post-publish-verifier.ts",
     "intakeAdapters": ["cli", "http"],
     "reason": "After publish, driveAcceptedWorkflowRun invokes reconfirmPostPublishVerification for the modes that require it (requiresPostPublishReconfirm); a contradiction with the pre-publish verdict flips the decision to not_satisfied while a clean reconfirm lets completion proceed — the whole module was previously unreachable (NIN-103/219)."
+  },
+  {
+    "name": "council-verifier-dispatch",
+    "symbol": "createCouncilDispatch",
+    "module": "src/workflow-run/council-dispatch.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "driveWithDeps (run-start-command.ts) and driveRun (accepted-run-driver.ts) build runCouncillor + synthesizeCouncil via createCouncilDispatch over the production dispatchRole boundary and thread them through the drivers into executeWorkflowDefinition, so a council-configured run start dispatches real councillor + synthesizer sessions and records the council verification.v1 instead of degrading to single mode (NIN-76/271)."
   }
 ]
