@@ -19,5 +19,12 @@
     "module": "src/workflow-run/evidence-store.ts",
     "intakeAdapters": ["cli"],
     "reason": "`run evidence show <id>` reads evidence through readEvidenceForDisplay, redacting secret-classified fields on display while preserving the raw stored record (NIN-108/204)."
+  },
+  {
+    "name": "http-run-create-drive",
+    "symbol": "driveAcceptedWorkflowRun",
+    "module": "src/workflow-run/drive-accepted-run.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "Every intake surface emits workflow_run.accepted; the Phase-8 acceptedRunDriver subscriber (cli/services.ts) drives the accepted run through driveAcceptedWorkflowRun -> executeWorkflowDefinition, so an HTTP-created run is not just an intake record (NIN-110/203)."
   }
 ]
