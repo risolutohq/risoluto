@@ -117,4 +117,5 @@ export interface ServiceConfig {
   server: ServerConfig;
   webhook?: WebhookConfig | null;
   slackIntake?: SlackIntakeConfig | null;
+  intakeRules?: readonly WorkflowRunIntakeRule[];
 }

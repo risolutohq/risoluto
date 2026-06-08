@@ -9,6 +9,7 @@ import {
 import { DEFAULT_WORKFLOW_DEFINITION_ID, toStartedOutput } from "../workflow-run/artifacts.js";
 import { acceptWorkflowRunIntake } from "../workflow-run/intake-core.js";
 import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
+import { loadCliIntakeRules } from "./workflow-run-intake.js";
 
 export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
   const parsed = parseArgs({
@@ -27,19 +28,23 @@ export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
   const title = requireNonEmpty(parsed.values.title, "--title");
   const intent = requireNonEmpty(parsed.values.intent, "--intent");
   const workflowDefinitionId = parsed.values["workflow-definition"]?.trim() || DEFAULT_WORKFLOW_DEFINITION_ID;
-  const workflowRegistry = await loadWorkflowDefinitionRegistry({
-    workflowDir: path.resolve(".risoluto", "workflows"),
-    globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
-  });
+  const dataDir = resolveDataDir(parsed.values["data-dir"]);
+  const [rules, workflowRegistry] = await Promise.all([
+    loadCliIntakeRules(dataDir),
+    loadWorkflowDefinitionRegistry({
+      workflowDir: path.resolve(".risoluto", "workflows"),
+      globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
+    }),
+  ]);
   const workflowDefinition = workflowRegistry.resolve(workflowDefinitionId);
   const intake = await acceptWorkflowRunIntake({
-    dataDir: resolveDataDir(parsed.values["data-dir"]),
+    dataDir,
     source: "cli",
     mode: "start",
     title,
     body: intent,
     externalObject: null,
-    rules: [],
+    rules,
     workflowDefinitionId: workflowDefinition.id,
     workspaceKey: parsed.values["workspace-key"]?.trim() || "default",
     resolvedWorkflowDefinition: toWorkflowRunResolvedDefinitionConfig(workflowDefinition),

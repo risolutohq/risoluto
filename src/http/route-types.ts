@@ -1,4 +1,5 @@
 import type { ConfigOverlayPort } from "../config/overlay.js";
+import type { WorkflowRunIntakeRule } from "../workflow-run/intake-rules.js";
 import type { AutomationScheduler } from "../automation/scheduler.js";
 import type { AlertHistoryStorePort } from "../alerts/history-store.js";
 import type { AuditLoggerPort } from "../audit/port.js";
@@ -42,6 +43,7 @@ export interface HttpRouteDeps {
   templateStore?: TemplateStorePort;
   auditLogger?: AuditLoggerPort;
   archiveDir?: string;
+  intakeRules?: readonly WorkflowRunIntakeRule[];
   webhookHandlerDeps?: WebhookHandlerDeps;
   slackWebhookDeps?: SlackWebhookHandlerDeps;
   metrics?: MetricsCollector;

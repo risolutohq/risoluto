@@ -3,6 +3,7 @@ import { asRecord } from "./coercion.js";
 import {
   deriveAgentConfig,
   deriveCodexConfig,
+  deriveIntakeRulesConfig,
   derivePollingConfig,
   deriveServerConfig,
   deriveSlackIntakeConfig,
@@ -42,6 +43,7 @@ interface ConfigDerivationInput {
   server: Record<string, unknown>;
   webhook: Record<string, unknown>;
   slackIntake: Record<string, unknown>;
+  intakeRules: Record<string, unknown>;
 }
 
 function createDerivationInput(mergedConfig: Record<string, unknown>): ConfigDerivationInput {
@@ -63,6 +65,7 @@ function createDerivationInput(mergedConfig: Record<string, unknown>): ConfigDer
     server: asRecord(root.server),
     webhook: asRecord(root.webhook),
     slackIntake: asRecord(root.slack_intake ?? root.slackIntake),
+    intakeRules: asRecord(root.intake_rules ?? root.intakeRules),
   };
 }
 
@@ -91,5 +94,6 @@ export function deriveServiceConfig(
     server: deriveServerConfig(input.server),
     webhook: deriveWebhookConfig(input.webhook, secretResolver),
     slackIntake: deriveSlackIntakeConfig(input.slackIntake, secretResolver),
+    intakeRules: deriveIntakeRulesConfig(input.intakeRules),
   };
 }
