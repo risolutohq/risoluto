@@ -99,10 +99,10 @@ describe("WorkspaceManager integration", () => {
 
     const workspace = await manager.ensureWorkspace("RIS/42");
     expect(workspace.createdNow).toBe(true);
-    expect(workspace.workspaceKey).toBe("NIN_42");
+    expect(workspace.workspaceKey).toBe("RIS_42");
     expect((await stat(workspace.path)).isDirectory()).toBe(true);
 
-    expect(await readFile(path.join(workspace.path, "after-create.txt"), "utf8")).toBe(`${workspace.path}\nNIN_42\n`);
+    expect(await readFile(path.join(workspace.path, "after-create.txt"), "utf8")).toBe(`${workspace.path}\nRIS_42\n`);
 
     await mkdir(path.join(workspace.path, "tmp"), { recursive: true });
     await mkdir(path.join(workspace.path, ".elixir_ls"), { recursive: true });
@@ -115,8 +115,8 @@ describe("WorkspaceManager integration", () => {
     await expect(stat(path.join(workspace.path, "tmp"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(path.join(workspace.path, ".elixir_ls"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(path.join(workspace.path, "keep.txt"), "utf8")).toBe("persist\n");
-    expect(await readFile(path.join(workspace.path, "before-run.txt"), "utf8")).toBe("before:NIN_42\n");
-    expect(await readFile(path.join(workspace.path, "after-run.txt"), "utf8")).toBe("after:NIN_42\n");
+    expect(await readFile(path.join(workspace.path, "before-run.txt"), "utf8")).toBe("before:RIS_42\n");
+    expect(await readFile(path.join(workspace.path, "after-run.txt"), "utf8")).toBe("after:RIS_42\n");
   });
 
   it("times out long-running hooks and rejects the run", async () => {
