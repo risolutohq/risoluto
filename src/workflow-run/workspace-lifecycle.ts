@@ -145,7 +145,7 @@ function sanitizeBranchText(value: string): string {
     output += next;
     previousDash = next === "-";
   }
-  return trimBranchSeparators(output).replaceAll("..", ".") || "workflow-run";
+  return trimBranchSeparators(output).replace(/\.{2,}/g, ".") || "workflow-run";
 }
 
 function trimBranchSeparators(value: string): string {

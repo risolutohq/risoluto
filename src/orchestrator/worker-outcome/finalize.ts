@@ -85,6 +85,7 @@ export function finalizeInactiveIssue(ctx: OutcomeContext, prepared: PreparedWor
       entry,
       configuredSelection: modelSelection,
       overrides: {
+        attempt,
         status: "paused",
         message: "issue is no longer active",
       },

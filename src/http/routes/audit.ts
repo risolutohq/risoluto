@@ -25,7 +25,7 @@ export function registerAuditApi(app: Express, deps: AuditApiDeps): void {
         from: typeof from === "string" ? from : undefined,
         to: typeof to === "string" ? to : undefined,
         limit: typeof limit === "string" ? clampInt(Number(limit), 0, 1000, 50) : 50,
-        offset: typeof offset === "string" ? clampInt(Number(offset), 0, Infinity, 0) : 0,
+        offset: typeof offset === "string" ? clampInt(Number(offset), 0, Number.MAX_SAFE_INTEGER, 0) : 0,
       };
 
       const entries = deps.auditLogger.query(queryOptions);

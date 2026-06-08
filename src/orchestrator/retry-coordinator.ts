@@ -75,6 +75,9 @@ class RetryCoordinatorImpl implements RetryCoordinator {
       case "compact_and_retry":
         this.handleErrorRetry(prepared, { startFreshSession: true });
         return;
+      default:
+        this.handleErrorRetry(prepared);
+        return;
     }
   }
 
