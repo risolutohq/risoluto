@@ -1,62 +1,67 @@
 import { describe, expect, it, vi } from "vitest";
 import { LinearClient } from "../../src/linear/client.js";
+import type { RisolutoLogger, ServiceConfig } from "../../src/core/types.js";
 import { createMockLogger } from "../helpers.js";
 
-function makeClient(fetchMock: ReturnType<typeof vi.fn>): LinearClient {
+const TEST_CONFIG = {
+  tracker: {
+    kind: "linear" as const,
+    apiKey: "test-key",
+    endpoint: "https://api.linear.app/graphql",
+    projectSlug: null,
+    activeStates: ["In Progress"],
+    terminalStates: ["Done"],
+  },
+  polling: { intervalMs: 30000 },
+  workspace: {
+    root: "/tmp",
+    hooks: { afterCreate: null, beforeRun: null, afterRun: null, beforeRemove: null, timeoutMs: 1000 },
+  },
+  agent: {
+    maxConcurrentAgents: 2,
+    maxConcurrentAgentsByState: {},
+    maxTurns: 2,
+    maxRetryBackoffMs: 300000,
+    maxContinuationAttempts: 5,
+    successState: "Done",
+    stallTimeoutMs: 1200000,
+  },
+  codex: {
+    command: "codex",
+    model: "gpt-5.4",
+    reasoningEffort: "high",
+    approvalPolicy: "never",
+    threadSandbox: "danger-full-access",
+    turnSandboxPolicy: { type: "dangerFullAccess" as const },
+    readTimeoutMs: 1000,
+    turnTimeoutMs: 10000,
+    drainTimeoutMs: 0,
+    startupTimeoutMs: 5000,
+    stallTimeoutMs: 300000,
+    auth: { mode: "api_key" as const, sourceHome: "/tmp" },
+    provider: null,
+    sandbox: {
+      image: "node:22",
+      network: "none",
+      security: { noNewPrivileges: true, dropCapabilities: true, gvisor: false, seccompProfile: "" },
+      resources: { memory: "1g", memoryReservation: "512m", memorySwap: "2g", cpus: "1", tmpfsSize: "100m" },
+      extraMounts: [],
+      envPassthrough: [],
+      logs: { driver: "json-file", maxSize: "50m", maxFile: 3 },
+      egressAllowlist: [],
+    },
+  },
+  server: { port: 4000 },
+};
+
+function makeClient(
+  fetchMock: ReturnType<typeof vi.fn>,
+  logger?: RisolutoLogger,
+): { client: LinearClient; logger: RisolutoLogger } {
   vi.stubGlobal("fetch", fetchMock);
-  return new LinearClient(
-    () => ({
-      tracker: {
-        kind: "linear",
-        apiKey: "test-key",
-        endpoint: "https://api.linear.app/graphql",
-        projectSlug: null,
-        activeStates: ["In Progress"],
-        terminalStates: ["Done"],
-      },
-      polling: { intervalMs: 30000 },
-      workspace: {
-        root: "/tmp",
-        hooks: { afterCreate: null, beforeRun: null, afterRun: null, beforeRemove: null, timeoutMs: 1000 },
-      },
-      agent: {
-        maxConcurrentAgents: 2,
-        maxConcurrentAgentsByState: {},
-        maxTurns: 2,
-        maxRetryBackoffMs: 300000,
-        maxContinuationAttempts: 5,
-        successState: "Done",
-        stallTimeoutMs: 1200000,
-      },
-      codex: {
-        command: "codex",
-        model: "gpt-5.4",
-        reasoningEffort: "high",
-        approvalPolicy: "never",
-        threadSandbox: "danger-full-access",
-        turnSandboxPolicy: { type: "dangerFullAccess" },
-        readTimeoutMs: 1000,
-        turnTimeoutMs: 10000,
-        drainTimeoutMs: 0,
-        startupTimeoutMs: 5000,
-        stallTimeoutMs: 300000,
-        auth: { mode: "api_key", sourceHome: "/tmp" },
-        provider: null,
-        sandbox: {
-          image: "node:22",
-          network: "none",
-          security: { noNewPrivileges: true, dropCapabilities: true, gvisor: false, seccompProfile: "" },
-          resources: { memory: "1g", memoryReservation: "512m", memorySwap: "2g", cpus: "1", tmpfsSize: "100m" },
-          extraMounts: [],
-          envPassthrough: [],
-          logs: { driver: "json-file", maxSize: "50m", maxFile: 3 },
-          egressAllowlist: [],
-        },
-      },
-      server: { port: 4000 },
-    }),
-    createMockLogger(),
-  );
+  const usedLogger = logger ?? createMockLogger();
+  const client = new LinearClient(() => ({ ...TEST_CONFIG }) as unknown as ServiceConfig, usedLogger);
+  return { client, logger: usedLogger };
 }
 
 function okResponse(data: unknown) {
@@ -79,7 +84,7 @@ describe("LinearClient.resolveStateId", () => {
         },
       }),
     );
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     const id = await client.resolveStateId("done");
     expect(id).toBe("state-done");
   });
@@ -88,7 +93,7 @@ describe("LinearClient.resolveStateId", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(okResponse({ workflowStates: { nodes: [{ id: "state-done", name: "Done" }] } }));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     const id = await client.resolveStateId("nonexistent");
     expect(id).toBeNull();
   });
@@ -101,7 +106,7 @@ describe("LinearClient.updateIssueState", () => {
         issueUpdate: { success: true, issue: { id: "issue-1", identifier: "MT-1", state: { name: "Done" } } },
       }),
     );
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await client.updateIssueState("issue-1", "state-done");
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
@@ -116,24 +121,28 @@ describe("LinearClient.updateIssueState", () => {
       .fn()
       .mockRejectedValueOnce(new Error("network error"))
       .mockResolvedValueOnce(okResponse({ issueUpdate: { success: true } }));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await expect(client.updateIssueState("issue-1", "state-done")).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("swallows errors after max retries (non-blocking)", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("always fails"));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await expect(client.updateIssueState("issue-1", "state-done")).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("does not retry when Linear returns an unconfirmed issueUpdate payload", async () => {
+  it("retries when Linear returns an unconfirmed issueUpdate payload", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ issueUpdate: { success: false } }));
-    const client = makeClient(fetchMock);
+    const { client, logger } = makeClient(fetchMock);
 
     await expect(client.updateIssueState("issue-1", "state-done")).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "updateIssueState" }),
+      "write-back failed after max retries (non-fatal)",
+    );
   });
 });
 
@@ -143,14 +152,14 @@ describe("LinearClient.updateIssueStateStrict", () => {
       .fn()
       .mockRejectedValueOnce(new Error("network error"))
       .mockResolvedValueOnce(okResponse({ issueUpdate: { success: true } }));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await expect(client.updateIssueStateStrict("issue-1", "state-done")).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("re-throws after max retries so callers can report failure", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("always fails"));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await expect(client.updateIssueStateStrict("issue-1", "state-done")).rejects.toThrow(
       /linear graphql request failed during transport/,
     );
@@ -159,7 +168,7 @@ describe("LinearClient.updateIssueStateStrict", () => {
 
   it("re-throws when Linear returns an unconfirmed issueUpdate payload", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ issueUpdate: { success: false } }));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
 
     await expect(client.updateIssueStateStrict("issue-1", "state-done")).rejects.toThrow(
       /linear issue transition was not confirmed/,
@@ -173,7 +182,7 @@ describe("LinearClient.createComment", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(okResponse({ commentCreate: { success: true, comment: { id: "comment-1" } } }));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await client.createComment("issue-1", "Agent completed ✓");
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
@@ -185,7 +194,7 @@ describe("LinearClient.createComment", () => {
 
   it("swallows errors after max retries (non-blocking)", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("always fails"));
-    const client = makeClient(fetchMock);
+    const { client } = makeClient(fetchMock);
     await expect(client.createComment("issue-1", "hello")).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });

@@ -349,7 +349,8 @@ export class LinearClient {
    */
   async updateIssueState(issueId: string, stateId: string): Promise<void> {
     await withNonFatalRetry(this.logger, "updateIssueState", async () => {
-      await this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
+      const payload = await this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
+      assertIssueTransitionSucceeded(payload);
     });
   }
 

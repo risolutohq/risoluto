@@ -116,6 +116,10 @@ async function dispatchModalSubmission(
     sendError(res, 400, "slack_modal_invalid", "Slack modal submission is missing required metadata");
     return;
   }
+  if (!deps.allowedSlackTeamIds.includes(modal.teamId)) {
+    sendError(res, 403, "slack_team_not_allowed", "Slack team is not in the allowed list");
+    return;
+  }
   const dedupe = await deduplicateSlackModal(deps, request, modal);
   if (dedupe === "unavailable") {
     sendError(res, 503, "webhook_inbox_unavailable", "Slack webhook inbox persistence is unavailable");

@@ -339,7 +339,7 @@ export class CodexControlPlane {
           createdAt: new Date().toISOString(),
           resolve: ({ writeResponse, result }) => {
             if (writeResponse) {
-              child.stdin.write(`${JSON.stringify(createSuccessResponse(id, { result }))}\n`);
+              child.stdin.write(`${JSON.stringify(createSuccessResponse(id, result))}\n`);
             }
             resolve();
           },

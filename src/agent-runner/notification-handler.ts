@@ -247,7 +247,7 @@ function handleTurnDiffUpdated(input: NotificationInput, params: Record<string, 
     sessionId: composeSessionId(input.threadId, asString(params.turnId) ?? input.turnId),
     event: "turn_diff",
     message: "Turn diff updated",
-    content: diff,
+    content: sanitizeContent(diff, { isDiff: true }),
     metadata: { isDiff: true },
   });
 }

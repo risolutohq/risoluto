@@ -47,6 +47,8 @@ export interface DispatchRequest {
   modelSelection: ModelSelection;
   promptTemplate: string;
   workspace: Workspace;
+  /** Thread ID from a previous attempt for resume on retry. */
+  previousThreadId?: string | null;
   /** Full config snapshot (workflow + overlay + secrets) */
   config: ServiceConfig;
   /** Pre-computed Codex TOML config (avoids data plane reading auth.json) */

@@ -12,9 +12,15 @@ describe("getSwaggerHtml", () => {
 
   it("contains Swagger UI CDN references", () => {
     const html = getSwaggerHtml();
-    expect(html).toContain("swagger-ui-dist@5");
+    expect(html).toContain("swagger-ui-dist@5.32.6");
     expect(html).toContain("swagger-ui.css");
     expect(html).toContain("swagger-ui-bundle.js");
+  });
+
+  it("includes SRI integrity hashes on CDN resources", () => {
+    const html = getSwaggerHtml();
+    expect(html).toContain("integrity=");
+    expect(html).toContain('crossorigin="anonymous"');
   });
 
   it("configures Swagger UI to load the openapi.json endpoint", () => {

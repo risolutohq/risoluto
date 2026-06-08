@@ -163,6 +163,34 @@ describe("driveAcceptedWorkflowRun publish-before-done", () => {
 
     expect(completeAutoMergeOnDone).not.toHaveBeenCalled();
   });
+
+  it("completes the run as done with a handoff even when the auto-merge completion gate throws (NIN-272)", async () => {
+    const { archiveDir, workflowRunId, input } = await acceptedRun();
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return { status: "done", events: [], roleExecutions: ["planner"], artifacts: {} };
+    });
+    const completeAutoMergeOnDone = vi.fn(async () => {
+      throw new Error("auto-merge timed out");
+    });
+
+    const result = await driveAcceptedWorkflowRun({
+      ...input,
+      publishOnDone: async () => ({ pullRequestUrl: "https://example.test/pr/7" }),
+      completeAutoMergeOnDone,
+    });
+
+    expect(result.outcome).toBe("done");
+    expect(completeAutoMergeOnDone).toHaveBeenCalledWith({ pullRequestUrl: "https://example.test/pr/7" });
+
+    const archive = createWorkflowRunArchive({ archiveDir });
+    const run = await archive.loadWorkflowRun(workflowRunId);
+    expect(run.status).toBe("done");
+
+    const handoff = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "handoff" });
+    expect(handoff.data).toMatchObject({ outcome: "done" });
+  });
 });
 
 describe("driveAcceptedWorkflowRun post-publish verifier reconfirm (NIN-103)", () => {

@@ -3,6 +3,7 @@ import { outcomeForAbort } from "../agent-runner/abort-outcomes.js";
 import type { ServiceConfig, RisolutoLogger, Issue, ModelSelection, Workspace, RunOutcome } from "../core/types.js";
 import type { AgentRunnerEventHandler } from "../agent-runner/contracts.js";
 import type { DispatchRequest, DispatchStreamMessage, RunAttemptDispatcher } from "./types.js";
+import type { WorkflowRunReference } from "../core/types.js";
 import { toErrorString } from "../utils/type-guards.js";
 
 interface DispatchClientDeps {
@@ -22,12 +23,15 @@ export class DispatchClient implements RunAttemptDispatcher {
 
   async runAttempt(input: {
     issue: Issue;
+    workflowRun?: WorkflowRunReference;
     attempt: number | null;
     modelSelection: ModelSelection;
     promptTemplate: string;
     workspace: Workspace;
     signal: AbortSignal;
     onEvent: AgentRunnerEventHandler;
+    previousThreadId?: string | null;
+    onSteerReady?: (steerTurn: (message: string) => Promise<boolean>) => void;
   }): Promise<RunOutcome> {
     const config = this.deps.getConfig();
     const logger = this.deps.logger.child({
@@ -43,7 +47,18 @@ export class DispatchClient implements RunAttemptDispatcher {
     };
 
     input.signal.addEventListener("abort", forwardAbort, { once: true });
-    const dispatchRequest = await this.buildDispatchRequest(input, config);
+    const dispatchRequest = await this.buildDispatchRequest(
+      {
+        issue: input.issue,
+        workflowRun: input.workflowRun,
+        attempt: input.attempt,
+        modelSelection: input.modelSelection,
+        promptTemplate: input.promptTemplate,
+        workspace: input.workspace,
+        previousThreadId: input.previousThreadId,
+      },
+      config,
+    );
     if (input.signal.aborted && !abortForwarding) {
       forwardAbort();
     }
@@ -81,10 +96,12 @@ export class DispatchClient implements RunAttemptDispatcher {
   private async buildDispatchRequest(
     input: {
       issue: Issue;
+      workflowRun?: WorkflowRunReference;
       attempt: number | null;
       modelSelection: ModelSelection;
       promptTemplate: string;
       workspace: Workspace;
+      previousThreadId?: string | null;
     },
     config: ServiceConfig,
   ): Promise<DispatchRequest> {
@@ -92,7 +109,7 @@ export class DispatchClient implements RunAttemptDispatcher {
     const requiredEnvNames = getRequiredProviderEnvNames(config.codex);
 
     return {
-      workflowRun: {
+      workflowRun: input.workflowRun ?? {
         id: input.issue.id,
         identifier: input.issue.identifier,
         title: input.issue.title,
@@ -103,6 +120,7 @@ export class DispatchClient implements RunAttemptDispatcher {
       modelSelection: input.modelSelection,
       promptTemplate: input.promptTemplate,
       workspace: input.workspace,
+      previousThreadId: input.previousThreadId,
       config,
       codexRuntimeConfigToml: configToml,
       codexRuntimeAuthJsonBase64: authJsonBase64,
