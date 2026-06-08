@@ -191,7 +191,7 @@ describe("createServices integration", () => {
     );
 
     try {
-      expect(result.webhookHealthTracker).toBeUndefined();
+      expect(result.webhookHealthTracker).not.toBeUndefined();
       expect(result.webhookInbox).toBeInstanceOf(SqliteWebhookInbox);
       expect(result.webhookRegistrar).toBeInstanceOf(WebhookRegistrar);
       expect(logger.warn).toHaveBeenCalledWith(

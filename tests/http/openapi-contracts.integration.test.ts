@@ -703,7 +703,7 @@ describe("OpenAPI Contract Tests", () => {
   describe("Workspaces", () => {
     it("GET /api/v1/workspaces -> 200, matches workspaceInventoryResponseSchema", async () => {
       const validate = compileResponseSchema("/api/v1/workspaces", "get", "200");
-      const response = await fetchApi("/api/v1/workspaces");
+      const response = await fetchApi("/api/v1/workspaces?includePaths=true");
 
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toContain("application/json");
