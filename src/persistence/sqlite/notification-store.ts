@@ -148,8 +148,8 @@ function parseJson<T>(value: string | null): T | null {
   }
   try {
     return JSON.parse(value) as T;
-  } catch (err) {
-    console.warn("corrupt JSON column in notification store:", String(err));
+  } catch (_err) {
+    /* corrupt JSON — return empty array */
     return null;
   }
 }

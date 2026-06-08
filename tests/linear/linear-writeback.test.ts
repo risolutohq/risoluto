@@ -140,8 +140,8 @@ describe("LinearClient.updateIssueState", () => {
     await expect(client.updateIssueState("issue-1", "state-done")).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ operation: "updateIssueState" }),
-      "write-back failed after max retries (non-fatal)",
+      expect.objectContaining({ issueId: "issue-1", stateId: "state-done" }),
+      "updateIssueState failed — state transition not confirmed",
     );
   });
 });

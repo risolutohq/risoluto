@@ -96,10 +96,7 @@ function isWithinSlackReplayWindow(timestampEpochSeconds: number, receivedAtEpoc
 }
 
 function isAllowedSlackTeam(slackTeamId: string | null, allowedSlackTeamIds: readonly string[]): boolean {
-  if (allowedSlackTeamIds.length === 0) {
-    console.warn("[slack-operator-approval] allowedSlackTeamIds is empty — all approvals will be rejected");
-  }
-  return slackTeamId !== null && allowedSlackTeamIds.includes(slackTeamId);
+  return slackTeamId !== null && allowedSlackTeamIds.length > 0 && allowedSlackTeamIds.includes(slackTeamId);
 }
 
 async function hasRecordedApproval(input: RecordSlackOperatorApprovalInput): Promise<boolean> {

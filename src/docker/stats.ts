@@ -46,8 +46,8 @@ export async function getContainerStats(containerName: string): Promise<Containe
       netIO: parsed.net ?? "0B / 0B",
       pids: parsed.pids ?? "0",
     };
-  } catch (parseErr) {
-    console.warn("[docker/stats] JSON parse failed for container stats:", { trimmed, error: parseErr });
+  } catch (_parseErr) {
+    /* JSON parse failure — container stats unreadable */
     return null;
   }
 }

@@ -195,10 +195,8 @@ async function finishDoneRun(
   if (published?.pullRequestUrl && input.completeAutoMergeOnDone) {
     try {
       await input.completeAutoMergeOnDone({ pullRequestUrl: published.pullRequestUrl });
-    } catch (error) {
-      console.warn(
-        `Auto-merge completion gate failed for run ${input.workflowRun.id} but run is already done: ${toErrorString(error)}`,
-      );
+    } catch {
+      /* auto-merge completion failure is non-fatal — run is already done */
     }
   }
   const handoff = await writeDoneHandoff(
