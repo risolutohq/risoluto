@@ -12,5 +12,12 @@
     "module": "src/workflow-run/run-status.ts",
     "intakeAdapters": ["http"],
     "reason": "Inbound external status strings must be parsed into a Run Status so a Workflow State value is never accepted as a Run Status (NIN-109/197/270)."
+  },
+  {
+    "name": "evidence-show",
+    "symbol": "readEvidenceForDisplay",
+    "module": "src/workflow-run/evidence-store.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "`run evidence show <id>` reads evidence through readEvidenceForDisplay, redacting secret-classified fields on display while preserving the raw stored record (NIN-108/204)."
   }
 ]
