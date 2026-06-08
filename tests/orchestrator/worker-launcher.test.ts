@@ -272,6 +272,18 @@ describe("launchWorker", () => {
       await expect(entry!.promise).resolves.toBeUndefined();
       expect(ctx.deps.logger.error).toHaveBeenCalled();
     });
+
+    it("cleans up the in-memory entry when runAttempt throws synchronously", async () => {
+      const { ctx, issue } = makeLaunchWorkerHarness();
+      ctx.deps.agentRunner.runAttempt = vi.fn(() => {
+        throw new Error("runAttempt exploded");
+      });
+
+      await expect(launchWorker(ctx, issue, 1)).rejects.toThrow("runAttempt exploded");
+
+      expect(ctx.runningEntries.has("workflow-run-1")).toBe(false);
+      expect(ctx.releaseIssueClaim).toHaveBeenCalledWith("workflow-run-1");
+    });
   });
 });
 

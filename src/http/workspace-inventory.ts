@@ -39,6 +39,31 @@ interface WorkspaceInventoryResponse {
 /*  Disk usage helpers                                                  */
 /* ------------------------------------------------------------------ */
 
+async function runWithConcurrencyLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: (R | undefined)[] = new Array(items.length);
+  let idx = 0;
+  let running = 0;
+  const pending: Promise<void>[] = [];
+  for (const item of items) {
+    running++;
+    const i = idx++;
+    const p = fn(item).then((value) => {
+      results[i] = value;
+      running--;
+    });
+    pending.push(p);
+    if (running >= limit) {
+      await Promise.race(pending);
+    }
+  }
+  await Promise.all(pending);
+  return results as R[];
+}
+
 async function computeDirSize(dirPath: string): Promise<number> {
   let total = 0;
   try {
@@ -157,24 +182,22 @@ export async function handleWorkspaceInventory(
     throw error;
   }
 
-  const workspaces: WorkspaceInventoryEntry[] = await Promise.all(
-    fsEntries.map(async (key) => {
-      const wsPath = path.join(workspaceRoot, key);
-      const { status, issue } = classifyWorkspace(key, snapshot.running, snapshot.retrying, snapshot.completed ?? []);
+  const workspaces: WorkspaceInventoryEntry[] = await runWithConcurrencyLimit(fsEntries, 4, async (key) => {
+    const wsPath = path.join(workspaceRoot, key);
+    const { status, issue } = classifyWorkspace(key, snapshot.running, snapshot.retrying, snapshot.completed ?? []);
 
-      const [diskBytes, lastModified] = await Promise.all([computeDirSize(wsPath), getDirMtime(wsPath)]);
+    const [diskBytes, lastModified] = await Promise.all([computeDirSize(wsPath), getDirMtime(wsPath)]);
 
-      return {
-        workspace_key: key,
-        path: wsPath,
-        status,
-        strategy,
-        issue,
-        disk_bytes: diskBytes,
-        last_modified_at: lastModified,
-      };
-    }),
-  );
+    return {
+      workspace_key: key,
+      path: wsPath,
+      status,
+      strategy,
+      issue,
+      disk_bytes: diskBytes,
+      last_modified_at: lastModified,
+    };
+  });
 
   const statusOrder: Record<string, number> = { running: 0, retrying: 1, completed: 2, orphaned: 3 };
   workspaces.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));

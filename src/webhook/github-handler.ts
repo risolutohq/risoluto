@@ -99,7 +99,7 @@ function buildGitHubWebhookContext(
   const action = asStringOrNull(payload.action) ?? "unknown";
   const issue = asRecord(payload.issue);
   const repository = asRecord(payload.repository);
-  const repoFullName = asStringOrNull(repository.full_name);
+  const repoFullName = asStringOrNull(repository.full_name)?.toLowerCase() ?? null;
   const issueNumber = typeof issue.number === "number" ? issue.number : null;
 
   const issueId = issueNumber === null ? null : String(issueNumber);

@@ -62,7 +62,16 @@ export async function writeComponentSnapshot(
   const tempPath = `${targetPath}.${randomUUID()}.tmp`;
   const content = JSON.stringify(snapshot, null, 2);
   await writeFile(tempPath, content, "utf8");
-  await rename(tempPath, targetPath);
+  try {
+    await rename(tempPath, targetPath);
+  } catch {
+    try {
+      await unlink(tempPath);
+    } catch {
+      /* Best effort — if unlink also fails the .tmp will be cleaned on next readdir pass. */
+    }
+    throw new Error(`failed to commit snapshot for ${snapshot.component}: rename failed`);
+  }
 }
 
 export async function readComponentSnapshots(root: string): Promise<ComponentObservabilitySnapshot[]> {

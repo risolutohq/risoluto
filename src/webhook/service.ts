@@ -104,11 +104,11 @@ export function createWebhookService(input: {
 }): WebhookService {
   const webhookConfig = input.webhookConfig;
   const webhookUrlSet = !!webhookConfig?.webhookUrl;
-  const webhookEnabled = evaluateWebhookConfig(webhookConfig, input.logger);
+  const _webhookEnabled = evaluateWebhookConfig(webhookConfig, input.logger);
   const webhookPersistence = webhookUrlSet ? input.persistence.webhook : undefined;
 
   const webhookInbox = webhookPersistence?.inbox;
-  const webhookHealthTracker = webhookEnabled
+  const webhookHealthTracker = webhookUrlSet
     ? new DefaultWebhookHealthTracker({
         config: webhookConfig!,
         eventBus: input.eventBus,

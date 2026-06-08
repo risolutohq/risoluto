@@ -27,8 +27,9 @@ function extractInput(args: unknown): { query: string; variables?: Record<string
 
 function countOperations(query: string): number {
   const operationKeywords = /\b(query|mutation|subscription)\b/gi;
+  const stripped = query.replace(/^[ \t]*#.*$/gm, "");
   let count = 0;
-  while (operationKeywords.exec(query) !== null) {
+  while (operationKeywords.exec(stripped) !== null) {
     count++;
   }
   return count;

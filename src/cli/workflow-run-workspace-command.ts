@@ -111,7 +111,7 @@ function parseRetentionDays(value: string | undefined): number {
   if (value === undefined || value.trim() === "") {
     return 7;
   }
-  const days = Number.parseInt(value, 10);
+  const days = Number(value.trim());
   if (!Number.isInteger(days) || days < 0) {
     throw new TypeError("--retention-days must be a non-negative integer");
   }

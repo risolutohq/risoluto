@@ -26,6 +26,7 @@ interface ScheduledAutomationEntry {
   task: ScheduledTask | null;
   valid: boolean;
   lastError: string | null;
+  running: Promise<AutomationRunRecord | null> | null;
 }
 
 interface AutomationSchedulerOptions {
@@ -88,7 +89,19 @@ export class AutomationScheduler {
     if (!entry) {
       return null;
     }
-    return this.options.runner.run(entry.config, "manual");
+    if (!entry.config.enabled) {
+      return null;
+    }
+    if (entry.running) {
+      return null;
+    }
+    const promise = this.options.runner.run(entry.config, "manual");
+    entry.running = promise;
+    const record = await promise;
+    if (entry.running === promise) {
+      entry.running = null;
+    }
+    return record;
   }
 
   private sync(configs: AutomationConfig[]): void {
@@ -115,7 +128,7 @@ export class AutomationScheduler {
 
   private createEntry(config: AutomationConfig, signature: string): ScheduledAutomationEntry {
     if (!config.enabled) {
-      return { config, signature, task: null, valid: true, lastError: null };
+      return { config, signature, task: null, valid: true, lastError: null, running: null };
     }
 
     if (!this.cronApi.validate(config.schedule)) {
@@ -150,7 +163,7 @@ export class AutomationScheduler {
             "invalid-cron notification delivery failed",
           );
         });
-      return { config, signature, task: null, valid: false, lastError: message };
+      return { config, signature, task: null, valid: false, lastError: message, running: null };
     }
 
     const task = this.cronApi.schedule(
@@ -170,6 +183,6 @@ export class AutomationScheduler {
         noOverlap: true,
       },
     );
-    return { config, signature, task, valid: true, lastError: null };
+    return { config, signature, task, valid: true, lastError: null, running: null };
   }
 }

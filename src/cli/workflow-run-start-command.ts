@@ -32,7 +32,7 @@ export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
   const [rules, workflowRegistry] = await Promise.all([
     loadCliIntakeRules(dataDir),
     loadWorkflowDefinitionRegistry({
-      workflowDir: path.resolve(".risoluto", "workflows"),
+      workflowDir: path.resolve(dataDir, ".risoluto", "workflows"),
       globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
     }),
   ]);

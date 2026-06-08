@@ -101,6 +101,9 @@ function runCodexExec(prompt: string, cwd: string): Promise<string | null> {
       clearTimeout(timeoutId);
       if (!child.killed) {
         child.kill("SIGTERM");
+        setTimeout(() => {
+          if (!child.killed) child.kill("SIGKILL");
+        }, 5000);
       }
       resolve(result);
     };

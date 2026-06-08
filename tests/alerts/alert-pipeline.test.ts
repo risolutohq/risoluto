@@ -96,6 +96,8 @@ describe("AlertPipeline", () => {
     const serialized = JSON.stringify(notification.metadata);
     expect(serialized).not.toContain("sk-alertsecret123");
     expect(serialized).not.toContain("sk-extrasecret");
+    expect(notification.message).not.toContain("sk-alertsecret123");
+    expect(notification.message).not.toContain("sk-extrasecret");
   });
 
   it("suppresses repeated alerts inside the cooldown window", async () => {

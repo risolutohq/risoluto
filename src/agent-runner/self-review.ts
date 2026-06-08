@@ -21,6 +21,9 @@ const REVIEW_PASS_PHRASES = [
   "no changes required",
   "looks good",
   "no problems",
+  "no fix required",
+  "no fixes required",
+  "no fixes needed",
 ] as const;
 
 const REVIEW_FAIL_PHRASES = ["issue", "problem", "fix required", "error found"] as const;

@@ -174,6 +174,7 @@ export class DispatchClient implements RunAttemptDispatcher {
         Authorization: `Bearer ${this.deps.secret}`,
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(5000),
     });
 
     if (response.status === 404) {

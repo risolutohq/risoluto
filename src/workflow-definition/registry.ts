@@ -129,7 +129,10 @@ const workflowDefinitionSchema = z
     states: z.array(
       z
         .object({
-          id: z.string().min(1),
+          id: z
+            .string()
+            .min(1)
+            .regex(/^[a-zA-Z0-9_-]+$/),
           roles: z.array(roleSchema),
           gates: z.array(z.string().min(1)),
           hooks: z.array(z.string().min(1)),

@@ -146,6 +146,8 @@ export async function createDockerSession(
     gid,
   });
   const initProcess = spawn(initCmd.program, initCmd.args, { stdio: "pipe" });
+  initProcess.stdout.resume();
+  initProcess.stderr.resume();
   try {
     await new Promise<void>((resolve, reject) => {
       initProcess.on("exit", (code) => {

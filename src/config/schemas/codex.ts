@@ -85,9 +85,9 @@ const turnSandboxPolicySchema = z
       };
     }
     return {
+      ...value,
       type:
         typeof value.type === "string" && VALID_SANDBOX_POLICY_TYPES.has(value.type) ? value.type : "workspaceWrite",
-      ...value,
     };
   });
 

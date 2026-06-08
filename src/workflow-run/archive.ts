@@ -129,9 +129,17 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
     throw error;
   }
 
-  const workflowRuns = await Promise.all(
-    entries.map(async (entry) => readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry))),
-  );
+  const workflowRuns = (
+    await Promise.all(
+      entries.map(async (entry) => {
+        try {
+          return await readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry));
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((item): item is WorkflowRunStartRecord => item !== null);
   return [...workflowRuns].sort(
     (left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id),
   );

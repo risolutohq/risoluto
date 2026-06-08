@@ -314,6 +314,10 @@ describe("AutomationRunner", () => {
       const result = await runner.run(makeConfig(), "manual");
       expect(result.status).toBe("failed");
       expect(result.error).toBe("snapshot exploded");
+
+      const runs = await store.listRuns();
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ status: "failed", error: "snapshot exploded" });
     });
 
     it("catches non-Error thrown values and records them as failed runs", async () => {

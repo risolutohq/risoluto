@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
 
 interface FailureHistoryEntry {
@@ -18,13 +18,18 @@ export interface FailureHistoryStore {
 export function readFailureHistory(filePath: string): FailureHistoryStore {
   try {
     return JSON.parse(readFileSync(filePath, "utf8")) as FailureHistoryStore;
-  } catch {
+  } catch (error) {
+    if ((error as { code?: string }).code !== "ENOENT") {
+      throw error;
+    }
     return { entries: {} };
   }
 }
 
 export function writeFailureHistory(filePath: string, store: FailureHistoryStore): void {
-  writeFileSync(filePath, JSON.stringify(store, null, 2) + "\n", "utf8");
+  const tmpPath = `${filePath}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(store, null, 2) + "\n", "utf8");
+  renameSync(tmpPath, filePath);
 }
 
 export function updateHistoryForFailure(

@@ -299,14 +299,14 @@ function rankStatus(status: HealthCheckStatus): number {
   switch (status) {
     case "ok":
       return 0;
-    case "slow":
-      return 1;
     case "unknown":
       return 1;
-    case "degraded":
+    case "slow":
       return 2;
-    case "down":
+    case "degraded":
       return 3;
+    case "down":
+      return 4;
   }
 }
 

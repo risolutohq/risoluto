@@ -6,6 +6,8 @@ import {
   loadWorkflowDefinitionRegistry,
 } from "../workflow-definition/registry.js";
 
+import { CliArgumentError } from "./parse-args.js";
+
 export async function tryHandleWorkflowCommand(argv: string[]): Promise<number | null> {
   if (argv[0] !== "workflow") {
     return null;
@@ -13,7 +15,7 @@ export async function tryHandleWorkflowCommand(argv: string[]): Promise<number |
   if (argv[1] === "validate") {
     return validateWorkflowCommand(argv.slice(2));
   }
-  throw new TypeError("unsupported workflow command. Expected: workflow validate");
+  throw new CliArgumentError("unsupported workflow command. Expected: workflow validate");
 }
 
 async function validateWorkflowCommand(argv: string[]): Promise<number> {

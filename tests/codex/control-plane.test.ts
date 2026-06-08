@@ -12,6 +12,7 @@ import { CODEX_METHOD } from "../../src/codex/methods.js";
 /*  Module-level mocks                                                 */
 /* ------------------------------------------------------------------ */
 
+const mockChmod = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const mockSpawn = vi.hoisted(() => vi.fn());
 const mockMkdtemp = vi.hoisted(() => vi.fn(() => Promise.resolve("/tmp/risoluto-cp-test")));
 const mockWriteFile = vi.hoisted(() => vi.fn(() => Promise.resolve()));
@@ -27,6 +28,7 @@ vi.mock("node:fs/promises", () => ({
   writeFile: mockWriteFile,
   cp: mockCp,
   rm: mockRm,
+  chmod: mockChmod,
 }));
 
 /* ------------------------------------------------------------------ */

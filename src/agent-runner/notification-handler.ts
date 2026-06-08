@@ -279,7 +279,7 @@ function handleItemEvent(
 
   const content = extractItemContent(itemType, itemId, item, verb, input.state.reasoningBuffers);
   if (itemType === "exitedReviewMode" && verb === "completed") {
-    recordReviewSummary(input.state, itemId, asString(item.review));
+    recordReviewSummary(input.state, input.turnId, asString(item.review));
   }
   if (verb === "completed") {
     deleteReasoningBuffer(input.state, itemId);

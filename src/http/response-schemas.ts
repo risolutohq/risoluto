@@ -113,7 +113,7 @@ const workflowRunSourceSchema = z.enum(["api", "cli", "github", "linear", "slack
 const workflowRunRecordSchema = z.object({
   id: z.string(),
   source: workflowRunSourceSchema,
-  status: z.literal("accepted"),
+  status: z.enum(["accepted", "running", "blocked", "done", "cancelled"]),
   title: z.string(),
   intent: z.string(),
   workflowDefinitionId: z.string(),

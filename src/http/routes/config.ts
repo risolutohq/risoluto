@@ -14,10 +14,6 @@ const DEFAULT_CONFIG_SCHEMA = {
       },
     },
     {
-      path: "codex.model",
-      value: "gpt-5.4",
-    },
-    {
       patch: {
         server: {
           port: 4001,

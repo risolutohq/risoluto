@@ -54,6 +54,30 @@ describe("handleWebhookSlack", () => {
     });
   });
 
+  it("rejects a signed Slack modal submission from a non-allowed team", async () => {
+    const dataDir = await createTempDir();
+    const rawBody = slackInteractionBody({
+      type: "view_submission",
+      team: { id: "T_EVIL" },
+      user: { id: "U_OK" },
+      view: {
+        id: "V_MODAL",
+        private_metadata: JSON.stringify({
+          title: "Ship Slack intake",
+          body: "Wire the inbound route.",
+          workflowDefinitionId: "single-operator-afk-coder",
+          workspaceKey: "risoluto",
+        }),
+      },
+    });
+    const { req, res, capture } = makeReqRes(rawBody, signSlack(rawBody));
+
+    await handleWebhookSlack(deps({ dataDir }), req, res);
+
+    expect(capture.status).toBe(403);
+    await expect(createWorkflowRunArchive({ dataDir }).listWorkflowRuns()).resolves.toEqual([]);
+  });
+
   it("rejects a Slack modal submission with an invalid signature", async () => {
     const dataDir = await createTempDir();
     const rawBody = slackInteractionBody({

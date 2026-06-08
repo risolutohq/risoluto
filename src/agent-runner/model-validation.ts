@@ -11,7 +11,12 @@ export async function fetchAvailableModels(
     const modelIds: string[] = [];
     let cursor: string | null = null;
 
+    let pages = 0;
     do {
+      if (++pages > 20) {
+        logger.warn("model/list pagination exceeded max pages — truncating");
+        break;
+      }
       const result = await connection.request(CODEX_METHOD.ModelList, cursor ? { cursor, limit: 100 } : { limit: 100 });
       const data = asRecord(result);
       const models = Array.isArray(data.data) ? data.data : data.models;

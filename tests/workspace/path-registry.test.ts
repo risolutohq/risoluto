@@ -61,7 +61,7 @@ describe("PathRegistry", () => {
       "/": "/host-root",
     });
 
-    expect(registry.translate("/data/workspaces/MT-1")).toBe("/host-rootdata/workspaces/MT-1");
+    expect(registry.translate("/data/workspaces/MT-1")).toBe("/host-root/data/workspaces/MT-1");
     expect(registry.translate("/")).toBe("/host-root");
     expect(registry.translate("relative/path")).toBe("relative/path");
   });
@@ -92,6 +92,6 @@ describe("PathRegistry", () => {
       "": "/host-root",
     });
 
-    expect(registry.translate("/data/workspaces/MT-1")).toBe("/host-rootdata/workspaces/MT-1");
+    expect(registry.translate("/data/workspaces/MT-1")).toBe("/host-root/data/workspaces/MT-1");
   });
 });

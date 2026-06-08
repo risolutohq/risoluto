@@ -38,7 +38,7 @@ const QUERY_TIMEOUT_MS = 15_000;
 function isCodexBinaryUnavailable(error: unknown): boolean {
   return error instanceof Error && error.message === "codex binary not found";
 }
-export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry[]> {
+export async function fetchCodexModels(apiKey?: string, includeHidden = false): Promise<CodexModelEntry[]> {
   const cacheKey = apiKey ?? "";
   const entry = cacheByKey.get(cacheKey);
 
@@ -54,7 +54,7 @@ export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry
 
   slot.inflight = (async () => {
     try {
-      const result = await queryModelList(apiKey);
+      const result = await queryModelList(apiKey, includeHidden);
       slot.cached = result;
       slot.expiry = Date.now() + CACHE_TTL_MS;
       return result;
@@ -73,7 +73,7 @@ export async function fetchCodexModels(apiKey?: string): Promise<CodexModelEntry
   return slot.inflight;
 }
 
-function queryModelList(apiKey?: string): Promise<CodexModelEntry[]> {
+function queryModelList(apiKey?: string, includeHidden = false): Promise<CodexModelEntry[]> {
   return new Promise((resolve, reject) => {
     const env: Record<string, string> = { ...process.env } as Record<string, string>;
     if (apiKey) {
@@ -143,25 +143,30 @@ function queryModelList(apiKey?: string): Promise<CodexModelEntry[]> {
       } catch {
         return;
       }
-      if (
-        typeof parsed === "object" &&
-        parsed !== null &&
-        "id" in parsed &&
-        (parsed as { id: unknown }).id === 1 &&
-        "result" in parsed
-      ) {
-        settled = true;
-        cleanup();
-        const result = (parsed as { result?: ModelListRpcResult }).result;
-        if (!result || !Array.isArray(result.data)) {
-          reject(new Error("codex model/list response missing data array"));
-          return;
+      if (typeof parsed === "object" && parsed !== null && "id" in parsed && (parsed as { id: unknown }).id === 1) {
+        if ("result" in parsed) {
+          settled = true;
+          cleanup();
+          const result = (parsed as { result?: ModelListRpcResult }).result;
+          if (!result || !Array.isArray(result.data)) {
+            reject(new Error("codex model/list response missing data array"));
+            return;
+          }
+          resolve(
+            result.data
+              .filter((m) => includeHidden || !m.hidden)
+              .map((m) => ({ id: m.id, displayName: m.displayName, isDefault: m.isDefault })),
+          );
+        } else if ("error" in parsed) {
+          settled = true;
+          cleanup();
+          const error = (parsed as { error?: { code?: number; message?: string } }).error;
+          reject(
+            new Error(
+              `codex model/list RPC error: ${error?.message ?? "unknown error"} (code ${error?.code ?? "unknown"})`,
+            ),
+          );
         }
-        resolve(
-          result.data
-            .filter((m) => !m.hidden)
-            .map((m) => ({ id: m.id, displayName: m.displayName, isDefault: m.isDefault })),
-        );
       }
     }
 
@@ -169,7 +174,7 @@ function queryModelList(apiKey?: string): Promise<CodexModelEntry[]> {
       jsonrpc: "2.0",
       id: 1,
       method: "model/list",
-      params: { limit: 50, includeHidden: false },
+      params: { limit: 50, includeHidden },
     });
     child.stdin.write(request + "\n");
   });

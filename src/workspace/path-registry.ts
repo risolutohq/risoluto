@@ -32,7 +32,8 @@ export class PathRegistry {
         continue;
       }
       const suffix = normalizedPath.slice(mapping.containerPrefix.length);
-      const translated = `${mapping.hostPrefix}${suffix}`;
+      const separator = suffix.length > 0 && !suffix.startsWith("/") ? "/" : "";
+      const translated = `${mapping.hostPrefix}${separator}${suffix}`;
       return translated || mapping.hostPrefix;
     }
     return normalizedPath;

@@ -179,6 +179,7 @@ export class DbSecretsStore {
   }
 
   async delete(key: string): Promise<boolean> {
+    this.requiredMasterKey();
     const existing = this.db.select().from(encryptedSecrets).where(eq(encryptedSecrets.key, key)).get();
     if (!existing) return false;
     this.db.delete(encryptedSecrets).where(eq(encryptedSecrets.key, key)).run();

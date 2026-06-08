@@ -39,5 +39,5 @@ export async function readCodexModelCatalog(
   }
 
   const apiKey = deps.secretsStore?.get("OPENAI_API_KEY") ?? undefined;
-  return fetchCodexModels(apiKey);
+  return fetchCodexModels(apiKey, includeHidden);
 }
