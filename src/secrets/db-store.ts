@@ -222,6 +222,7 @@ export class DbSecretsStore {
     if (v1Rows.length === 0) return;
 
     const now = new Date().toISOString();
+    let migratedCount = 0;
     this.db.transaction((tx) => {
       for (const row of v1Rows) {
         let plaintext: string;
@@ -248,9 +249,10 @@ export class DbSecretsStore {
           })
           .where(eq(encryptedSecrets.key, row.key))
           .run();
+        migratedCount++;
       }
     });
-    this.logger.info({ count: v1Rows.length }, "migrated encrypted_secrets rows from KDF V1 to V2");
+    this.logger.info({ count: migratedCount }, "migrated encrypted_secrets rows from KDF V1 to V2");
   }
 
   private notify(): void {

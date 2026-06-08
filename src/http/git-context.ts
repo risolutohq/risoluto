@@ -41,7 +41,7 @@ interface GitRepoView {
   github?: {
     description: string | null;
     visibility: string;
-    openPrCount: number;
+    renderedPrCount: number;
     pulls: GitPullView[];
     recentCommits: GitCommitView[];
   };
@@ -205,7 +205,7 @@ async function enrichConfiguredRepo(
       view.github = {
         description: asString(repoRecord.description) || null,
         visibility: asString(repoRecord.visibility) || "unknown",
-        openPrCount: pulls.length,
+        renderedPrCount: pulls.length,
         pulls,
         recentCommits: parseRepoCommits(commitsData),
       };

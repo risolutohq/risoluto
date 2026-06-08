@@ -1,4 +1,4 @@
-import { readFile, realpath } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -27,6 +27,10 @@ export async function resolveWorkspaceExtraMountPaths(
 
   let gitPointer: string;
   try {
+    const gitFileStat = await stat(gitFilePath);
+    if (gitFileStat.size > 512) {
+      return [];
+    }
     gitPointer = await readFile(gitFilePath, "utf8");
   } catch {
     return [];

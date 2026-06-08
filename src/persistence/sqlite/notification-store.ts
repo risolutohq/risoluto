@@ -123,8 +123,10 @@ class SqliteNotificationStore implements NotificationStorePort {
       return { updatedCount: 0, unreadCount: 0 };
     }
     const updatedAt = new Date().toISOString();
-    this.db.update(notifications).set({ read: true, updatedAt }).where(eq(notifications.read, false)).run();
-    return { updatedCount: unreadCount, unreadCount: 0 };
+    const result = this.db.$client
+      .prepare("UPDATE notifications SET read = 1, updated_at = ? WHERE read = 0")
+      .run(updatedAt);
+    return { updatedCount: result.changes, unreadCount: 0 };
   }
 
   private async getById(id: string): Promise<NotificationRecord | null> {

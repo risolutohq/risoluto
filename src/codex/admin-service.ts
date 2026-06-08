@@ -48,7 +48,7 @@ function readMethods(deps: { controlPlane: CodexAdminServiceControlPlane; secret
         limit: query.limit,
         sortKey: query.sortKey,
         archived: query.archived,
-        cwd: undefined,
+        cwd: query.cwd,
         modelProviders: query.modelProviders,
         sourceKinds: query.sourceKinds,
       });

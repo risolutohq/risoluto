@@ -84,6 +84,7 @@ function validateGitHubWebhookRequest(
   }
 
   if (!deps.webhookInbox) {
+    res.setHeader("Retry-After", "5");
     sendError(res, 503, "webhook_inbox_unavailable", "GitHub webhook inbox persistence is unavailable");
     return null;
   }

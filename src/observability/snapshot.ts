@@ -93,6 +93,15 @@ export async function readComponentSnapshots(root: string): Promise<ComponentObs
         try {
           const raw = await readFile(snapshotPath, "utf8");
           const snapshot = JSON.parse(raw) as ComponentObservabilitySnapshot;
+          if (
+            typeof snapshot.pid !== "number" ||
+            snapshot.pid <= 0 ||
+            typeof snapshot.component !== "string" ||
+            snapshot.component.length === 0
+          ) {
+            await unlink(snapshotPath).catch(() => undefined);
+            return null;
+          }
           if (!isProcessAlive(snapshot.pid)) {
             await unlink(snapshotPath).catch(() => undefined);
             return null;

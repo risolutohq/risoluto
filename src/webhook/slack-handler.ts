@@ -122,6 +122,7 @@ async function dispatchModalSubmission(
   }
   const dedupe = await deduplicateSlackModal(deps, request, modal);
   if (dedupe === "unavailable") {
+    res.setHeader("Retry-After", "5");
     sendError(res, 503, "webhook_inbox_unavailable", "Slack webhook inbox persistence is unavailable");
     return;
   }

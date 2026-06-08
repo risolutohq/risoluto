@@ -74,8 +74,8 @@ export type TemplateOverrideBody = z.infer<typeof templateOverrideSchema>;
 
 export const createWorkflowRunSchema = z
   .object({
-    title: z.string().min(1),
-    intent: z.string().min(1),
+    title: z.string().trim().min(1),
+    intent: z.string().trim().min(1),
     workflowDefinitionId: z.string().min(1).optional(),
     workspaceKey: z.string().min(1).optional(),
     /** Intake mode: "start" (default) creates a new run; "retry" resumes an existing mapped run. */

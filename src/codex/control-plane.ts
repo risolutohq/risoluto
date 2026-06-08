@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, cp, chmod, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { createSuccessResponse } from "./protocol.js";
+import { createErrorResponse, createSuccessResponse } from "./protocol.js";
 import { buildConfigToml } from "./runtime-config.js";
 import { CODEX_METHOD } from "./methods.js";
 import { JsonRpcConnection } from "../agent/json-rpc-connection.js";
@@ -375,8 +375,10 @@ export class CodexControlPlane {
         break;
       }
       default:
-        response = { error: { code: -32601, message: `unsupported host-side codex request: ${method}` } };
-        break;
+        child.stdin.write(
+          `${JSON.stringify(createErrorResponse(id, `unsupported host-side codex request: ${method}`))}\n`,
+        );
+        return;
     }
     child.stdin.write(`${JSON.stringify(createSuccessResponse(id, response))}\n`);
   }

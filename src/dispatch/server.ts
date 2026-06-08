@@ -48,12 +48,13 @@ export type DataPlaneApp = express.Application & { drain: () => void };
 export function createDataPlaneServer(secret: string): DataPlaneApp {
   const app = express();
   const activeDispatches = new Map<string, AbortController>();
+  let draining = false;
 
   app.use(express.json({ limit: "10mb" }));
 
   app.get("/health", (_req: Request, res: Response) => {
     const health: DataPlaneHealth = {
-      status: "ok",
+      status: draining ? "draining" : "ok",
       activeDispatches: activeDispatches.size,
     };
     res.json(health);
@@ -214,6 +215,7 @@ export function createDataPlaneServer(secret: string): DataPlaneApp {
   });
 
   const drain = (): void => {
+    draining = true;
     for (const [, controller] of activeDispatches) {
       controller.abort();
     }

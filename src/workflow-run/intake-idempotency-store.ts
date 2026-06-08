@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { z } from "zod";
@@ -143,7 +143,13 @@ async function claimMapping(
 async function atomicOverwrite(filePath: string, payload: string): Promise<void> {
   const tempPath = `${filePath}.${randomUUID()}.tmp`;
   await writeFile(tempPath, payload, { encoding: "utf8", flag: "wx" });
-  await rename(tempPath, filePath);
+  try {
+    await rename(tempPath, filePath);
+  } catch (error) {
+    // Clean up the orphaned temp file so it doesn't accumulate on disk.
+    await unlink(tempPath).catch(() => {});
+    throw error;
+  }
 }
 
 function externalMappingPath(

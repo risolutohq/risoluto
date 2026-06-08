@@ -375,21 +375,4 @@ describe("WebhookRegistrar", () => {
       await expect(registrar.register()).resolves.toBeUndefined();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // stop() idempotency
-  // -------------------------------------------------------------------------
-
-  describe("stop()", () => {
-    it("is idempotent — safe to call multiple times", () => {
-      const { registrar } = makeRegistrar({}, makeWebhookConfig());
-
-      // Should not throw on repeated calls
-      expect(() => {
-        registrar.stop();
-        registrar.stop();
-        registrar.stop();
-      }).not.toThrow();
-    });
-  });
 });

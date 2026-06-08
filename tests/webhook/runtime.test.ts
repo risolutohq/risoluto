@@ -187,7 +187,12 @@ describe("createWebhookRuntime", () => {
     const logger = makeLogger();
     const orchestrator = makeOrchestrator();
     // The orchestrator's current view of the run reports canonical status "running".
-    orchestrator.getIssueDetail.mockReturnValue({ issueId: "issue-1", identifier: "NIN-1", status: "running", workflowRunId: null });
+    orchestrator.getIssueDetail.mockReturnValue({
+      issueId: "issue-1",
+      identifier: "NIN-1",
+      status: "running",
+      workflowRunId: null,
+    });
     const runtime = createWebhookRuntime({
       persistence: makePersistence(),
       webhookConfig: makeWebhookConfig(),

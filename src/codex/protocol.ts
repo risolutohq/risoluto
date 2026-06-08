@@ -79,7 +79,8 @@ export function isJsonRpcRequest(message: unknown): message is JsonRpcRequest {
     typeof message === "object" &&
     message !== null &&
     typeof (message as { method?: unknown }).method === "string" &&
-    "id" in message
+    "id" in message &&
+    (typeof (message as { id: unknown }).id === "string" || typeof (message as { id: unknown }).id === "number")
   );
 }
 
@@ -93,9 +94,13 @@ export function isJsonRpcNotification(message: unknown): message is JsonRpcNotif
 }
 
 export function isJsonRpcSuccessResponse(message: unknown): message is JsonRpcSuccessResponse {
-  return typeof message === "object" && message !== null && "id" in message && "result" in message;
+  return (
+    typeof message === "object" && message !== null && "id" in message && "result" in message && !("error" in message)
+  );
 }
 
 export function isJsonRpcErrorResponse(message: unknown): message is JsonRpcErrorResponse {
-  return typeof message === "object" && message !== null && "id" in message && "error" in message;
+  return (
+    typeof message === "object" && message !== null && "id" in message && "error" in message && !("result" in message)
+  );
 }

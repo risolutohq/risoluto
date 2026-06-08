@@ -245,7 +245,7 @@ function buildShutdown({
   eventBus,
   persistence,
   webhookHealthTracker,
-  webhookRegistrar,
+  webhookRegistrar: _webhookRegistrar,
   prMonitor,
   automationScheduler,
   alertEngine,
@@ -277,7 +277,6 @@ function buildShutdown({
     await orchestrator.stop().catch((error: unknown) => {
       logger.warn({ error: toErrorString(error) }, "orchestrator shutdown failed");
     });
-    webhookRegistrar?.stop();
     webhookHealthTracker?.stop();
     await configStore.stop().catch((error: unknown) => {
       logger.warn({ error: toErrorString(error) }, "config store shutdown failed");

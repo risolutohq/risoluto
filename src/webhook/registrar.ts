@@ -45,7 +45,6 @@ export class WebhookRegistrar {
   private readonly getWebhookConfig: WebhookRegistrarDeps["getWebhookConfig"];
   private readonly onSecretResolved: WebhookRegistrarDeps["onSecretResolved"];
   private readonly logger: RisolutoLogger;
-  private stopped = false;
 
   constructor(deps: WebhookRegistrarDeps) {
     this.linearClient = deps.linearClient;
@@ -75,11 +74,6 @@ export class WebhookRegistrar {
     }
   }
 
-  /** Cleanup. Safe to call multiple times. */
-  stop(): void {
-    this.stopped = true;
-  }
-
   // ---------------------------------------------------------------------------
   // Secret resolution pipeline
   // ---------------------------------------------------------------------------
@@ -96,7 +90,9 @@ export class WebhookRegistrar {
     if (storedSecret) {
       const resolved = await this.useStoredSecret(config, storedSecret);
       if (resolved) return;
-      // Stored secret is stale — fall through to auto-create
+      // Stored secret is stale — clear it before auto-creating to prevent
+      // a partial-failure scenario leaving a misleading stale secret in the store.
+      this.secretsStore.delete(SECRETS_KEY);
     }
 
     // Priority 3: auto-create a new webhook

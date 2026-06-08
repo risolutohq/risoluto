@@ -1,10 +1,5 @@
 import { LinearClient } from "./client.js";
-import {
-  type ToolCallResult,
-  toolCallSuccess,
-  toolCallFailure,
-  toolCallErrorPayload,
-} from "../utils/tool-call-result.js";
+import { type ToolCallResult, toolCallSuccess, toolCallFailure } from "../utils/tool-call-result.js";
 
 function extractInput(args: unknown): { query: string; variables?: Record<string, unknown> } {
   if (typeof args === "string") {
@@ -67,9 +62,6 @@ export async function handleLinearGraphqlToolCall(client: LinearClient, args: un
     assertReadOnlyQuery(input.query);
 
     const response = await client.runGraphQL(input.query, input.variables);
-    if (Array.isArray(response.errors) && response.errors.length > 0) {
-      return toolCallErrorPayload(response);
-    }
     return toolCallSuccess(response);
   } catch (error) {
     return toolCallFailure(error);

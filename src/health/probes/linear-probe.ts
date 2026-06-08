@@ -110,7 +110,10 @@ function looksUnreachable(message: string): boolean {
     lower.includes("etimedout") ||
     lower.includes("network") ||
     lower.includes("fetch failed") ||
-    lower.includes("timeout")
+    lower.includes("timeout") ||
+    lower.includes("socket hang up") ||
+    lower.includes("the operation was aborted") ||
+    lower.includes("timed out")
   );
 }
 

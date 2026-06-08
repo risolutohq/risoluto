@@ -85,9 +85,18 @@ export function normalizeCodexAuthRecord(
   });
 }
 
-export function normalizeCodexAuthJson(authJson: string, options: { lastRefresh?: string } = {}): string {
-  const normalized = normalizeCodexAuthRecord(JSON.parse(authJson) as unknown, options);
-  return JSON.stringify(normalized, null, 2);
+export function normalizeCodexAuthJson(
+  authJson: string,
+  options: { lastRefresh?: string; authJsonPath?: string } = {},
+): string {
+  const { authJsonPath, ...recordOptions } = options;
+  try {
+    const normalized = normalizeCodexAuthRecord(JSON.parse(authJson) as unknown, recordOptions);
+    return JSON.stringify(normalized, null, 2);
+  } catch (error) {
+    const pathHint = authJsonPath ? ` (${authJsonPath})` : "";
+    throw new Error(`Failed to normalize auth JSON${pathHint}`, { cause: error });
+  }
 }
 
 export function readCodexAuthTokens(value: unknown): CodexAuthTokens | null {
