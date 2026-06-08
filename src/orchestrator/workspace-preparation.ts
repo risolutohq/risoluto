@@ -77,7 +77,7 @@ export async function prepareWorkspaceForLaunch(ctx: WorkspacePreparationContext
         },
       }),
     );
-    ctx.releaseIssueClaim(issue.id);
+    // Claim release handled by launchWorker's catch (promiseHandedOff is false here)
     throw error;
   }
 }

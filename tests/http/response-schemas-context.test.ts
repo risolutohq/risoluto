@@ -43,7 +43,6 @@ describe("gitContextResponseSchema", () => {
                 updatedAt: "2026-04-01T00:00:00Z",
                 url: "https://github.com/org/repo/pull/1",
                 headBranch: "feature/1",
-                checksStatus: null,
               },
             ],
             recentCommits: [{ sha: "abc1234", message: "fix: something", author: "dev", date: "2026-04-01T00:00:00Z" }],

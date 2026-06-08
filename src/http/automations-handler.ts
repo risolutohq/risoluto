@@ -63,7 +63,7 @@ export async function handleListAutomationRuns(
   const automationName = getSingleParam(request.query.automation_name as string | string[] | undefined);
   const [runs, totalCount] = await Promise.all([
     deps.automationStore.listRuns({ limit: limit ?? undefined, automationName: automationName ?? undefined }),
-    deps.automationStore.countRuns(),
+    deps.automationStore.countRuns({ automationName: automationName ?? undefined }),
   ]);
 
   response.json({

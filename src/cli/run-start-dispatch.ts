@@ -7,7 +7,7 @@ import {
   createWorkflowRunAgentDispatch,
 } from "../workflow-run/agent-role-dispatch.js";
 import type { WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
-import { LIVE_RUN_START_ENV } from "./constants.js";
+import { LIVE_RUN_START_ENV, DEFAULT_AGENT_MODEL } from "./constants.js";
 
 /**
  * Injection seam for the agent-dispatch composition in `run start`. Production passes nothing; the
@@ -108,6 +108,6 @@ function requireWorkspace(injected: Workspace | undefined, liveEnvOptIn: boolean
  * only fires for an injected dispatcher that omits a resolver.
  */
 function defaultModelForProfile(_modelProfile: string): ModelSelection {
-  const model = process.env.RISOLUTO_DEFAULT_MODEL ?? "gpt-5.4-mini";
+  const model = process.env.RISOLUTO_DEFAULT_MODEL ?? DEFAULT_AGENT_MODEL;
   return { model, reasoningEffort: "high", source: "default" };
 }

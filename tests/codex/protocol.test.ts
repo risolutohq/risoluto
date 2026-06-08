@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createErrorResponse,
+  createIdCounter,
   createRequest,
   createSuccessResponse,
   isJsonRpcErrorResponse,
@@ -198,5 +199,19 @@ describe("isJsonRpcErrorResponse", () => {
 
   it("returns false for undefined", () => {
     expect(isJsonRpcErrorResponse(undefined)).toBe(false);
+  });
+});
+
+describe("createIdCounter", () => {
+  it("produces isolated counters that do not share state", () => {
+    const counterA = createIdCounter();
+    const counterB = createIdCounter();
+
+    expect(counterA("a", null).id).toBe(1);
+    expect(counterA("b", null).id).toBe(2);
+    expect(counterB("c", null).id).toBe(1);
+    expect(counterB("d", null).id).toBe(2);
+    expect(counterA("e", null).id).toBe(3);
+    expect(counterB("f", null).id).toBe(3);
   });
 });

@@ -41,19 +41,11 @@ describe("auto-merge completion", () => {
       { name: "ci", input: makeInput({ dataDir, ci: { status: "failed" } }), reason: "ci_not_green" },
       { name: "ci result missing", input: makeInput({ dataDir, ci: null }), reason: "ci_not_green" },
       {
-        name: "post-publish reconfirm not required",
+        name: "post-publish reconfirm absent — blocks when optional field is missing",
         input: makeInput({
           dataDir,
           postPublishVerification: {
             decision: "satisfied",
-            postPublishReconfirm: {
-              required: false,
-              prePublishDecision: "satisfied",
-              decision: "satisfied",
-              summary: "no reconfirm performed",
-              checkedInputs: [],
-              contradictedBy: [],
-            },
           },
         }),
         reason: "post_publish_verifier_not_satisfied",

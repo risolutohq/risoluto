@@ -595,6 +595,9 @@ function applyV12Migration(sqlite: SqliteDb): void {
   bumpSchemaVersion(sqlite, 12);
 }
 
+/** Current schema version — keep in sync with the migration chain below. */
+export const CURRENT_SCHEMA_VERSION = 13;
+
 /**
  * Adds the tamper-evident hash-chain columns to config_history. Existing rows keep NULL hashes
  * (pre-chain history); every new audit entry links to the prior entry's hash (RIS-266). Fresh

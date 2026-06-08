@@ -48,6 +48,7 @@ describe("codex approval gate (RIS-237)", () => {
     expect(resolveCodexApprovalPolicy({ RISOLUTO_CODEX_AUTO_APPROVE: "0" })).toBe(denyAllApprovalPolicy);
     expect(resolveCodexApprovalPolicy({ RISOLUTO_CODEX_AUTO_APPROVE: "1" })).toBe(acceptForSessionApprovalPolicy);
     expect(resolveCodexApprovalPolicy({ RISOLUTO_CODEX_AUTO_APPROVE: "true" })).toBe(acceptForSessionApprovalPolicy);
+    expect(resolveCodexApprovalPolicy({ RISOLUTO_CODEX_AUTO_APPROVE: "yes" })).toBe(acceptForSessionApprovalPolicy);
   });
 
   it("defaults decideCodexApproval to the env-resolved policy (deny without opt-in)", () => {

@@ -91,7 +91,7 @@ export interface WebhookInboxStore {
 const MAX_ERROR_LENGTH = 500;
 
 function truncateError(error: string): string {
-  return error.slice(0, Math.min(error.length, MAX_ERROR_LENGTH));
+  return error.slice(0, MAX_ERROR_LENGTH);
 }
 
 export class SqliteWebhookInbox implements WebhookInboxStore {

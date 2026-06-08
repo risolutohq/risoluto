@@ -632,7 +632,6 @@ const gitPullViewSchema = z.object({
   updatedAt: z.string(),
   url: z.string(),
   headBranch: z.string(),
-  checksStatus: z.string().nullable(),
 });
 
 const gitCommitViewSchema = z.object({

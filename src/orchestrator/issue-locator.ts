@@ -14,6 +14,14 @@ export interface IssueLocatorCallbacks {
   getCompletedViews: () => Map<string, RuntimeIssueView>;
   getDetailViews: () => Map<string, RuntimeIssueView>;
   resolveModelSelection: (identifier: string) => ModelSelection;
+  /**
+   * Optional pre-built identifier-keyed secondary indexes to avoid O(n)
+   * allocation per lookup in hot-path callers (e.g. snapshot builder).
+   * When non-null, resolveIssue uses these directly instead of scanning
+   * the full running/retry entry maps.
+   */
+  runningEntriesByIdentifier?: Map<string, RunningEntry>;
+  retryEntriesByIdentifier?: Map<string, RetryRuntimeEntry>;
 }
 
 function buildRunningEntryIndex(entries: Map<string, RunningEntry>): Map<string, RunningEntry> {
@@ -38,12 +46,16 @@ function buildRetryEntryIndex(entries: Map<string, RetryRuntimeEntry>): Map<stri
  * re-searching multiple state maps.
  */
 export function resolveIssue(identifier: string, callbacks: IssueLocatorCallbacks): IssueLocation | null {
-  const runningEntry = buildRunningEntryIndex(callbacks.getRunningEntries()).get(identifier);
+  // Use pre-built identifier-keyed secondary indexes when available (hot-path), falling
+  // back to per-call index construction for callers that don't maintain them.
+  const runningByIdentifier = callbacks.runningEntriesByIdentifier ?? buildRunningEntryIndex(callbacks.getRunningEntries());
+  const runningEntry = runningByIdentifier.get(identifier);
   if (runningEntry) {
     return { kind: "running", entry: runningEntry };
   }
 
-  const retryEntry = buildRetryEntryIndex(callbacks.getRetryEntries()).get(identifier);
+  const retryByIdentifier = callbacks.retryEntriesByIdentifier ?? buildRetryEntryIndex(callbacks.getRetryEntries());
+  const retryEntry = retryByIdentifier.get(identifier);
   if (retryEntry) {
     return { kind: "retry", entry: retryEntry };
   }

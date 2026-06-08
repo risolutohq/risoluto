@@ -19,6 +19,12 @@ export interface ObservabilityHealthSummary {
   surfaces: ObservabilityHealthSurface[];
 }
 
+/**
+ * Aggregates a list of per-surface health statuses into a single overall status.
+ * - If any surface is `"error"`, returns `"error"`.
+ * - Else if any surface is `"warn"`, returns `"warn"`.
+ * - Otherwise returns `"ok"` (including the empty-list case, which is trivially healthy).
+ */
 export function summarizeHealthStatus(statuses: ObservabilityHealthStatus[]): ObservabilityHealthStatus {
   if (statuses.includes("error")) {
     return "error";
@@ -29,6 +35,12 @@ export function summarizeHealthStatus(statuses: ObservabilityHealthStatus[]): Ob
   return "ok";
 }
 
+/**
+ * Creates a sorted summary from a collection of health surfaces.
+ * Sorting order: errors first, then warns, then ok. Within the same status level,
+ * surfaces are sorted alphabetically by name. Returns status, counts, and the
+ * sorted surface list.
+ */
 export function summarizeHealthSurfaces(surfaces: ObservabilityHealthSurface[]): ObservabilityHealthSummary {
   const sorted = [...surfaces].sort((left, right) => {
     const statusOrder = healthStatusRank(right.status) - healthStatusRank(left.status);

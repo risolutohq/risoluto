@@ -355,7 +355,9 @@ function resolveWorkflowDefinition(
         produces: role.produces,
         dependsOn: role.dependsOn,
         ...(role.verifierMode ? { verifierMode: role.verifierMode } : {}),
-        ...(role.councillors ? { councillors: resolveCouncillors(role, modelProfile) } : {}),
+        ...(role.councillors && role.verifierMode === "council"
+          ? { councillors: resolveCouncillors(role, modelProfile) }
+          : {}),
       })),
     ),
     actions: definition.actions,

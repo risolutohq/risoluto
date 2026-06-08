@@ -115,6 +115,17 @@ export async function readComponentSnapshots(root: string): Promise<ComponentObs
   return snapshots.filter((snapshot): snapshot is ComponentObservabilitySnapshot => snapshot !== null);
 }
 
+/**
+ * Check whether a process with the given PID is alive.
+ *
+ * Uses `process.kill(pid, 0)` which only confirms *some* process with that
+ * PID is alive — it does not verify it is the same Risoluto component that
+ * wrote the snapshot. Linux recycles PIDs, so a short-lived original process
+ * that died could be replaced by an unrelated process with the same PID.
+ * Stale snapshots will persist until evicted by the next periodic write from
+ * the original component (which overwrites the snapshot file) or by manual
+ * cleanup of the observability directory.
+ */
 function isProcessAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;

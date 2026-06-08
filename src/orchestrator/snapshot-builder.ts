@@ -156,8 +156,6 @@ export function serializeSnapshot(snapshot: RuntimeSnapshot): Record<string, unk
             last_delivery_at: snapshot.webhookHealth.stats.lastDeliveryAt,
             last_event_type: snapshot.webhookHealth.stats.lastEventType,
           },
-          last_delivery_at: snapshot.webhookHealth.lastDeliveryAt,
-          last_event_type: snapshot.webhookHealth.lastEventType,
         }
       : undefined,
   };

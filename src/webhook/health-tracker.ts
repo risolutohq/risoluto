@@ -9,6 +9,9 @@
  *   degraded      →  connected     (verified delivery + 60s cooldown expired)
  *   *             →  disconnected  (stop() called / webhook removed)
  *
+ * An enabled=false subscription check while a cooldown is running resets the
+ * 60s window to start from the check time, delaying reconnection.
+ *
  * Invalid HMAC signatures never reach this module — they are security
  * telemetry handled entirely by the webhook handler.
  */
@@ -112,8 +115,6 @@ export class DefaultWebhookHealthTracker implements WebhookHealthTracker {
       status: this.status,
       effectiveIntervalMs: this.computeEffectiveInterval(),
       stats: this.buildStats(),
-      lastDeliveryAt: this.lastDeliveryAt,
-      lastEventType: this.lastEventType,
     };
   }
 
@@ -201,6 +202,8 @@ export class DefaultWebhookHealthTracker implements WebhookHealthTracker {
     if (this.stopped || !this.linearClient) return;
 
     try {
+      // Query all webhooks and filter by URL. Acceptable for typical workspace sizes;
+      // a targeted query by webhook id is possible when webhookId is added to WebhookConfig.
       const result = await this.linearClient.runGraphQL(`query { webhooks { nodes { url enabled } } }`);
 
       const webhooks = result as { webhooks?: { nodes?: Array<{ url: string; enabled: boolean }> } };

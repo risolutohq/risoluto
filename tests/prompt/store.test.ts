@@ -69,6 +69,34 @@ describe("PromptTemplateStore — CRUD", () => {
   it("remove returns not-deleted for nonexistent template", () => {
     expect(store.remove("nope")).toEqual({ deleted: false });
   });
+
+  it("remove blocks deletion of the currently active template", () => {
+    store.create({ id: "active-tpl", name: "Active", body: "body" });
+    // Insert a config row selecting this template as active
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = (db as any).$client;
+    raw
+      .prepare("INSERT INTO config (key, value, updated_at) VALUES (?, ?, ?)")
+      .run("system", JSON.stringify({ selectedTemplateId: "active-tpl" }), new Date().toISOString());
+
+    const result = store.remove("active-tpl");
+    expect(result.deleted).toBe(false);
+    expect(result.error).toContain("cannot delete the active template");
+    expect(store.get("active-tpl")).not.toBeNull();
+  });
+
+  it("remove survives corrupt JSON in config system section", () => {
+    store.create({ id: "tpl", name: "T", body: "b" });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = (db as any).$client;
+    raw
+      .prepare("INSERT INTO config (key, value, updated_at) VALUES (?, ?, ?)")
+      .run("system", "{not valid json", new Date().toISOString());
+
+    // Should not throw; the corrupt JSON path logs a warning and falls through to delete
+    const result = store.remove("tpl");
+    expect(result.deleted).toBe(true);
+  });
 });
 
 describe("PromptTemplateStore — preview", () => {

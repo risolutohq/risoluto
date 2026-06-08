@@ -91,19 +91,34 @@ export interface RisolutoEventMap {
     attempt: number | null;
   };
 
-  /** An agent worker was launched for an issue. */
+  /**
+   * An agent worker was launched for an issue.
+   * @deprecated Use `workflow_run.started` instead — the core primitive is Workflow Run.
+   */
   "issue.started": { issueId: string; identifier: string; attempt: number | null };
 
-  /** An agent worker finished (any terminal outcome). */
+  /**
+   * An agent worker finished (any terminal outcome).
+   * @deprecated Use `workflow_run.completed` instead — the core primitive is Workflow Run.
+   */
   "issue.completed": { issueId: string; identifier: string; outcome: string };
 
-  /** An agent worker was detected as stalled and killed. */
+  /**
+   * An agent worker was detected as stalled and killed.
+   * @deprecated Use `workflow_run.stalled` instead — the core primitive is Workflow Run.
+   */
   "issue.stalled": { issueId: string; identifier: string; reason: string };
 
-  /** An issue was queued for later processing. */
+  /**
+   * An issue was queued for later processing.
+   * @deprecated Use `workflow_run.queued` instead — the core primitive is Workflow Run.
+   */
   "issue.queued": { issueId: string; identifier: string };
 
-  /** A worker failure occurred (crash, timeout, etc.). */
+  /**
+   * A worker failure occurred (crash, timeout, etc.).
+   * @deprecated Use `workflow_run.worker_failed` instead — the core primitive is Workflow Run.
+   */
   "worker.failed": { issueId: string; identifier: string; error: string };
 
   /** A model selection was updated at runtime. */

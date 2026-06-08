@@ -41,7 +41,7 @@ describe("PKCE auth helpers", () => {
 
   describe("createPkceSession", () => {
     it("generates a valid PKCE session with auth URL", () => {
-      const session = createPkceSession("http://localhost:4000");
+      const session = createPkceSession();
 
       expect(session.codeVerifier).toBeTruthy();
       expect(session.state).toBeTruthy();
@@ -57,8 +57,8 @@ describe("PKCE auth helpers", () => {
     });
 
     it("generates unique state and verifier for each session", () => {
-      const session1 = createPkceSession("http://localhost:4000");
-      const session2 = createPkceSession("http://localhost:4000");
+      const session1 = createPkceSession();
+      const session2 = createPkceSession();
 
       expect(session1.state).not.toBe(session2.state);
       expect(session1.codeVerifier).not.toBe(session2.codeVerifier);

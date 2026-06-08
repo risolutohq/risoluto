@@ -103,6 +103,27 @@ describe("GET /api/v1/prs", () => {
     expect(body.prs[0]).toEqual(expect.objectContaining({ number: 42, status: "open" }));
   });
 
+  it("filters by status=merged returning only merged PRs", async () => {
+    const response = await fetch(`${baseUrl}/api/v1/prs?status=merged`);
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      prs: Array<{ number: number; status: string }>;
+    };
+    expect(body.prs).toHaveLength(1);
+    expect(body.prs[0]).toEqual(expect.objectContaining({ number: 43, status: "merged" }));
+  });
+
+  it("filters by status=closed returning empty list when none closed", async () => {
+    const response = await fetch(`${baseUrl}/api/v1/prs?status=closed`);
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      prs: Array<{ number: number; status: string }>;
+    };
+    expect(body.prs).toHaveLength(0);
+  });
+
   it("returns 400 for an invalid status filter", async () => {
     const response = await fetch(`${baseUrl}/api/v1/prs?status=queued`);
     expect(response.status).toBe(400);

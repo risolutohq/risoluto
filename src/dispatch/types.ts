@@ -1,4 +1,5 @@
 import type { AgentRunnerEventHandler } from "../agent-runner/contracts.js";
+import type { StopSignal } from "../core/signal-detection.js";
 import type {
   Issue,
   ModelSelection,
@@ -68,6 +69,8 @@ export type DispatchEvent = RecentEvent & {
   usageMode?: "absolute_total" | "delta";
   rateLimits?: unknown;
   content?: string | null;
+  stopSignal?: StopSignal | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 /**

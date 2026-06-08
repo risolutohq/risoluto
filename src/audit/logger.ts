@@ -14,7 +14,7 @@ import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { configHistory } from "../persistence/sqlite/schema.js";
 import type { AuditLoggerPort } from "./port.js";
 import type { AuditEntry, AuditQueryOptions, AuditRecord } from "./types.js";
-import { redactSensitiveValue, sanitizeContent } from "../core/content-sanitizer.js";
+import { redactSensitiveValue, sanitizeContent, REDACT_KEYS } from "../core/content-sanitizer.js";
 
 export type { AuditEntry, AuditQueryOptions, AuditRecord };
 
@@ -23,8 +23,8 @@ const REDACTED = "[REDACTED]";
 // Audit values are fully redacted when their key/path names a secret-like field,
 // and otherwise scanned for embedded secret patterns, so no config mutation
 // persists a webhook URL, token, API key, or $SECRET-resolved value verbatim
-// (RIS-247).
-const SENSITIVE_AUDIT_KEY = /secret|token|password|credential|authorization|api[_-]?key|webhook/i;
+// (RIS-247). Shared with content-sanitizer's REDACT_KEYS.
+const SENSITIVE_AUDIT_KEY = REDACT_KEYS;
 
 function redactAuditValue(key: string, path: string | null, value: string | null): string | null {
   if (value === null) {
@@ -210,6 +210,42 @@ export class AuditLogger implements AuditLoggerPort {
       count: number;
     };
     return result.count;
+  }
+
+  verifyChain(): { valid: boolean; firstBrokenId?: number } {
+    const rows = this.db.$client
+      .prepare("SELECT id, table_name, key, path, operation, previous_value, new_value, actor, request_id, timestamp, entry_hash, previous_hash FROM config_history ORDER BY id ASC")
+      .all() as Array<Record<string, unknown>>;
+    if (rows.length === 0) {
+      return { valid: true };
+    }
+
+    let previousHash: string | null = null;
+    for (const row of rows) {
+      const fields = {
+        tableName: row.table_name as string,
+        key: row.key as string,
+        path: (row.path as string) ?? null,
+        operation: row.operation as string,
+        previousValue: (row.previous_value as string) ?? null,
+        newValue: (row.new_value as string) ?? null,
+        actor: (row.actor as string) ?? "operator",
+        requestId: (row.request_id as string) ?? null,
+        timestamp: row.timestamp as string,
+        previousHash,
+      };
+      const recomputed = computeAuditEntryHash(fields);
+      const storedHash = (row.entry_hash as string) ?? null;
+      if (recomputed !== storedHash) {
+        return { valid: false, firstBrokenId: row.id as number };
+      }
+      const storedPreviousHash = (row.previous_hash as string) ?? null;
+      if (storedPreviousHash !== previousHash) {
+        return { valid: false, firstBrokenId: row.id as number };
+      }
+      previousHash = recomputed;
+    }
+    return { valid: true };
   }
 }
 

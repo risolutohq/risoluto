@@ -102,7 +102,7 @@ async function isReadableFile(path: string): Promise<boolean> {
 function unquoteEnvValue(value: string): string {
   if (value.length >= 2) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      return value.slice(1, -1);
+      return value.slice(1, -1).replace(/\\n/g, "\n");
     }
   }
   return value;

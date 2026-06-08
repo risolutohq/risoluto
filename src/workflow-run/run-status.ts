@@ -3,6 +3,12 @@ import type { WorkflowRunStatus } from "./contracts.js";
 export type RunStatusTransitionEvent =
   | "queue"
   | "start"
+  /**
+   * Transitions running → waiting_for_operator.
+   * The executor handles the wait-for-operator case entirely in-process without
+   * persisting this transition, so 'waiting_for_operator' is never a persisted
+   * run status and no resume event exists in this machine.
+   */
   | "operator_input_required"
   | "prerequisite_failed"
   | "complete"

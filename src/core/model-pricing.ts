@@ -42,6 +42,13 @@ function isValidTokenCount(value: number): boolean {
  * pricing is unavailable, or when reported token counts are not finite,
  * non-negative safe integers (guards against NaN/Infinity/negative propagating
  * into invalid totals).
+ *
+ * **Cache-token costs are excluded** from this per-attempt figure. The
+ * `TokenUsageSnapshot` carries optional `cacheReadTokens` and `cacheWriteTokens`
+ * fields, and Anthropic charges separately for cache reads/writes, but this
+ * function only accounts for `inputTokens` and `outputTokens`. The workflow-budget
+ * path (`budget-retry.ts`) uses a separate `WorkflowModelProfilePrice` that does
+ * include cache fields, so actual budget enforcement is unaffected.
  */
 export function computeAttemptCostUsd(attempt: {
   model: string;

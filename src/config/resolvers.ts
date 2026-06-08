@@ -17,6 +17,10 @@ import path from "node:path";
  * - `$SECRET:name` → looks up secret via secretResolver
  * - `$VAR` → looks up environment variable
  * - literal strings → returned as-is
+ *
+ * When `secretResolver` is absent (undefined) and the value is a `$SECRET:name`
+ * reference, this function silently returns `""`. Callers that need a hard error
+ * on missing resolver should use a strict overload.
  */
 function resolveEnvBackedString(value: unknown, secretResolver?: (name: string) => string | undefined): string {
   if (typeof value !== "string") {

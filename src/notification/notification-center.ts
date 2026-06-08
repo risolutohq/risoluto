@@ -4,6 +4,7 @@ import type { RisolutoLogger } from "../core/types.js";
 import type { NotificationChannel, NotificationEvent } from "./channel.js";
 import { SlackWebhookChannel } from "./slack-webhook.js";
 import type { ListNotificationsOptions, NotificationStorePort } from "./port.js";
+import type { NotificationRecord } from "../core/notification-types.js";
 import { toErrorString } from "../utils/type-guards.js";
 
 export interface NotificationCenterOptions {
@@ -24,7 +25,7 @@ export class NotificationCenter {
 
   async listNotifications(
     options: ListNotificationsOptions = {},
-  ): Promise<NotificationCenterResponse<{ notifications: unknown[]; unreadCount: number; totalCount: number }>> {
+  ): Promise<NotificationCenterResponse<{ notifications: NotificationRecord[]; unreadCount: number; totalCount: number }>> {
     if (!this.options.notificationStore) {
       return unavailable("notification store not available");
     }
@@ -47,7 +48,7 @@ export class NotificationCenter {
 
   async markNotificationRead(
     notificationId: string,
-  ): Promise<NotificationCenterResponse<{ ok: true; notification: unknown; unreadCount: number }>> {
+  ): Promise<NotificationCenterResponse<{ ok: true; notification: NotificationRecord; unreadCount: number }>> {
     if (!this.options.notificationStore) {
       return unavailable("notification store not available");
     }
@@ -112,6 +113,7 @@ export class NotificationCenter {
     }
 
     const channels = this.options.configStore.getConfig().notifications?.channels ?? [];
+    // Only the first enabled Slack channel is tested. Multiple channels require manual verification.
     const slackChannel = channels.find((channel) => channel.type === "slack" && channel.enabled !== false);
     if (!slackChannel || slackChannel.type !== "slack" || !slackChannel.webhookUrl) {
       return {

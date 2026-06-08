@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 
 import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { encryptedSecrets } from "../persistence/sqlite/schema.js";
+import type { SecretsPort } from "./port.js";
 import type { RisolutoLogger } from "../core/types.js";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
@@ -50,7 +51,7 @@ function decryptValue(ciphertext: string, iv: string, authTag: string, key: Buff
   return plaintext.toString("utf8");
 }
 
-export class DbSecretsStore {
+export class DbSecretsStore implements SecretsPort {
   private masterKey: string | null = null;
   private readonly listeners = new Set<() => void>();
 

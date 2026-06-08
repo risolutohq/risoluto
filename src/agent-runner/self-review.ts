@@ -52,11 +52,23 @@ export async function runSelfReview(
   timeoutMs: number,
 ): Promise<SelfReviewResult | null> {
   try {
-    const result = await connection.request(CODEX_METHOD.ReviewStart, {
+    const reviewStart = connection.request(CODEX_METHOD.ReviewStart, {
       threadId,
       delivery: "inline",
       target: { type: "uncommittedChanges" },
     });
+    const aborted = new Promise<never>((_, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("aborted", signal.reason ?? "AbortError")), {
+        once: true,
+      });
+    });
+    if (signal.aborted) {
+      // Already aborted before we entered — bail immediately rather than
+      // racing a connection.request that won't receive the signal via its
+      // internal timeout.
+      return null;
+    }
+    const result = await Promise.race([reviewStart, aborted]);
     const review = asRecord(result);
     const reviewTurnId = extractTurnId(review);
     if (reviewTurnId) {

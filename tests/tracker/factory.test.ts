@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createTracker } from "../../src/tracker/factory.js";
 import { LinearClient } from "../../src/linear/client.js";
 import { LinearTrackerAdapter } from "../../src/tracker/linear-adapter.js";
+import { LinearTrackerToolProvider } from "../../src/linear/tool-provider.js";
+import { GitHubTrackerAdapter } from "../../src/tracker/github-adapter.js";
+import { NullTrackerToolProvider } from "../../src/tracker/tool-provider.js";
 import { createMockLogger } from "../helpers.js";
 import type { ServiceConfig } from "../../src/core/types.js";
 
@@ -63,13 +66,36 @@ function createConfig(): ServiceConfig {
   } as unknown as ServiceConfig;
 }
 
+function createGithubConfig(): ServiceConfig {
+  return {
+    ...createConfig(),
+    tracker: {
+      kind: "github",
+      owner: "test-org",
+      repo: "test-repo",
+      activeStates: ["in_progress"],
+      terminalStates: ["done"],
+    },
+  } as unknown as ServiceConfig;
+}
+
 describe("createTracker", () => {
   it("returns a TrackerPort and the underlying LinearClient", () => {
     const logger = createMockLogger();
     const result = createTracker(() => createConfig(), logger);
 
     expect(result.tracker).toBeInstanceOf(LinearTrackerAdapter);
+    expect(result.trackerToolProvider).toBeInstanceOf(LinearTrackerToolProvider);
     expect(result.linearClient).toBeInstanceOf(LinearClient);
+  });
+
+  it("returns a GitHubTrackerAdapter, NullTrackerToolProvider, and null linearClient for github kind", () => {
+    const logger = createMockLogger();
+    const result = createTracker(() => createGithubConfig(), logger);
+
+    expect(result.tracker).toBeInstanceOf(GitHubTrackerAdapter);
+    expect(result.trackerToolProvider).toBeInstanceOf(NullTrackerToolProvider);
+    expect(result.linearClient).toBeNull();
   });
 
   it("creates logger child with linear component", () => {

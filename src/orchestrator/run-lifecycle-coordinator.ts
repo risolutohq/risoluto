@@ -100,8 +100,6 @@ class RunLifecycleCoordinatorImpl implements RunLifecycleCoordinator {
             status: health.status,
             effectiveIntervalMs: health.effectiveIntervalMs,
             stats: health.stats,
-            lastDeliveryAt: health.lastDeliveryAt,
-            lastEventType: health.lastEventType,
           };
         },
         getCostSamples: () =>

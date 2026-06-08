@@ -65,6 +65,7 @@ export async function fetchCodexModels(apiKey?: string, includeHidden = false): 
       if (isCodexBinaryUnavailable(error)) {
         return getAvailableModelIds().map((id) => ({ id, displayName: id, isDefault: false }));
       }
+      cacheByKey.delete(cacheKey);
       throw error;
     } finally {
       slot.inflight = null;

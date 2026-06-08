@@ -45,52 +45,6 @@ afterEach(async () => {
 });
 
 describe("CLI parseCliArgs (via main module)", () => {
-  it("resolves default workflow path when no positional arg given", async () => {
-    const { parseArgs } = await import("node:util");
-    const result = parseArgs({
-      args: [],
-      allowPositionals: true,
-      options: {
-        port: { type: "string" },
-        "log-dir": { type: "string" },
-      },
-    });
-    expect(result.positionals[0] ?? "./WORKFLOW.md").toBe("./WORKFLOW.md");
-  });
-
-  it("resolves custom workflow path from first positional", async () => {
-    const { parseArgs } = await import("node:util");
-    const result = parseArgs({
-      args: ["./my-workflow.md"],
-      allowPositionals: true,
-      options: {
-        port: { type: "string" },
-        "log-dir": { type: "string" },
-      },
-    });
-    expect(result.positionals[0]).toBe("./my-workflow.md");
-  });
-
-  it("extracts --port and --log-dir options", async () => {
-    const { parseArgs } = await import("node:util");
-    const result = parseArgs({
-      args: ["./flow.md", "--port", "3456", "--log-dir", "/tmp/my-archives"],
-      allowPositionals: true,
-      options: {
-        port: { type: "string" },
-        "log-dir": { type: "string" },
-      },
-    });
-    expect(result.values.port).toBe("3456");
-    expect(result.values["log-dir"]).toBe("/tmp/my-archives");
-  });
-
-  it("resolves archive dir from DATA_DIR env when no --log-dir", () => {
-    const dataDir = "/data/custom";
-    const archiveDir = path.resolve(path.join(dataDir, "archives"));
-    expect(archiveDir).toBe(path.resolve("/data/custom/archives"));
-  });
-
   it("rejects invalid --port values before startup", async () => {
     const { parseCliArgs } = await import("../../src/cli/index.js");
     expect(() => parseCliArgs(["--port", "abc"])).toThrow(

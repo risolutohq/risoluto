@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG_SECTIONS } from "../config/defaults.js";
 import { loadLiveEnvFile, resolveLivePreflightConfig } from "../config/live-preflight-config.js";
 import type { ServiceConfig } from "../core/types.js";
 import { createGitHubJwt, createInstallationToken, githubHeaders, splitRepo } from "../live/github-app-auth.js";
+import { DEFAULT_AGENT_MODEL } from "./constants.js";
 
 /** Default env file the live composition reads sandbox creds + model profile from (gitignored). */
 const LIVE_ENV_FILE = ".env.live.local";
@@ -38,7 +39,7 @@ export function buildLiveServiceConfig(env: NodeJS.ProcessEnv, dataDir: string, 
   if (!repoRef) {
     throw new Error("E2E_GITHUB_REPO must be set to owner/name for a live run start");
   }
-  const model = env.RISOLUTO_LIVE_MODEL_ID?.trim() || "gpt-5.4-mini";
+  const model = env.RISOLUTO_LIVE_MODEL_ID?.trim() || DEFAULT_AGENT_MODEL;
   const mergedConfig: Record<string, unknown> = {
     ...DEFAULT_CONFIG_SECTIONS,
     tracker: { kind: "github", active_states: ["in_progress"], terminal_states: ["done"] },

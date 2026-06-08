@@ -69,7 +69,7 @@ export class HealthRunner {
     }
   }
 
-  /** Snapshot of the latest aggregated results. Always returns four fields (one per id, plus a synthetic for any unconfigured probe). */
+  /** Snapshot of the latest aggregated results. Always returns three probe results (one per id, plus a synthetic for any unconfigured probe). */
   getChecks(): HealthChecks {
     return {
       github: this.resolveResult("github"),

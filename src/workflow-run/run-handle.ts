@@ -6,7 +6,6 @@ import type {
   WorkflowRunAttemptCancelledOutput,
   WorkflowRunAttemptCompletedOutput,
   WorkflowRunAttemptFailedOutput,
-  WorkflowRunAttemptReference,
   WorkflowRunAttemptStartedOutput,
   WorkflowRunEventRecord,
   WorkflowRunGateReference,
@@ -61,7 +60,7 @@ export interface RecordTransitionInput {
 export interface StartRunAttemptInput {
   attemptId: string;
   attemptNumber: number;
-  reason: WorkflowRunAttemptReference["reason"];
+  reason: "initial" | "retry" | "resume";
 }
 
 export interface TerminalRunAttemptInput {

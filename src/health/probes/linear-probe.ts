@@ -36,6 +36,14 @@ export class LinearProbe implements HealthProbe {
 
   constructor(private readonly options: LinearProbeOptions) {}
 
+  /**
+   * Unlike GithubProbe and DockerProbe, this probe does not thread the
+   * {@link HealthProbeContext.signal} through to tracker API calls. The
+   * underlying {@link TrackerPort} methods do not accept an AbortSignal
+   * parameter, so cancellation is only applied at the subprobe timeout level.
+   * When a per-probe deadline fires, in-flight Linear API calls will
+   * continue until they complete or reach their own internal timeout.
+   */
   async run(context: HealthProbeContext): Promise<HealthSubprobe[]> {
     const { nowMs } = context;
     const tasks: Array<Promise<HealthSubprobe>> = [

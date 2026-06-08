@@ -324,10 +324,7 @@ async function persistExecutorEvents(
   await archive.appendWorkflowRunEvents(input.workflowRun.id, records);
 }
 
-interface EvidenceRef {
-  readonly evidenceId: string;
-  readonly path: string;
-}
+import type { EvidenceRef } from "./drive-done-handoff.js";
 
 interface EvidenceCapturingHook {
   readonly runHook: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;

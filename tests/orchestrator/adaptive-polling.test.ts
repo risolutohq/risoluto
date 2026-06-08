@@ -54,8 +54,6 @@ function makeHealthTracker(overrides: Partial<WebhookHealthState> = {}): Webhook
     status: "connected",
     effectiveIntervalMs: 120_000,
     stats: { deliveriesReceived: 5, lastDeliveryAt: "2026-03-30T10:00:00Z", lastEventType: "Issue" },
-    lastDeliveryAt: "2026-03-30T10:00:00Z",
-    lastEventType: "Issue",
     ...overrides,
   };
   return {
@@ -200,8 +198,6 @@ describe("serializeSnapshot webhook health", () => {
       status: "connected",
       effectiveIntervalMs: 120_000,
       stats: { deliveriesReceived: 7, lastDeliveryAt: "2026-03-30T10:00:00Z", lastEventType: "Issue" },
-      lastDeliveryAt: "2026-03-30T10:00:00Z",
-      lastEventType: "Issue",
     });
 
     const result = serializeSnapshot(snapshot);
@@ -229,8 +225,7 @@ describe("serializeSnapshot webhook health", () => {
       status: "degraded",
       effectiveIntervalMs: 15_000,
       stats: { deliveriesReceived: 3, lastDeliveryAt: null, lastEventType: null },
-      lastDeliveryAt: null,
-      lastEventType: null,
+    });
     });
 
     const result = serializeSnapshot(snapshot);

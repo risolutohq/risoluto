@@ -17,7 +17,8 @@ export function isPrStatusResponse(value: unknown): value is PrStatusResponse {
     (value["state"] === "open" || value["state"] === "closed") &&
     typeof value["merged"] === "boolean" &&
     typeof value["number"] === "number" &&
-    typeof value["html_url"] === "string"
+    typeof value["html_url"] === "string" &&
+    (typeof value["merge_commit_sha"] === "string" || value["merge_commit_sha"] === null)
   );
 }
 

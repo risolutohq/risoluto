@@ -31,4 +31,11 @@ export interface AuditLoggerPort {
 
   /** Count audit records matching the given filters. */
   count(options?: AuditQueryOptions): number;
+
+  /**
+   * Verify the integrity of the audit chain by walking all rows ordered by id,
+   * recomputing each entry hash, and checking the previousHash link.
+   * Returns whether the chain is valid and the id of the first broken link if any.
+   */
+  verifyChain(): { valid: boolean; firstBrokenId?: number };
 }

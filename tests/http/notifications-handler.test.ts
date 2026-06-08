@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Request } from "express";
 
-import { handleTestSlackNotification } from "../../src/http/notifications-handler.js";
+import {
+  handleListNotifications,
+  handleMarkAllNotificationsRead,
+  handleMarkNotificationRead,
+  handleTestSlackNotification,
+} from "../../src/http/notifications-handler.js";
 import { SlackWebhookChannel } from "../../src/notification/slack-webhook.js";
 import type { ConfigStore } from "../../src/config/store.js";
 import type { ServiceConfig } from "../../src/core/types.js";
+import type { NotificationStorePort } from "../../src/notification/port.js";
 import { createJsonResponse, createMockLogger, createTextResponse, makeMockResponse } from "../helpers.js";
 
 function makeConfigStore(
@@ -206,5 +212,82 @@ describe("handleTestSlackNotification", () => {
 
     expect(res._status).toBe(504);
     expect((res._body as { error: { code: string } }).error.code).toBe("timeout");
+  });
+});
+
+describe("handleMarkNotificationRead", () => {
+  it("returns 400 when notification_id is missing", async () => {
+    const res = makeMockResponse();
+    const req = { params: {} } as unknown as Request;
+
+    await handleMarkNotificationRead(
+      {
+        notificationStore: { markRead: vi.fn() } as unknown as NotificationStorePort,
+      },
+      req,
+      res,
+    );
+
+    expect(res._status).toBe(400);
+    expect((res._body as { error: { code: string } }).error.code).toBe("validation_error");
+  });
+
+  it("returns 404 when markRead returns null", async () => {
+    const res = makeMockResponse();
+    const req = { params: { notification_id: "not-found" } } as unknown as Request;
+    const store = { markRead: vi.fn().mockResolvedValue(null) } as unknown as NotificationStorePort;
+
+    await handleMarkNotificationRead({ notificationStore: store }, req, res);
+
+    expect(res._status).toBe(404);
+  });
+});
+
+describe("handleMarkAllNotificationsRead", () => {
+  it("returns 200 with updatedCount and unreadCount", async () => {
+    const res = makeMockResponse();
+    const store = {
+      markAllRead: vi.fn().mockResolvedValue({ updatedCount: 3, unreadCount: 0 }),
+    } as unknown as NotificationStorePort;
+
+    await handleMarkAllNotificationsRead({ notificationStore: store }, {} as Request, res);
+
+    expect(res._status).toBe(200);
+    const body = res._body as { ok: true; updatedCount: number; unreadCount: number };
+    expect(body.ok).toBe(true);
+    expect(body.updatedCount).toBe(3);
+    expect(body.unreadCount).toBe(0);
+  });
+});
+
+describe("handleListNotifications", () => {
+  it("resolves unread=1 as true", async () => {
+    const res = makeMockResponse();
+    const req = { query: { unread: "1" } } as unknown as Request;
+    const store = {
+      list: vi.fn().mockResolvedValue([]),
+      countUnread: vi.fn().mockResolvedValue(0),
+      countAll: vi.fn().mockResolvedValue(0),
+    } as unknown as NotificationStorePort;
+
+    await handleListNotifications({ notificationStore: store }, req, res);
+
+    expect(res._status).toBe(200);
+    expect(store.list).toHaveBeenCalledWith(expect.objectContaining({ unreadOnly: true }));
+  });
+
+  it("resolves unread=true as true", async () => {
+    const res = makeMockResponse();
+    const req = { query: { unread: "true" } } as unknown as Request;
+    const store = {
+      list: vi.fn().mockResolvedValue([]),
+      countUnread: vi.fn().mockResolvedValue(0),
+      countAll: vi.fn().mockResolvedValue(0),
+    } as unknown as NotificationStorePort;
+
+    await handleListNotifications({ notificationStore: store }, req, res);
+
+    expect(res._status).toBe(200);
+    expect(store.list).toHaveBeenCalledWith(expect.objectContaining({ unreadOnly: true }));
   });
 });

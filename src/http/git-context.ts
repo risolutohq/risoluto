@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 import type { ConfigStore } from "../config/store.js";
-import type { RuntimeIssueView, RuntimeSnapshot } from "../core/types.js";
+import type { RisolutoLogger, RuntimeIssueView, RuntimeSnapshot } from "../core/types.js";
 import { asNumber, asRecord, asString } from "../config/coercion.js";
 import { GitHubTransport } from "../github/transport.js";
 import type { OrchestratorPort } from "../orchestrator/port.js";
@@ -20,7 +20,6 @@ interface GitPullView {
   updatedAt: string;
   url: string;
   headBranch: string;
-  checksStatus: string | null;
 }
 
 interface GitCommitView {
@@ -104,7 +103,6 @@ function parseRepoPulls(raw: unknown): GitPullView[] {
       updatedAt: asString(record.updated_at),
       url: asString(record.html_url),
       headBranch: asString(head?.ref),
-      checksStatus: null,
     };
   });
 }
@@ -160,6 +158,7 @@ export interface GitContextDeps {
   configStore?: ConfigStore;
   secretsStore?: SecretsPort;
   fetchImpl?: typeof fetch;
+  logger?: Pick<RisolutoLogger, "warn">;
 }
 
 function resolveGithubToken(deps: GitContextDeps): string | null {
@@ -178,6 +177,7 @@ async function enrichConfiguredRepo(
     githubRepo?: string | null;
   },
   fetchOptions: GitHubFetchOptions,
+  logger?: Pick<RisolutoLogger, "warn">,
 ): Promise<GitRepoView> {
   const view: GitRepoView = {
     repoUrl: repo.repoUrl,
@@ -209,8 +209,11 @@ async function enrichConfiguredRepo(
         pulls,
         recentCommits: parseRepoCommits(commitsData),
       };
-    } catch {
-      // GitHub API failed — return config-only data
+    } catch (err) {
+      logger?.warn(
+        { repo: `${repo.githubOwner}/${repo.githubRepo}`, error: String(err) },
+        "GitHub enrichment failed",
+      );
     }
   }
 
@@ -236,7 +239,7 @@ export async function handleGitContext(deps: GitContextDeps, _req: Request, res:
   const enrichedRepos = await Promise.all(
     repoConfigs.map((repo) =>
       enrichmentEnabled
-        ? enrichConfiguredRepo(repo, fetchOptions)
+        ? enrichConfiguredRepo(repo, fetchOptions, deps.logger)
         : Promise.resolve({
             repoUrl: repo.repoUrl,
             defaultBranch: repo.defaultBranch,

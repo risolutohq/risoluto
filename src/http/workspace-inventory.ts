@@ -15,7 +15,7 @@ import type { WorkspacePort } from "../workspace/port.js";
 
 interface WorkspaceInventoryEntry {
   workspace_key: string;
-  path: string;
+  path?: string;
   status: "running" | "retrying" | "completed" | "orphaned";
   strategy: string;
   issue: {
@@ -150,9 +150,10 @@ export interface WorkspaceInventoryDeps {
 
 export async function handleWorkspaceInventory(
   deps: WorkspaceInventoryDeps,
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> {
+  const includePaths = req.query?.includePaths === "true";
   const config = deps.configStore?.getConfig() ?? null;
   const workspaceRoot = config?.workspace.root;
   const strategy = config?.workspace.strategy ?? "directory";
@@ -190,7 +191,7 @@ export async function handleWorkspaceInventory(
 
     return {
       workspace_key: key,
-      path: wsPath,
+      ...(includePaths ? { path: wsPath } : {}),
       status,
       strategy,
       issue,

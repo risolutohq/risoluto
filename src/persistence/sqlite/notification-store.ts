@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { desc, eq, sql } from "drizzle-orm";
 
 import type { NotificationDeliverySummary, NotificationRecord } from "../../core/notification-types.js";
-import { normalizeLimit } from "./query-helpers.js";
+import { clampLimit } from "./store-utils.js";
 import type { RisolutoDatabase } from "./database.js";
 import { notifications } from "./schema.js";
 import type {
@@ -59,7 +59,7 @@ class SqliteNotificationStore implements NotificationStorePort {
   }
 
   async list(options: ListNotificationsOptions = {}): Promise<NotificationRecord[]> {
-    const limit = normalizeLimit(options.limit);
+    const limit = clampLimit(options.limit, 100, 500);
     const rows = (
       options.unreadOnly
         ? this.db.select().from(notifications).where(eq(notifications.read, false))
@@ -148,7 +148,8 @@ function parseJson<T>(value: string | null): T | null {
   }
   try {
     return JSON.parse(value) as T;
-  } catch {
+  } catch (err) {
+    console.warn("corrupt JSON column in notification store:", String(err));
     return null;
   }
 }

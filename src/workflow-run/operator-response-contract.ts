@@ -16,7 +16,7 @@ export const operatorResponseArtifactSchema = z
     response: z.string().min(1),
     slack: z
       .object({
-        teamId: z.string().min(1),
+        teamId: z.string().min(1).nullable(),
         userId: z.string().min(1),
       })
       .strict(),

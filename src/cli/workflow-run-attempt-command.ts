@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 
-import { openWorkflowRun, type WorkflowRunAttemptReference } from "../workflow-run/artifacts.js";
+import { openWorkflowRun } from "../workflow-run/artifacts.js";
 import { listWorkflowRunAttempts } from "../workflow-run/run-attempt-projection.js";
 import { resolveDataDir, requireNonEmpty } from "./cli-helpers.js";
 
@@ -158,7 +158,7 @@ function parseAttemptNumber(value: string): number {
   throw new TypeError("--attempt-number must be a positive integer");
 }
 
-function parseAttemptReason(value: string): WorkflowRunAttemptReference["reason"] {
+function parseAttemptReason(value: string): "initial" | "retry" | "resume" {
   if (value === "initial" || value === "retry" || value === "resume") {
     return value;
   }
