@@ -187,7 +187,12 @@ async function loadWorkflowDefinitions(workflowDir: string): Promise<WorkflowDef
   try {
     entries = (await readdir(workflowDir)).filter((entry) => entry.endsWith(".yaml") || entry.endsWith(".yml"));
   } catch (error: unknown) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "ENOENT") {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code: string }).code === "ENOENT"
+    ) {
       return [];
     }
     throw error;
