@@ -4,6 +4,7 @@ import {
   type ExecuteWorkflowDefinitionInput,
   type WorkflowExecutorResult,
 } from "./executor.js";
+import { decideUnansweredSlackClarification } from "./slack-interactions.js";
 
 /**
  * Production driver inputs. Mirrors {@link ExecuteWorkflowDefinitionInput} but adds the archive location so
@@ -25,6 +26,8 @@ export interface DriveWorkflowRunInput extends WorkflowRunArchiveLocation {
   readonly maxGateRetries?: number;
   readonly budget?: ExecuteWorkflowDefinitionInput["budget"];
   readonly recordStatus?: ExecuteWorkflowDefinitionInput["recordStatus"];
+  /** Maximum times the engine re-runs the implementer state on `wait_for_operator`. Defaults to 1. */
+  readonly maxClarificationAttempts?: number;
 }
 
 /**
@@ -43,6 +46,8 @@ export async function driveWorkflowRun(input: DriveWorkflowRunInput): Promise<Wo
     retryGate: input.retryGate,
     maxGateRetries: input.maxGateRetries,
     budget: input.budget,
+    decideUnansweredClarification: decideUnansweredSlackClarification,
+    maxClarificationAttempts: input.maxClarificationAttempts,
     // The archive is created lazily inside the default closure so callers that inject their own
     // recordStatus (tests, fakes) do not need to supply an archive location.
     recordStatus:
