@@ -3,6 +3,7 @@ import { isRecord } from "../utils/type-guards.js";
 import type { WorkflowBudgetPolicy } from "./budget-retry.js";
 import { DEFAULT_GATE_RETRY_LIMIT } from "./budget-retry.js";
 import type { WorkflowRunStatus } from "./contracts.js";
+import { transitionWorkflowRunStatus, type RunStatusTransitionEvent } from "./run-status.js";
 import { executeConfiguredWorkflowActions, type WorkflowActionExecutionInput } from "./executor-actions.js";
 import { evaluateStateGatesWithRetry, type WorkflowGateRetryInput } from "./gate-retry-controller.js";
 import {
@@ -72,7 +73,7 @@ export interface WorkflowRoleExecutionInput {
 
 export interface WorkflowStatusRecordInput {
   readonly workflowRunId: string;
-  readonly status: Extract<WorkflowRunStatus, "blocked" | "done" | "running">;
+  readonly status: WorkflowRunStatus;
 }
 
 export interface WorkflowExecutorResult {
@@ -103,7 +104,8 @@ export async function executeWorkflowDefinition(
   let gateRetryAttempts = 0;
   let verifierRetryAttempts = 0;
 
-  await recordWorkflowRunStatus(input, "running");
+  await advanceRunStatus(input, "accepted", "queue");
+  await advanceRunStatus(input, "queued", "start");
   await executeConfiguredWorkflowActions({ ...input, ...state, phase: "before_roles", attempt: 0 });
   let index = 0;
   while (index < orderedRoles.length) {
@@ -235,7 +237,7 @@ async function finishWorkflowExecution(
   status: Extract<WorkflowRunStatus, "blocked" | "done">,
   state: WorkflowExecutionState,
 ): Promise<WorkflowExecutorResult> {
-  await recordWorkflowRunStatus(input, status);
+  await advanceRunStatus(input, "running", status === "done" ? "complete" : "prerequisite_failed");
   return {
     status,
     workflowStatesVisited: state.statesVisited,
@@ -301,6 +303,21 @@ async function recordWorkflowRunStatus(
   status: WorkflowStatusRecordInput["status"],
 ): Promise<void> {
   await input.recordStatus?.({ workflowRunId: input.workflowRunId, status });
+}
+
+/**
+ * Advance the Run Status through the validated lifecycle machine (NIN-109/197) and record the result.
+ * Routing every status write through `transitionWorkflowRunStatus` enforces the
+ * `accepted -> queued -> running` ordering — so `queued` is observed in production — and the
+ * active -> `blocked` guard, instead of ad-hoc `recordWorkflowRunStatus` writes.
+ */
+async function advanceRunStatus(
+  input: ExecuteWorkflowDefinitionInput,
+  from: WorkflowRunStatus,
+  event: RunStatusTransitionEvent,
+): Promise<void> {
+  const { to } = transitionWorkflowRunStatus({ from, event });
+  await recordWorkflowRunStatus(input, to);
 }
 
 async function fireHooksForNewState(

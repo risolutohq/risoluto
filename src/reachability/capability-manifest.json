@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "name": "run-status-lifecycle-transition",
+    "symbol": "transitionWorkflowRunStatus",
+    "module": "src/workflow-run/run-status.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "Workflow Run status progression (accepted->queued->running, active->blocked) must go through the validated lifecycle machine, not ad-hoc status writes (NIN-109/197)."
+  },
+  {
+    "name": "run-status-inbound-parse",
+    "symbol": "parseWorkflowRunStatus",
+    "module": "src/workflow-run/run-status.ts",
+    "intakeAdapters": ["http"],
+    "reason": "Inbound external status strings must be parsed into a Run Status so a Workflow State value is never accepted as a Run Status (NIN-109/197/270)."
+  }
+]

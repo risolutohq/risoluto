@@ -38,7 +38,7 @@ function intentArtifact() {
 }
 
 describe("driveWorkflowRun", () => {
-  it("executes the definition through the engine and records the running -> done status transitions", async () => {
+  it("executes the definition through the engine and records the queued -> running -> done status transitions", async () => {
     const statuses: string[] = [];
 
     const result = await driveWorkflowRun({
@@ -53,10 +53,10 @@ describe("driveWorkflowRun", () => {
 
     expect(result.status).toBe("done");
     expect(result.roleExecutions).toEqual(["planner"]);
-    expect(statuses).toEqual(["running", "done"]);
+    expect(statuses).toEqual(["queued", "running", "done"]);
   });
 
-  it("records a running -> blocked transition when a role blocks the run", async () => {
+  it("records a queued -> running -> blocked transition when a role blocks the run", async () => {
     const statuses: string[] = [];
 
     const result = await driveWorkflowRun({
@@ -78,6 +78,6 @@ describe("driveWorkflowRun", () => {
     });
 
     expect(result.status).toBe("blocked");
-    expect(statuses).toEqual(["running", "blocked"]);
+    expect(statuses).toEqual(["queued", "running", "blocked"]);
   });
 });

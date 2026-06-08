@@ -210,7 +210,7 @@ describe("executeWorkflowDefinition", () => {
     expect(result.artifacts["validation_result.v1"]).toMatchObject({ status: "passed" });
   });
 
-  it("reports running and terminal Run Status through the optional status recorder", async () => {
+  it("reports queued, running and terminal Run Status through the optional status recorder", async () => {
     const recordedStatuses: string[] = [];
 
     const result = await executeWorkflowDefinition({
@@ -224,7 +224,7 @@ describe("executeWorkflowDefinition", () => {
     });
 
     expect(result.status).toBe("done");
-    expect(recordedStatuses).toEqual(["running", "done"]);
+    expect(recordedStatuses).toEqual(["queued", "running", "done"]);
   });
 
   it("blocks after planner triage when the plan artifact has only blocked steps", async () => {
