@@ -136,21 +136,33 @@ export class GitHubPrClient implements GithubApiToolClient {
       const created = await this.githubRequest(`/repos/${owner}/${repo}/pulls`, { method: "POST", body }, tokenEnvName);
       return isPrCreateResult(created) ? created : undefined;
     } catch (error) {
-      if (!isDuplicatePrError(error)) throw error;
-      const existing = await this.githubRequest(
-        `/repos/${owner}/${repo}/pulls?head=${owner}:${encodeURIComponent(branchName)}&state=open`,
-        { method: "GET" },
-        tokenEnvName,
-      );
-      const first = Array.isArray(existing) ? existing[0] : undefined;
+      return this.refetchExistingPr(error, owner, repo, branchName, tokenEnvName);
+    }
+  }
+
+  private async refetchExistingPr(
+    error: unknown,
+    owner: string,
+    repo: string,
+    branchName: string,
+    tokenEnvName: string,
+  ): Promise<PrCreateResult | undefined> {
+    if (!isDuplicatePrError(error)) throw error;
+    const existing = await this.githubRequest(
+      `/repos/${owner}/${repo}/pulls?head=${owner}:${encodeURIComponent(branchName)}&state=open`,
+      { method: "GET" },
+      tokenEnvName,
+    );
+    const first = Array.isArray(existing) ? existing[0] : undefined;
+    if (!isPrCreateResult(first)) {
       if (!first) {
         console.warn(
           `[git] createPR re-fetch returned empty results for ${owner}/${repo}:${branchName} — PR reference may be lost`,
         );
-        return undefined;
       }
-      return isPrCreateResult(first) ? first : undefined;
+      return undefined;
     }
+    return first;
   }
 
   async addPrComment(input: {

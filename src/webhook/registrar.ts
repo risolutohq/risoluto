@@ -114,7 +114,7 @@ export class WebhookRegistrar {
     // Best-effort verification that the URL exists in Linear
     try {
       const webhooks = await this.linearClient.listWebhooks();
-    const match = webhooks.find((webhook) => webhook.url.replace(/\/$/, "") === config.webhookUrl.replace(/\/$/, ""));
+      const match = webhooks.find((webhook) => webhook.url.replace(/\/$/, "") === config.webhookUrl.replace(/\/$/, ""));
 
       if (!match) {
         this.logger.warn(

@@ -187,7 +187,7 @@ describe("createWebhookRuntime", () => {
     const logger = makeLogger();
     const orchestrator = makeOrchestrator();
     // The orchestrator's current view of the run reports canonical status "running".
-    orchestrator.getIssueDetail.mockReturnValue({ issueId: "issue-1", identifier: "NIN-1", status: "running" });
+    orchestrator.getIssueDetail.mockReturnValue({ issueId: "issue-1", identifier: "NIN-1", status: "running", workflowRunId: null });
     const runtime = createWebhookRuntime({
       persistence: makePersistence(),
       webhookConfig: makeWebhookConfig(),
@@ -208,7 +208,7 @@ describe("createWebhookRuntime", () => {
     expect(orchestrator.getIssueDetail).toHaveBeenCalledWith("NIN-1");
     expect(logger.info).toHaveBeenCalledWith(
       expect.objectContaining({
-        workflow_run_id: "issue-1",
+        workflow_run_id: "NIN-1",
         canonical_run_status: "running",
         external_status: "In Review",
       }),
