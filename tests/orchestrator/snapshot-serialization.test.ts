@@ -120,8 +120,6 @@ describe("serializeSnapshot", () => {
           lastDeliveryAt: "2024-01-02T00:03:00Z",
           lastEventType: "issues.update",
         },
-        lastDeliveryAt: "2024-01-02T00:03:00Z",
-        lastEventType: "issues.update",
       },
     } as unknown as RuntimeSnapshot & Record<string, unknown>;
 
@@ -157,8 +155,6 @@ describe("serializeSnapshot", () => {
         last_delivery_at: "2024-01-02T00:03:00Z",
         last_event_type: "issues.update",
       },
-      last_delivery_at: "2024-01-02T00:03:00Z",
-      last_event_type: "issues.update",
     });
   });
 

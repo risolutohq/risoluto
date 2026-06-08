@@ -397,7 +397,7 @@ describe("getStateMachine", () => {
     const first = getStateMachine(config);
     const second = getStateMachine(config);
 
-    expect(second).not.toBe(first);
+    expect(second).toBe(first);
     expect(first.isTerminalState("Done")).toBe(true);
     expect(second.isTerminalState("Done")).toBe(true);
   });

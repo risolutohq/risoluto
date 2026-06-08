@@ -214,7 +214,9 @@ export class AuditLogger implements AuditLoggerPort {
 
   verifyChain(): { valid: boolean; firstBrokenId?: number } {
     const rows = this.db.$client
-      .prepare("SELECT id, table_name, key, path, operation, previous_value, new_value, actor, request_id, timestamp, entry_hash, previous_hash FROM config_history ORDER BY id ASC")
+      .prepare(
+        "SELECT id, table_name, key, path, operation, previous_value, new_value, actor, request_id, timestamp, entry_hash, previous_hash FROM config_history ORDER BY id ASC",
+      )
       .all() as Array<Record<string, unknown>>;
     if (rows.length === 0) {
       return { valid: true };

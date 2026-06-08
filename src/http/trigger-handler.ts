@@ -159,7 +159,14 @@ async function handleRefreshIssueTrigger(
   dispatch: Pick<TriggerDispatchContext, "action" | "issueId" | "issueIdentifier">,
 ): Promise<void> {
   if (dispatch.issueId && dispatch.issueIdentifier) {
-    let refresh: { queued: boolean; coalesced: boolean; requestedAt?: string; targeted: boolean; issueId?: string; issueIdentifier?: string };
+    let refresh: {
+      queued: boolean;
+      coalesced: boolean;
+      requestedAt?: string;
+      targeted: boolean;
+      issueId?: string;
+      issueIdentifier?: string;
+    };
     if (typeof deps.orchestrator.executeCommand === "function") {
       refresh = await deps.orchestrator.executeCommand({
         type: "refresh",
@@ -168,11 +175,7 @@ async function handleRefreshIssueTrigger(
         reason: "trigger:refresh_issue",
       });
     } else {
-      deps.orchestrator.requestTargetedRefresh(
-        dispatch.issueId,
-        dispatch.issueIdentifier,
-        "trigger:refresh_issue",
-      );
+      deps.orchestrator.requestTargetedRefresh(dispatch.issueId, dispatch.issueIdentifier, "trigger:refresh_issue");
       refresh = {
         queued: true,
         coalesced: false,

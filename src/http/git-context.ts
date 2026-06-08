@@ -210,10 +210,7 @@ async function enrichConfiguredRepo(
         recentCommits: parseRepoCommits(commitsData),
       };
     } catch (err) {
-      logger?.warn(
-        { repo: `${repo.githubOwner}/${repo.githubRepo}`, error: String(err) },
-        "GitHub enrichment failed",
-      );
+      logger?.warn({ repo: `${repo.githubOwner}/${repo.githubRepo}`, error: String(err) }, "GitHub enrichment failed");
     }
   }
 

@@ -628,7 +628,7 @@ describe("workspace inventory direct handler guards", () => {
           configStore: makeConfigStore("/tmp/risoluto-root") as never,
           workspaceManager: makePassThroughWorkspaceManager(),
         },
-        {} as Request,
+        { query: { includePaths: "true" } } as unknown as Request,
         makeJsonResponse(),
       ),
     ).rejects.toBe(error);
@@ -673,7 +673,7 @@ describe("workspace inventory direct handler guards", () => {
         configStore: makeConfigStore(root) as never,
         workspaceManager: makePassThroughWorkspaceManager(),
       },
-      {} as Request,
+      { query: { includePaths: "true" } } as unknown as Request,
       response,
     );
 

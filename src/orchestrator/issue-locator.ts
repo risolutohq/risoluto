@@ -48,7 +48,8 @@ function buildRetryEntryIndex(entries: Map<string, RetryRuntimeEntry>): Map<stri
 export function resolveIssue(identifier: string, callbacks: IssueLocatorCallbacks): IssueLocation | null {
   // Use pre-built identifier-keyed secondary indexes when available (hot-path), falling
   // back to per-call index construction for callers that don't maintain them.
-  const runningByIdentifier = callbacks.runningEntriesByIdentifier ?? buildRunningEntryIndex(callbacks.getRunningEntries());
+  const runningByIdentifier =
+    callbacks.runningEntriesByIdentifier ?? buildRunningEntryIndex(callbacks.getRunningEntries());
   const runningEntry = runningByIdentifier.get(identifier);
   if (runningEntry) {
     return { kind: "running", entry: runningEntry };

@@ -1,6 +1,11 @@
 import type { RisolutoLogger } from "../../core/types.js";
 import type { RisolutoDatabase } from "./database.js";
-import { SqliteWebhookInbox, type WebhookDeliveryRecord, type WebhookInboxStats, type WebhookInboxStore } from "./webhook-inbox.js";
+import {
+  SqliteWebhookInbox,
+  type WebhookDeliveryRecord,
+  type WebhookInboxStats,
+  type WebhookInboxStore,
+} from "./webhook-inbox.js";
 
 export interface WebhookPersistenceSnapshot {
   stats: WebhookInboxStats;

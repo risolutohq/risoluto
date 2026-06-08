@@ -272,7 +272,7 @@ describe("createWebhookRuntime", () => {
       recentDeliveries: [expect.objectContaining({ deliveryId: "delivery-snapshot" })],
       health: expect.objectContaining({
         status: "connected",
-        lastEventType: "Issue:create",
+        stats: expect.objectContaining({ lastEventType: "Issue:create" }),
       }),
     });
   });

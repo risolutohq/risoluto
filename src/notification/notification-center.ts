@@ -25,7 +25,9 @@ export class NotificationCenter {
 
   async listNotifications(
     options: ListNotificationsOptions = {},
-  ): Promise<NotificationCenterResponse<{ notifications: NotificationRecord[]; unreadCount: number; totalCount: number }>> {
+  ): Promise<
+    NotificationCenterResponse<{ notifications: NotificationRecord[]; unreadCount: number; totalCount: number }>
+  > {
     if (!this.options.notificationStore) {
       return unavailable("notification store not available");
     }
