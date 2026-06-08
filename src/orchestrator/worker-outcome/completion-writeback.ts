@@ -6,12 +6,19 @@ import { toErrorString } from "../../utils/type-guards.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID, type WorkflowRunStatus } from "../../workflow-run/contracts.js";
 import {
   type StatusProjectionProvider,
+  type WorkflowRunStatusMapping,
   WorkflowRunStatusProjectionError,
 } from "../../workflow-run/status-projection.js";
 import { mirrorWorkflowRunStatusToTracker } from "../../workflow-run/status-mirror.js";
 
 export type CompletionWritebackContext = Pick<OutcomeContext, "getConfig"> & {
   deps: Pick<OutcomeContext["deps"], "tracker" | "logger">;
+  /**
+   * Resolve the workflow-level status mapping from the run's resolved definition (NIN-77).
+   * When present and the issue carries a `workflowRunId`, this beats the workspace-level mapping.
+   * Absent for legacy issue-keyed runs that pre-date the Workflow Run archive.
+   */
+  resolveWorkflowStatusMapping?: (workflowRunId: string) => Promise<WorkflowRunStatusMapping | undefined>;
 };
 
 export interface CompletionWritebackInput {
@@ -116,15 +123,20 @@ async function mirrorOutcomeViaProjection(
     return { configured: false, externalStatus: null };
   }
 
+  const workflowRunId = input.issue.workflowRunId;
+  const workflowMapping =
+    workflowRunId !== undefined ? await ctx.resolveWorkflowStatusMapping?.(workflowRunId) : undefined;
+
   try {
     const result = await mirrorWorkflowRunStatusToTracker({
       tracker: ctx.deps.tracker,
-      workflowRunId: input.issue.workflowRunId ?? input.issue.id,
+      workflowRunId: workflowRunId ?? input.issue.id,
       workflowDefinitionId: DEFAULT_WORKFLOW_DEFINITION_ID,
       provider: statusProjectionProvider(trackerConfig.kind),
       issueId: input.issue.id,
       runStatus,
       workspaceMapping,
+      workflowMapping,
       logger: ctx.deps.logger,
     });
     if (result.applied) {

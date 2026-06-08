@@ -1,4 +1,5 @@
 import type { Issue, ModelSelection, RuntimeIssueView, ServiceConfig, TokenUsageSnapshot } from "../core/types.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 import type { OrchestratorDeps, RunningEntry } from "./runtime-types.js";
 import type { LaunchWorkerOptions } from "./runtime-types.js";
 import type { StallEvent } from "./stall-detector.js";
@@ -47,6 +48,11 @@ export interface OrchestratorContext {
   getStallEvents: () => StallEvent[];
   detectAndKillStalled: () => { killed: number };
   eventBus?: TypedEventBus<RisolutoEventMap>;
+  /**
+   * Resolve the workflow-level status mapping from the run's persisted resolved definition (NIN-77).
+   * Wired from the Workflow Run archive in production; absent in legacy/test contexts.
+   */
+  resolveWorkflowStatusMapping?: (workflowRunId: string) => Promise<WorkflowRunStatusMapping | undefined>;
 }
 
 export type RetryRuntimeContext = Pick<

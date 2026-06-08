@@ -1,4 +1,5 @@
 import type { Issue, ModelSelection, RuntimeIssueView, ServiceConfig } from "../core/types.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 import type { RunningEntry } from "./runtime-types.js";
 import type { GitDiffPort, GitPostRunPort } from "../git/port.js";
 import type { NotificationEvent } from "../notification/channel.js";
@@ -53,6 +54,11 @@ export interface OutcomeContext {
   isRunning: () => boolean;
   getConfig: () => ServiceConfig;
   releaseIssueClaim: (issueId: string) => void;
+  /**
+   * Resolve the workflow-level status mapping from the run's persisted resolved definition (NIN-77).
+   * Wired from the Workflow Run archive in production. Absent when archive access is not configured.
+   */
+  resolveWorkflowStatusMapping?: (workflowRunId: string) => Promise<WorkflowRunStatusMapping | undefined>;
   suppressIssueDispatch?: (issue: Issue) => void;
   markDirty: () => void;
   resolveModelSelection: (identifier: string) => ModelSelection;

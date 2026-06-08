@@ -43,6 +43,7 @@ import type { VerifiedWebhookDeliveryStore } from "../webhook/delivery-workflow.
 import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
 import { acceptLinearTriggeredWorkflowRun } from "../workflow-run/linear-intake.js";
 import { acceptGitHubTriggeredWorkflowRun } from "../workflow-run/tracker-intake.js";
+import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { createAcceptedRunDriver } from "./accepted-run-driver.js";
 
 export { evaluateWebhookConfig } from "../webhook/composition.js";
@@ -230,6 +231,7 @@ function createRuntimeServices(
   templateAudit: TemplateAuditPhase,
   webhook: ReturnType<typeof initWebhookInfrastructure>,
   logger: RisolutoLogger,
+  archiveDir: string,
 ) {
   const { persistence, tracker, repoRouter, gitManager, metrics, observability } = infra;
   const { workspaceManager, agentRunner } = workspace;
@@ -250,6 +252,7 @@ function createRuntimeServices(
     logger: logger.child({ component: "health-notification-bridge" }),
   });
 
+  const archive = createWorkflowRunArchive({ archiveDir });
   const orchestrator = new Orchestrator({
     attemptStore: persistence.attemptStore,
     costSampleStore: persistence.costSampleStore,
@@ -269,6 +272,14 @@ function createRuntimeServices(
     resolveTemplate,
     metrics,
     observability,
+    resolveWorkflowStatusMapping: async (workflowRunId: string) => {
+      try {
+        const record = await archive.loadWorkflowRun(workflowRunId);
+        return record.resolvedWorkflowDefinition?.statusMapping;
+      } catch {
+        return undefined;
+      }
+    },
   });
 
   const automationRunner = new AutomationRunner({
@@ -500,7 +511,16 @@ export async function createServices(
   const codexControlPlane = createCodexControlPlane(configStore, events.eventBus, logger);
 
   // Phase 6 — Runtime services
-  const runtime = createRuntimeServices(configStore, infra, workspace, events, templateAudit, webhook, logger);
+  const runtime = createRuntimeServices(
+    configStore,
+    infra,
+    workspace,
+    events,
+    templateAudit,
+    webhook,
+    logger,
+    archiveDir,
+  );
 
   // Phase 7 — HTTP layer
   const { httpServer } = createHttpLayer(

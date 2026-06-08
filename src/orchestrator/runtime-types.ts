@@ -1,4 +1,5 @@
 import type { RunAttemptDispatcher } from "../dispatch/types.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 import type { AttemptStorePort } from "../core/attempt-store-port.js";
 import type { CostSampleStorePort } from "../core/cost-sample-port.js";
 import type { HealthRunner } from "../health/health-runner.js";
@@ -78,4 +79,10 @@ export interface OrchestratorDeps {
   resolveTemplate: (identifier: string) => Promise<string>;
   metrics?: MetricsCollector;
   observability?: ObservabilityHub;
+  /**
+   * Resolve the workflow-level status mapping from the run's persisted resolved definition (NIN-77).
+   * Supplied from the Workflow Run archive when `archiveDir` is available. Absent for legacy setups
+   * that pre-date the archive or in test harnesses that don't wire archive access.
+   */
+  resolveWorkflowStatusMapping?: (workflowRunId: string) => Promise<WorkflowRunStatusMapping | undefined>;
 }
