@@ -82,5 +82,12 @@
     "module": "src/workflow-run/council-dispatch.ts",
     "intakeAdapters": ["cli"],
     "reason": "driveWithDeps (run-start-command.ts) and driveRun (accepted-run-driver.ts) build runCouncillor + synthesizeCouncil via createCouncilDispatch over the production dispatchRole boundary and thread them through the drivers into executeWorkflowDefinition, so a council-configured run start dispatches real councillor + synthesizer sessions and records the council verification.v1 instead of degrading to single mode (NIN-76/271)."
+  },
+  {
+    "name": "auto-merge-completion",
+    "symbol": "completeAutoMergeForRun",
+    "module": "src/workflow-run/auto-merge-post-run.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "driveWithDeps (run-start-command.ts) builds completeAutoMergeOnDone via buildCompleteAutoMergeCallback when publishMode is auto_merge and a merge client is wired, routing the done path through completeAutoMergeForRun; merge policy is evaluated and persisted as merge_policy_result.v1 at publish. The real GitHub merge client + live merge belong to the live tier (NIN-75/272)."
   }
 ]
