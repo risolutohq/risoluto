@@ -18,6 +18,16 @@ import type { ResolvedWorkflowDefinition } from "../../src/workflow-definition/r
 import type { WorkflowRunRoleExecutor } from "../../src/workflow-run/run-role-runner.js";
 import { driveWorkflowRun } from "../../src/workflow-run/workflow-run-driver.js";
 
+const VERIFICATION_FIXTURE = {
+  version: 1 as const,
+  createdAt: "2026-06-08T12:00:00.000Z",
+  mode: "single" as const,
+  decision: "satisfied" as const,
+  summary: "Pre-publish verifier accepted the change.",
+  allowedInputs: [] as string[],
+  evidenceLinks: [] as string[],
+};
+
 const FIXED_TIME = "2026-06-03T12:00:00.000Z";
 const tempDirs: string[] = [];
 
@@ -152,5 +162,121 @@ describe("driveAcceptedWorkflowRun publish-before-done", () => {
     });
 
     expect(completeAutoMergeOnDone).not.toHaveBeenCalled();
+  });
+});
+
+describe("driveAcceptedWorkflowRun post-publish verifier reconfirm (NIN-103)", () => {
+  function buildVerification(workflowRunId: string) {
+    return { ...VERIFICATION_FIXTURE, workflowRunId };
+  }
+
+  it("AC1: reconfirm runs for ready mode and writes postPublishReconfirm into archived verification", async () => {
+    const { archiveDir, workflowRunId, input } = await acceptedRun();
+    const archive = createWorkflowRunArchive({ archiveDir });
+
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return {
+        status: "done",
+        events: [],
+        roleExecutions: ["planner"],
+        artifacts: {
+          "verification.v1": buildVerification(driveInput.workflowRunId),
+          "publish_result.v1": { mode: "ready" },
+        },
+      };
+    });
+
+    await driveAcceptedWorkflowRun({
+      ...input,
+      publishOnDone: async () => ({ pullRequestUrl: "https://example.test/pr/101" }),
+    });
+
+    // The archived verification must have been updated with postPublishReconfirm, proving the
+    // reconfirm ran on the production path. The specific decision (satisfied vs not_satisfied)
+    // is asserted per-scenario in AC2 and AC3; here we only prove the field is present.
+    const payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "verification" });
+    expect(payload.data).toMatchObject({
+      postPublishReconfirm: {
+        required: true,
+        prePublishDecision: "satisfied",
+      },
+    });
+  });
+
+  it("AC2: post-publish contradiction is detected — absent CI flips decision to not_satisfied", async () => {
+    const { archiveDir, workflowRunId, input } = await acceptedRun();
+    const archive = createWorkflowRunArchive({ archiveDir });
+
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return {
+        status: "done",
+        events: [],
+        roleExecutions: ["planner"],
+        artifacts: {
+          "verification.v1": buildVerification(driveInput.workflowRunId),
+          "publish_result.v1": { mode: "ready" },
+          // No ci_result.v1 → contradiction
+        },
+      };
+    });
+
+    await driveAcceptedWorkflowRun({
+      ...input,
+      publishOnDone: async () => ({ pullRequestUrl: "https://example.test/pr/102" }),
+    });
+
+    const payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "verification" });
+    expect(payload.data).toMatchObject({
+      decision: "not_satisfied",
+      postPublishReconfirm: {
+        required: true,
+        prePublishDecision: "satisfied",
+        decision: "not_satisfied",
+        contradictedBy: expect.arrayContaining(["ci_result.v1"]),
+      },
+    });
+  });
+
+  it("AC3: clean reconfirm (CI passed) keeps decision satisfied and the run completes as done", async () => {
+    const { archiveDir, workflowRunId, input } = await acceptedRun();
+    const archive = createWorkflowRunArchive({ archiveDir });
+
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return {
+        status: "done",
+        events: [],
+        roleExecutions: ["planner"],
+        artifacts: {
+          "verification.v1": buildVerification(driveInput.workflowRunId),
+          "publish_result.v1": { mode: "ready" },
+          "ci_result.v1": { status: "passed" },
+        },
+      };
+    });
+
+    const result = await driveAcceptedWorkflowRun({
+      ...input,
+      publishOnDone: async () => ({ pullRequestUrl: "https://example.test/pr/103" }),
+    });
+
+    // The run must complete as done when reconfirm finds no contradictions.
+    expect(result.outcome).toBe("done");
+
+    const payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "verification" });
+    expect(payload.data).toMatchObject({
+      decision: "satisfied",
+      postPublishReconfirm: {
+        required: true,
+        prePublishDecision: "satisfied",
+        decision: "satisfied",
+        contradictedBy: [],
+      },
+    });
   });
 });
