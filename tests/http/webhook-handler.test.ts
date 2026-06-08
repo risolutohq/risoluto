@@ -207,6 +207,7 @@ describe("handleWebhookLinear", () => {
         title: "Fix bug",
         url: "https://linear.app/risoluto/issue/SYM-42",
         description: "Operator-approved intent.",
+        labels: [],
       },
     });
     expect(deps.requestTargetedRefresh).toHaveBeenCalledWith("issue-1", "SYM-42", "webhook:issue:create");

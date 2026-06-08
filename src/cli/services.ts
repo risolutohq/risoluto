@@ -42,7 +42,11 @@ import { initWebhookInfrastructure, buildWebhookHandlerDeps } from "../webhook/c
 import type { VerifiedWebhookDeliveryStore } from "../webhook/delivery-workflow.js";
 import type { SlackWebhookHandlerDeps } from "../webhook/slack-handler.js";
 import { acceptLinearTriggeredWorkflowRun } from "../workflow-run/linear-intake.js";
-import { acceptGitHubTriggeredWorkflowRun } from "../workflow-run/tracker-intake.js";
+import {
+  acceptGitHubTriggeredWorkflowRun,
+  acceptTrackerIssueWorkflowRun,
+  type TrackerIntakeProvider,
+} from "../workflow-run/tracker-intake.js";
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { createAcceptedRunDriver } from "./accepted-run-driver.js";
 
@@ -279,6 +283,17 @@ function createRuntimeServices(
       } catch {
         return undefined;
       }
+    },
+    pollTrackerIssue: async (issue) => {
+      const trackerKind = configStore.getConfig().tracker?.kind;
+      const provider: TrackerIntakeProvider = trackerKind === "github" ? "github" : "linear";
+      await acceptTrackerIssueWorkflowRun({
+        archiveDir,
+        provider,
+        deliveryKind: "polling",
+        action: "reconcile",
+        issue,
+      });
     },
   });
 

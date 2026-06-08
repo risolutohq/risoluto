@@ -85,4 +85,11 @@ export interface OrchestratorDeps {
    * that pre-date the archive or in test harnesses that don't wire archive access.
    */
   resolveWorkflowStatusMapping?: (workflowRunId: string) => Promise<WorkflowRunStatusMapping | undefined>;
+  /**
+   * Drive each polled candidate issue through the same intake idempotency path as the webhook leg
+   * so webhook delivery + polling reconciliation for the same external issue collapse to ONE Workflow
+   * Run (NIN-106). When absent the polling tick skips intake; the orchestrator still dispatches based
+   * on the raw tracker state alone.
+   */
+  pollTrackerIssue?: (issue: Issue) => Promise<void>;
 }

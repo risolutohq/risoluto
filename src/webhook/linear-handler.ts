@@ -193,6 +193,7 @@ async function processWebhookEvent(
   }
 
   if (type === "Comment" && COMMENT_ACTIONS.has(action)) {
+    await maybeAcceptLinearRetryComment(deps, body, deliveryId);
     handleCommentEvent(deps, action, issueId, issueIdentifier);
     return;
   }
@@ -208,7 +209,7 @@ async function handleIssueEvent(
   issueId: string | null,
   issueIdentifier: string | null,
 ): Promise<void> {
-  if (action === "create") {
+  if (action === "create" || action === "update") {
     await maybeAcceptLinearTriggeredWorkflowRun(deps, action, body, deliveryId, issueId, issueIdentifier);
   }
 
@@ -249,9 +250,81 @@ async function maybeAcceptLinearTriggeredWorkflowRun(
       title,
       url: typeof data.url === "string" ? data.url : (body.url ?? null),
       description: typeof data.description === "string" ? data.description : null,
+      labels: extractLinearLabelNames(data),
     },
   });
   emitWorkflowRunAccepted(deps, result);
+}
+
+interface LinearCommentIssue {
+  readonly issueId: string;
+  readonly issueIdentifier: string;
+  readonly title: string;
+  readonly url: string | null;
+  readonly description: string | null;
+}
+
+/** Extract the associated issue from a Linear Comment webhook data payload. Returns null if required fields are missing. */
+function extractLinearCommentIssue(data: Record<string, unknown>): LinearCommentIssue | null {
+  const issueData = data.issue as Record<string, unknown> | undefined;
+  if (!issueData || typeof issueData !== "object") return null;
+  const issueId = typeof issueData.id === "string" ? issueData.id : null;
+  const issueIdentifier = typeof issueData.identifier === "string" ? issueData.identifier : null;
+  const title = typeof issueData.title === "string" ? issueData.title : null;
+  if (!issueId || !issueIdentifier || !title) return null;
+  return {
+    issueId,
+    issueIdentifier,
+    title,
+    url: typeof issueData.url === "string" ? issueData.url : null,
+    description: typeof issueData.description === "string" ? issueData.description : null,
+  };
+}
+
+/**
+ * If the Comment event body is a retry command, drive it through the Linear intake so the
+ * idempotency store records a new attempt on the existing Workflow Run (NIN-106).
+ */
+async function maybeAcceptLinearRetryComment(
+  deps: WebhookHandlerDeps,
+  body: LinearWebhookPayload,
+  deliveryId: string,
+): Promise<void> {
+  if (!deps.acceptLinearTriggeredWorkflowRun) return;
+  const data = body.data;
+  const commentBody = typeof data.body === "string" ? data.body : null;
+  if (!commentBody) return;
+  const normalized = commentBody.trim().toLowerCase();
+  if (normalized !== "/risoluto retry" && normalized !== "risoluto retry") return;
+  const issue = extractLinearCommentIssue(data);
+  if (!issue) return;
+  const result = await deps.acceptLinearTriggeredWorkflowRun({
+    action: "comment",
+    deliveryId,
+    issue: {
+      id: issue.issueId,
+      identifier: issue.issueIdentifier,
+      title: issue.title,
+      url: issue.url,
+      description: issue.description,
+      comments: [commentBody],
+    },
+  });
+  emitWorkflowRunAccepted(deps, result);
+}
+
+function extractLinearLabelNames(data: Record<string, unknown>): readonly string[] {
+  const rawLabels = data.labels;
+  if (!Array.isArray(rawLabels)) return [];
+  return rawLabels
+    .map((label) => {
+      if (typeof label === "object" && label !== null) {
+        const name = (label as Record<string, unknown>).name;
+        return typeof name === "string" ? name : null;
+      }
+      return null;
+    })
+    .filter((name): name is string => name !== null && name.length > 0);
 }
 
 function emitWorkflowRunAccepted(deps: WebhookHandlerDeps, result: unknown): void {
