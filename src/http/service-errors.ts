@@ -44,6 +44,13 @@ function bodyParserErrorStatus(error: Error): number | null {
   return typeof status === "number" && status >= 400 && status < 500 ? status : null;
 }
 
+const RUNTIME_TYPE_ERROR_RE =
+  /^(Cannot read propert|Cannot destructure|Cannot set propert|Cannot convert|Cannot call |Cannot assign to|[A-Za-z0-9_.]+ is not a function$)/;
+
+function isRuntimeTypeError(message: string): boolean {
+  return RUNTIME_TYPE_ERROR_RE.test(message);
+}
+
 /**
  * Express error-handling middleware that catches service-layer exceptions
  * and returns structured JSON error responses.
@@ -67,7 +74,7 @@ export function serviceErrorHandler(error: Error, req: Request, res: Response, n
     return;
   }
 
-  if (error instanceof TypeError) {
+  if (error instanceof TypeError && !isRuntimeTypeError(error.message)) {
     res.status(400).json({
       error: {
         code: "service_validation_error",

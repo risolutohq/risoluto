@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -48,24 +48,25 @@ export async function resolveWorkspaceExtraMountPaths(
   try {
     commonDir = (await readFile(path.join(gitDirPath, "commondir"), "utf8")).trim();
   } catch {
-    return allowedMount(gitBaseDir, gitDirPath);
+    return await allowedMount(gitBaseDir, gitDirPath);
   }
 
   if (!commonDir) {
-    return allowedMount(gitBaseDir, gitDirPath);
+    return await allowedMount(gitBaseDir, gitDirPath);
   }
 
   const commonDirPath = path.resolve(gitDirPath, commonDir);
-  return allowedMount(gitBaseDir, commonDirPath);
+  return await allowedMount(gitBaseDir, commonDirPath);
 }
 
 /** Returns `[candidatePath]` only when it is contained within the trusted base. */
-function allowedMount(gitBaseDir: string, candidatePath: string): string[] {
-  return isWithinBase(gitBaseDir, candidatePath) ? [candidatePath] : [];
-}
-
-/** True when `candidatePath` is the base directory itself or nested under it. */
-function isWithinBase(baseDir: string, candidatePath: string): boolean {
-  const relative = path.relative(baseDir, candidatePath);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+async function allowedMount(gitBaseDir: string, candidatePath: string): Promise<string[]> {
+  try {
+    const realBase = await realpath(gitBaseDir);
+    const realCandidate = await realpath(candidatePath);
+    const relative = path.relative(realBase, realCandidate);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative)) ? [candidatePath] : [];
+  } catch {
+    return [];
+  }
 }

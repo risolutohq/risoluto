@@ -6,6 +6,29 @@ import type { DispatchRequest, DispatchStreamMessage, RunAttemptDispatcher } fro
 import type { WorkflowRunReference } from "../core/types.js";
 import { toErrorString } from "../utils/type-guards.js";
 
+const DISPATCH_CREDENTIAL_KEYS = new Set([
+  "apiKey",
+  "token",
+  "webhookSecret",
+  "previousWebhookSecret",
+  "signingSecret",
+]);
+
+function redactDispatchCredentials(_key: string, value: unknown): unknown {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    for (const k of DISPATCH_CREDENTIAL_KEYS) {
+      if (k in value) {
+        const redacted: Record<string, unknown> = {};
+        for (const mk of Object.keys(value as Record<string, unknown>)) {
+          redacted[mk] = DISPATCH_CREDENTIAL_KEYS.has(mk) ? "[redacted]" : (value as Record<string, unknown>)[mk];
+        }
+        return redacted;
+      }
+    }
+  }
+  return value;
+}
+
 interface DispatchClientDeps {
   dispatchUrl: string;
   secret: string;
@@ -136,7 +159,7 @@ export class DispatchClient implements RunAttemptDispatcher {
         Authorization: `Bearer ${this.deps.secret}`,
         Accept: "text/event-stream",
       },
-      body: JSON.stringify(dispatchRequest),
+      body: JSON.stringify(dispatchRequest, redactDispatchCredentials),
       signal,
     });
   }
