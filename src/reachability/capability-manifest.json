@@ -33,5 +33,19 @@
     "module": "src/workflow-run/status-mirror.ts",
     "intakeAdapters": ["cli"],
     "reason": "completion-writeback resolves the run's workflow-level statusMapping from the archive (cli/services.ts) and threads it as workflowMapping into mirrorWorkflowRunStatusToTracker, so a workflow definition's override beats the workspace-level board mapping end-to-end (NIN-77/270)."
+  },
+  {
+    "name": "tracker-polling-reconcile",
+    "symbol": "acceptTrackerIssueWorkflowRun",
+    "module": "src/workflow-run/tracker-intake.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "The orchestrator poll tick drives each polled tracker issue through acceptTrackerIssueWorkflowRun (cli/services.ts pollTrackerIssue) on the same intake idempotency path as the webhook leg, so webhook delivery + polling reconciliation for one external issue collapse to a single Workflow Run (NIN-106)."
+  },
+  {
+    "name": "verifier-decision-routing",
+    "symbol": "routeSingleVerifierDecision",
+    "module": "src/workflow-run/verifier.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "The executor routes the verifier verdict through routeSingleVerifierDecision/resolveVerifierStep on the CLI-driven run path: not_satisfied with retry budget remaining loops back to the implementer state instead of blocking, and the allowlist-filtered verifier input is consumed; the live real-verifier exercise is carried to NIN-273/76 (NIN-102/201)."
   }
 ]
