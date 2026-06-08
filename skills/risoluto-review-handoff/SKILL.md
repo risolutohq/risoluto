@@ -55,7 +55,11 @@ Prioritize:
    each capability the PRD says an operator can invoke (a CLI command, an HTTP/webhook request, a Slack
    action), confirm the production path actually reaches the engine — the entry point dispatches to a handler
    that is _wired_, not just exported. A load-bearing function called only from tests is an unshipped feature
-   wearing a green check. This is the gap a same-loop reviewer most reliably misses.
+   wearing a green check. For each such capability, independently name in the finding: (a) the capability's
+   entry key in `src/reachability/capability-manifest.json`, (b) whether `pnpm reach:check` is green for it,
+   and (c) the e2e or integration test file and test name that drives it from the real intake adapter. A
+   missing manifest entry, a failing `reach:check`, or an absent intake-adapter e2e is each a standalone HIGH
+   finding. This is the gap a same-loop reviewer most reliably misses.
 3. Acceptance gaps where a PRD story or Linear criterion is not actually satisfied.
 4. Invariant violations: tracker id used as run id, artifact validation skipped, PR action automated, cascade
    residue committed, or PRD Out of Scope implemented.
@@ -68,8 +72,10 @@ Prioritize:
 For lens 2, the cheapest high-signal probe: pick the load-bearing symbols (the engine entry, each adapter's
 intake function, each handler) and grep for **non-test** callers, e.g.
 `rg -n "executeWorkflowDefinition" src --glob '!*.test.ts'`. Zero production callers, or callers that exist
-only in `tests/`, is a HIGH reachability finding. Cross-check parity across sibling adapters — if Linear is
-wired and GitHub is not, the asymmetry is the bug.
+only in `tests/`, is a HIGH reachability finding. Independently run `pnpm reach:check` and inspect
+`src/reachability/capability-manifest.json` — a missing manifest entry or a failing check is its own HIGH
+finding, separate from the grep signal. Cross-check parity across sibling adapters — if Linear is wired and
+GitHub is not, the asymmetry is the bug.
 
 For API, workflow-run, storage/archive, workflow-definition, or schema findings, name the contract surface
 the conductor should re-run when practical, such as OpenAPI contracts or `pnpm run test:integration`.

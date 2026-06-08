@@ -1,1 +1,93 @@
-[]
+[
+  {
+    "name": "run-status-lifecycle-transition",
+    "symbol": "transitionWorkflowRunStatus",
+    "module": "src/workflow-run/run-status.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "Workflow Run status progression (accepted->queued->running, active->blocked) must go through the validated lifecycle machine, not ad-hoc status writes (NIN-109/197)."
+  },
+  {
+    "name": "run-status-inbound-parse",
+    "symbol": "parseWorkflowRunStatus",
+    "module": "src/workflow-run/run-status.ts",
+    "intakeAdapters": ["http"],
+    "reason": "Inbound external status strings must be parsed into a Run Status so a Workflow State value is never accepted as a Run Status (NIN-109/197/270)."
+  },
+  {
+    "name": "evidence-show",
+    "symbol": "readEvidenceForDisplay",
+    "module": "src/workflow-run/evidence-store.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "`run evidence show <id>` reads evidence through readEvidenceForDisplay, redacting secret-classified fields on display while preserving the raw stored record (NIN-108/204)."
+  },
+  {
+    "name": "http-run-create-drive",
+    "symbol": "driveAcceptedWorkflowRun",
+    "module": "src/workflow-run/drive-accepted-run.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "Every intake surface emits workflow_run.accepted; the Phase-8 acceptedRunDriver subscriber (cli/services.ts) drives the accepted run through driveAcceptedWorkflowRun -> executeWorkflowDefinition, so an HTTP-created run is not just an intake record (NIN-110/203)."
+  },
+  {
+    "name": "workflow-level-status-mapping",
+    "symbol": "mirrorWorkflowRunStatusToTracker",
+    "module": "src/workflow-run/status-mirror.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "completion-writeback resolves the run's workflow-level statusMapping from the archive (cli/services.ts) and threads it as workflowMapping into mirrorWorkflowRunStatusToTracker, so a workflow definition's override beats the workspace-level board mapping end-to-end (NIN-77/270)."
+  },
+  {
+    "name": "tracker-polling-reconcile",
+    "symbol": "acceptTrackerIssueWorkflowRun",
+    "module": "src/workflow-run/tracker-intake.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "The orchestrator poll tick drives each polled tracker issue through acceptTrackerIssueWorkflowRun (cli/services.ts pollTrackerIssue) on the same intake idempotency path as the webhook leg, so webhook delivery + polling reconciliation for one external issue collapse to a single Workflow Run (NIN-106)."
+  },
+  {
+    "name": "verifier-decision-routing",
+    "symbol": "routeSingleVerifierDecision",
+    "module": "src/workflow-run/verifier.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "The executor routes the verifier verdict through routeSingleVerifierDecision/resolveVerifierStep on the CLI-driven run path: not_satisfied with retry budget remaining loops back to the implementer state instead of blocking, and the allowlist-filtered verifier input is consumed; the live real-verifier exercise is carried to NIN-273/76 (NIN-102/201)."
+  },
+  {
+    "name": "intake-rule-evaluation",
+    "symbol": "resolveWorkflowRunIntake",
+    "module": "src/workflow-run/intake-rules.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "Production intake call sites now load real intake rules from config (cli loadCliIntakeRules; http deps.intakeRules) and thread them through intake-core into resolveWorkflowRunIntake, so ambiguous intake is rejected with a disambiguation error, invalid intake is rejected before any run record is created, and an explicit retry signal resumes the existing run instead of duplicating it (NIN-107/202)."
+  },
+  {
+    "name": "unanswered-clarification-timeout",
+    "symbol": "decideUnansweredSlackClarification",
+    "module": "src/workflow-run/slack-interactions.ts",
+    "intakeAdapters": ["slack"],
+    "reason": "The run driver (workflow-run-driver.ts) passes decideUnansweredSlackClarification into executeWorkflowDefinition; when a verifier returns uncertain the engine's wait-for-operator loop (resolveClarificationStep) consults it to retry the implementer state while clarification budget remains, then routes the run to blocked once exhausted (NIN-105/213)."
+  },
+  {
+    "name": "attempt-memory-read-and-candidate",
+    "symbol": "createWorkflowRunMemoryStore",
+    "module": "src/workflow-run/memory-store.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "driveAcceptedWorkflowRun now consumes the memory store's read + candidate methods (previously dead): a retry reads prior attempt memory into the next attempt's initialArtifacts (readPriorAttemptMemory) and a completed run emits a project-memory candidate with provenance in propose-only mode (writeProjectMemoryCandidate) (NIN-104/214)."
+  },
+  {
+    "name": "post-publish-reconfirm",
+    "symbol": "reconfirmPostPublishVerification",
+    "module": "src/workflow-run/post-publish-verifier.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "After publish, driveAcceptedWorkflowRun invokes reconfirmPostPublishVerification for the modes that require it (requiresPostPublishReconfirm); a contradiction with the pre-publish verdict flips the decision to not_satisfied while a clean reconfirm lets completion proceed — the whole module was previously unreachable (NIN-103/219)."
+  },
+  {
+    "name": "council-verifier-dispatch",
+    "symbol": "createCouncilDispatch",
+    "module": "src/workflow-run/council-dispatch.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "driveWithDeps (run-start-command.ts) and driveRun (accepted-run-driver.ts) build runCouncillor + synthesizeCouncil via createCouncilDispatch over the production dispatchRole boundary and thread them through the drivers into executeWorkflowDefinition, so a council-configured run start dispatches real councillor + synthesizer sessions and records the council verification.v1 instead of degrading to single mode (NIN-76/271)."
+  },
+  {
+    "name": "auto-merge-completion",
+    "symbol": "completeAutoMergeForRun",
+    "module": "src/workflow-run/auto-merge-post-run.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "driveWithDeps (run-start-command.ts) builds completeAutoMergeOnDone via buildCompleteAutoMergeCallback when publishMode is auto_merge and a merge client is wired, routing the done path through completeAutoMergeForRun; merge policy is evaluated and persisted as merge_policy_result.v1 at publish. The real GitHub merge client + live merge belong to the live tier (NIN-75/272)."
+  }
+]

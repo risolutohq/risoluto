@@ -10,13 +10,18 @@ import { driveAcceptedWorkflowRun, type DriveAcceptedWorkflowRunResult } from ".
 import type { WorkflowGateRetryInput } from "../workflow-run/gate-retry-controller.js";
 import {
   createWorkflowRunActionRunner,
+  type MergePolicyEvaluation,
+  type WorkflowRunActionEffects,
   type WorkflowRunCiPoller,
   type WorkflowRunValidationCommandRunner,
 } from "../workflow-run/run-action-runner.js";
 import type { PrPublishMode } from "../workflow-run/publish-policy.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
+import { createCouncilDispatch } from "../workflow-run/council-dispatch.js";
 import type { WorkflowRunWorkspacePreparer } from "../workflow-run/workspace-preparer.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
+import { completeAutoMergeForRun } from "../workflow-run/auto-merge-post-run.js";
+import type { AutoMergeRequest } from "../workflow-run/auto-merge-completion.js";
 import { resolveWorkflowRunIntake, type ResolvedWorkflowRunIntake } from "./workflow-run-intake.js";
 import { resolveDispatchRole } from "./run-start-dispatch.js";
 import { composeLiveDispatch, type ComposedLiveDispatch } from "./run-start-live-dispatch.js";
@@ -50,6 +55,23 @@ export interface RunStartCommandDeps {
   readonly now?: () => string;
   /** Run-level abort signal threaded to the dispatch seam; the CLI binds it to SIGINT/SIGTERM. */
   readonly signal?: AbortSignal;
+  /**
+   * Merge client for the auto-merge completion gate (NIN-75). Production wires the real GitHub
+   * GraphQL auto-merge API (via {@link ComposedLiveDispatch}); hermetic tests inject a vi.fn fake.
+   * Required for `auto_merge` mode to call `requestAutoMerge`; absent → gate fires but stays blocked.
+   */
+  readonly requestAutoMerge?: (request: AutoMergeRequest) => Promise<void>;
+  /**
+   * Override publish handler for hermetic tests that need to exercise the auto-merge done path
+   * without a live git workspace. The live path uses `live.publishDraftPr` and takes precedence.
+   */
+  readonly publishOnDone?: () => Promise<{ pullRequestUrl: string | null }>;
+  /**
+   * Evaluate the merge policy at publish time (NIN-75). Production binds real git-diff logic via
+   * the live path; hermetic tests inject a pre-determined result. Called only when publishMode is
+   * `auto_merge` and the `evaluateMergePolicy` action effect is wired.
+   */
+  readonly mergePolicyForPublish?: (workflowRunId: string) => Promise<MergePolicyEvaluation | null>;
 }
 
 export async function startAndDriveRunCommand(argv: string[], deps: RunStartCommandDeps = {}): Promise<number> {
@@ -152,21 +174,37 @@ async function driveWithDeps(
 ): Promise<DriveAcceptedWorkflowRunResult> {
   const archive = createWorkflowRunArchive({ dataDir });
   const nowString = deps.now ?? (() => new Date().toISOString());
+  const dispatchRole = resolveDispatchRole(deps, dataDir, deps.dispatchRole);
   const runRole = createWorkflowRunRoleRunner({
-    dispatchRole: resolveDispatchRole(deps, dataDir, deps.dispatchRole),
+    dispatchRole,
     readArtifact: (input) => archive.readWorkflowRunArtifact(input),
   });
+  const council = createCouncilDispatch({
+    workflowRunId: accepted.workflowRun.id,
+    dispatchRole,
+    readArtifact: (input) => archive.readWorkflowRunArtifact(input),
+  });
+  const mergePolicyEffect = deps.mergePolicyForPublish ?? live?.evaluateMergePolicy;
   const runAction = createWorkflowRunActionRunner({
-    effects: {
-      ...(deps.prepareWorkspace ? { prepareWorkspace: deps.prepareWorkspace } : {}),
-      ...(deps.runValidationCommand ? { runValidationCommand: deps.runValidationCommand } : {}),
-      ...(deps.pollCi ? { pollCi: deps.pollCi } : {}),
-    },
+    effects: buildActionEffects(deps, mergePolicyEffect),
     workflowDefinitionId: accepted.definition.id,
     now: nowString,
     writeArtifact: (input) => archive.writeWorkflowRunArtifact(input),
     ...(publishMode ? { publishMode } : {}),
   });
+  // Resolve the publish handler: live path wins; fall back to the injected dep (hermetic tests).
+  const publishHandler = live
+    ? () => live.publishDraftPr().then((p) => ({ pullRequestUrl: p.pullRequestUrl }))
+    : deps.publishOnDone;
+  // Resolve the auto-merge client: injected dep wins; fall back to the live path's client.
+  const autoMergeClient = deps.requestAutoMerge ?? live?.requestAutoMerge;
+  const completeAutoMergeOnDone = buildCompleteAutoMergeCallback(
+    dataDir,
+    accepted.workflowRun.id,
+    autoMergeClient,
+    publishMode,
+    publishHandler,
+  );
   return driveAcceptedWorkflowRun({
     dataDir,
     definition: accepted.definition,
@@ -175,11 +213,77 @@ async function driveWithDeps(
     runRole,
     runAction,
     budget: deps.budget ?? createDefaultWorkflowBudget(),
+    runCouncillor: council.runCouncillor,
+    synthesizeCouncil: council.synthesizeCouncil,
+    ...buildDriveOptionals(deps, publishHandler, completeAutoMergeOnDone),
+  });
+}
+
+/** Build the action-runner effects object from the injected deps + resolved merge-policy seam. */
+function buildActionEffects(
+  deps: RunStartCommandDeps,
+  mergePolicyEffect: ((workflowRunId: string) => Promise<MergePolicyEvaluation | null>) | undefined,
+): WorkflowRunActionEffects {
+  return {
+    ...(deps.prepareWorkspace ? { prepareWorkspace: deps.prepareWorkspace } : {}),
+    ...(deps.runValidationCommand ? { runValidationCommand: deps.runValidationCommand } : {}),
+    ...(deps.pollCi ? { pollCi: deps.pollCi } : {}),
+    ...(mergePolicyEffect ? { evaluateMergePolicy: mergePolicyEffect } : {}),
+  };
+}
+
+/** Build the optional fields forwarded to {@link driveAcceptedWorkflowRun}. */
+function buildDriveOptionals(
+  deps: RunStartCommandDeps,
+  publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined,
+  completeAutoMergeOnDone: ((input: { pullRequestUrl: string }) => Promise<void>) | undefined,
+) {
+  return {
     ...(deps.retryGate ? { retryGate: deps.retryGate } : {}),
     ...(deps.maxGateRetries === undefined ? {} : { maxGateRetries: deps.maxGateRetries }),
-    ...(deps.now ? { now: deps.now } : {}),
-    ...(live ? { publishOnDone: () => live.publishDraftPr().then((p) => ({ pullRequestUrl: p.pullRequestUrl })) } : {}),
-  });
+    ...(deps.now ? { now: deps.now, councilClock: deps.now } : {}),
+    ...(publishHandler ? { publishOnDone: publishHandler } : {}),
+    ...(completeAutoMergeOnDone ? { completeAutoMergeOnDone } : {}),
+  };
+}
+
+/**
+ * Build the `completeAutoMergeOnDone` callback when all preconditions are met: a merge client is
+ * wired, `publishMode` is `auto_merge`, and a publish handler is present (so the PR URL reaches the
+ * callback). Returns `undefined` when any precondition is absent — the done path skips silently.
+ */
+function buildCompleteAutoMergeCallback(
+  dataDir: string,
+  workflowRunId: string,
+  autoMergeClient: ((request: AutoMergeRequest) => Promise<void>) | undefined,
+  publishMode: PrPublishMode | undefined,
+  publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined,
+): ((input: { pullRequestUrl: string }) => Promise<void>) | undefined {
+  if (!autoMergeClient || publishMode !== "auto_merge" || !publishHandler) {
+    return undefined;
+  }
+  return async ({ pullRequestUrl }: { pullRequestUrl: string }) => {
+    const pr = parsePrUrl(pullRequestUrl);
+    if (!pr) {
+      return;
+    }
+    await completeAutoMergeForRun({
+      dataDir,
+      workflowRunId,
+      pullRequest: pr,
+      requestAutoMerge: autoMergeClient,
+    });
+  };
+}
+
+/** Parse a GitHub PR URL into owner/repo/pullNumber, or return null for non-matching URLs. */
+function parsePrUrl(url: string): { owner: string; repo: string; pullNumber: number } | null {
+  const match = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(url);
+  if (!match) {
+    return null;
+  }
+  const pullNumber = parseInt(match[3], 10);
+  return isNaN(pullNumber) ? null : { owner: match[1], repo: match[2], pullNumber };
 }
 
 function printRunOutcome(

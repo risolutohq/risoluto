@@ -4,11 +4,14 @@ import { createLogger } from "../core/logger.js";
 import type { Issue, ModelSelection, RisolutoLogger, ServiceConfig, Workspace } from "../core/types.js";
 import { createDispatcher } from "../dispatch/factory.js";
 import type { RunAttemptDispatcher } from "../dispatch/types.js";
+import { GitHubPrClient } from "../git/github-pr-client.js";
 import type { GitIntegrationPort } from "../git/port.js";
 import { executeGitPostRun } from "../orchestrator/git-post-run.js";
 import { NullTrackerToolProvider } from "../tracker/tool-provider.js";
 import { PathRegistry } from "../workspace/path-registry.js";
 import { WorkspaceManager, type WorkspaceManagerWorktreeDeps } from "../workspace/manager.js";
+import type { AutoMergeRequest } from "../workflow-run/auto-merge-completion.js";
+import type { MergePolicyEvaluation } from "../workflow-run/run-action-runner.js";
 import { createGitHubToolProvider, createRepoRouterProvider } from "./runtime-providers.js";
 import {
   buildLiveServiceConfig,
@@ -38,6 +41,10 @@ export interface ComposedLiveDispatch {
   readonly modelForProfile: (modelProfile: string) => ModelSelection;
   /** Commit + push the agent's worktree and open a DRAFT PR on the sandbox. Run on the done path. */
   readonly publishDraftPr: () => Promise<{ pullRequestUrl: string | null; summary: string | null }>;
+  /** Request auto-merge on the published PR via the GitHub GraphQL API (NIN-75). */
+  readonly requestAutoMerge: (request: AutoMergeRequest) => Promise<void>;
+  /** Evaluate the merge policy against the live workspace diff at publish time (NIN-75). */
+  readonly evaluateMergePolicy: (workflowRunId: string) => Promise<MergePolicyEvaluation | null>;
   readonly dispose: () => Promise<void>;
 }
 
@@ -83,6 +90,8 @@ export async function composeLiveDispatch(input: ComposeLiveDispatchInput): Prom
     throw new Error(`no repo route matched the live run issue (label ${LIVE_REPO_LABEL}); check E2E_GITHUB_REPO`);
   }
 
+  const prClient = new GitHubPrClient({ env: liveEnv });
+
   return {
     dispatcher,
     workspace,
@@ -91,6 +100,16 @@ export async function composeLiveDispatch(input: ComposeLiveDispatchInput): Prom
       liveEnv[LIVE_GITHUB_TOKEN_ENV] = await mintGithubInstallationToken(env);
       return executeGitPostRun(gitManager, workspace, prepIssue, repoMatch, true);
     },
+    requestAutoMerge: (request: AutoMergeRequest) =>
+      prClient.requestAutoMerge(
+        request.owner,
+        request.repo,
+        request.pullNumber,
+        request.mergeMethod,
+        LIVE_GITHUB_TOKEN_ENV,
+      ),
+    evaluateMergePolicy: (_workflowRunId: string) =>
+      evaluateLiveMergePolicy(config, gitManager, workspace.path, repoMatch.defaultBranch),
     dispose: () => removeWorktree(gitManager, workspace, logger),
   };
 }
@@ -149,4 +168,29 @@ async function removeWorktree(
   } catch (error) {
     logger.warn({ error: toErrorString(error) }, "live worktree cleanup failed");
   }
+}
+
+/**
+ * Evaluate the merge policy for the live workspace at publish time (NIN-75). Reads the configured
+ * `agent.autoMerge` policy, diffs the workspace against the default branch, and returns the verdict.
+ * Returns null when the diff is unavailable so the publish policy falls through to the safe default
+ * (blocked at merge_policy_not_satisfied) rather than silently promoting a non-compliant change.
+ */
+async function evaluateLiveMergePolicy(
+  config: ServiceConfig,
+  gitManager: GitIntegrationPort,
+  workspacePath: string,
+  defaultBranch: string,
+): Promise<MergePolicyEvaluation | null> {
+  const { evaluateMergePolicy } = await import("../git/merge-policy.js");
+  const policy = config.agent.autoMerge;
+  const [changedFiles, diffStats] = await Promise.all([
+    gitManager.diffNameOnly(workspacePath, defaultBranch).catch(() => null),
+    gitManager.diffShortStat(workspacePath, defaultBranch).catch(() => null),
+  ]);
+  if (!changedFiles || !diffStats) {
+    return null;
+  }
+  const result = evaluateMergePolicy(policy, changedFiles, diffStats, []);
+  return { status: result.allowed ? "passed" : "failed", mergeMethod: policy.mergeMethod };
 }

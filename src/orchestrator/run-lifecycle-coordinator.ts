@@ -235,6 +235,7 @@ class RunLifecycleCoordinatorImpl implements RunLifecycleCoordinator {
       getStallEvents: () => this.state.stallEvents,
       detectAndKillStalled: () => this.detectAndKillStalled(),
       eventBus: this.deps.eventBus,
+      resolveWorkflowStatusMapping: this.deps.resolveWorkflowStatusMapping,
     };
 
     Object.defineProperties(ctx, {

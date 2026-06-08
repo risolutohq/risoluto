@@ -1,4 +1,5 @@
 import type { RunAttemptDispatcher } from "../dispatch/types.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
 import type { AttemptStorePort } from "../core/attempt-store-port.js";
 import type { CostSampleStorePort } from "../core/cost-sample-port.js";
 import type { HealthRunner } from "../health/health-runner.js";
@@ -78,4 +79,17 @@ export interface OrchestratorDeps {
   resolveTemplate: (identifier: string) => Promise<string>;
   metrics?: MetricsCollector;
   observability?: ObservabilityHub;
+  /**
+   * Resolve the workflow-level status mapping from the run's persisted resolved definition (NIN-77).
+   * Supplied from the Workflow Run archive when `archiveDir` is available. Absent for legacy setups
+   * that pre-date the archive or in test harnesses that don't wire archive access.
+   */
+  resolveWorkflowStatusMapping?: (workflowRunId: string) => Promise<WorkflowRunStatusMapping | undefined>;
+  /**
+   * Drive each polled candidate issue through the same intake idempotency path as the webhook leg
+   * so webhook delivery + polling reconciliation for the same external issue collapse to ONE Workflow
+   * Run (NIN-106). When absent the polling tick skips intake; the orchestrator still dispatches based
+   * on the raw tracker state alone.
+   */
+  pollTrackerIssue?: (issue: Issue) => Promise<void>;
 }

@@ -156,6 +156,8 @@ export const workflowRunsListResponseSchema = z.object({
 export const workflowRunStartedResponseSchema = z.object({
   type: z.literal("workflow_run.started"),
   workflowRun: workflowRunRecordSchema,
+  action: z.enum(["created", "deduplicated", "retried"]),
+  runAttempt: workflowRunAttemptSummarySchema.optional(),
 });
 
 /** GET /api/v1/workflow-runs/:workflow_run_id — Workflow Run metadata projection. */

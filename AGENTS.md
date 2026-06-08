@@ -38,12 +38,12 @@ The `skills/risoluto-features/` skill writes into this submodule and fails hard 
 The pre-commit / pre-PR gate is:
 
 ```bash
-pnpm run build && pnpm run lint && pnpm run format:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
+pnpm run build && pnpm run lint && pnpm run format:check && pnpm run reach:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
 ```
 
-Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `typecheck` runs `tsc --noEmit`, and `typecheck:coverage` (type-coverage >= 95%) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
+Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `reach:check` (fast, read-only) fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter (a green test suite is not reachability), `typecheck` runs `tsc --noEmit`, and `typecheck:coverage` (type-coverage >= 95%) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
 
-When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
+When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:e2e` (intake-adapter e2e tier: CLI / HTTP / Slack → engine), `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
 
 ## Code-style ceilings (enforced by OXLint)
 

@@ -1,5 +1,6 @@
 import type { ResolvedWorkflowDefinition } from "../workflow-definition/registry.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
+import { parseWorkflowRunArtifact } from "./artifact-contracts.js";
 import type { WorkflowRunStartRecord } from "./contracts.js";
 import { budgetFromPolicy, writeDoneHandoff, writeHandoffMarkdown } from "./drive-done-handoff.js";
 import {
@@ -16,11 +17,17 @@ import type {
 } from "./gate-hook-engine.js";
 import type { HandoffArtifact } from "./handoff-contract.js";
 import type { WorkflowRunIntentArtifact } from "./intake-core.js";
-import { createWorkflowRunMemoryStore, type WorkflowRunAttemptMemoryRecord } from "./memory-store.js";
+import {
+  createWorkflowRunMemoryStore,
+  type ProjectMemoryPromotionMode,
+  type WorkflowRunAttemptMemoryRecord,
+} from "./memory-store.js";
+import { reconfirmPostPublishVerification, type VerificationArtifact } from "./post-publish-verifier.js";
+import type { PrPublishMode } from "./publish-policy.js";
 import { WorkflowRunActionError } from "./run-action-runner.js";
 import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
-import { driveWorkflowRun } from "./workflow-run-driver.js";
-import { toErrorString } from "../utils/type-guards.js";
+import { driveWorkflowRun, type DriveWorkflowRunInput } from "./workflow-run-driver.js";
+import { isRecord, toErrorString } from "../utils/type-guards.js";
 
 export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocation {
   readonly definition: ResolvedWorkflowDefinition;
@@ -34,6 +41,10 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
   readonly maxGateRetries?: number;
   readonly budget?: ExecuteWorkflowDefinitionInput["budget"];
   readonly now?: () => string;
+  /** Council verifier callbacks (NIN-76). When present, council-mode verifier roles dispatch real sessions. */
+  readonly runCouncillor?: ExecuteWorkflowDefinitionInput["runCouncillor"];
+  readonly synthesizeCouncil?: ExecuteWorkflowDefinitionInput["synthesizeCouncil"];
+  readonly councilClock?: ExecuteWorkflowDefinitionInput["councilClock"];
   /**
    * Run on the DONE path BEFORE the handoff is written: commit + push the agent's workspace and open a
    * PR. Its `pullRequestUrl` is threaded into `handoff.output` and the result so callers can surface it.
@@ -46,6 +57,17 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
    * already-finalized run.
    */
   readonly completeAutoMergeOnDone?: (input: { pullRequestUrl: string }) => Promise<void>;
+  /**
+   * Ordinal position of this attempt within the Workflow Run (1-based). Used to read prior attempt memory
+   * before execution and to write attempt memory with the correct sequence number (NIN-104). Defaults to 1
+   * when not supplied — pass the intake-derived attempt number for retries.
+   */
+  readonly attemptNumber?: number;
+  /**
+   * Controls whether project-memory candidates emitted during this run are auto-promoted or kept as
+   * proposals only (NIN-104). Defaults to `"propose_only"`.
+   */
+  readonly projectMemoryMode?: ProjectMemoryPromotionMode;
 }
 
 export interface DriveAcceptedWorkflowRunResult {
@@ -68,15 +90,17 @@ export async function driveAcceptedWorkflowRun(
   const archive = createWorkflowRunArchive(input);
   const location = archiveLocation(input);
   const now = input.now ?? defaultNow;
+  const attemptNumber = input.attemptNumber ?? 1;
   const { runHook, getEvidenceRefs } = input.runHook
     ? { runHook: input.runHook, getEvidenceRefs: () => [] as EvidenceRef[] }
     : createEvidenceCapturingHook(location, now);
+  const priorAttemptMemory = await readPriorAttemptMemoryForRun(location, input.workflowRun.id, attemptNumber);
   try {
     const result = await driveWorkflowRun({
       ...location,
       definition: input.definition,
       workflowRunId: input.workflowRun.id,
-      initialArtifacts: { "intent.v1": input.intent },
+      initialArtifacts: buildInitialArtifacts(input.intent, priorAttemptMemory),
       runRole: input.runRole,
       ...(input.runAction ? { runAction: input.runAction } : {}),
       runHook,
@@ -84,6 +108,7 @@ export async function driveAcceptedWorkflowRun(
       ...(input.retryGate ? { retryGate: input.retryGate } : {}),
       ...(input.maxGateRetries === undefined ? {} : { maxGateRetries: input.maxGateRetries }),
       ...(input.budget ? { budget: input.budget } : {}),
+      ...buildCouncilDriveOpts(input),
       // Defer the terminal "done" persistence until after publishOnDone (in finishDrivenRun). If the
       // executor wrote "done" here, the archive's terminal-status guard would reject the later
       // done -> blocked transition when a PR publish fails, stranding a "done" run with no PR
@@ -94,8 +119,16 @@ export async function driveAcceptedWorkflowRun(
         }
       },
     });
+    await persistCouncilVerificationIfPresent(archive, input.workflowRun.id, result.artifacts);
     const evidenceRefs = getEvidenceRefs();
-    const memoryRecord = await writeAttemptMemory(input, location, now, result.status, evidenceRefs);
+    const memoryRecord = await writeAttemptMemoryAndCandidate(
+      input,
+      location,
+      now,
+      result.status,
+      evidenceRefs,
+      attemptNumber,
+    );
     return await finishDrivenRun(archive, input, location, result, memoryRecord, evidenceRefs);
   } catch (error) {
     if (
@@ -107,7 +140,7 @@ export async function driveAcceptedWorkflowRun(
     ) {
       throw error;
     }
-    await writeAttemptMemory(input, location, now, "blocked", getEvidenceRefs());
+    await writeAttemptMemoryAndCandidate(input, location, now, "blocked", getEvidenceRefs(), attemptNumber);
     return await finishFailedRun(archive, input, error.message);
   }
 }
@@ -137,6 +170,17 @@ async function finishDrivenRun(
     // executor's terminal "done" write was deferred (see recordStatus above) so the publish-failure
     // path above could still route to blocked past the archive's terminal guard (RIS-260).
     await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
+    // Update publish_result.v1 with the actual PR URL now that it is known (NIN-75). The action runner
+    // writes pullRequestUrl: null at policy evaluation time; this stamps the real URL so the post-run
+    // auto-merge gate reads an artifact that passes isPublishReadyForAutoMerge.
+    if (published?.pullRequestUrl) {
+      await updatePublishResultUrl(archive, input.workflowRun.id, published.pullRequestUrl);
+    }
+    // Post-publish verification reconfirm (NIN-103): update the archived verification artifact with
+    // post-publish evidence so the auto-merge gate reads the reconfirmed decision.
+    if (published) {
+      await reconfirmAndPersistVerification(archive, input.workflowRun.id, result, published);
+    }
     // The run is finalized done and the PR is published — now run the auto-merge completion gate (NIN-272).
     // Post-finalization and best-effort: the callback owns its result/errors, so it can never un-do the run.
     if (published?.pullRequestUrl && input.completeAutoMergeOnDone) {
@@ -306,21 +350,163 @@ function createEvidenceCapturingHook(location: WorkflowRunArchiveLocation, now: 
   return { runHook, getEvidenceRefs: () => refs };
 }
 
-async function writeAttemptMemory(
+/**
+ * Read prior attempt memory for the run. Returns an empty array for the first attempt (no prior
+ * history), avoiding an unnecessary FS scan (NIN-104).
+ */
+async function readPriorAttemptMemoryForRun(
+  location: WorkflowRunArchiveLocation,
+  workflowRunId: string,
+  currentAttemptNumber: number,
+): Promise<readonly WorkflowRunAttemptMemoryRecord[]> {
+  if (currentAttemptNumber <= 1) {
+    return [];
+  }
+  return createWorkflowRunMemoryStore(location).readPriorAttemptMemory({
+    workflowRunId,
+    beforeAttemptNumber: currentAttemptNumber,
+  });
+}
+
+/**
+ * Build the executor's initial artifact map. Includes prior attempt memory so retry attempts can
+ * surface what earlier attempts learned (NIN-104).
+ */
+function buildInitialArtifacts(
+  intent: WorkflowRunIntentArtifact,
+  priorAttemptMemory: readonly WorkflowRunAttemptMemoryRecord[],
+): Record<string, unknown> {
+  const artifacts: Record<string, unknown> = { "intent.v1": intent };
+  if (priorAttemptMemory.length > 0) {
+    artifacts["prior_attempt_memory.v1"] = priorAttemptMemory;
+  }
+  return artifacts;
+}
+
+/**
+ * Write the attempt-memory record and, when evidence refs are present, a project-memory candidate
+ * with provenance pointing to the first collected evidence ref (NIN-104).
+ */
+async function writeAttemptMemoryAndCandidate(
   input: DriveAcceptedWorkflowRunInput,
   location: WorkflowRunArchiveLocation,
   now: () => string,
   status: "blocked" | "done",
   evidenceRefs: readonly EvidenceRef[],
+  attemptNumber: number,
 ): Promise<WorkflowRunAttemptMemoryRecord> {
   const store = createWorkflowRunMemoryStore(location);
-  return store.writeAttemptMemory({
+  const attemptId = `attempt-${attemptNumber}`;
+  const record = await store.writeAttemptMemory({
     workflowRunId: input.workflowRun.id,
-    attemptId: "attempt-1",
-    attemptNumber: 1,
+    attemptId,
+    attemptNumber,
     createdAt: now(),
     summary: `Workflow Run ${input.workflowRun.id} completed with status: ${status}`,
     evidenceRefs,
+  });
+  if (evidenceRefs.length > 0) {
+    await store.writeProjectMemoryCandidate({
+      workflowRunId: input.workflowRun.id,
+      candidateId: `${attemptId}-memory`,
+      createdAt: now(),
+      text: record.summary,
+      sourceEvidence: evidenceRefs[0]!,
+      promotionMode: input.projectMemoryMode ?? "propose_only",
+    });
+  }
+  return record;
+}
+
+/**
+ * Run the post-publish verification reconfirm (NIN-103). Extracts the pre-publish verification and
+ * publish mode from the executor's in-memory result, computes contradictions from post-publish
+ * evidence, and overwrites the archived `verification.v1` artifact with the reconfirmed decision
+ * so the auto-merge gate and handoff see an up-to-date verdict.
+ *
+ * A missing verification or publish artifact → silently skips (reconfirm is only applicable
+ * when both are present). Parse errors on the verification → silently skip (the gate will block on
+ * the absent post-publish record as the safe default).
+ */
+async function reconfirmAndPersistVerification(
+  archive: WorkflowRunArchive,
+  workflowRunId: string,
+  result: WorkflowExecutorResult,
+  published: { pullRequestUrl: string | null },
+): Promise<void> {
+  const rawVerification = result.artifacts["verification.v1"];
+  const rawPublish = result.artifacts["publish_result.v1"];
+  if (!rawVerification || !isRecord(rawPublish)) return;
+
+  let verification: VerificationArtifact;
+  try {
+    verification = parseWorkflowRunArtifact({
+      contractId: "verification.v1",
+      data: rawVerification,
+    }) as VerificationArtifact;
+  } catch {
+    return;
+  }
+
+  const publishMode = typeof rawPublish["mode"] === "string" ? (rawPublish["mode"] as PrPublishMode) : null;
+  if (!publishMode) return;
+
+  const reconfirmResult = reconfirmPostPublishVerification({
+    verification,
+    publish: {
+      mode: publishMode,
+      pullRequestUrl: published.pullRequestUrl,
+      status: published.pullRequestUrl ? "published" : "not_published",
+    },
+    ci: extractCiStatus(result.artifacts),
+    handoff: { outcome: "done" },
+  });
+
+  if (reconfirmResult.status !== "completed") return;
+
+  await archive.writeWorkflowRunArtifact({
+    workflowRunId,
+    contractId: "verification.v1",
+    artifactId: "verification",
+    data: reconfirmResult.artifact,
+    producer: { type: "action", id: "post-publish-reconfirm" },
+  });
+}
+
+function extractCiStatus(artifacts: Readonly<Record<string, unknown>>): { status: "failed" | "passed" } | null {
+  const raw = artifacts["ci_result.v1"];
+  if (!isRecord(raw)) return null;
+  if (raw["status"] === "passed") return { status: "passed" };
+  if (raw["status"] === "failed") return { status: "failed" };
+  return null;
+}
+
+/**
+ * Stamp the real PR URL into the archived `publish_result.v1` after `publishOnDone` succeeds (NIN-75).
+ * The action runner records `pullRequestUrl: null` at policy time (the URL is unknown then); this
+ * overwrites only that field so the post-run auto-merge gate passes `isPublishReadyForAutoMerge`.
+ * Silently skips when the artifact is absent or when `pullRequestUrl` is already non-null.
+ */
+async function updatePublishResultUrl(
+  archive: WorkflowRunArchive,
+  workflowRunId: string,
+  pullRequestUrl: string,
+): Promise<void> {
+  let payload: { contractId: string; data: unknown };
+  try {
+    payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "publish_result" });
+  } catch {
+    return;
+  }
+  if (!isRecord(payload.data) || payload.data["pullRequestUrl"] !== null) {
+    return;
+  }
+  await archive.writeWorkflowRunArtifact({
+    workflowRunId,
+    contractId: "publish_result.v1",
+    artifactId: "publish_result",
+    data: { ...payload.data, pullRequestUrl },
+    producer: { type: "action", id: "publish-pr" },
   });
 }
 
@@ -331,6 +517,42 @@ function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveL
   };
 }
 
+/** Extract optional council deps so `driveAcceptedWorkflowRun` stays within the complexity ceiling. */
+function buildCouncilDriveOpts(
+  input: DriveAcceptedWorkflowRunInput,
+): Pick<DriveWorkflowRunInput, "runCouncillor" | "synthesizeCouncil" | "councilClock"> {
+  return {
+    ...(input.runCouncillor ? { runCouncillor: input.runCouncillor } : {}),
+    ...(input.synthesizeCouncil ? { synthesizeCouncil: input.synthesizeCouncil } : {}),
+    ...(input.councilClock ? { councilClock: input.councilClock } : {}),
+  };
+}
+
 function defaultNow(): string {
   return new Date().toISOString();
+}
+
+/**
+ * Persist the council `verification.v1` to the run archive (NIN-76). The executor assembles the
+ * council artifact in-memory via `runCouncilVerifier`; without this step it would not be readable
+ * from the archive by downstream code (handoffs, post-publish reconfirm, tests). Uses `ifNotExists`
+ * so a subsequent `reconfirmAndPersistVerification` call can freely overwrite.
+ */
+async function persistCouncilVerificationIfPresent(
+  archive: WorkflowRunArchive,
+  workflowRunId: string,
+  artifacts: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  const verification = artifacts["verification.v1"];
+  if (!isRecord(verification) || verification["mode"] !== "council") {
+    return;
+  }
+  await archive.writeWorkflowRunArtifact({
+    workflowRunId,
+    contractId: "verification.v1",
+    artifactId: "verification",
+    data: verification,
+    producer: { type: "action", id: "council-verification" },
+    ifNotExists: true,
+  });
 }

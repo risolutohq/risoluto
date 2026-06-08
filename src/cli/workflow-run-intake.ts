@@ -1,3 +1,10 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import YAML from "yaml";
+
+import { deriveIntakeRulesConfig } from "../config/intake-rules-section.js";
+import { asRecord } from "../config/coercion.js";
 import {
   DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
   loadWorkflowDefinitionRegistry,
@@ -6,6 +13,7 @@ import {
 } from "../workflow-definition/registry.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
 import { acceptWorkflowRunIntake, type WorkflowRunIntentArtifact } from "../workflow-run/intake-core.js";
+import type { WorkflowRunIntakeRule } from "../workflow-run/intake-rules.js";
 
 export interface ResolveWorkflowRunIntakeInput {
   readonly dataDir: string;
@@ -14,12 +22,34 @@ export interface ResolveWorkflowRunIntakeInput {
   readonly workflowDefinitionId: string;
   readonly workspaceKey: string;
   readonly workflowDir: string;
+  /** Pre-loaded intake rules. When absent, rules are loaded from the overlay config at dataDir. */
+  readonly rules?: readonly WorkflowRunIntakeRule[];
 }
 
 export interface ResolvedWorkflowRunIntake {
   readonly workflowRun: WorkflowRunStartRecord;
   readonly intent: WorkflowRunIntentArtifact;
   readonly definition: ResolvedWorkflowDefinition;
+}
+
+/**
+ * Load intake rules from the overlay config at {dataDir}/archives/config/overlay.yaml.
+ * Returns an empty array when the file does not exist (no rules configured).
+ */
+export async function loadCliIntakeRules(dataDir: string): Promise<readonly WorkflowRunIntakeRule[]> {
+  const overlayPath = path.join(dataDir, "archives", "config", "overlay.yaml");
+  let content: string;
+  try {
+    content = await readFile(overlayPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  const overlay = YAML.parse(content) as unknown;
+  const root = asRecord(overlay);
+  return deriveIntakeRulesConfig(asRecord(root.intake_rules));
 }
 
 /**
@@ -30,6 +60,7 @@ export interface ResolvedWorkflowRunIntake {
 export async function resolveWorkflowRunIntake(
   input: ResolveWorkflowRunIntakeInput,
 ): Promise<ResolvedWorkflowRunIntake> {
+  const rules = input.rules ?? (await loadCliIntakeRules(input.dataDir));
   const registry = await loadWorkflowDefinitionRegistry({
     workflowDir: input.workflowDir,
     globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
@@ -42,7 +73,7 @@ export async function resolveWorkflowRunIntake(
     title: input.title,
     body: input.intent,
     externalObject: null,
-    rules: [],
+    rules,
     workflowDefinitionId: definition.id,
     workspaceKey: input.workspaceKey,
     resolvedWorkflowDefinition: toWorkflowRunResolvedDefinitionConfig(definition),

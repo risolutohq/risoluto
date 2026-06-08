@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { executeWorkflowDefinition, WorkflowExecutorError } from "../../src/workflow-run/executor.js";
+import { decideUnansweredSlackClarification } from "../../src/workflow-run/slack-interactions.js";
 import type { ResolvedWorkflowDefinition } from "../../src/workflow-definition/registry.js";
 
 const workflowRunId = "wr_executor";
@@ -210,7 +211,7 @@ describe("executeWorkflowDefinition", () => {
     expect(result.artifacts["validation_result.v1"]).toMatchObject({ status: "passed" });
   });
 
-  it("reports running and terminal Run Status through the optional status recorder", async () => {
+  it("reports queued, running and terminal Run Status through the optional status recorder", async () => {
     const recordedStatuses: string[] = [];
 
     const result = await executeWorkflowDefinition({
@@ -224,7 +225,7 @@ describe("executeWorkflowDefinition", () => {
     });
 
     expect(result.status).toBe("done");
-    expect(recordedStatuses).toEqual(["running", "done"]);
+    expect(recordedStatuses).toEqual(["queued", "running", "done"]);
   });
 
   it("blocks after planner triage when the plan artifact has only blocked steps", async () => {
@@ -679,6 +680,32 @@ describe("executeWorkflowDefinition", () => {
     // No completed councillor means no synthesized decision — the synthesizer must not be consulted.
     expect(synthesize).not.toHaveBeenCalled();
     expect(result.artifacts["verification.v1"]).toBeUndefined();
+  });
+
+  it("retries the implementer state on an uncertain verifier verdict and blocks when clarification budget is exhausted (NIN-105)", async () => {
+    const roleRuns: string[] = [];
+
+    const result = await executeWorkflowDefinition({
+      definition: createVerifierDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      maxClarificationAttempts: 1,
+      decideUnansweredClarification: decideUnansweredSlackClarification,
+      runRole: async ({ role }) => {
+        roleRuns.push(role.id);
+        if (role.id === "verifier") {
+          return { "verification.v1": verificationArtifact("uncertain") };
+        }
+        return roleOutput(role.id);
+      },
+    });
+
+    expect(result.status).toBe("blocked");
+    // First uncertain verdict: decideUnansweredSlackClarification → retry (attemptsUsed 0 < maxAttempts 1).
+    // Second uncertain verdict: decideUnansweredSlackClarification → block (attemptsUsed 1 >= maxAttempts 1).
+    // The engine reached decideUnansweredSlackClarification on the production path both times.
+    expect(roleRuns.filter((id) => id === "verifier")).toHaveLength(2);
+    expect(roleRuns.filter((id) => id === "implementer")).toHaveLength(2);
   });
 });
 

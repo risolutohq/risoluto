@@ -45,6 +45,8 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "operator_approval.v1",
   "consumed_approval_nonce.v1",
   "merge_policy_result.v1",
+  "council_verifier_decision.v1",
+  "council_synthesizer_decision.v1",
 ] as const;
 
 const consumedApprovalNonceSchema = z
@@ -180,6 +182,42 @@ const artifactContractSchemaEntries: readonly (readonly [
   ["operator_approval.v1", operatorApprovalArtifactSchema],
   ["consumed_approval_nonce.v1", consumedApprovalNonceSchema],
   ["merge_policy_result.v1", mergePolicyResultArtifactSchema],
+  [
+    "council_verifier_decision.v1",
+    z.union([
+      z
+        .object({
+          version: z.literal(1),
+          workflowRunId: z.string().min(1),
+          createdAt: z.string().min(1),
+          status: z.literal("completed"),
+          decision: z.enum(["satisfied", "not_satisfied", "uncertain"]),
+          summary: z.string().min(1),
+        })
+        .strict(),
+      z
+        .object({
+          version: z.literal(1),
+          workflowRunId: z.string().min(1),
+          createdAt: z.string().min(1),
+          status: z.literal("failed"),
+          error: z.string().min(1),
+        })
+        .strict(),
+    ]),
+  ],
+  [
+    "council_synthesizer_decision.v1",
+    z
+      .object({
+        version: z.literal(1),
+        workflowRunId: z.string().min(1),
+        createdAt: z.string().min(1),
+        decision: z.enum(["satisfied", "not_satisfied", "uncertain"]),
+        summary: z.string().min(1),
+      })
+      .strict(),
+  ],
 ];
 
 const artifactContractSchemas: ReadonlyMap<string, ZodType<unknown>> = new Map(artifactContractSchemaEntries);

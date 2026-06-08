@@ -78,6 +78,14 @@ export const createWorkflowRunSchema = z
     intent: z.string().min(1),
     workflowDefinitionId: z.string().min(1).optional(),
     workspaceKey: z.string().min(1).optional(),
+    /** Intake mode: "start" (default) creates a new run; "retry" resumes an existing mapped run. */
+    mode: z.enum(["start", "retry"]).optional(),
+    /** Labels forwarded to the rule engine for matching (e.g. provider labels from a tracker). */
+    labels: z.array(z.string()).optional(),
+    /** External object identifier — combined with externalProvider to create/look up an idempotency mapping. */
+    externalId: z.string().min(1).optional(),
+    /** External provider that owns the externalId. */
+    externalProvider: z.enum(["api", "cli", "slack", "linear", "github"]).optional(),
   })
   .strict();
 

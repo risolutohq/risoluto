@@ -287,3 +287,4 @@ export function deriveServerConfig(server: Record<string, unknown>): ServiceConf
 }
 
 export { deriveSlackIntakeConfig } from "./slack-intake-section.js";
+export { deriveIntakeRulesConfig } from "./intake-rules-section.js";

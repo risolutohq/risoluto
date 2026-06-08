@@ -1,8 +1,10 @@
 import type { ResolvedWorkflowDefinition, ResolvedWorkflowRole } from "../workflow-definition/registry.js";
 import { isRecord } from "../utils/type-guards.js";
 import type { WorkflowBudgetPolicy } from "./budget-retry.js";
-import { DEFAULT_GATE_RETRY_LIMIT } from "./budget-retry.js";
+import { DEFAULT_GATE_RETRY_LIMIT, evaluateWorkflowBudget } from "./budget-retry.js";
+import type { SlackClarificationDecision, UnansweredSlackClarificationInput } from "./slack-interactions.js";
 import type { WorkflowRunStatus } from "./contracts.js";
+import { transitionWorkflowRunStatus, type RunStatusTransitionEvent } from "./run-status.js";
 import { executeConfiguredWorkflowActions, type WorkflowActionExecutionInput } from "./executor-actions.js";
 import { evaluateStateGatesWithRetry, type WorkflowGateRetryInput } from "./gate-retry-controller.js";
 import {
@@ -62,6 +64,16 @@ export interface ExecuteWorkflowDefinitionInput {
   readonly retryGate?: (input: WorkflowGateRetryInput) => Promise<Readonly<Record<string, unknown>>>;
   readonly maxGateRetries?: number;
   readonly budget?: WorkflowBudgetPolicy;
+  /**
+   * Called when a verifier's `uncertain` verdict routes the run to `wait_for_operator` (NIN-105).
+   * While retry budget remains and clarification attempts are not exhausted, the engine loops back
+   * to the implementer state so the operator's clarification can be incorporated. When the decision
+   * says to block — either because attempts are exhausted or the budget is spent — the run routes to
+   * `blocked`. Falls back to blocking immediately when absent.
+   */
+  readonly decideUnansweredClarification?: (input: UnansweredSlackClarificationInput) => SlackClarificationDecision;
+  /** Maximum times the engine re-runs the implementer state on `wait_for_operator`. Defaults to 1. */
+  readonly maxClarificationAttempts?: number;
 }
 
 export interface WorkflowRoleExecutionInput {
@@ -72,7 +84,7 @@ export interface WorkflowRoleExecutionInput {
 
 export interface WorkflowStatusRecordInput {
   readonly workflowRunId: string;
-  readonly status: Extract<WorkflowRunStatus, "blocked" | "done" | "running">;
+  readonly status: WorkflowRunStatus;
 }
 
 export interface WorkflowExecutorResult {
@@ -102,8 +114,10 @@ export async function executeWorkflowDefinition(
   let currentStateId: string | undefined;
   let gateRetryAttempts = 0;
   let verifierRetryAttempts = 0;
+  let clarificationRetryAttempts = 0;
 
-  await recordWorkflowRunStatus(input, "running");
+  await advanceRunStatus(input, "accepted", "queue");
+  await advanceRunStatus(input, "queued", "start");
   await executeConfiguredWorkflowActions({ ...input, ...state, phase: "before_roles", attempt: 0 });
   let index = 0;
   while (index < orderedRoles.length) {
@@ -130,6 +144,16 @@ export async function executeWorkflowDefinition(
         currentStateId = undefined;
         index = verifierStep.index;
         continue;
+      }
+      if (verifierStep.kind === "wait_for_operator") {
+        const clarificationStep = resolveClarificationStep(input, clarificationRetryAttempts, orderedRoles);
+        if (clarificationStep.kind === "retry") {
+          clarificationRetryAttempts += 1;
+          currentStateId = undefined;
+          index = clarificationStep.index;
+          continue;
+        }
+        return finishWorkflowExecution(input, "blocked", state);
       }
     }
     if (nextRoleStartsNewState(orderedRoles, index, role.stateId)) {
@@ -235,7 +259,7 @@ async function finishWorkflowExecution(
   status: Extract<WorkflowRunStatus, "blocked" | "done">,
   state: WorkflowExecutionState,
 ): Promise<WorkflowExecutorResult> {
-  await recordWorkflowRunStatus(input, status);
+  await advanceRunStatus(input, "running", status === "done" ? "complete" : "prerequisite_failed");
   return {
     status,
     workflowStatesVisited: state.statesVisited,
@@ -303,6 +327,21 @@ async function recordWorkflowRunStatus(
   await input.recordStatus?.({ workflowRunId: input.workflowRunId, status });
 }
 
+/**
+ * Advance the Run Status through the validated lifecycle machine (NIN-109/197) and record the result.
+ * Routing every status write through `transitionWorkflowRunStatus` enforces the
+ * `accepted -> queued -> running` ordering — so `queued` is observed in production — and the
+ * active -> `blocked` guard, instead of ad-hoc `recordWorkflowRunStatus` writes.
+ */
+async function advanceRunStatus(
+  input: ExecuteWorkflowDefinitionInput,
+  from: WorkflowRunStatus,
+  event: RunStatusTransitionEvent,
+): Promise<void> {
+  const { to } = transitionWorkflowRunStatus({ from, event });
+  await recordWorkflowRunStatus(input, to);
+}
+
 async function fireHooksForNewState(
   input: ExecuteWorkflowDefinitionInput,
   artifacts: Readonly<Record<string, unknown>>,
@@ -347,7 +386,8 @@ function routeVerifierResult(artifacts: Readonly<Record<string, unknown>>, retry
 type VerifierStep =
   | { readonly kind: "continue" }
   | { readonly kind: "retry"; readonly index: number }
-  | { readonly kind: "block" };
+  | { readonly kind: "block" }
+  | { readonly kind: "wait_for_operator" };
 
 /**
  * Map the verifier's decision to the next executor move. `continue_to_publish` advances the run;
@@ -369,7 +409,40 @@ function resolveVerifierStep(
     const retryIndex = implementerStateStartIndex(orderedRoles);
     return retryIndex >= 0 ? { kind: "retry", index: retryIndex } : { kind: "block" };
   }
+  if (action === "wait_for_operator") {
+    return { kind: "wait_for_operator" };
+  }
   return { kind: "block" };
+}
+
+/**
+ * Consult the `decideUnansweredClarification` callback to determine whether the engine should
+ * retry the implementer state (budget + attempts allow it) or route the run to `blocked` (NIN-105).
+ * Falls back to `{ kind: "block" }` when no callback is wired.
+ */
+function resolveClarificationStep(
+  input: ExecuteWorkflowDefinitionInput,
+  clarificationAttemptsUsed: number,
+  orderedRoles: readonly ResolvedWorkflowRole[],
+): { readonly kind: "retry"; readonly index: number } | { readonly kind: "block" } {
+  if (!input.decideUnansweredClarification) {
+    return { kind: "block" };
+  }
+  const budgetRemaining =
+    !input.budget ||
+    evaluateWorkflowBudget({ policy: input.budget, nextStepLabel: "clarification-retry" }).status === "passed";
+  const decision = input.decideUnansweredClarification({
+    workflowRunId: input.workflowRunId,
+    questionId: `${input.workflowRunId}-clarification`,
+    attemptsUsed: clarificationAttemptsUsed,
+    maxAttempts: input.maxClarificationAttempts ?? 1,
+    budgetRemaining,
+  });
+  if (decision.type !== "slack_clarification.retry") {
+    return { kind: "block" };
+  }
+  const retryIndex = implementerStateStartIndex(orderedRoles);
+  return retryIndex >= 0 ? { kind: "retry", index: retryIndex } : { kind: "block" };
 }
 
 /** Index of the first role in the implementer's state, or -1 when the workflow has no implementer to retry. */

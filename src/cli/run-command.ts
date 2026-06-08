@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { startAndDriveRunCommand } from "./run-start-command.js";
+import { runEvidenceShowCommand } from "./run-evidence-command.js";
 import { resolveDataDir } from "./cli-helpers.js";
 
 export async function tryHandleRunCommand(argv: string[]): Promise<number | null> {
@@ -14,7 +15,10 @@ export async function tryHandleRunCommand(argv: string[]): Promise<number | null
   if (argv[1] === "status") {
     return workflowRunStatusCommand(argv.slice(2));
   }
-  throw new TypeError("unsupported run command. Expected: run start, run status <id>");
+  if (argv[1] === "evidence" && argv[2] === "show") {
+    return runEvidenceShowCommand(argv.slice(3));
+  }
+  throw new TypeError("unsupported run command. Expected: run start, run status <id>, run evidence show <id>");
 }
 
 async function workflowRunStatusCommand(argv: string[]): Promise<number> {

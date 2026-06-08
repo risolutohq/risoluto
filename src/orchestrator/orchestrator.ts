@@ -30,7 +30,7 @@ import type {
 import type { OrchestratorDeps, RunningEntry } from "./runtime-types.js";
 import { computeCostUsd, computeSecondsRunning, serializeSnapshot } from "./snapshot-builder.js";
 import { nowIso } from "./views.js";
-import type { ReasoningEffort, RuntimeSnapshot } from "../core/types.js";
+import type { Issue, ReasoningEffort, RuntimeSnapshot } from "../core/types.js";
 import type { RecoveryReport } from "./recovery-types.js";
 import { toErrorString } from "../utils/type-guards.js";
 import { createMetricsCollector, type MetricsCollector } from "../observability/metrics.js";
@@ -584,8 +584,26 @@ export class Orchestrator implements OrchestratorPort {
     if (this._ctx.detectAndKillStalled().killed > 0) this.markStateDirty();
     if (await this.runtimeCoordinator.reconcileRunningAndRetrying()) this.markStateDirty();
     const candidateIssues = sortIssuesForDispatch(await this.deps.tracker.fetchCandidateIssues());
+    await this.reconcileCandidatesViaPolling(candidateIssues);
     await this.runtimeCoordinator.refreshQueueViews(candidateIssues);
     await this.runtimeCoordinator.launchAvailableWorkers(candidateIssues);
+  }
+
+  /**
+   * Drive each polled candidate through the tracker intake so that a prior webhook delivery and the
+   * polling reconciliation for the same external issue collapse to a single Workflow Run (NIN-106).
+   * Errors are non-fatal — a transient archive write failure must not abort the entire tick.
+   */
+  private async reconcileCandidatesViaPolling(issues: readonly Issue[]): Promise<void> {
+    const { pollTrackerIssue } = this.deps;
+    if (!pollTrackerIssue) return;
+    for (const issue of issues) {
+      try {
+        await pollTrackerIssue(issue);
+      } catch (error) {
+        this.deps.logger.warn({ error: toErrorString(error), issueId: issue.id }, "polling intake failed");
+      }
+    }
   }
 
   private recordSuccessfulTick(

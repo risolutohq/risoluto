@@ -100,6 +100,9 @@ export const DEFAULT_CONFIG_SECTIONS: Record<string, Record<string, unknown>> = 
   alerts: {
     rules: [],
   },
+  intake_rules: {
+    rules: [],
+  },
   github: {},
   repos: {},
   state_machine: {
