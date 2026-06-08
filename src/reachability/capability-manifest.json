@@ -61,5 +61,19 @@
     "module": "src/workflow-run/slack-interactions.ts",
     "intakeAdapters": ["slack"],
     "reason": "The run driver (workflow-run-driver.ts) passes decideUnansweredSlackClarification into executeWorkflowDefinition; when a verifier returns uncertain the engine's wait-for-operator loop (resolveClarificationStep) consults it to retry the implementer state while clarification budget remains, then routes the run to blocked once exhausted (NIN-105/213)."
+  },
+  {
+    "name": "attempt-memory-read-and-candidate",
+    "symbol": "createWorkflowRunMemoryStore",
+    "module": "src/workflow-run/memory-store.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "driveAcceptedWorkflowRun now consumes the memory store's read + candidate methods (previously dead): a retry reads prior attempt memory into the next attempt's initialArtifacts (readPriorAttemptMemory) and a completed run emits a project-memory candidate with provenance in propose-only mode (writeProjectMemoryCandidate) (NIN-104/214)."
+  },
+  {
+    "name": "post-publish-reconfirm",
+    "symbol": "reconfirmPostPublishVerification",
+    "module": "src/workflow-run/post-publish-verifier.ts",
+    "intakeAdapters": ["cli", "http"],
+    "reason": "After publish, driveAcceptedWorkflowRun invokes reconfirmPostPublishVerification for the modes that require it (requiresPostPublishReconfirm); a contradiction with the pre-publish verdict flips the decision to not_satisfied while a clean reconfirm lets completion proceed — the whole module was previously unreachable (NIN-103/219)."
   }
 ]
