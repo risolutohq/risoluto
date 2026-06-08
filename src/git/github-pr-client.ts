@@ -143,6 +143,12 @@ export class GitHubPrClient implements GithubApiToolClient {
         tokenEnvName,
       );
       const first = Array.isArray(existing) ? existing[0] : undefined;
+      if (!first) {
+        console.warn(
+          `[git] createPR re-fetch returned empty results for ${owner}/${repo}:${branchName} — PR reference may be lost`,
+        );
+        return undefined;
+      }
       return isPrCreateResult(first) ? first : undefined;
     }
   }

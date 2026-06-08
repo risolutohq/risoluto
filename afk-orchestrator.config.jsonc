@@ -1,0 +1,38 @@
+{
+  // afk-orchestrator role config — the daemon's `config` module (RIS-284) reads this and spawns
+  // each opencode agent's session with the model below. FILL THE BLANKS before running the daemon.
+  //
+  //  - `model`         : opencode model id "provider/model[/variant]". The optional 3rd /variant segment
+  //                      is the per-provider effort/thinking lever (e.g. /high, /xhigh, /max) — as in your
+  //                      opencode.json default "claude-max/claude-opus-4-8/xhigh". Custom proxied models work.
+  //                      No default — the daemon fails fast if a role's model is empty.
+  //                      Models are interchangeable across roles, EXCEPT: reviewer.model MUST differ
+  //                      from coder.model (the cross-model review gate).
+  //  - `fallbacks`     : optional ORDERED list — the daemon fails over to each id in turn on a
+  //                      provider / rate-limit error (opencode has no native fallback; the orchestrator owns it).
+  //                      Leave "" for no fallback.
+  //  - `reasoningEffort`: minimal | low | medium | high | xhigh. Mirrors the value in
+  //                      .opencode/agents/<role>.md; set here for the daemon-driven sessions.
+  //
+  // Run `opencode models` to list available ids.
+  "agents": {
+    "coder": {
+      "model": "deepseek/deepseek-v4-pro",
+      "fallbacks": ["claude-pro/claude-sonnet-4-6", "claude-max/claude-sonnet-4-6/high"],
+      "reasoningEffort": "high",
+    },
+    "reviewer": {
+      "model": "claude-max/claude-opus-4-8/xhigh",
+      "fallbacks": ["openai/gpt-5.5/high"],
+      "reasoningEffort": "high",
+    },
+    // diagnoser: cheap model, max thinking — "max variant" expressed as top reasoningEffort
+    // (the SDK has no --variant field; opencode applies the agent's effort instead). Spike verifies.
+    // `fallbacks` is tried in order on a provider/rate-limit error: deepseek-direct → opencode-free → opencode-go.
+    "diagnoser": {
+      "model": "deepseek/deepseek-v4-flash",
+      "fallbacks": ["opencode/deepseek-v4-flash-free", "opencode-go/deepseek-v4-flash"],
+      "reasoningEffort": "high",
+    },
+  },
+}

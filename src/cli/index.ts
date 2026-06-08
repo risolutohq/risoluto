@@ -307,6 +307,7 @@ async function awaitShutdown(logger: RisolutoLogger, shutdown: () => Promise<voi
     };
     process.once("SIGINT", handleSignal);
     process.once("SIGTERM", handleSignal);
+    process.once("SIGHUP", handleSignal);
   });
 }
 

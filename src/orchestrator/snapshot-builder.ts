@@ -394,7 +394,7 @@ function resolveRelatedEvents(
   eventsCache: Map<string, RecentEvent[]>,
 ): RecentEvent[] {
   if (runningEntry) return deps.attemptStore.getEvents(runningEntry.runId);
-  if (retryEntry || archivedAttempts.length === 0) {
+  if (archivedAttempts.length === 0) {
     return callbacks.getRecentEvents().filter((event) => event.issueIdentifier === identifier);
   }
   return archivedAttempts.flatMap((attempt) => {

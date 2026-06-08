@@ -15,18 +15,33 @@ code itself** — the subagents do. Keep the orchestration here; keep the review
 
 The pipeline the script runs: **Map** (one mapper agent per spine layer → semantic feature
 slices) → **Review** (one reviewer per slice, all 10 categories, Sonnet) → **Merge/dedupe**
-(plain code, cross-slice) → **Verify** (3 perspective-diverse skeptics per finding, Opus,
-refute-or-survive) → **Handoff** (synthesize a `review-handoff.v1` markdown).
+(plain code, cross-slice) → **Verify** (one combined skeptic per finding runs all three lenses —
+evidence / reasoning / impact — in a single Opus pass, refute-or-keep) → **Handoff** (synthesize
+a `review-handoff.v1` markdown).
 
 ## Why this shape
 
 A 52.9k-LOC repo is not reviewable in one pass, so it is sliced. Prior sweeps on this repo ran
 **34–50% false-positive** (the reviewing model's own triage was wrong a third to half the time),
-so the load-bearing stage is **Verify**, not Review: every finding is attacked by three
-independent skeptics whose default is "this is a false positive," and a finding survives only if
-at least two fail to refute it. That is where accuracy comes from — the wide-net Review casts,
-the adversarial Verify culls. Review runs on Sonnet (cheap, high recall); Verify and the final
-synthesis run on Opus (where being right matters most).
+so the load-bearing stage is **Verify**, not Review: every finding is attacked by an adversarial
+skeptic whose job is to refute it. The skeptic runs all three lenses — evidence (does the quote
+still exist?), reasoning (can the failure actually occur?), impact (is it reachable in
+production?) — in one Opus pass, and a finding is killed only when the skeptic can **concretely
+disprove** it on at least one lens; borderline findings are kept (and flagged `unverified`) for
+the deeper downstream review rather than culled by one over-eager pass. That layered accuracy —
+wide-net Review casts, adversarial Verify culls the obvious FPs, the downstream fixing session
+re-reviews each survivor before touching code — is the point. Review runs on Sonnet (cheap, high
+recall); Verify and synthesis run on Opus.
+
+**Hard limits (learned the expensive way).** The harness caps a workflow at **1000 agents** for
+its lifetime, and the Claude session has a rolling **token/usage window**. A 3-skeptics-per-finding
+panel over ~300 findings needs ~900 verify agents and ~10M tokens and blows **both** — the run
+dies mid-Verify with no handoff (this happened: 7 maps + 106 reviews + 887 skeptics = the 1000
+cap, after the session limit had already turned ~750 skeptics into no-ops). So Verify uses **one**
+combined skeptic per finding (~3× cheaper, every finding checked, no deferral), the script
+hard-caps the fan-out (`MAX_AGENTS`), and a crashed/limited skeptic is a non-event — the finding
+survives flagged `unverified`, never silently dropped as if refuted. For a genuinely huge finding
+set the cap defers the lowest-severity tail and `log()`s it.
 
 It stops at the handoff on purpose. A fresh session — or the `/goal` conductor — fixes from the
 artifact. Mixing "find" and "fix" in one run is how a 50%-FP list quietly rewrites correct code.
@@ -71,11 +86,16 @@ Workflow({
 
 - The Workflow returns immediately with a run id and runs in the background; you are notified on
   completion. Watch progress with `/workflows` if you like.
-- **Scale with the budget.** A whole-repo sweep can fan out to 100+ subagents (20–90 slices, 3
-  skeptics per surviving finding). Without a budget directive it reviews every slice. With a
-  `+Nk` directive on the turn, the script caps the slice count to fit and `log()`s exactly what
-  it dropped — there is never a silent cap. For a real full sweep, suggest Omer prepend something
-  like `+300k`.
+- **Scale.** A whole-repo sweep fans out to a few hundred subagents: typically 7 mappers + ~100
+  reviewers + ~300 skeptics (one per deduped finding) + 1 synth ≈ ~400 agents, ~7–8M tokens. The
+  1000-agent cap and 5-hour session token window are both real and were both hit by the first
+  attempt (3 skeptics/finding × 300 findings blew both). The current single-skeptic design fits
+  comfortably but `MAX_AGENTS` is still wired as a backstop — if a run ever exceeds it, the
+  lowest-severity findings are deferred unverified and `log()`ed. A skeptic crash (StructuredOutput
+  failure, session limit) is caught by a try/catch and the finding survives flagged `unverified`
+  instead of being silently lost. Token cost is dominated by reviewers re-reading source
+  (cache-read, ~138M for a full repo); if a run dies on the session window, **resume** (below) —
+  Map+Review return from cache for free, only Verify+Handoff re-run.
 - **Resume.** If a run is interrupted, re-launch with
   `Workflow({ scriptPath, resumeFromRunId: "<run id>", args: <same args> })`. Map and Review
   results are cached on unchanged `(prompt, args)`, so only Verify onward re-runs. Keep `args`
@@ -103,7 +123,7 @@ Print a terse summary and the path — nothing else acts on the findings:
 
 ```text
 clawpatch sweep complete — reviews/<date>-sweep.md
-slices: <stats.slices>  |  raw <stats.raw> -> deduped <stats.deduped> -> confirmed <confirmed> (<stats.dropped> refuted)
+slices: <stats.slices>  |  raw <stats.raw> -> deduped <stats.deduped> -> confirmed <confirmed> (<stats.dropped> refuted, <stats.deferred> deferred, <stats.unverified> unverified)
 summary: <high> HIGH, <med> MED, <nit> NIT  (HIGH blocks any PR a fixer opens)
 next: hand reviews/<date>-sweep.md to a fresh session to fix; the embedded review-handoff.v1 JSON is conductor-parseable.
 ```
@@ -134,7 +154,11 @@ Everything substantive lives in the script — adjust it there, not here:
   legitimate tracker coordinate; the two known deferred-as-unsafe edits). These are injected into
   both the Review and Verify prompts. When a new systematic false positive shows up, add it here —
   that is how the sweep gets sharper over time.
-- **Verify strength** — `REFUTE_LENSES` (evidence / reasoning / impact) and `SURVIVE_THRESHOLD`
-  (2 of 3). Add a fourth lens or raise the threshold to be stricter.
+- **Verify strength** — `REFUTE_LENSES` (evidence / reasoning / impact) are all run by a single
+  combined skeptic per finding (`SKEPTICS_PER_FINDING = 1`); a finding is killed only on concrete
+  refutation. To make Verify stricter, add a lens, sharpen the refute calibration in
+  `refutePrompt`, or raise `SKEPTICS_PER_FINDING` back to a multi-skeptic vote — but mind the
+  1000-agent / token-window limits in "Why this shape" (a multi-skeptic panel over a whole-repo
+  finding set will not fit one run).
 - **Model tiers** — Review on `sonnet`, Verify and synthesis on `opus`. Change per-agent `model`
   opts if the cost/accuracy trade shifts.

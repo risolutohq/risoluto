@@ -91,6 +91,9 @@ export function classifyWorkflowRunWorktreeRetention(
   }
 
   const ageMs = Date.parse(input.now) - Date.parse(input.finishedAt);
+  if (isNaN(ageMs)) {
+    return { action: "keep", reason: "retention_window_active" };
+  }
   const retentionMs = Math.max(0, input.retentionDays) * MS_PER_DAY;
   if (ageMs <= retentionMs) {
     return { action: "keep", reason: "retention_window_active" };

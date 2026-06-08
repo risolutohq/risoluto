@@ -66,7 +66,7 @@ function recordExternalStatusObservation(
   }
 
   const observation = observeExternalStatusChange({
-    workflowRunId: detail.issueId,
+    workflowRunId: detail.workflowRunId ?? detail.identifier,
     workflowDefinitionId: DEFAULT_WORKFLOW_DEFINITION_ID,
     provider: "linear",
     canonicalRunStatus,

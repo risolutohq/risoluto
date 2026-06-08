@@ -50,7 +50,8 @@ function assertReadOnlyQuery(query: string): void {
   if (MUTATING_OPERATION.test(query)) {
     throw new Error("linear_graphql only permits read-only query operations (mutation/subscription rejected)");
   }
-  if (SECRET_BEARING_FIELD.test(query)) {
+  const strippedQuery = query.replace(/"((?:[^"\\]|\\.)*)"/g, '""');
+  if (SECRET_BEARING_FIELD.test(strippedQuery)) {
     throw new Error("linear_graphql rejects secret-bearing fields (e.g. webhook secret, tokens)");
   }
 }
