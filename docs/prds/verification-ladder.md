@@ -1,6 +1,6 @@
 ---
 slug: verification-ladder
-linear_project: https://linear.app/ninetech/project/verification-ladder-f60d2c7e97f2
+linear_project: https://linear.app/ninetech/project/verification-ladder-e25bb1dd5a9d
 synced_at: 2026-06-02T00:00:00Z
 source: docs/roadmap.md#verification-ladder
 status: draft

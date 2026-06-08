@@ -1,6 +1,6 @@
 ---
 slug: workflow-first-afk-mvp
-linear_project: https://linear.app/ninetech/project/workflow-first-afk-mvp-838087658d56
+linear_project: https://linear.app/ninetech/project/workflow-first-afk-mvp-f21a3ba5db93
 synced_at: 2026-05-31T00:00:00Z
 source: docs/roadmap.md#workflow-first-afk-mvp
 status: draft
