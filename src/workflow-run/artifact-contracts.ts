@@ -2,6 +2,7 @@ import { z, ZodError, type ZodType } from "zod";
 
 import { ciResultArtifactSchema } from "./ci-babysitter.js";
 import { handoffArtifactSchema } from "./handoff-contract.js";
+import { mergePolicyResultArtifactSchema } from "./merge-policy-result-contract.js";
 import { operatorApprovalArtifactSchema } from "./operator-approval-contract.js";
 import { operatorResponseArtifactSchema } from "./operator-response-contract.js";
 import { publishResultArtifactSchema } from "./publish-policy.js";
@@ -43,6 +44,7 @@ export const WORKFLOW_RUN_ARTIFACT_CONTRACT_IDS = [
   "operator_response.v1",
   "operator_approval.v1",
   "consumed_approval_nonce.v1",
+  "merge_policy_result.v1",
 ] as const;
 
 const consumedApprovalNonceSchema = z
@@ -177,6 +179,7 @@ const artifactContractSchemaEntries: readonly (readonly [
   ["operator_response.v1", operatorResponseArtifactSchema],
   ["operator_approval.v1", operatorApprovalArtifactSchema],
   ["consumed_approval_nonce.v1", consumedApprovalNonceSchema],
+  ["merge_policy_result.v1", mergePolicyResultArtifactSchema],
 ];
 
 const artifactContractSchemas: ReadonlyMap<string, ZodType<unknown>> = new Map(artifactContractSchemaEntries);

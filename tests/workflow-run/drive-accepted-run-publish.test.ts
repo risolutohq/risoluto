@@ -116,4 +116,41 @@ describe("driveAcceptedWorkflowRun publish-before-done", () => {
     const run = await archive.loadWorkflowRun(workflowRunId);
     expect(run.status).toBe("done");
   });
+
+  it("runs the auto-merge completion gate on the done path with the published PR url (NIN-272)", async () => {
+    const { input } = await acceptedRun();
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return { status: "done", events: [], roleExecutions: ["planner"], artifacts: {} };
+    });
+    const completeAutoMergeOnDone = vi.fn(async () => {});
+
+    const result = await driveAcceptedWorkflowRun({
+      ...input,
+      publishOnDone: async () => ({ pullRequestUrl: "https://example.test/pr/7" }),
+      completeAutoMergeOnDone,
+    });
+
+    expect(result.outcome).toBe("done");
+    expect(completeAutoMergeOnDone).toHaveBeenCalledWith({ pullRequestUrl: "https://example.test/pr/7" });
+  });
+
+  it("skips the auto-merge completion gate when no PR was published (NIN-272)", async () => {
+    const { input } = await acceptedRun();
+    vi.mocked(driveWorkflowRun).mockImplementation(async (driveInput) => {
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "running" });
+      await driveInput.recordStatus?.({ workflowRunId: driveInput.workflowRunId, status: "done" });
+      return { status: "done", events: [], roleExecutions: ["planner"], artifacts: {} };
+    });
+    const completeAutoMergeOnDone = vi.fn(async () => {});
+
+    await driveAcceptedWorkflowRun({
+      ...input,
+      publishOnDone: async () => ({ pullRequestUrl: null }),
+      completeAutoMergeOnDone,
+    });
+
+    expect(completeAutoMergeOnDone).not.toHaveBeenCalled();
+  });
 });

@@ -250,6 +250,32 @@ describe("handleWebhookLinear", () => {
     });
   });
 
+  it("observes an external status change on Issue update without mutating canonical truth (NIN-270 AC3)", async () => {
+    const observeExternalStatusChange = vi.fn();
+    const deps = makeDeps({ observeExternalStatusChange });
+    const payload = makePayload({
+      action: "update",
+      data: { id: "issue-1", identifier: "SYM-42", title: "Fix bug", state: { name: "In Review" } },
+    });
+    const bodyStr = JSON.stringify(payload);
+    const rawBody = Buffer.from(bodyStr);
+    const req = makeRequest(payload, { "linear-signature": sign(bodyStr) }, rawBody);
+    const res = makeResponse();
+
+    handleWebhookLinear(deps, req, res);
+    await flushMicrotasks();
+
+    expect(res._status).toBe(200);
+    // The inbound external status change reaches the observation seam (observeExternalStatusChange).
+    expect(observeExternalStatusChange).toHaveBeenCalledWith({
+      issueId: "issue-1",
+      issueIdentifier: "SYM-42",
+      externalStatus: "In Review",
+    });
+    // A non-terminal external state must NOT stop the worker — the observation is read-only.
+    expect(deps.stopWorkerForIssue).not.toHaveBeenCalled();
+  });
+
   it("includes 'update' in refresh reason for Issue update events", async () => {
     const deps = makeDeps();
     const payload = makePayload({ action: "update" });

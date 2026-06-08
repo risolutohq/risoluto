@@ -49,6 +49,12 @@ export interface WorkflowRunResolvedDefinitionConfig {
   workflowDefinitionId: string;
   validationProfile: string;
   modelProfiles: Record<string, string>;
+  /**
+   * Workflow-level status mapping override (NIN-270). When present it beats the workspace-level
+   * `tracker.statusMapping` during projection. Inlined here rather than imported from
+   * status-projection.ts to avoid a contracts ↔ status-projection import cycle.
+   */
+  statusMapping?: Partial<Record<WorkflowRunStatus, string>>;
 }
 
 export interface WorkflowRunStartedOutput {

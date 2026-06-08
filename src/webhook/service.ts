@@ -1,9 +1,13 @@
 import type { TypedEventBus } from "../core/event-bus.js";
 import type { RisolutoEventMap } from "../core/risoluto-events.js";
 import type { RisolutoLogger, WebhookConfig } from "../core/types.js";
+import type { OrchestratorPort } from "../orchestrator/port.js";
 import type { PersistenceRuntime } from "../persistence/sqlite/runtime.js";
 import type { SecretsStore } from "../secrets/store.js";
+import { DEFAULT_WORKFLOW_DEFINITION_ID, type WorkflowRunStatus } from "../workflow-run/contracts.js";
 import type { LinearTriggeredWorkflowRunRequest } from "../workflow-run/linear-intake.js";
+import { parseWorkflowRunStatus, WorkflowRunStatusError } from "../workflow-run/run-status.js";
+import { observeExternalStatusChange } from "../workflow-run/status-projection.js";
 import type { GitHubTriggeredWorkflowRunRequest } from "../workflow-run/tracker-intake.js";
 import { DefaultWebhookHealthTracker, type WebhookHealthTracker } from "./health-tracker.js";
 import type { WebhookHandlerDeps } from "./linear-handler.js";
@@ -31,6 +35,55 @@ export function evaluateWebhookConfig(
   }
 
   return false;
+}
+
+/**
+ * Record an inbound external (Linear board) status change as a read-only observation (NIN-270 AC3).
+ *
+ * The canonical Workflow Run status is sourced from the orchestrator's current view of the run. When
+ * that runtime status is not a canonical Workflow Run status (e.g. the orchestrator's transient
+ * "stopping"/"retrying"), there is no canonical truth to compare against, so the observation is
+ * skipped rather than fabricated. This path never mutates run state — it only emits the observation.
+ */
+function recordExternalStatusObservation(
+  orchestrator: Pick<OrchestratorPort, "getIssueDetail">,
+  logger: RisolutoLogger,
+  input: { issueId: string; issueIdentifier: string; externalStatus: string },
+): void {
+  const detail = orchestrator.getIssueDetail(input.issueIdentifier);
+  if (!detail) {
+    return;
+  }
+
+  let canonicalRunStatus: WorkflowRunStatus;
+  try {
+    canonicalRunStatus = parseWorkflowRunStatus(detail.status);
+  } catch (error) {
+    if (error instanceof WorkflowRunStatusError) {
+      return;
+    }
+    throw error;
+  }
+
+  const observation = observeExternalStatusChange({
+    workflowRunId: detail.issueId,
+    workflowDefinitionId: DEFAULT_WORKFLOW_DEFINITION_ID,
+    provider: "linear",
+    canonicalRunStatus,
+    externalStatus: input.externalStatus,
+    observedAt: new Date().toISOString(),
+  });
+
+  logger.info(
+    {
+      workflow_run_id: observation.workflowRunId,
+      issue_identifier: input.issueIdentifier,
+      canonical_run_status: observation.canonicalRunStatus,
+      external_status: observation.externalStatus,
+      observed_at: observation.observedAt,
+    },
+    "external tracker status observed — canonical Workflow Run truth unchanged",
+  );
 }
 
 export interface WebhookService extends WebhookPort {
@@ -92,6 +145,8 @@ export function createWebhookService(input: {
         return undefined;
       }
 
+      const handlerLogger = logger.child({ component: "webhook-handler" });
+
       return {
         getWebhookSecret: () => resolvedWebhookSecret.current,
         getPreviousWebhookSecret: () => resolvedPreviousWebhookSecret,
@@ -100,12 +155,14 @@ export function createWebhookService(input: {
           orchestrator.requestTargetedRefresh(issueId, issueIdentifier, reason),
         stopWorkerForIssue: (issueIdentifier: string, reason: string) =>
           orchestrator.stopWorkerForIssue(issueIdentifier, reason),
+        observeExternalStatusChange: (statusInput) =>
+          recordExternalStatusObservation(orchestrator, handlerLogger, statusInput),
         recordVerifiedDelivery: (eventType: string) => webhookHealthTracker?.recordVerifiedDelivery(eventType),
         acceptLinearTriggeredWorkflowRun: input.acceptLinearTriggeredWorkflowRun,
         acceptGitHubTriggeredWorkflowRun: input.acceptGitHubTriggeredWorkflowRun,
         webhookInbox,
         eventBus: input.eventBus,
-        logger: logger.child({ component: "webhook-handler" }),
+        logger: handlerLogger,
       };
     },
     async getSnapshot(limit = 20): Promise<WebhookPortSnapshot> {

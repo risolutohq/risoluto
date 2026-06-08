@@ -97,6 +97,12 @@ jobs:
     env:
       LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       E2E_GITHUB_TOKEN: ${{ secrets.E2E_GITHUB_TOKEN }}
+      # Opt the live engine drive in (NIN-273); without this the run-start live suite skips.
+      RISOLUTO_LIVE_RUN_START: "1"
+      RISOLUTO_LIVE_MODEL_API_KEY: ${{ secrets.RISOLUTO_LIVE_MODEL_API_KEY }}
+      E2E_GITHUB_REPO: risolutohq/risoluto-live-sandbox
+      GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+      GITHUB_APP_INSTALLATION_ID: ${{ secrets.GITHUB_APP_INSTALLATION_ID }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
@@ -105,6 +111,16 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Prepare GitHub App key file
+        env:
+          RISOLUTO_LIVE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$RISOLUTO_LIVE_GITHUB_APP_PRIVATE_KEY" ]; then
+            install -m 700 -d "$RUNNER_TEMP/risoluto-live"
+            printf '%s' "$RISOLUTO_LIVE_GITHUB_APP_PRIVATE_KEY" > "$RUNNER_TEMP/risoluto-live/github-app.pem"
+            chmod 600 "$RUNNER_TEMP/risoluto-live/github-app.pem"
+            echo "GITHUB_APP_PRIVATE_KEY_FILE=$RUNNER_TEMP/risoluto-live/github-app.pem" >> "$GITHUB_ENV"
+          fi
       - run: pnpm run test:integration:live
 
   live-preflight:

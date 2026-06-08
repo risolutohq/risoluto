@@ -34,6 +34,12 @@ export interface WebhookHandlerDeps {
   requestRefresh: (reason: string) => void;
   requestTargetedRefresh?: (issueId: string, issueIdentifier: string, reason: string) => void;
   stopWorkerForIssue?: (issueIdentifier: string, reason: string) => void;
+  /**
+   * Record an inbound external (tracker board) status change as an observation (NIN-270). Read-only:
+   * it must NOT mutate canonical Workflow Run truth. The composition wires this to the inbound twin of
+   * `projectWorkflowRunStatus` — `observeExternalStatusChange` — keyed on the run's current canonical status.
+   */
+  observeExternalStatusChange?: (input: { issueId: string; issueIdentifier: string; externalStatus: string }) => void;
   recordVerifiedDelivery: (eventType: string) => void;
   acceptLinearTriggeredWorkflowRun?: (input: LinearTriggeredWorkflowRunRequest) => Promise<unknown>;
   acceptGitHubTriggeredWorkflowRun?: (input: GitHubTriggeredWorkflowRunRequest) => Promise<unknown>;
@@ -208,6 +214,7 @@ async function handleIssueEvent(
 
   if (issueId && issueIdentifier && deps.requestTargetedRefresh) {
     deps.requestTargetedRefresh(issueId, issueIdentifier, `webhook:issue:${action}`);
+    maybeObserveExternalStatus(deps, action, body, issueId, issueIdentifier);
     maybeStopWorker(deps, action, body, issueIdentifier);
     return;
   }
@@ -291,6 +298,32 @@ function handleCommentEvent(
   }
 
   deps.requestRefresh(`webhook:comment:${action}`);
+}
+
+/**
+ * Forward an inbound external status change (the board's new `state.name` on an Issue update) to the
+ * read-only observation seam. The handler only knows the external status and issue identity here — the
+ * composition resolves the canonical run status and records the observation without mutating it (NIN-270).
+ */
+function maybeObserveExternalStatus(
+  deps: WebhookHandlerDeps,
+  action: string,
+  body: LinearWebhookPayload,
+  issueId: string,
+  issueIdentifier: string,
+): void {
+  if (action !== "update" || !deps.observeExternalStatusChange) {
+    return;
+  }
+
+  const data = body.data as Record<string, unknown>;
+  const state = data.state as Record<string, unknown> | undefined;
+  const externalStatus = typeof state?.name === "string" ? state.name : null;
+  if (!externalStatus) {
+    return;
+  }
+
+  deps.observeExternalStatusChange({ issueId, issueIdentifier, externalStatus });
 }
 
 function maybeStopWorker(

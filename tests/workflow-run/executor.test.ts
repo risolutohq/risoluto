@@ -86,6 +86,26 @@ function createVerifierDefinition(): ResolvedWorkflowDefinition {
   };
 }
 
+// Council variant: the verifier role runs in council mode with two councillors (NIN-271).
+function createCouncilVerifierDefinition(): ResolvedWorkflowDefinition {
+  const base = createVerifierDefinition();
+  return {
+    ...base,
+    roles: base.roles.map((role) =>
+      role.id === "verifier"
+        ? {
+            ...role,
+            verifierMode: "council" as const,
+            councillors: [
+              { id: "council-correctness", modelProfile: "verifier", lens: "correctness" },
+              { id: "council-security", modelProfile: "strong", lens: "security" },
+            ],
+          }
+        : role,
+    ),
+  };
+}
+
 function verificationArtifact(decision: string): Readonly<Record<string, unknown>> {
   return {
     version: 1,
@@ -605,6 +625,60 @@ describe("executeWorkflowDefinition", () => {
     // Default budget is one retry: verify (retry) → re-run implement→review→verify → verify (budget 0) → block.
     expect(roleRuns.filter((id) => id === "verifier")).toHaveLength(2);
     expect(roleRuns.filter((id) => id === "implementer")).toHaveLength(2);
+  });
+
+  it("routes a council-configured verifier through runCouncilVerifier and records councillor evidence (NIN-271)", async () => {
+    const councillorRuns: string[] = [];
+
+    const result = await executeWorkflowDefinition({
+      definition: createCouncilVerifierDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      councilClock: () => createdAt,
+      runCouncillor: async ({ councillor }) => {
+        councillorRuns.push(councillor.id);
+        return { status: "completed", decision: "satisfied", summary: `${councillor.lens} ok` };
+      },
+      synthesizeCouncil: async ({ completedResults }) => ({
+        decision: "satisfied",
+        summary: `synthesized from ${completedResults.length} councillors`,
+      }),
+      runRole: async ({ role }) => {
+        if (role.id === "verifier") {
+          throw new Error("council verifier must route through runCouncilVerifier, not runRole");
+        }
+        return roleOutput(role.id);
+      },
+    });
+
+    expect(result.status).toBe("done");
+    // Both councillors ran and the synthesizer decided — reached from the executor on a real run.
+    expect(councillorRuns).toEqual(["council-correctness", "council-security"]);
+    const verification = result.artifacts["verification.v1"] as Record<string, unknown>;
+    expect(verification.mode).toBe("council");
+    expect(verification.decision).toBe("satisfied");
+    expect(verification.consensus).toBe("unanimous");
+    expect(verification.summary).toBe("synthesized from 2 councillors");
+    expect(verification.councillors).toHaveLength(2);
+  });
+
+  it("blocks a council verifier run when every councillor fails (NIN-271)", async () => {
+    const synthesize = vi.fn(async () => ({ decision: "satisfied" as const, summary: "should not run" }));
+
+    const result = await executeWorkflowDefinition({
+      definition: createCouncilVerifierDefinition(),
+      workflowRunId,
+      initialArtifacts: { "intent.v1": intentArtifact() },
+      councilClock: () => createdAt,
+      runCouncillor: async () => ({ status: "failed", error: "councillor crashed" }),
+      synthesizeCouncil: synthesize,
+      runRole: async ({ role }) => (role.id === "verifier" ? {} : roleOutput(role.id)),
+    });
+
+    expect(result.status).toBe("blocked");
+    // No completed councillor means no synthesized decision — the synthesizer must not be consulted.
+    expect(synthesize).not.toHaveBeenCalled();
+    expect(result.artifacts["verification.v1"]).toBeUndefined();
   });
 });
 

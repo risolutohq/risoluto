@@ -7,6 +7,9 @@ import { z, ZodError } from "zod";
 
 import { isWorkflowRunArtifactContractId } from "../workflow-run/artifact-contracts.js";
 import type { WorkflowRunResolvedDefinitionConfig } from "../workflow-run/contracts.js";
+import { RUN_STATUS_VALUES } from "../workflow-run/run-status.js";
+import type { WorkflowRunStatusMapping } from "../workflow-run/status-projection.js";
+import type { CouncilVerifier } from "../workflow-run/verifier.js";
 
 export interface WorkflowResolutionDefaults {
   readonly modelProfile: string;
@@ -31,6 +34,10 @@ export interface ResolvedWorkflowRole {
   readonly consumes: readonly string[];
   readonly produces: readonly string[];
   readonly dependsOn: readonly string[];
+  /** Verifier dispatch mode (NIN-271). `council` routes the verifier role through `runCouncilVerifier`. */
+  readonly verifierMode?: "single" | "council";
+  /** Council members dispatched when `verifierMode === "council"`; each carries its model profile and lens. */
+  readonly councillors?: readonly CouncilVerifier[];
 }
 
 export interface ResolvedWorkflowDefinition {
@@ -39,6 +46,8 @@ export interface ResolvedWorkflowDefinition {
   readonly states: readonly ResolvedWorkflowState[];
   readonly roles: readonly ResolvedWorkflowRole[];
   readonly actions: readonly string[];
+  /** Workflow-level status mapping override (NIN-270); beats the workspace-level tracker mapping. */
+  readonly statusMapping?: WorkflowRunStatusMapping;
 }
 
 export interface WorkflowDefinitionRegistry {
@@ -74,6 +83,16 @@ const BUILTIN_ACTION_IDS = new Set([
 const BUILTIN_MODEL_PROFILE_IDS = new Set(["balanced", "fast", "strong", "verifier"]);
 const BUILTIN_VALIDATION_PROFILE_IDS = new Set(["node-pnpm-standard", "offline-smoke"]);
 
+const workflowRunStatusKeySchema = z.enum(RUN_STATUS_VALUES);
+
+const councillorSchema = z
+  .object({
+    id: z.string().min(1),
+    modelProfile: z.string().min(1).optional(),
+    lens: z.string().min(1),
+  })
+  .strict();
+
 const roleSchema = z
   .object({
     id: z.string().min(1),
@@ -81,8 +100,21 @@ const roleSchema = z
     consumes: z.array(z.string().min(1)),
     produces: z.array(z.string().min(1)),
     dependsOn: z.array(z.string().min(1)),
+    // Optional council verifier config (NIN-271). `council` routes the verifier role through
+    // `runCouncilVerifier`; councillors each declare a model profile (defaults to the role's) and a lens.
+    verifierMode: z.enum(["single", "council"]).optional(),
+    councillors: z.array(councillorSchema).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.verifierMode === "council" && (val.councillors == null || val.councillors.length === 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["councillors"],
+        message: `verifierMode "council" requires at least one councillor`,
+      });
+    }
+  });
 
 const workflowDefinitionSchema = z
   .object({
@@ -105,6 +137,9 @@ const workflowDefinitionSchema = z
         .strict(),
     ),
     actions: z.array(z.string().min(1)),
+    // Optional workflow-level status mapping override (NIN-270). Keys are canonical Run Status values;
+    // present keys beat the workspace-level tracker.statusMapping during projection.
+    statusMapping: z.partialRecord(workflowRunStatusKeySchema, z.string()).optional(),
   })
   .strict();
 
@@ -140,6 +175,7 @@ export function toWorkflowRunResolvedDefinitionConfig(
     workflowDefinitionId: definition.id,
     validationProfile: definition.validationProfile,
     modelProfiles,
+    ...(definition.statusMapping ? { statusMapping: definition.statusMapping } : {}),
   };
 }
 
@@ -241,6 +277,9 @@ function validateWorkflowDefinitionReferences(definition: WorkflowDefinition): v
 function validateRoleReferences(role: WorkflowRoleDefinition): void {
   assertKnownId(BUILTIN_ROLE_IDS, role.id, "role");
   assertKnownId(BUILTIN_MODEL_PROFILE_IDS, role.modelProfile, "model profile");
+  for (const councillor of role.councillors ?? []) {
+    assertKnownId(BUILTIN_MODEL_PROFILE_IDS, councillor.modelProfile, "model profile");
+  }
   for (const contractId of [...role.consumes, ...role.produces]) {
     if (!isWorkflowRunArtifactContractId(contractId)) {
       throw new WorkflowDefinitionRegistryError(`unknown artifact contract id ${contractId}`);
@@ -312,10 +351,23 @@ function resolveWorkflowDefinition(
         consumes: role.consumes,
         produces: role.produces,
         dependsOn: role.dependsOn,
+        ...(role.verifierMode ? { verifierMode: role.verifierMode } : {}),
+        ...(role.councillors ? { councillors: resolveCouncillors(role, modelProfile) } : {}),
       })),
     ),
     actions: definition.actions,
+    ...(definition.statusMapping ? { statusMapping: definition.statusMapping } : {}),
   };
+}
+
+/** Resolve each councillor's model profile to its explicit value or the verifier role's default (NIN-271). */
+function resolveCouncillors(role: WorkflowRoleDefinition, definitionModelProfile: string): CouncilVerifier[] {
+  const roleModelProfile = role.modelProfile ?? definitionModelProfile;
+  return (role.councillors ?? []).map((councillor) => ({
+    id: councillor.id,
+    modelProfile: councillor.modelProfile ?? roleModelProfile,
+    lens: councillor.lens,
+  }));
 }
 
 function resolveRegisteredWorkflowDefinition(
