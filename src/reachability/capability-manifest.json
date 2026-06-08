@@ -26,5 +26,12 @@
     "module": "src/workflow-run/drive-accepted-run.ts",
     "intakeAdapters": ["cli", "http"],
     "reason": "Every intake surface emits workflow_run.accepted; the Phase-8 acceptedRunDriver subscriber (cli/services.ts) drives the accepted run through driveAcceptedWorkflowRun -> executeWorkflowDefinition, so an HTTP-created run is not just an intake record (NIN-110/203)."
+  },
+  {
+    "name": "workflow-level-status-mapping",
+    "symbol": "mirrorWorkflowRunStatusToTracker",
+    "module": "src/workflow-run/status-mirror.ts",
+    "intakeAdapters": ["cli"],
+    "reason": "completion-writeback resolves the run's workflow-level statusMapping from the archive (cli/services.ts) and threads it as workflowMapping into mirrorWorkflowRunStatusToTracker, so a workflow definition's override beats the workspace-level board mapping end-to-end (NIN-77/270)."
   }
 ]
