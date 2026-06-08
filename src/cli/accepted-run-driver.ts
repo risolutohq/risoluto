@@ -9,6 +9,7 @@ import { driveAcceptedWorkflowRun, type DriveAcceptedWorkflowRunResult } from ".
 import type { WorkflowRunIntentArtifact } from "../workflow-run/intake-core.js";
 import { createWorkflowRunActionRunner, type WorkflowRunActionEffects } from "../workflow-run/run-action-runner.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
+import { createCouncilDispatch } from "../workflow-run/council-dispatch.js";
 import type { RisolutoLogger } from "../core/types.js";
 
 /**
@@ -72,6 +73,12 @@ async function driveRun(deps: AcceptedRunDriverDeps, workflowRunId: string): Pro
     readArtifact: (input) => archive.readWorkflowRunArtifact(input),
   });
 
+  const council = createCouncilDispatch({
+    workflowRunId,
+    dispatchRole,
+    readArtifact: (input) => archive.readWorkflowRunArtifact(input),
+  });
+
   const runAction = createWorkflowRunActionRunner({
     effects: deps.actionEffects ?? {},
     workflowDefinitionId: definition.id,
@@ -87,6 +94,9 @@ async function driveRun(deps: AcceptedRunDriverDeps, workflowRunId: string): Pro
     runRole,
     runAction,
     budget: deps.budget ?? createDefaultWorkflowBudget(),
+    runCouncillor: council.runCouncillor,
+    synthesizeCouncil: council.synthesizeCouncil,
+    councilClock: nowFn,
     now: nowFn,
   });
 

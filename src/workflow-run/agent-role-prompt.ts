@@ -32,6 +32,16 @@ const CONTRACT_DATA_SHAPES: ReadonlyMap<string, string> = new Map([
     '{ "version": 1, "workflowRunId": "<run-id>", "createdAt": "<ISO-8601>", "mode": "single", ' +
       '"decision": "satisfied|not_satisfied|uncertain", "summary": "<judgement>", "allowedInputs": [], "evidenceLinks": [] }',
   ],
+  [
+    "council_verifier_decision.v1",
+    '{ "version": 1, "workflowRunId": "<run-id>", "createdAt": "<ISO-8601>", "status": "completed", ' +
+      '"decision": "satisfied|not_satisfied|uncertain", "summary": "<your verdict given your assigned lens>" }',
+  ],
+  [
+    "council_synthesizer_decision.v1",
+    '{ "version": 1, "workflowRunId": "<run-id>", "createdAt": "<ISO-8601>", ' +
+      '"decision": "satisfied|not_satisfied|uncertain", "summary": "<reconciled council verdict>" }',
+  ],
 ]);
 
 const ROLE_GUIDANCE: ReadonlyMap<string, string> = new Map([
@@ -43,6 +53,7 @@ const ROLE_GUIDANCE: ReadonlyMap<string, string> = new Map([
     "Judge whether the change satisfies the intent using only the allowed artifacts; never read the implementer transcript.",
   ],
   ["ci_babysitter", "Watch the remote CI run and classify any failures."],
+  ["council-synthesis", "Synthesize the council members' verdicts into a single reconciled decision and summary."],
 ]);
 
 const PROMPT_INJECTION_PREFIXES = ["System:", "IGNORE", "Assistant:", "USER:", "HUMAN:"];
@@ -68,7 +79,7 @@ export function buildAgentRolePrompt(input: BuildAgentRolePromptInput): string {
   const sanitizedBody = sanitizeIntentField(input.intentBody, MAX_INTENT_BODY_LENGTH);
   const lines: string[] = [
     `You are the "${input.role.id}" role in an autonomous software workflow run.`,
-    ROLE_GUIDANCE.get(input.role.id) ?? `Perform the ${input.role.id} role.`,
+    roleGuidanceFor(input.role.id),
     "",
     `Workflow Run id: ${input.workflowRunId}`,
     "--- USER INTENT (untrusted) ---",
@@ -80,7 +91,9 @@ export function buildAgentRolePrompt(input: BuildAgentRolePromptInput): string {
     'Each file MUST contain: { "contractId": "<id>", "data": <DATA> }',
   ];
   for (const contractId of input.role.produces) {
-    const artifactId = workflowRunArtifactIdForContract(contractId);
+    // Council sessions use the role id as the artifact id to avoid collisions between multiple
+    // councillors writing the same contract in a single run.
+    const artifactId = contractId.startsWith("council_") ? input.role.id : workflowRunArtifactIdForContract(contractId);
     lines.push(
       "",
       `- ${contractId} -> ${input.archiveRoot}/workflow-runs/${input.workflowRunId}/artifacts/${artifactId}.json`,
@@ -92,4 +105,15 @@ export function buildAgentRolePrompt(input: BuildAgentRolePromptInput): string {
     "Emit valid JSON only, with every required field present. The run fails if any artifact is missing or malformed.",
   );
   return lines.join("\n");
+}
+
+function roleGuidanceFor(roleId: string): string {
+  const exact = ROLE_GUIDANCE.get(roleId);
+  if (exact !== undefined) {
+    return exact;
+  }
+  if (roleId.startsWith("council-decision-")) {
+    return "Review the change as a council member with your assigned lens and produce your independent verdict.";
+  }
+  return `Perform the ${roleId} role.`;
 }

@@ -26,7 +26,7 @@ import { reconfirmPostPublishVerification, type VerificationArtifact } from "./p
 import type { PrPublishMode } from "./publish-policy.js";
 import { WorkflowRunActionError } from "./run-action-runner.js";
 import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
-import { driveWorkflowRun } from "./workflow-run-driver.js";
+import { driveWorkflowRun, type DriveWorkflowRunInput } from "./workflow-run-driver.js";
 import { isRecord, toErrorString } from "../utils/type-guards.js";
 
 export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocation {
@@ -41,6 +41,10 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
   readonly maxGateRetries?: number;
   readonly budget?: ExecuteWorkflowDefinitionInput["budget"];
   readonly now?: () => string;
+  /** Council verifier callbacks (NIN-76). When present, council-mode verifier roles dispatch real sessions. */
+  readonly runCouncillor?: ExecuteWorkflowDefinitionInput["runCouncillor"];
+  readonly synthesizeCouncil?: ExecuteWorkflowDefinitionInput["synthesizeCouncil"];
+  readonly councilClock?: ExecuteWorkflowDefinitionInput["councilClock"];
   /**
    * Run on the DONE path BEFORE the handoff is written: commit + push the agent's workspace and open a
    * PR. Its `pullRequestUrl` is threaded into `handoff.output` and the result so callers can surface it.
@@ -104,6 +108,7 @@ export async function driveAcceptedWorkflowRun(
       ...(input.retryGate ? { retryGate: input.retryGate } : {}),
       ...(input.maxGateRetries === undefined ? {} : { maxGateRetries: input.maxGateRetries }),
       ...(input.budget ? { budget: input.budget } : {}),
+      ...buildCouncilDriveOpts(input),
       // Defer the terminal "done" persistence until after publishOnDone (in finishDrivenRun). If the
       // executor wrote "done" here, the archive's terminal-status guard would reject the later
       // done -> blocked transition when a PR publish fails, stranding a "done" run with no PR
@@ -114,6 +119,7 @@ export async function driveAcceptedWorkflowRun(
         }
       },
     });
+    await persistCouncilVerificationIfPresent(archive, input.workflowRun.id, result.artifacts);
     const evidenceRefs = getEvidenceRefs();
     const memoryRecord = await writeAttemptMemoryAndCandidate(
       input,
@@ -476,6 +482,42 @@ function archiveLocation(input: WorkflowRunArchiveLocation): WorkflowRunArchiveL
   };
 }
 
+/** Extract optional council deps so `driveAcceptedWorkflowRun` stays within the complexity ceiling. */
+function buildCouncilDriveOpts(
+  input: DriveAcceptedWorkflowRunInput,
+): Pick<DriveWorkflowRunInput, "runCouncillor" | "synthesizeCouncil" | "councilClock"> {
+  return {
+    ...(input.runCouncillor ? { runCouncillor: input.runCouncillor } : {}),
+    ...(input.synthesizeCouncil ? { synthesizeCouncil: input.synthesizeCouncil } : {}),
+    ...(input.councilClock ? { councilClock: input.councilClock } : {}),
+  };
+}
+
 function defaultNow(): string {
   return new Date().toISOString();
+}
+
+/**
+ * Persist the council `verification.v1` to the run archive (NIN-76). The executor assembles the
+ * council artifact in-memory via `runCouncilVerifier`; without this step it would not be readable
+ * from the archive by downstream code (handoffs, post-publish reconfirm, tests). Uses `ifNotExists`
+ * so a subsequent `reconfirmAndPersistVerification` call can freely overwrite.
+ */
+async function persistCouncilVerificationIfPresent(
+  archive: WorkflowRunArchive,
+  workflowRunId: string,
+  artifacts: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  const verification = artifacts["verification.v1"];
+  if (!isRecord(verification) || verification["mode"] !== "council") {
+    return;
+  }
+  await archive.writeWorkflowRunArtifact({
+    workflowRunId,
+    contractId: "verification.v1",
+    artifactId: "verification",
+    data: verification,
+    producer: { type: "action", id: "council-verification" },
+    ifNotExists: true,
+  });
 }

@@ -15,6 +15,7 @@ import {
 } from "../workflow-run/run-action-runner.js";
 import type { PrPublishMode } from "../workflow-run/publish-policy.js";
 import { createWorkflowRunRoleRunner, type WorkflowRunRoleDispatch } from "../workflow-run/run-role-runner.js";
+import { createCouncilDispatch } from "../workflow-run/council-dispatch.js";
 import type { WorkflowRunWorkspacePreparer } from "../workflow-run/workspace-preparer.js";
 import type { WorkflowRunStartRecord } from "../workflow-run/contracts.js";
 import { resolveWorkflowRunIntake, type ResolvedWorkflowRunIntake } from "./workflow-run-intake.js";
@@ -152,8 +153,14 @@ async function driveWithDeps(
 ): Promise<DriveAcceptedWorkflowRunResult> {
   const archive = createWorkflowRunArchive({ dataDir });
   const nowString = deps.now ?? (() => new Date().toISOString());
+  const dispatchRole = resolveDispatchRole(deps, dataDir, deps.dispatchRole);
   const runRole = createWorkflowRunRoleRunner({
-    dispatchRole: resolveDispatchRole(deps, dataDir, deps.dispatchRole),
+    dispatchRole,
+    readArtifact: (input) => archive.readWorkflowRunArtifact(input),
+  });
+  const council = createCouncilDispatch({
+    workflowRunId: accepted.workflowRun.id,
+    dispatchRole,
     readArtifact: (input) => archive.readWorkflowRunArtifact(input),
   });
   const runAction = createWorkflowRunActionRunner({
@@ -175,9 +182,11 @@ async function driveWithDeps(
     runRole,
     runAction,
     budget: deps.budget ?? createDefaultWorkflowBudget(),
+    runCouncillor: council.runCouncillor,
+    synthesizeCouncil: council.synthesizeCouncil,
     ...(deps.retryGate ? { retryGate: deps.retryGate } : {}),
     ...(deps.maxGateRetries === undefined ? {} : { maxGateRetries: deps.maxGateRetries }),
-    ...(deps.now ? { now: deps.now } : {}),
+    ...(deps.now ? { now: deps.now, councilClock: deps.now } : {}),
     ...(live ? { publishOnDone: () => live.publishDraftPr().then((p) => ({ pullRequestUrl: p.pullRequestUrl })) } : {}),
   });
 }

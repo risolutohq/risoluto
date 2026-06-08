@@ -28,6 +28,10 @@ export interface DriveWorkflowRunInput extends WorkflowRunArchiveLocation {
   readonly recordStatus?: ExecuteWorkflowDefinitionInput["recordStatus"];
   /** Maximum times the engine re-runs the implementer state on `wait_for_operator`. Defaults to 1. */
   readonly maxClarificationAttempts?: number;
+  /** Council verifier callbacks (NIN-76). When present, council-mode verifier roles dispatch real sessions. */
+  readonly runCouncillor?: ExecuteWorkflowDefinitionInput["runCouncillor"];
+  readonly synthesizeCouncil?: ExecuteWorkflowDefinitionInput["synthesizeCouncil"];
+  readonly councilClock?: ExecuteWorkflowDefinitionInput["councilClock"];
 }
 
 /**
@@ -48,6 +52,9 @@ export async function driveWorkflowRun(input: DriveWorkflowRunInput): Promise<Wo
     budget: input.budget,
     decideUnansweredClarification: decideUnansweredSlackClarification,
     maxClarificationAttempts: input.maxClarificationAttempts,
+    ...(input.runCouncillor ? { runCouncillor: input.runCouncillor } : {}),
+    ...(input.synthesizeCouncil ? { synthesizeCouncil: input.synthesizeCouncil } : {}),
+    ...(input.councilClock ? { councilClock: input.councilClock } : {}),
     // The archive is created lazily inside the default closure so callers that inject their own
     // recordStatus (tests, fakes) do not need to supply an archive location.
     recordStatus:
