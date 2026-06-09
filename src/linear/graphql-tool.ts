@@ -42,11 +42,14 @@ const MUTATING_OPERATION = /\b(mutation|subscription)\b/i;
 const SECRET_BEARING_FIELD = /secret|token|password|credential|api[_-]?key|private[_-]?key/i;
 
 function assertReadOnlyQuery(query: string): void {
-  if (MUTATING_OPERATION.test(query)) {
+  // Strip string-literal contents and `#` comments so an operation keyword or a
+  // secret-like word appearing inside a string value or a comment is not misread
+  // as a mutation or a secret-bearing selection.
+  const sanitized = query.replace(/"((?:[^"\\]|\\.)*)"/g, '""').replace(/#.*$/gm, "");
+  if (MUTATING_OPERATION.test(sanitized)) {
     throw new Error("linear_graphql only permits read-only query operations (mutation/subscription rejected)");
   }
-  const strippedQuery = query.replace(/"((?:[^"\\]|\\.)*)"/g, '""');
-  if (SECRET_BEARING_FIELD.test(strippedQuery)) {
+  if (SECRET_BEARING_FIELD.test(sanitized)) {
     throw new Error("linear_graphql rejects secret-bearing fields (e.g. webhook secret, tokens)");
   }
 }

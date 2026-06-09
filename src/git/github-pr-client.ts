@@ -137,7 +137,7 @@ export class GitHubPrClient implements GithubApiToolClient {
       const created = await this.githubRequest(`/repos/${owner}/${repo}/pulls`, { method: "POST", body }, tokenEnvName);
       return isPrCreateResult(created) ? created : undefined;
     } catch (error) {
-      return this.refetchExistingPr(error, owner, repo, branchName, tokenEnvName);
+      return await this.refetchExistingPr(error, owner, repo, branchName, tokenEnvName);
     }
   }
 

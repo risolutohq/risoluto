@@ -150,7 +150,7 @@ export class WebhookRegistrar {
       return true;
     }
 
-    const match = webhooks.find((webhook) => webhook.url === config.webhookUrl);
+    const match = webhooks.find((webhook) => webhook.url.replace(/\/$/, "") === config.webhookUrl.replace(/\/$/, ""));
 
     if (!match) {
       this.logger.info(

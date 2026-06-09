@@ -14,7 +14,7 @@ import type { RisolutoDatabase } from "../persistence/sqlite/database.js";
 import { configHistory } from "../persistence/sqlite/schema.js";
 import type { AuditLoggerPort } from "./port.js";
 import type { AuditEntry, AuditQueryOptions, AuditRecord } from "./types.js";
-import { redactSensitiveValue, sanitizeContent, REDACT_KEYS } from "../core/content-sanitizer.js";
+import { redactSensitiveValue, sanitizeContent } from "../core/content-sanitizer.js";
 
 export type { AuditEntry, AuditQueryOptions, AuditRecord };
 
@@ -23,8 +23,10 @@ const REDACTED = "[REDACTED]";
 // Audit values are fully redacted when their key/path names a secret-like field,
 // and otherwise scanned for embedded secret patterns, so no config mutation
 // persists a webhook URL, token, API key, or $SECRET-resolved value verbatim
-// (RIS-247). Shared with content-sanitizer's REDACT_KEYS.
-const SENSITIVE_AUDIT_KEY = REDACT_KEYS;
+// (RIS-247). Intentionally tighter than content-sanitizer's REDACT_KEYS — audit
+// must redact secrets without over-redacting non-secret fields (author,
+// workspaceKey, ...) into the immutable chain.
+const SENSITIVE_AUDIT_KEY = /secret|token|password|credential|authorization|api[_-]?key|webhook/i;
 
 function redactAuditValue(key: string, path: string | null, value: string | null): string | null {
   if (value === null) {

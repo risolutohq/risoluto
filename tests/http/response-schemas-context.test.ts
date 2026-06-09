@@ -33,7 +33,7 @@ describe("gitContextResponseSchema", () => {
           github: {
             description: "A test repo",
             visibility: "private",
-            openPrCount: 2,
+            renderedPrCount: 2,
             pulls: [
               {
                 number: 1,
@@ -50,7 +50,7 @@ describe("gitContextResponseSchema", () => {
         },
       ],
     });
-    expect(result.repos[0].github?.openPrCount).toBe(2);
+    expect(result.repos[0].github?.renderedPrCount).toBe(2);
   });
 
   it("parses with active branches", () => {

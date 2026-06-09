@@ -149,7 +149,7 @@ function parseJson<T>(value: string | null): T | null {
   try {
     return JSON.parse(value) as T;
   } catch {
-    /* corrupt JSON — return empty array */
+    /* corrupt JSON — return null */
     return null;
   }
 }

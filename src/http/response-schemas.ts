@@ -208,8 +208,6 @@ const serializedStateWebhookHealthSchema = z.object({
     last_delivery_at: z.string().nullable(),
     last_event_type: z.string().nullable(),
   }),
-  last_delivery_at: z.string().nullable(),
-  last_event_type: z.string().nullable(),
 });
 
 /** Shared shape for RuntimeIssueView used in state, issue detail, and snapshots. */
@@ -653,7 +651,7 @@ const gitRepoViewSchema = z.object({
     .object({
       description: z.string().nullable(),
       visibility: z.string(),
-      openPrCount: z.number(),
+      renderedPrCount: z.number(),
       pulls: z.array(gitPullViewSchema),
       recentCommits: z.array(gitCommitViewSchema),
     })

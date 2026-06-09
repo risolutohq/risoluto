@@ -103,7 +103,7 @@ function runCodexExec(prompt: string, cwd: string): Promise<string | null> {
         child.kill("SIGTERM");
         setTimeout(() => {
           if (!child.killed) child.kill("SIGKILL");
-        }, 5000);
+        }, 5000).unref();
       }
       resolve(result);
     };

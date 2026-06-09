@@ -39,7 +39,7 @@ function isCodexBinaryUnavailable(error: unknown): boolean {
   return error instanceof Error && error.message === "codex binary not found";
 }
 export async function fetchCodexModels(apiKey?: string, includeHidden = false): Promise<CodexModelEntry[]> {
-  const cacheKey = apiKey ?? "";
+  const cacheKey = `${apiKey ?? ""}:${includeHidden ? "1" : "0"}`;
   const entry = cacheByKey.get(cacheKey);
 
   if (entry && entry.cached.length > 0 && Date.now() < entry.expiry) {

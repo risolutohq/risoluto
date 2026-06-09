@@ -97,11 +97,13 @@ export class AutomationScheduler {
     }
     const promise = this.options.runner.run(entry.config, "manual");
     entry.running = promise;
-    const record = await promise;
-    if (entry.running === promise) {
-      entry.running = null;
+    try {
+      return await promise;
+    } finally {
+      if (entry.running === promise) {
+        entry.running = null;
+      }
     }
-    return record;
   }
 
   private sync(configs: AutomationConfig[]): void {

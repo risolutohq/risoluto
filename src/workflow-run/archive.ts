@@ -146,8 +146,11 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
       entries.map(async (entry) => {
         try {
           return await readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry));
-        } catch {
-          return null;
+        } catch (error) {
+          if (error instanceof WorkflowRunArchiveParseError || (error as NodeJS.ErrnoException).code === "ENOENT") {
+            return null;
+          }
+          throw error;
         }
       }),
     )

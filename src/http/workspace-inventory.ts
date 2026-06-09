@@ -45,18 +45,16 @@ async function runWithConcurrencyLimit<T, R>(
   fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
   const results: (R | undefined)[] = new Array(items.length);
+  const pending = new Set<Promise<void>>();
   let idx = 0;
-  let running = 0;
-  const pending: Promise<void>[] = [];
   for (const item of items) {
-    running++;
     const i = idx++;
-    const p = fn(item).then((value) => {
+    const p: Promise<void> = fn(item).then((value) => {
       results[i] = value;
-      running--;
+      pending.delete(p);
     });
-    pending.push(p);
-    if (running >= limit) {
+    pending.add(p);
+    if (pending.size >= limit) {
       await Promise.race(pending);
     }
   }

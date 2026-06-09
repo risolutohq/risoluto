@@ -58,9 +58,17 @@ export async function runSelfReview(
       target: { type: "uncommittedChanges" },
     });
     const aborted = new Promise<never>((_, reject) => {
-      signal.addEventListener("abort", () => reject(new DOMException("aborted", signal.reason ?? "AbortError")), {
-        once: true,
-      });
+      signal.addEventListener(
+        "abort",
+        () => {
+          const reason =
+            signal.reason instanceof Error
+              ? signal.reason
+              : new DOMException("The operation was aborted.", "AbortError");
+          reject(reason);
+        },
+        { once: true },
+      );
     });
     if (signal.aborted) {
       // Already aborted before we entered — bail immediately rather than
