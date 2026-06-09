@@ -16,7 +16,7 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
 import { parse as parseYaml } from "yaml";
 
@@ -117,15 +117,25 @@ async function collectPrdFiles(): Promise<FileToValidate[]> {
   return files;
 }
 
-function extractFrontmatter(raw: string): unknown {
-  if (!raw.startsWith("---")) {
+/**
+ * Extract and parse the YAML frontmatter block, normalizing line endings first.
+ *
+ * A CRLF checkout (Windows, or `core.autocrlf=true`) otherwise leaves a trailing
+ * `\r` on every scalar: `status: draft` parses as `"draft\r"`, which silently
+ * fails enum checks like prd.schema.json's `status`. The `.gitattributes`
+ * `eol=lf` rule is the primary guard; this keeps the parser correct even if a
+ * file reaches us with CRLF (or lone-CR) endings regardless of checkout config.
+ */
+export function extractFrontmatter(raw: string): unknown {
+  const normalized = raw.replace(/\r\n?/g, "\n");
+  if (!normalized.startsWith("---")) {
     throw new Error("missing YAML frontmatter (expected leading ---)");
   }
-  const end = raw.indexOf("\n---", 3);
+  const end = normalized.indexOf("\n---", 3);
   if (end === -1) {
     throw new Error("unterminated YAML frontmatter (missing closing ---)");
   }
-  const block = raw.slice(3, end).replace(/^\r?\n/, "");
+  const block = normalized.slice(3, end).replace(/^\n/, "");
   return parseYaml(block) ?? {};
 }
 
@@ -256,10 +266,14 @@ async function main(): Promise<void> {
   console.log(`validate:research: ${files.length} file(s) OK.`);
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error("validate:research: unexpected error");
-  console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
-  process.exitCode = 1;
+function isMain(): boolean {
+  return Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+if (isMain()) {
+  main().catch((error: unknown) => {
+    console.error("validate:research: unexpected error");
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+    process.exitCode = 1;
+  });
 }
