@@ -10,36 +10,28 @@
 
 ## At a glance
 
-```
-        ┌──────────────────────────────────────────────────────────┐
-        │                      RESEARCH INTAKE                       │
-        │                                                            │
-        │   Mode A (per-source)          Mode B (whole corpus)       │
-        │   researcher → dedup → grill   ingest                      │
-        └───────────────────────┬──────────────────┬────────────────┘
-                                 │ idea/next        │ idea
-                                 ▼                  ▼
-                       ╔════════════════════════════════════╗
-                       ║   docs/roadmap.md   (FOUNDER-OWNED) ║
-                       ║   skills propose · founder disposes ║
-                       ╚════════════════════╤═══════════════╝
-                                            │ founder promotes a `next` row
-                                            ▼
-        ┌──────────────────────────────────────────────────────────┐
-        │                      PLANNING / BUILD                      │
-        │                                                            │
-        │   to-prd → to-issues → [preflight] → tdd → pre-pr →        │
-        │   verify-acceptance → MERGE → post-merge CI → sync         │
-        └───────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
-                          shipped on master
-                          Linear mirrors git
-
-   ── parallel/optional ────────────────────────────────────────────
-   next-bundle .......... read-only scheduler (groups ready issues)
-   AFK conductor ........ preflight→goal-prep→goal-run→review-handoff→sync
-   architecture-loop .... headless, PRD-less deepening (outside funnel)
+```mermaid
+flowchart TB
+  subgraph ModeA["Mode A — targeted adoption"]
+    RA["risoluto-researcher<br/>deep-analyze a source"] --> GA["risoluto-grill<br/>critic-grill candidates"]
+  end
+  ING["risoluto-ingest<br/>Mode B: wiki + gap-grounded ideas"]
+  RM["docs/roadmap.md<br/>founder-owned: skills propose, founder disposes"]
+  GA --> RM
+  ING --> RM
+  RM -->|"founder promotes a next row"| S1
+  subgraph Back["Back-half: a next row to merged code"]
+    S1["to-prd<br/>PRD + Linear project"]
+    S2["to-issues<br/>flat Linear issues"]
+    S25["preflight<br/>GO / NO-GO"]
+    S3["tdd<br/>red-green-refactor"]
+    S35["pre-pr<br/>advisory review + v1-check"]
+    S36["verify-acceptance<br/>cross-model AC check"]
+    MG["merge + post-merge CI"]
+    S45["sync<br/>reconcile Linear to git"]
+    S1 --> S2 --> S25 --> S3 --> S35 --> S36 --> MG --> S45
+  end
+  S45 --> SH["shipped on master<br/>git canon, Linear mirrors"]
 ```
 
 ## Mental model
@@ -76,7 +68,7 @@ PLANNING / BUILD ─────────────────────
   Stage 1     ┌──────────┐   docs/prds/<slug>.md  +  Linear Project (mirror)
   to-prd      │  to-prd  │──────────────────────────────────────────────┐
               └────┬─────┘   pushes pipeline/<slug>-prd · PRINTS gh pr    │
-                   │ Stage 1.3 drift gate: pnpm prd:drift-check           │
+                   │                                                      │
                    ▼                                                      │
   Stage 2     ┌──────────┐   flat Linear issues, label from:prd-<slug>    │
   to-issues   │ to-issues│   tracer-bullet vertical slices · ACs =        │
@@ -160,7 +152,7 @@ to `next` — that is the founder disposing in real time, not the skill self-pro
 | `docs/`                           | Current-truth product / technical / decision docs.                                                                                                   |
 
 Git is the source of truth for PRDs; Linear mirrors them. No GitHub Issues mirror (public exposure
-deferred). Linear → git only flows for the PRD drift hook and PR back-comments.
+deferred). Linear → git flows only for explicit PRD reconciliation (`prd:reconcile`) and PR back-comments.
 
 ## Prerequisites
 
@@ -171,7 +163,7 @@ node -v && pnpm -v                     # Node 22+, pnpm 11
 [ -n "$LINEAR_API_KEY" ] && echo ok || echo "set LINEAR_API_KEY first"
 ```
 
-`LINEAR_API_KEY` is required for `to-prd`, `to-issues`, `tdd`, `prd:drift-check`, post-merge, and any
+`LINEAR_API_KEY` is required for `to-prd`, `to-issues`, `tdd`, post-merge, and any
 `mcp__linear-server__*` call. The Linear MCP server is configured in `.mcp.json`.
 
 ## The two research modes
@@ -248,7 +240,6 @@ Ingest is **idempotent and non-interactive** — run it anytime to refresh the w
 | B1  | Ingest (Mode B)     | `/risoluto-ingest`                 | all `research/targets/` + sources                   | `research/wiki/` (home + concept notes); roadmap idea rows                                             | operator |
 | 0   | Plan                | edit [`roadmap.md`](./roadmap.md)  | roadmap idea rows + judgement                       | a roadmap row promoted to `next` (has Why + Size)                                                      | operator |
 | 1   | To-PRD              | `/risoluto-to-prd <slug>`          | the `next` roadmap row + its linked research        | `docs/prds/<slug>.md`, Linear project, branch `pipeline/…`                                             | operator |
-| 1.3 | Drift gate          | `pnpm prd:drift-check`             | PRD body vs Linear                                  | exit 1 on drift — also in `.husky/pre-push`                                                            | gate     |
 | 2   | To-issues           | `/risoluto-to-issues <slug>`       | `docs/prds/<slug>.md` + roadmap row                 | Linear issues labelled `from:prd-<slug>`, blocked-by edges                                             | operator |
 | 2.5 | Preflight (gate)    | `/risoluto-preflight <slug>`       | PRD + `from:prd-<slug>` issues + env                | GO/NO-GO verdict; roadblockers disposed (interactive)                                                  | operator |
 | 3   | TDD                 | `/risoluto-tdd <ticket-ref>`       | Linear issue + linked PRD                           | code + tests; prints `gh pr create`                                                                    | operator |
@@ -283,7 +274,7 @@ pnpm validate:research                     # PRD frontmatter validates (exit 0)
 
 # 2. Slice into issues, implement test-first.
 /risoluto-to-issues <slug>                 # PRD → flat Linear issues, blocked-by inferred (review the graph)
-/risoluto-tdd RSL-123                      # validates blocked-by are Done; red-green-refactor; prints `gh pr create`
+/risoluto-tdd NIN-123                      # validates blocked-by are Done; red-green-refactor; prints `gh pr create`
 
 # ADVISORY — founder applies findings selectively, not a blocking gate.
 /risoluto-pre-pr                           # code-review → triage → simplify → mandatory v1-check; reprints `gh pr create`
@@ -346,16 +337,17 @@ Linear has two relevant Project fields:
 - `content` — the full markdown body shown in Linear's Description area. This mirrors the full PRD
   body from git.
 
-- **Do not edit the Linear Project Description body in the UI.** The drift hook is intentional friction; treat Linear content as generated from git.
+- **Do not edit the Linear Project Description body in the UI.** Treat Linear content as generated from git; reconcile explicitly (below) if it diverges.
 - **Resolve drift** by choosing a direction:
   - _Git is right_ → re-run `/risoluto-to-prd <slug>` (idempotent; overwrites Linear from git).
   - _Linear is right_ → `pnpm prd:reconcile <slug>` (pulls Linear → git on a branch; prints `gh pr create`).
 
-## The drift gate
+## Drift handling (no automated gate)
 
-`prd:drift-check` compares each PRD body against its Linear Project content and fails on divergence.
-It runs in `.husky/pre-push` (only for pushes that touch `docs/prds/*`) and in the
-`prd-drift` GitHub Action on PRs. `LINEAR_API_KEY` unset = hard exit 1 (it does not silently pass).
+Git is canon by convention — there is **no** automated PRD drift-check gate (the former
+`prd:drift-check` hook and `prd-drift` GitHub Action were removed). When a PRD body and its Linear
+Project content diverge, reconcile explicitly: `pnpm prd:reconcile <slug>` (Linear → git) or re-run
+`/risoluto-to-prd <slug>` (git → Linear, idempotent).
 
 ## Frontmatter contract
 
@@ -541,17 +533,16 @@ global skills stay tracker-agnostic. `grill-me`, `grill-with-docs`, `save-to-obs
 
 ## Reference
 
-**Scripts:** `scripts/validate-research.ts`, `scripts/prd-drift-check.ts`, `scripts/prd-reconcile.ts`,
+**Scripts:** `scripts/validate-research.ts`, `scripts/prd-reconcile.ts`,
 `scripts/prd-linear.ts`, `scripts/post-merge-prd.mjs`.
 **Key files:** [`docs/roadmap.md`](./roadmap.md), `docs/prds/`, `research/targets/`, `research/wiki/`,
 `docs/adr/0001-foundation.md` (§7).
 
 ## Troubleshooting
 
-| Symptom                               | Cause / fix                                                                                       |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `validate:research` fails early       | `research/` submodule not initialized — `git submodule update --init research`.                   |
-| `prd:drift-check` exits 1 "hard gate" | `LINEAR_API_KEY` unset — export it (or set the GH secret for CI).                                 |
-| `prd:drift-check` reports DRIFT       | PRD body and Linear content diverged — `prd:reconcile <slug>` or `to-prd <slug>` to sync.         |
-| Post-merge didn't flip status         | PR lacked the `from:prd-<slug>` label, or a Linear call failed (flip is skipped).                 |
-| `risoluto-ingest` emits no ideas      | All generated ideas lacked citations — cite-or-drop is enforced. Add more research targets first. |
+| Symptom                              | Cause / fix                                                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `validate:research` fails early      | `research/` submodule not initialized — `git submodule update --init research`.                    |
+| PRD body and Linear content diverged | No auto-gate — reconcile with `prd:reconcile <slug>` (Linear→git) or `to-prd <slug>` (git→Linear). |
+| Post-merge didn't flip status        | PR lacked the `from:prd-<slug>` label, or a Linear call failed (flip is skipped).                  |
+| `risoluto-ingest` emits no ideas     | All generated ideas lacked citations — cite-or-drop is enforced. Add more research targets first.  |

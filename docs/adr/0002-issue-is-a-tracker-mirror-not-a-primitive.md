@@ -33,6 +33,9 @@ the tracked gap.
   Mirror** so future code does not reintroduce the conflation.
 - Remediation is tiered by blast radius: safe internal renames and structural fixes first; the persisted
   columns, HTTP routes, and `issue.*` event channels are a gated public-surface migration that needs its
-  own PRD (data migration + API version bump).
+  own PRD (data migration + API version bump). **Progress:** the `issue.*` event channels are now
+  `@deprecated` in favour of shipped `workflow_run.*` channels (`src/core/risoluto-events.ts`), and
+  run-keyed `/api/v1/workflow-runs/*` routes have landed (`src/http/routes/workflow-runs.ts`) beside the
+  legacy `:issue_identifier` routes; the `attempts` table's missing `workflow_run_id` column remains the core gap.
 - Until that migration lands, `issueId` as a de-facto run key is a known, documented gap — not evidence
   that `Issue` is a primitive.

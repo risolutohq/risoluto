@@ -13,8 +13,41 @@ This repository is the public canonical v1 foundation for the product. It starts
 - Primary product surface: CLI.
 - Next first-class surface: TUI.
 - Support/internal surface: HTTP API.
+- Intake adapters: CLI, HTTP webhook, Slack, and tracker (Linear / GitHub) polling — each maps an Engineering Intent to a Workflow Run.
 - Core primitive: Workflow Run.
 - Planning source of truth: Linear, with selected public GitHub issue mirrors.
+
+```mermaid
+flowchart LR
+  subgraph Intake
+    CLI["CLI<br/>risoluto run start"]
+    HTTP["HTTP API<br/>POST /api/v1/workflow-runs"]
+    LIN["Linear<br/>webhook + polling"]
+    GH["GitHub webhook"]
+    SLK["Slack intake"]
+  end
+  subgraph Engine["Core engine"]
+    ORC["Orchestrator<br/>intake to accepted"]
+    WFR["Workflow Run<br/>accepted to done"]
+    EXE["Executor<br/>state machine + role DAG"]
+  end
+  CDX["Codex harness<br/>AgentSessionPort"]
+  subgraph Out["Output adapters"]
+    TRK["Tracker Mirror<br/>Linear / GitHub"]
+    EVD["Evidence Store<br/>filesystem + SQLite"]
+    SLA["Slack operator approval"]
+  end
+  CLI --> ORC
+  HTTP --> ORC
+  LIN --> ORC
+  GH --> ORC
+  SLK --> ORC
+  ORC --> WFR --> EXE
+  EXE --> CDX
+  EXE --> TRK
+  EXE --> EVD
+  EXE --> SLA
+```
 
 ## Prerequisites
 
@@ -57,6 +90,9 @@ risoluto run start --title "..." --intent "..." --publish-mode draft --json
 # Inspect a Workflow Run
 risoluto run status <run-id> --json
 
+# Show a Workflow Run's stored evidence (secret-classified fields redacted on display)
+risoluto run evidence show <run-id> --json
+
 # Validate workflow definitions in a directory (default: .risoluto/workflows)
 risoluto workflow validate --workflow-dir ./.risoluto/workflows
 
@@ -81,6 +117,7 @@ Configuration is read from the environment. The table lists variable **names onl
 | `MASTER_KEY`                                                                                                            | Encryption key for the secrets store. Absent → service starts in setup mode. |
 | `LOG_LEVEL`, `RISOLUTO_LOG_FORMAT`                                                                                      | Pino log level and output format.                                            |
 | `LINEAR_API_KEY`, `LINEAR_PROJECT_SLUG`                                                                                 | Linear tracker intake/mirror. Absent → setup mode.                           |
+| `SLACK_SIGNING_SECRET`                                                                                                  | Verifies inbound Slack requests for the Slack intake adapter.                |
 | `OPENAI_API_KEY`, `RISOLUTO_DEFAULT_MODEL`                                                                              | Model provider key and default model profile for agent dispatch.             |
 | `GITHUB_TOKEN`, `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` / `GITHUB_APP_PRIVATE_KEY_FILE` | GitHub access for PR publishing (PAT or GitHub App).                         |
 | `RISOLUTO_BIND`, `RISOLUTO_TRUST_PROXY`                                                                                 | HTTP bind address and reverse-proxy trust.                                   |
@@ -116,8 +153,10 @@ Useful focused checks:
 
 ```bash
 pnpm run typecheck
+pnpm run reach:check
 pnpm run test:integration
 pnpm run test:integration:live
+pnpm run test:e2e
 pnpm run test:load
 pnpm run circular
 ```

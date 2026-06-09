@@ -1,7 +1,7 @@
 # Risoluto — Product Spine
 
 > **Identity.** Risoluto is **workflow-run-centered background agent orchestration for engineering
-> work.** Engineering intent — a tracker issue, a PRD slice, a schedule, a webhook, an operator
+> work.** Engineering intent — a tracker issue, a PRD slice, a schedule, a webhook, a Slack message, an operator
 > command — becomes a durable **Workflow Run** executed by reusable **Agent Roles** across pluggable
 > trackers, harnesses, and model providers.
 
@@ -18,7 +18,7 @@ A workflow-run engine for autonomous engineering work:
 - **Workflow Definitions** — reusable templates for how work flows through named states
   (`classify → plan → implement → review → validate → publish → done`, plus `blocked`), with
   graph-shaped role execution _inside_ each state.
-- **Background / AFK Agents** — perform roles in those workflows while the operator is away.
+- **Background / AFK Agents** — perform roles in those workflows while the operator is away. A Verifier role may run as a single judge or a multi-model **council**.
 - **Pluggable adapters** — trackers (Linear, GitHub Issues, GitLab, Jira), harnesses (Codex, Claude
   Code, Cursor, custom), and model providers — each behind a typed contract that is never reached
   around.
@@ -116,13 +116,13 @@ operator-observed need is real.
 
 - Full external plugin API.
 - Full Board Projection implementation (contract only in v1).
-- Jira / GitLab / GitHub-Issues tracker adapter completion (Linear first).
+- Jira / GitLab tracker adapters (Linear is the default; GitHub Issues ships but is incomplete).
 - SaaS billing / tenancy; hosted control plane.
 - Full Memory Manager retrieval / indexing across tiers.
 - Web dashboard / frontend; docs-site rebuild.
 - Public skill marketplace.
 - Multi-tenant surfaces (no tenancy in v1).
-- User-authored workflow DSL — built-in TypeScript definitions first ([ADR §5](./adr/0001-foundation.md#5-built-in-typescript-workflow-definitions-before-a-user-authored-dsl)).
+- User-authored workflow DSL — config-authored YAML definitions first ([ADR §5](./adr/0001-foundation.md#5-yaml-config-authored-workflow-definitions-no-user-authored-dsl)).
 
 ## Related docs
 

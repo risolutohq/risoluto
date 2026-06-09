@@ -9,11 +9,23 @@ capabilities shipped green-but-dead; see the `from:prd-workflow-first-afk-mvp` r
 The ladder is the standing defense against that regression class. Each rung is stronger and slower than
 the one below; a capability is only "shipped" when it clears the rungs that apply to it.
 
+```mermaid
+flowchart TB
+  R1["Rung 1 — Capability manifest<br/>capability-manifest.json: symbol, module, intakeAdapters"]
+  R2["Rung 2 — reach:check static gate<br/>reachable from a real intake adapter + non-test caller"]
+  R3["Rung 3 — e2e intake tier<br/>CLI / HTTP / Slack assert an archived artifact"]
+  R4["Rung 4 — in-loop definition of done<br/>pipeline skills enforce before ticking a criterion"]
+  R5["Rung 5 — live smoke (opt-in)<br/>real run start, real merge; NIN-189"]
+  R1 --> R2 --> R3 --> R4 --> R5
+  R2 -->|gap| FAIL["build fails<br/>capability unreachable"]
+  R3 -->|assertion missing| FAIL
+```
+
 ## Rungs
 
 1. **Capability manifest** — `src/reachability/capability-manifest.json`. Each entry declares a
    load-bearing capability: its `symbol`, the `module` that exports it, and the `intakeAdapters`
-   (`cli` / `http` / `slack`) it must be reachable from. Loader + schema: `src/reachability/capability-manifest.ts`.
+   (`cli` / `http` / `slack`) it must be reachable from. Schema + validator: `src/reachability/capability-manifest.ts`; disk reader: `src/reachability/manifest-file.ts`.
 
 2. **`reach:check` static gate** — `pnpm reach:check` (`scripts/reachability-check.ts`). Builds the real
    import graph (madge) + a call-site scan and asserts every manifested capability is reachable from a

@@ -17,7 +17,7 @@ The durable, retryable, replayable instance of work — the core primitive every
 _Avoid_: Issue, ticket, job, task, "run" (unqualified).
 
 **Engineering Intent**
-A raw work request — from a tracker, the CLI, a webhook, a schedule, a PRD slice, or an operator command —
+A raw work request — from a tracker, the CLI, a webhook, Slack, a schedule, a PRD slice, or an operator command —
 before it becomes a Workflow Run.
 _Avoid_: request, prompt, task.
 
@@ -30,6 +30,23 @@ The person running or controlling Risoluto.
 _Avoid_: user, admin, owner.
 
 ### Workflow structure
+
+A run has two orthogonal axes at once — its operational **Run Status** and its position in the
+definition's DAG (**Workflow State**). They never collapse into one "status":
+
+```
+  Run Status (operational lifecycle, workflow-agnostic)
+    accepted -> queued -> running -> done
+                            |- waiting_for_operator (transient)
+                            |- blocked
+                            \- cancelled
+
+  Workflow State (position in the definition's DAG, varies per definition)
+    classify -> plan -> implement -> review -> validate -> publish -> done   (+ blocked)
+
+  e.g. a run can be  Run Status = running  AND  Workflow State = implement
+       at the same time.
+```
 
 **Workflow Definition**
 A reusable state-machine / graph template for executing an intent. One definition serves many runs.
@@ -44,6 +61,29 @@ _Avoid_: status, stage, step, phase.
 The operational lifecycle of a run, identical for every workflow — `accepted`, `queued`, `running`,
 `waiting_for_operator`, `blocked`, `done`, `cancelled`. Finite and workflow-agnostic.
 _Avoid_: state, phase, stage.
+
+```mermaid
+stateDiagram-v2
+  [*] --> accepted: intake creates run
+  accepted --> queued: queue
+  queued --> running: start
+  running --> waiting_for_operator: operator_input_required
+  waiting_for_operator --> running: operator responds
+  running --> done: complete
+  accepted --> blocked: prerequisite_failed
+  queued --> blocked: prerequisite_failed
+  running --> blocked: prerequisite_failed
+  accepted --> cancelled: cancel
+  queued --> cancelled: cancel
+  running --> cancelled: cancel
+  done --> [*]
+  blocked --> [*]
+  cancelled --> [*]
+  note right of waiting_for_operator
+    In-process only.
+    Never persisted to SQLite.
+  end note
+```
 
 **Transition**
 An explicit rule moving a run between Workflow States. Distinct from a Run Status change.

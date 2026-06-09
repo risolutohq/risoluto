@@ -41,6 +41,18 @@ The pre-commit / pre-PR gate is:
 pnpm run build && pnpm run lint && pnpm run format:check && pnpm run reach:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
 ```
 
+```mermaid
+flowchart LR
+  B["build<br/>surfaces TS errors first"]
+  L["lint<br/>oxlint, complexity 15"]
+  F["format:check<br/>oxfmt, read-only"]
+  RC["reach:check<br/>capability reachable from intake"]
+  T["test<br/>vitest"]
+  TC["typecheck<br/>tsc --noEmit"]
+  TCC["typecheck:coverage<br/>type-coverage >= 95"]
+  B --> L --> F --> RC --> T --> TC --> TCC --> PASS["all green"]
+```
+
 Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `reach:check` (fast, read-only) fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter (a green test suite is not reachability), `typecheck` runs `tsc --noEmit`, and `typecheck:coverage` (type-coverage >= 95%) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
 
 When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:e2e` (intake-adapter e2e tier: CLI / HTTP / Slack → engine), `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
@@ -53,12 +65,13 @@ Refactor before a function's branching would breach the complexity cap — split
 
 OXLint ignores `*.mjs` (via `ignorePatterns`), so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to this ceiling — it applies to `.ts` files only.
 
-## Test tiers (4 vitest configs)
+## Test tiers (5 vitest configs)
 
 - `vitest.config.ts` — default unit suite (`pnpm test`)
 - `vitest.integration.config.ts` — `pnpm run test:integration*`
 - `vitest.live.config.ts` — real external APIs (needs `.env.live.local`)
 - `vitest.load.config.ts` — load / perf tier
+- `vitest.e2e.config.ts` — intake-adapter e2e tier (`pnpm run test:e2e`): CLI / HTTP / Slack → engine
 
 Quarantined tests live in `quarantine.json` (currently empty). Do not silently add to it — quarantine is for flaky tests with an open ticket, not for ones an agent could not fix.
 
@@ -76,6 +89,7 @@ Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks`
 - `@docs/product-spine.md`, `@docs/technical-spine.md` — what v1 actually is
 - `@docs/decisions.md`, `@docs/adr/` — decisions with rationale
 - `@docs/testing-and-release.md` — test tiers, the `1.0.0` gate, and release flow
+- `@docs/reachability-ladder.md` — why `reach:check` exists; the multi-rung proof model for when a capability is truly shipped
 - `@docs/roadmap.md` — the single ordered plan of what's next
 - `@docs/research-to-shipping-pipeline.md` — the planning pipeline: stage-by-stage how-to, file contracts, and ownership (decisions in `docs/adr/0001-foundation.md` §7, decisions.md row #29)
 - `@skills/risoluto-features/SKILL.md` — two-repo spine updater (consumes `research/`)

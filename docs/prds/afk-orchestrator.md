@@ -1,6 +1,6 @@
 ---
 slug: afk-orchestrator
-linear_project: https://linear.app/kyanite/project/afk-orchestrator-77742470e134
+linear_project: https://linear.app/ninetech/project/afk-orchestrator-e0ea11426d15
 synced_at: 2026-06-04T14:08:43.000Z
 source: docs/roadmap.md#afk-orchestrator
 status: draft
@@ -13,7 +13,7 @@ Risoluto's current AFK ("away-from-keyboard") engineering path is `/risoluto-goa
 2. **It can't recover from a crash mid-cascade.** State lives in the run, not on disk. If the process dies after three slices have merged and two are in flight, there is no journal to re-derive "what is actually done" from git + session state, so resuming means re-running or hand-reconciling.
 3. **Merge/gate orchestration is manual.** Serializing merges into an integration branch, running the full v1 gate per wave, and propagating a blocked slice to its dependents are operator responsibilities today, which defeats the "away-from-keyboard" premise.
 
-Across the AFK-orchestration neighbourhood the bar is an autonomous loop that observes a real execution substrate and is crash-safe by construction. Risoluto already has every upstream piece — a Linear `from:prd-<slug>` issue graph, the `fixer` agent, git worktrees, and the canonical six-command v1 gate — but no standing process that *closes the loop* over them. The gap this fills: turn AFK from a **guided run** (operator in the merge/gate path, no live reaction, no crash recovery) into an **autonomous cascade** (live session events, journal-backed crash recovery, serialized gated merges) that takes a multi-wave PRD to merged without supervision.
+Across the AFK-orchestration neighbourhood the bar is an autonomous loop that observes a real execution substrate and is crash-safe by construction. Risoluto already has every upstream piece — a Linear `from:prd-<slug>` issue graph, the `fixer` agent, git worktrees, and the canonical seven-command v1 gate — but no standing process that *closes the loop* over them. The gap this fills: turn AFK from a **guided run** (operator in the merge/gate path, no live reaction, no crash recovery) into an **autonomous cascade** (live session events, journal-backed crash recovery, serialized gated merges) that takes a multi-wave PRD to merged without supervision.
 
 ## Solution
 
@@ -22,11 +22,33 @@ A standing `scripts/afk-orchestrator/` (run via `tsx`; the repo is `"type":"modu
 - **Reads the DAG from Linear directly.** `dag.ts` queries the Linear GraphQL API with `LINEAR_API_KEY` for the `from:prd-<slug>` issues, extracts each issue's `blockedBy` edges, and assigns waves by dependency depth (no pre-rendered goal package required).
 - **Drives `fixer` sessions over a live event stream.** Built on `@opencode-ai/sdk` against a long-lived `opencode serve`. Each slice runs in its own git worktree on a `slice/<id>` branch; the orchestrator subscribes to `event.subscribe()` and reacts to `session.idle`, `permission.updated`, `session.status` (`idle | retry | busy`), and `todo.updated`.
 - **Is journal-first and crash-safe.** An append-only JSONL journal is the source of truth. On boot and after any SSE reconnect, a reconcile pass re-derives each slice's real state from the journal plus git (`session.status` for liveness, branch commits for progress) and repairs drift — so a mid-cascade crash resumes instead of restarting.
-- **Serializes gated merges.** Only `coder` and `reviewer` sessions run in the bounded concurrency pool; *all* merges pass through a single serial mutex executed in a **dedicated integration worktree** (`git -C`, never a checkout in the repo root) into `integration/<slug>`. Each wave ends with the exact six-command v1 gate run directly.
+- **Serializes gated merges.** Only `coder` and `reviewer` sessions run in the bounded concurrency pool; *all* merges pass through a single serial mutex executed in a **dedicated integration worktree** (`git -C`, never a checkout in the repo root) into `integration/<slug>`. Each wave ends with the exact seven-command v1 gate run directly.
 - **Owns the Linear write boundary.** The orchestrator writes per-slice status transitions to Linear live and ticks acceptance criteria under a strict proof-only rule, fully replacing the post-hoc `/risoluto-sync` reconciler. Linear writes are best-effort and non-fatal; the journal remains canon.
 - **Is bounded and safe by default.** Permission prompts are auto-allowed only for types *not* listed in `CONTROL.md require_approval_for`; a gated type parks the slice in `awaiting-approval` rather than blanket-allowing. Global wall-clock and total-session budgets halt a runaway cascade.
 
 The observable seam: an operator promotes a PRD, walks away, and returns to an `integration/<slug>` branch with each independently-passing slice merged behind a green gate, Linear reflecting accurate status and only provable acceptance criteria ticked, and a printed `gh pr create` command — or a precise halt summary naming exactly which slice blocked and why.
+
+```mermaid
+flowchart LR
+  INT["integration branch<br/>one per slug"]
+  subgraph Wave["Wave N"]
+    C1["coder worktree<br/>issue A"]
+    C2["coder worktree<br/>issue B"]
+    RV["reviewer<br/>different model"]
+    C1 --> RV
+    C2 --> RV
+  end
+  MQ["merge mutex<br/>serial, in integration worktree"]
+  GATE["v1 gate<br/>7 commands, fail-fast"]
+  DONE["PRD shipped<br/>prints gh pr create"]
+  INT --> C1
+  INT --> C2
+  RV -->|approved| MQ
+  MQ -->|wave drained| GATE
+  GATE -->|green| INT
+  GATE -->|red| MQ
+  INT -->|all waves done| DONE
+```
 
 ## User Stories
 
@@ -40,7 +62,7 @@ The observable seam: an operator promotes a PRD, walks away, and returns to an `
 8. As a Risoluto operator, I want a merge conflict auto-rebased and retried, and only after persistent failure marked `blocked`, so that routine conflicts don't need me. *Verifiable: an induced conflict triggers `merge --abort` then a rebase-and-retry; a permanent conflict (after the rebase retry cap) ends in `blocked`.*
 9. As a Risoluto operator, I want a slice journaled `merged` only after the merge commit is verified reachable from `integration/<slug>`, so that a half-applied merge is never recorded as done. *Verifiable: `git merge-base --is-ancestor <sha> integration/<slug>` must pass before the `merged` journal entry is written.*
 10. As a Risoluto operator, I want a busy session whose todo list has been stale past a threshold (and is not in `retry`) handed to a one-shot diagnoser that emits a retry prompt, so that a genuine stall is unstuck without flagging healthy retrying sessions. *Verifiable: busy + stale-todo + not-retry → diagnoser invoked; a session reporting `status: retry` is never flagged.*
-11. As a Risoluto operator, I want each per-wave gate to run the exact six v1 commands directly (build, lint, format:check, test, typecheck, typecheck:coverage), fail-fast, so that a wave can't advance on a weaker check than a PR. *Verifiable: a wave with a lint error journals `gate-red` at the lint step and the next wave does not start.*
+11. As a Risoluto operator, I want each per-wave gate to run the exact seven v1 commands directly (build, lint, format:check, reach:check, test, typecheck, typecheck:coverage), fail-fast, so that a wave can't advance on a weaker check than a PR. *Verifiable: a wave with a lint error journals `gate-red` at the lint step and the next wave does not start.*
 12. As a Risoluto operator, I want `scripts/afk-orchestrator/` itself covered by build + typecheck, so that the orchestrator's own TypeScript is gated, not just lint/format. *Verifiable: a type error in an orchestrator module fails the gate's typecheck step.*
 13. As a Risoluto operator, I want a permission type listed in `CONTROL.md require_approval_for` to park the slice in `awaiting-approval` rather than be auto-allowed, so that an AFK run can't self-authorize a privileged action. *Verifiable: a gated permission type yields an `awaiting-approval` journal entry and no allow call; a non-listed type is auto-allowed.*
 14. As a Risoluto operator, I want a `blocked`/`rejected` slice to transitively mark its dependents `blocked` while independent slices in the wave still finish, then halt the cascade at wave end with a summary, so that failures don't silently cascade or strand the run mid-wave. *Verifiable: a blocked slice's dependents are skipped as `blocked`, an independent sibling still reaches `merged`, and the cascade halts at wave boundary with a summary naming the cause.*
@@ -66,11 +88,11 @@ The observable seam: an operator promotes a PRD, walks away, and returns to an `
 
 **Runtime & location.** `scripts/afk-orchestrator/` run via `tsx`. It is dev tooling, not shipped `src/`, but its TypeScript must still be gated — see *Gate coverage*.
 
-**Module boundaries.** One responsibility per module: `index` (entry/wiring), `config` (paths, ports, concurrency cap, required model ids, budgets — fail-fast), `types`, `journal` (append-only JSONL + idempotent reducer, schema-versioned + sequence-id'd events — see D13), `sse` (event stream + reconnect), `reconcile` (boot/reconnect state re-derivation), `linear` (GraphQL read + write + proof-only AC + reconcile), `dag` (Linear edges → waves, cycle detection), `worktree` (worktree/branch lifecycle + integration worktree), `merge-queue` (serial mutex), `merge` (merge/rebase/verify), `coder` (session drive + done state machine + permission policy), `done` (idle-AND-new-commit predicate), `gate` (the six v1 commands), `watchdog` (stall detection), `diagnoser` (one-shot retry-prompt), `reviewer` (different-model review + fix loop), `fixtures` (pre-wave domain fixtures), `control` (`CONTROL.md` pause + approval allowlist), `budget` (wall-clock + session guards), `http` (`/status` + PATCH steering), `cascade` (the orchestration loop), `spike` (Wave-0 capability probe).
+**Module boundaries.** One responsibility per module: `index` (entry/wiring), `config` (paths, ports, concurrency cap, required model ids, budgets — fail-fast), `types`, `journal` (append-only JSONL + idempotent reducer, schema-versioned + sequence-id'd events — see D13), `sse` (event stream + reconnect), `reconcile` (boot/reconnect state re-derivation), `linear` (GraphQL read + write + proof-only AC + reconcile), `dag` (Linear edges → waves, cycle detection), `worktree` (worktree/branch lifecycle + integration worktree), `merge-queue` (serial mutex), `merge` (merge/rebase/verify), `coder` (session drive + done state machine + permission policy), `done` (idle-AND-new-commit predicate), `gate` (the seven v1 commands), `watchdog` (stall detection), `diagnoser` (one-shot retry-prompt), `reviewer` (different-model review + fix loop), `fixtures` (pre-wave domain fixtures), `control` (`CONTROL.md` pause + approval allowlist), `budget` (wall-clock + session guards), `http` (`/status` + PATCH steering), `cascade` (the orchestration loop), `spike` (Wave-0 capability probe).
 
 **opencode integration (D1).** `@opencode-ai/sdk` against a long-lived `opencode serve`. Because this repo historically drives opencode only via `opencode run` CLI one-shots and may be a customized slim build, a **Wave-0 spike is a hard pre-req gate**: it must prove `event.subscribe`, `session.promptAsync`→`session.idle`, `session.status` shape, and `permission.updated`+allow before any Wave-1 code or the SDK dependency is committed.
 
-**Gate execution & coverage (D2).** `gate.ts` runs the six underlying commands directly and fail-fast: `build → lint → format:check → test → typecheck → typecheck:coverage` (prefixed `CI=true` to avoid the no-TTY pnpm abort). It must **not** shell out to a `v1-check` script — `v1-check` is a Claude skill, not a pnpm script. The repo `tsconfig.json` (`rootDir:"src"`, `include:["src/**/*"]`) excludes `scripts/`, so a dedicated typecheck project must add `scripts/afk-orchestrator/**/*` to genuinely build/type-gate the orchestrator (today only lint/format touch `scripts/`).
+**Gate execution & coverage (D2).** `gate.ts` runs the seven underlying commands directly and fail-fast: `build → lint → format:check → reach:check → test → typecheck → typecheck:coverage` (prefixed `CI=true` to avoid the no-TTY pnpm abort). It must **not** shell out to a `v1-check` script — `v1-check` is a Claude skill, not a pnpm script. The repo `tsconfig.json` (`rootDir:"src"`, `include:["src/**/*"]`) excludes `scripts/`, so a dedicated typecheck project must add `scripts/afk-orchestrator/**/*` to genuinely build/type-gate the orchestrator (today only lint/format touch `scripts/`).
 
 **Merge model (D3).** Concurrency pool holds only `coder` + `reviewer`. Merges serialize through one mutex in a dedicated integration worktree via `git -C` — never `git checkout` in the repo root. Conflict path: `merge --abort` → rebase the slice branch on the integration branch → retry; persistent conflict (after cap) → `blocked`. A `merged` entry is journaled only after `git merge-base --is-ancestor` confirms reachability. **Reviewer-before-merge invariant:** no *real* (Linear-derived) slice enters the merge queue until it has passed the Wave-3 reviewer gate (US21). Wave 2 lands the merge/conflict/gate machinery a wave before the reviewer, but its exit criterion is a *synthetic* multi-wave PRD — so Wave 2 may merge **synthetic/test slices only**, and a production cascade is never merged unreviewed.
 
@@ -141,7 +163,7 @@ Prior-art shape to follow: the existing skill scripts and `src/orchestrator/` us
 - **Multi-PRD / multi-slug concurrency.** One `<slug>` cascade per orchestrator process.
 - **Opening the PR.** The orchestrator (and the thin launcher) print `gh pr create`; they never run it (memory: skills-no-auto-pr).
 - **Goal-package rendering.** The DAG is read live from Linear; `/risoluto-goal-prep`-style pre-rendered packages are not required or produced.
-- **Replacing the v1 gate definition.** The orchestrator *runs* the existing six commands; it does not redefine what the gate is.
+- **Replacing the v1 gate definition.** The orchestrator *runs* the existing seven commands; it does not redefine what the gate is.
 - **A UI beyond the minimal `/status` + PATCH HTTP surface.** No dashboard.
 - **Retaining the manual build path.** `/risoluto-sync`, `/risoluto-verify-acceptance`, `/risoluto-pre-pr`, `/risoluto-tdd`, `/risoluto-review-handoff`, `/risoluto-goal-prep`, and the `goal-run` conductor are all retired — their capabilities move into the daemon (see [Pipeline Skill Restructure](#pipeline-skill-restructure)). The boot/end reconcile pass is the only reconciliation safety net and carries `/risoluto-sync`'s proof-only discipline.
 - **Merging or redesigning surviving skills.** The restructure is DRY-only on survivors (`to-prd`, `to-issues`, `preflight`, `next-bundle`); none are merged. `risoluto-architecture-loop` keeps its own identity — only its discipline reference is repointed to `coder-discipline/`.
@@ -153,3 +175,4 @@ Prior-art shape to follow: the existing skill scripts and `src/orchestrator/` us
 - **Risk to watch.** The Linear writeback + proof-only AC + reconcile item (D10/D11) roughly doubles the Linear surface area and folds in `/risoluto-sync`'s hardest logic; track it as a first-class item, not a side effect.
 - **Precondition — Linear status mapping.** The slice-state → Linear-workflow-state mapping is config-driven and is a **hard precondition of the Wave-3 writeback item** (no longer an open question). Decided mapping for the Risoluto (RIS) team: `queued→Backlog`, `running→In Progress`, `awaiting-review→In Review`, `awaiting-approval→Blocked`, `blocked→Blocked`, `rejected→Blocked`, `aborted-budget→Blocked`, `merged→Done`. The team ships Backlog/Todo/In Progress/In Review/Done/Canceled/Duplicate by default — **no `Blocked` status** — so creating a `Blocked` workflow status on the Risoluto team is a precondition of writeback, and the writeback config **fails closed at boot if any mapped target status is absent** (it never invents or silently drops a transition).
 - **Production-readiness gate.** After Wave 3, before the daemon drives a real PRD unattended, run one real `<slug>` end-to-end (start → reviewed merge → proof-only writeback → boot/end reconcile → printed `gh pr create`) as final acceptance — distinct from the synthetic dry run that exits Wave 2.
+- **Partial Wave-1 deliverables already on disk.** The `coder` / `reviewer` / `diagnoser` opencode agents (D6) already exist at `.opencode/agents/{coder,diagnoser,reviewer}.md` — extend them, don't recreate.

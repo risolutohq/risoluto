@@ -1,9 +1,9 @@
 ---
 slug: code-review-remediation
-linear_project: https://linear.app/ninetech/project/code-review-remediation-53f1ca436217
+linear_project: https://linear.app/ninetech/project/code-review-remediation-7d80b2af1c4e
 synced_at: 2026-06-03T16:18:14.818Z
 source: docs/roadmap.md#code-review-remediation
-status: draft
+status: shipped
 ---
 
 ## Problem Statement

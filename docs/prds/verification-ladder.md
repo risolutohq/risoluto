@@ -3,7 +3,7 @@ slug: verification-ladder
 linear_project: https://linear.app/ninetech/project/verification-ladder-e25bb1dd5a9d
 synced_at: 2026-06-02T00:00:00Z
 source: docs/roadmap.md#verification-ladder
-status: draft
+status: shipped
 ---
 
 ## Problem Statement
@@ -199,8 +199,8 @@ answers "is this capability wired into Risoluto," never "did a Workflow Run sati
   (independently confirm the manifest entry and e2e). These edits encode the bar already proven by hand
   during the workflow-first-afk-mvp build.
 - No new runtime dependency is added; `madge`, `knip`, and `vitest` are already present. The lint
-  ceilings (300 lines per file, 50 per function, complexity 15) apply; the analyzer is split into the
-  deep module plus a thin script to stay under them.
+  ceiling (complexity 15 per function) applies; the analyzer is split into the
+  deep module plus a thin script to stay under it.
 - The first `reach:check` run doubles as a retroactive audit of the current branch's capabilities; its
   output seeds the initial manifest and reveals which already-"Done" tickets are genuinely reachable.
 
@@ -209,7 +209,7 @@ answers "is this capability wired into Risoluto," never "did a Workflow Run sati
 - Tests validate external behavior and contracts, not private implementation details. Prior art: the
   `run-start-*.integration.test.ts` family (drive a CLI command with an injected external boundary,
   then assert archived artifacts and events) and the script-driven checks (`live-preflight`,
-  `prd-drift-check`).
+  `prd-reconcile`).
 - **Reachability analyzer** is tested with unit tests over fixture import-graphs and fixture manifests:
   a wired capability returns `reachable` with the caller chain; an exported-but-uncalled capability
   returns `no-nontest-caller`; a capability reachable only from `tests/` returns the test-only gap; an

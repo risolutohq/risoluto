@@ -13,7 +13,7 @@
 #   SKIP_HOOKS=1 git push        → skip build/test/typecheck (emergency)
 #   FULL_CHECK=1 git push        → run the full CI-mirror suite
 #
-# Note: PRD drift check runs unconditionally — SKIP_HOOKS does NOT bypass it.
+# Note: slug:check runs unconditionally — SKIP_HOOKS does NOT bypass it.
 
 set -e
 
@@ -45,7 +45,7 @@ fi
 
 # ── Emergency bypass ─────────────────────────────────────────────────
 if [ "${SKIP_HOOKS:-0}" = "1" ]; then
-  echo "⚠️  SKIP_HOOKS=1 — skipping build/test/typecheck (PRD drift check already ran)."
+  echo "⚠️  SKIP_HOOKS=1 — skipping build/test/typecheck (slug:check already ran)."
   exit 0
 fi
 
@@ -87,7 +87,7 @@ fi
 
 if [ "$need_gate" = false ]; then
   echo "📄 No code/config/test/deps changes in this push — skipping build/test/typecheck."
-  echo "   (PRD drift check already ran; use FULL_CHECK=1 to force the full suite.)"
+  echo "   (slug:check already ran; use FULL_CHECK=1 to force the full suite.)"
   exit 0
 fi
 

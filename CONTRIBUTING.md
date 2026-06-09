@@ -11,10 +11,12 @@ Follow the [Quickstart](README.md#quickstart) in the README: Node.js >= 22, pnpm
 Run the canonical gate before committing or opening a PR — same order CI uses:
 
 ```bash
-pnpm run build && pnpm run lint && pnpm run format:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
+pnpm run build && pnpm run lint && pnpm run format:check && pnpm run reach:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
 ```
 
-When a change touches an integration boundary, also run the relevant focused suite (`test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:integration:live`, `test:load`, `test:docker`). See [docs/testing-and-release.md](docs/testing-and-release.md) for the test tiers and the `1.0.0` gate.
+`reach:check` (fast, read-only) fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter — adding a load-bearing capability means adding its manifest entry. See [docs/reachability-ladder.md](docs/reachability-ladder.md).
+
+When a change touches an integration boundary, also run the relevant focused suite (`test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:integration:live`, `test:e2e`, `test:load`, `test:docker`). See [docs/testing-and-release.md](docs/testing-and-release.md) for the test tiers and the `1.0.0` gate.
 
 ## Commit conventions
 

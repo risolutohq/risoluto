@@ -65,27 +65,75 @@
 +--------------------------------------------------------------+
 ```
 
+```mermaid
+flowchart TB
+  subgraph Intake["Intake & surfaces"]
+    cli["cli (24)"]
+    http["http (47)"]
+    webhook["webhook (12)"]
+    live["live (5)"]
+  end
+  subgraph Core["Core workflow engine"]
+    wr["workflow-run (50)"]
+    orch["orchestrator (32)"]
+    wd["workflow-definition (1)"]
+    state["state (4)"]
+    dispatch["dispatch (7)"]
+    ar["agent-runner (20)"]
+    codex["codex (12)"]
+    agent["agent (2)"]
+  end
+  subgraph Trackers["Tracker adapters"]
+    linear["linear (11)"]
+    github["github (2)"]
+    tracker["tracker (6)"]
+  end
+  subgraph Support["Support & platform"]
+    config["config (27)"]
+    core["core (25)"]
+    persistence["persistence (17)"]
+    git["git (13)"]
+    docker["docker (5)"]
+    workspace["workspace (5)"]
+    setup["setup (18)"]
+    secrets["secrets (3)"]
+    reach["reachability (6)"]
+    health["health (9)"]
+    obs["observability (5)"]
+    notif["notification (8)"]
+    prompt["prompt (5)"]
+    utils["utils (5)"]
+    auto["automation (4)"]
+    audit["audit (3)"]
+    alerts["alerts (3)"]
+  end
+  Intake --> Core
+  Core --> Trackers
+  Core --> Support
+```
+
 ## Boundary rules
 
 - **Ports are the contract.** Tracker / harness / PR / model integrations live behind typed ports. Code that reaches around a port (e.g. calling `LinearClient` straight from the orchestrator) is wrong.
-- **Plane separation.** Control-plane code never assumes execution-plane locality; execution-plane code never assumes control-plane authority over secrets.
+- **Plane separation.** Control-plane code never assumes execution-plane locality; execution-plane code never assumes control-plane authority over secrets. The seam is `src/dispatch/` (`RunAttemptDispatcher`: local `AgentRunner` vs remote `DispatchClient`); the run state machine lives in `src/state/` + `src/workflow-run/executor.ts`.
 - **Hooks ≠ Gates ≠ Transitions.** A hook is a side-effect / extension point, a gate is a proof requirement, a transition is a state change. Same execution context, different concepts, separate code paths.
 - **Skill packs are versioned and discoverable** through one registry contract, whether in-tree (v1) or out-of-tree (post-v1).
 - **No external plugin API in v1.** Plugin boundaries exist in the type system; the public extension surface is deferred.
 
 ## Adapter surfaces (v1 contracts, not full implementations)
 
-| Surface          | v1 contract                                                         | v1 implementation                            |
-| ---------------- | ------------------------------------------------------------------- | -------------------------------------------- |
-| Tracker          | `TrackerPort` (intake, mirror, board projection)                    | Linear (first), CLI / direct ingest (second) |
-| PR / MR          | `PrPort` (open, comment, status)                                    | GitHub PRs                                   |
-| Harness          | `HarnessPort` (spawn role, collect artifacts, stream evidence)      | Codex (first)                                |
-| Model / provider | `ModelProvider` config                                              | Anthropic, OpenAI (explicit, name-based)     |
-| Persistence      | `WorkflowRunStore`, `ArtifactStore`, `EventLogStore`, `MemoryStore` | SQLite + filesystem (single-node)            |
+| Surface          | v1 contract                                                                                                | v1 implementation                        |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Tracker          | `TrackerPort` (intake, mirror, board projection)                                                           | Linear (first), GitHub Issues (shipped)  |
+| PR / MR          | `GitPostRunPort` / `GitIntegrationPort` (commit-push, open PR, status, diff)                               | GitHub PRs                               |
+| Harness          | `AgentSessionPort` (start session, collect artifacts, stream evidence)                                     | Codex (first)                            |
+| Model / provider | `CodexProviderConfig`                                                                                      | Anthropic, OpenAI (explicit, name-based) |
+| Persistence      | `AttemptStorePort`, `WorkflowRunArchive` (event log), `WorkflowRunEvidenceStore`, `WorkflowRunMemoryStore` | SQLite + filesystem (single-node)        |
 
-Other tracker / PR / harness implementations are [roadmap](./roadmap.md) work. The full v1
-out-of-scope list lives in the [Product Spine](./product-spine.md#what-v1-does-not-implement) — it is
-not restated here.
+GitHub Issues ships as a second tracker adapter (`src/tracker/github-adapter.ts`, selected when the
+tracker kind is `github`); Linear stays the default and most complete. Other tracker / PR / harness
+implementations are [roadmap](./roadmap.md) work. The full v1 out-of-scope list lives in the
+[Product Spine](./product-spine.md#what-v1-does-not-implement) — it is not restated here.
 
 ## Related docs
 

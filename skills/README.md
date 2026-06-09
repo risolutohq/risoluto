@@ -2,7 +2,9 @@
 
 Index of the skills that operate this repo's **research → shipping pipeline**. Each lives in a
 `skills/<name>/` folder — the `risoluto-*` pipeline skills plus the `init-research` and `v1-check`
-helpers — and is symlinked into both `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex).
+helpers — and is symlinked into `.claude/skills/` (Claude Code); the Codex-portable subset is also in
+`.agents/skills/` (the three Claude-only skills — `risoluto-architecture-loop`, `risoluto-clawpatch`,
+`risoluto-goal-run` — are not).
 Canonical references: [`docs/research-to-shipping-pipeline.md`](../docs/research-to-shipping-pipeline.md)
 (the full funnel) and [`docs/product-spine.md`](../docs/product-spine.md) (the value model — the five
 AFK jobs every candidate is gated against).
@@ -34,7 +36,7 @@ One canonical body per skill, symlinked into both `.claude/skills/` and `.agents
 | **`/init-research`**     | Initialize or refresh the private `research/` submodule (`risolutohq/risoluto-research`). Idempotent. Hard prerequisite — most skills fail fast if it is missing.                                                                  |
 | **`/risoluto-vault`**    | Configure `research/` as a scoped Obsidian vault: `.obsidian/` config, Templater templates, Dataview view notes, pinned plugin set, relative-link enforcement. Idempotent — repairs drift without clobbering operator preferences. |
 | **`/risoluto-features`** | Regenerate `RISOLUTO_FEATURES.md`, the code-backed inventory of every shipped feature (two-repo map-reduce). It is the **dedup anchor** for both research modes and the home for the exit-gate usage signal.                       |
-| **`/v1-check`**          | Run the canonical pre-commit / pre-PR gate in order: build → lint → format:check → test → typecheck → typecheck:coverage. Stops at the first failure and surfaces its output verbatim.                                             |
+| **`/v1-check`**          | Run the canonical pre-commit / pre-PR gate in order: build → lint → format:check → reach:check → test → typecheck → typecheck:coverage. Stops at the first failure and surfaces its output verbatim.                                |
 
 ## Mode A — targeted adoption (study one source)
 
@@ -86,3 +88,7 @@ One canonical body per skill, symlinked into both `.claude/skills/` and `.agents
   different job. Note its internal `Phase 0 — Preflight` is **not** the `risoluto-preflight` skill:
   the loop's Phase 0 checks repo/model-auth wiring, while `/risoluto-preflight` is the interactive
   roadblocker interview before an AFK build.
+- **`risoluto-clawpatch`** is likewise outside the funnel — a Claude-only whole-repo, slice-by-slice
+  code-review Workflow (map → review → merge → adversarially verify → review-handoff). It reviews and
+  hands off findings only: it never fixes code, ticks a tracker, or opens a PR, so it carries no roadmap
+  row or `from:prd-<slug>` label and is not indexed in the tables above.

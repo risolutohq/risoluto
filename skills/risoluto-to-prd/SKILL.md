@@ -75,7 +75,7 @@ The skill never runs `gh pr create`. Surface the printed command to Omer; he dec
 
 ## PRD body template
 
-The body (everything below frontmatter) uses these **exact** section headings — Stage 1.3's drift hook (`pnpm prd:drift-check`) does a literal diff against the Linear Project content.
+The body (everything below frontmatter) uses these **exact** section headings — keep them stable so the git PRD stays a clean diff against its Linear Project content mirror (reconcile with `pnpm prd:reconcile` if they diverge).
 
 ```markdown
 ## Problem Statement
