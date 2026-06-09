@@ -23,7 +23,7 @@ DEFAULT_BRANCH=$(gh repo view <owner>/<repo> --json defaultBranchRef --jq '.defa
 git clone --depth 1 --branch "$DEFAULT_BRANCH" <url> /tmp/researcher-<target-slug>
 ```
 
-Never assume `main` — detect it (Risoluto's own peers include `master`-default repos). If the clone already exists from a previous run, `git pull` instead. The clone is ephemeral — never committed to the research vault.
+Never assume `main` — detect it (Risoluto's own peers include `master`-default repos). If the clone already exists from a previous run, `git pull` instead. The clone is ephemeral — never committed to the research vault. On Windows the Git-Bash `/tmp/researcher-<target-slug>` resolves to a `C:\Users\…\AppData\Local\Temp\…` path (the `git clone` output prints it); when you then read those files with the `Read` tool or a `node` call, hand it that host-absolute path, not the `/tmp/…` alias — see SKILL.md → **Platform notes**.
 
 A local shallow clone is preferred because it lets the agent read files directly and run `colgrep` over the source — strictly more capable than paginated API calls, and it sidesteps rate limits on large repos. If a clone is impossible (private without access, or very large), fall back to the trees API:
 

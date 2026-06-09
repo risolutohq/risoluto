@@ -49,6 +49,17 @@ These checks are deliberately **not** global gates:
 - **`browser-harness` + a Chrome on the CDP port** — needed only for `article` (generic web page) sources. Checked when Step 2b routes to `webpage-capture.md`, never globally. `browser-harness --doctor` must show an active browser connection; no API key for local capture.
 - **`research/templates/`** — the researcher does not read templates at runtime (its body builders are self-contained — see the closing note), so a missing vault never blocks a capture. `/risoluto-vault` is still the recommended companion since it owns the Obsidian config.
 
+## Platform notes (shells & paths)
+
+This skill shells out to `node`, `pnpm`, `git`, and `opencode`. Two portability gaps bite on Windows / Git-Bash (and any shell where the toolchain isn't on PATH) — handle them once here so the steps below stay clean:
+
+- **`pnpm` may not be on PATH.** A bare `pnpm …` can fail with `command not found` (e.g. the Bash tool on Windows, where only `corepack` / `node` / `npx` resolve). If it does, run the same script through **`corepack pnpm …`** (it resolves the repo-pinned pnpm). This bites at **Step 6** (`validate:research`) and **Step 7** (the husky pre-commit hook shells `pnpm exec lint-staged`). For the hook, never reach for `--no-verify` — put a one-shot shim on PATH for that one commit instead:
+  ```bash
+  mkdir -p /tmp/pnpm-shim && printf '#!/bin/sh\nexec corepack pnpm "$@"\n' > /tmp/pnpm-shim/pnpm && chmod +x /tmp/pnpm-shim/pnpm
+  PATH="/tmp/pnpm-shim:$PATH" git commit …     # the hook now finds pnpm
+  ```
+- **Paths cross a shell→host boundary.** `research.mjs` and `opencode` run as host processes (e.g. Windows Node), so a Git-Bash alias like `/tmp/x.md` is **not** what they resolve. When you hand a path to `--body-file`, `opencode -f`, the `Read` tool, or a `node` call, use the **host-absolute path** the shell actually resolved to — on Windows that's the `C:\Users\…\AppData\Local\Temp\…` your `git clone` / write landed at (the `git clone` output prints it), not the `/tmp/…` form. Writing the body file with the `Write` tool at an explicit absolute path and passing that exact string sidesteps the mismatch entirely.
+
 ## The pipeline
 
 ### Step 1 — Gather inputs
@@ -126,7 +137,7 @@ node skills/risoluto-researcher/scripts/research.mjs \
   --ideas "multi-agent,cost-ceiling" \
   --title "The page title" \
   --description "One paragraph about the target" \
-  --body-file "/tmp/researcher-body.md"
+  --body-file "/tmp/researcher-body.md"   # host-absolute path — on Windows this is a `C:\…\Temp\…` path, not a Git-Bash /tmp alias (see Platform notes)
 ```
 
 All flags:
@@ -170,7 +181,10 @@ Concretely, this is the failure that turned a 44-minute talk into 6 bullets and 
 Mirror the `/risoluto-verify-acceptance` idiom — a non-anchored model via `opencode run --pure` (plugins off; the installed `oh-my-opencode-slim` agent prompts are unreliable under this build, so never `--agent`). Pass it the captured source body and your drafted candidate **names only** — withhold the `[job:]`/`[flag:]` tags so they can't bias it:
 
 ```bash
-opencode run --pure --model <provider/model> --format json -f <path-to-source-body>.md "$(cat <<'PROMPT'
+# `-f`/`--file` is an ARRAY flag: it greedily swallows a trailing positional, so a prompt placed after it
+# vanishes (you get "File not found: <your prompt>"). Put the PROMPT first and `-f` LAST, and give `-f` a
+# HOST-ABSOLUTE path (Platform notes), not a /tmp alias. Wrap in a bounded `timeout` so a stall can't hang.
+PROMPT="$(cat <<'PROMPT'
 You are a completeness critic. The attached file is a captured research source. Below is the list of
 candidate features another analyst already extracted from it. List ONLY distinct user-observable or
 backend-surface features the source EXPLICITLY names that are ABSENT from that list — or that the list
@@ -182,9 +196,10 @@ Candidate features already extracted:
 Output a JSON array: [{ "feature": "<name>", "citation": "<quote from the source>" }]. Empty array if the list is already complete.
 PROMPT
 )"
+timeout 200 opencode run "$PROMPT" --pure --model <provider/model> --format default -f "<host-absolute-path-to-source-body>.md"
 ```
 
-`opencode models` lists `provider/model` ids — pick one **different** from the model drafting the candidates (same-model reproduces the same blind spot). If opencode is unavailable, spawn a fresh-context subagent with the same prompt: the point is an independent reader, not a specific tool. If the critic errors, surface it and fix it — **do not skip the gate**.
+`opencode models` lists `provider/model` ids — pick one **different** from the model drafting the candidates (same-model reproduces the same blind spot); `--format default` prints the answer directly (`--format json` emits raw events you would have to parse). Treat opencode as the **preferred but best-effort** independent reader: if it is unavailable, stalls past the timeout, or returns empty (seen with the free/community models), fall **straight to a fresh-context subagent** with the same prompt rather than retrying — the point is an independent reader, not a specific tool, and a fresh-context subagent is non-anchored on your framing even when it shares your model family. Only a genuine error (not a stall) is worth surfacing — but either way, **do not skip the gate**.
 
 **Reconcile, then proceed.** For every feature the critic returns, either add it as a new candidate bullet (it then flows through the rest of 5.1 and into 5.2 dedup) or write one line on why it is genuinely the same as an existing bullet. Do not start 5.2 until the critic has run and every returned item is either added or dismissed-with-reason. An empty array passes the gate — note that the critic ran clean.
 
@@ -235,10 +250,10 @@ Skills propose; the founder disposes: never reorder, promote, or delete roadmap 
 After the script runs and the dedup edits are in place, verify the output:
 
 ```bash
-pnpm validate:research
+pnpm validate:research        # if `pnpm` isn't on PATH (e.g. Windows Git-Bash): `corepack pnpm validate:research` — see Platform notes
 ```
 
-If validation fails, fix the frontmatter and re-run. Common failures: missing required fields, slug pattern mismatch, invalid source_type or category enum, malformed date format.
+If validation fails, fix the frontmatter and re-run. Common failures: missing required fields, slug pattern mismatch, invalid source_type or category enum, malformed date format. **Scope note:** `validate:research` checks the whole vault _and_ `docs/prds/*.md`, but a capture only writes `research/targets/<slug>/…` + `INDEX.md` — so failures pointing at `docs/prds/*.md` are pre-existing PRD drift, **not yours**. Fix only your own files; report the rest rather than chasing them.
 
 ### Step 7 — Commit
 
@@ -246,12 +261,14 @@ The `research/` submodule has its own git history. Commit there first, then bump
 
 ```bash
 cd research
+git checkout master                       # `git submodule update --init` leaves a DETACHED HEAD; land the commit on the branch so `git push` has a ref
 git add targets/ INDEX.md
 git commit -m "research: capture <target-slug> via risoluto-researcher"
-git push
+git push origin master
 cd ..
 git add research
-git commit -m "chore: bump research submodule for <target-slug> capture"
+git commit -m "chore: bump research submodule for <target-slug> capture"   # if the husky hook fails on `pnpm`, use the shim from Platform notes (never --no-verify)
+git push                                  # outward-facing — confirm with the operator before pushing the parent
 ```
 
 ## Target README ownership (what the script touches on re-runs)
@@ -291,6 +308,9 @@ This is the canonical flat list for agents, CI, `cat`, and `git log` — complem
 Given one URL, the researcher produces a target README + one source file that pass `pnpm validate:research`:
 
 ```bash
+# `--body-file` is OPTIONAL — omit it for the smoke test (the script writes a placeholder body). Avoid
+# `--body-file /dev/null`: it ENOENTs under Windows Node. For a real body, pass a host-absolute path (Platform notes).
+
 # Dry-run first
 node skills/risoluto-researcher/scripts/research.mjs \
   --url "https://cursor.com" \
@@ -300,7 +320,6 @@ node skills/risoluto-researcher/scripts/research.mjs \
   --source-slug "homepage" \
   --title "Cursor — The AI Code Editor" \
   --description "Cursor is an AI-first code editor built on VS Code. It ships inline multi-model chat, whole-codebase context, and agent-driven refactoring. We track it because it defines the current ceiling for AI-assisted coding UX." \
-  --body-file /dev/null \
   --dry-run
 
 # Apply for real (omit --dry-run)
@@ -311,10 +330,9 @@ node skills/risoluto-researcher/scripts/research.mjs \
   --source-type "article" \
   --source-slug "homepage" \
   --title "Cursor — The AI Code Editor" \
-  --description "Cursor is an AI-first code editor built on VS Code. It ships inline multi-model chat, whole-codebase context, and agent-driven refactoring. We track it because it defines the current ceiling for AI-assisted coding UX." \
-  --body-file /dev/null
+  --description "Cursor is an AI-first code editor built on VS Code. It ships inline multi-model chat, whole-codebase context, and agent-driven refactoring. We track it because it defines the current ceiling for AI-assisted coding UX."
 
-# Validate
+# Validate (use `corepack pnpm …` if pnpm isn't on PATH)
 pnpm validate:research
 # Expected: "validate:research: N file(s) OK."
 ```
