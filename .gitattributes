@@ -1,0 +1,12 @@
+# Enforce LF line endings on checkout and commit.
+#
+# The toolchain assumes LF: oxfmt formats to LF, and scripts/validate-research.ts
+# parses YAML frontmatter that silently breaks if a trailing CR survives a CRLF
+# checkout (`status: draft` -> `"draft\r"`, failing prd.schema.json's enum). Without
+# this, a Windows checkout with core.autocrlf=true rewrites tracked files to CRLF
+# and breaks validation. `text=auto` lets Git auto-detect and skip binary files.
+* text=auto eol=lf
+
+# Markdown is the most CRLF-sensitive surface (PRD + research frontmatter) — pin it
+# explicitly so the intent survives future edits to this file.
+*.md text eol=lf
