@@ -46,7 +46,7 @@ export async function getContainerStats(containerName: string): Promise<Containe
       netIO: parsed.net ?? "0B / 0B",
       pids: parsed.pids ?? "0",
     };
-  } catch (_parseErr) {
+  } catch {
     /* JSON parse failure — container stats unreadable */
     return null;
   }

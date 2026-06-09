@@ -130,7 +130,7 @@ export class ComponentObserver {
     this.persistQueue = this.persistQueue
       .catch(() => undefined)
       .then(() => writeComponentSnapshot(this.root, this.snapshot()))
-      .catch((_err: unknown) => {
+      .catch(() => {
         // Non-fatal: observability write failure must not crash the process, but should be visible.
         /* snapshot write failure handled silently */
       });
