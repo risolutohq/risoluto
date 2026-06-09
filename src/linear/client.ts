@@ -115,6 +115,13 @@ function assertIssueTransitionSucceeded(payload: { data?: Record<string, unknown
   }
 }
 
+function assertCommentCreated(payload: { data?: Record<string, unknown> }): void {
+  const commentCreate = asRecord(asRecord(payload.data).commentCreate);
+  if (asBooleanOrNull(commentCreate.success) !== true) {
+    throw new LinearClientError("linear_unknown_payload", "linear comment creation was not confirmed");
+  }
+}
+
 function graphQLErrorMessages(errors: unknown[] | undefined): string[] {
   return (errors ?? []).map((error) => asStringOrNull(asRecord(error).message) ?? "Linear GraphQL error");
 }
@@ -363,26 +370,38 @@ export class LinearClient {
   }
 
   /**
-   * Strict variant of {@link updateIssueState}. Re-throws on final retry failure
-   * so callers that need to report success/failure to an operator (state
-   * transition endpoints, tracker adapter `transitionIssue`) can distinguish
-   * success from a silent swallow.
+   * Strict variant of {@link updateIssueState}. Asserts the transition inside the
+   * retry lambda, so an unconfirmed (HTTP 200, `success: false`) payload is retried
+   * rather than accepted; re-throws on final retry failure so callers that report
+   * success/failure to an operator (state transition endpoints, tracker adapter
+   * `transitionIssue`) can distinguish success from a silent swallow.
    */
   async updateIssueStateStrict(issueId: string, stateId: string): Promise<void> {
-    const payload = await withRetryReturn(this.logger, "updateIssueState", async () => {
-      return this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
+    await withRetryReturn(this.logger, "updateIssueState", async () => {
+      const payload = await this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
+      assertIssueTransitionSucceeded(payload);
+      return payload;
     });
-    assertIssueTransitionSucceeded(payload);
   }
 
   /**
    * Post a comment on a Linear issue.
-   * Retries up to 3 times with exponential backoff. Non-blocking on failure.
+   * Retries up to 3 times with exponential backoff, asserting the mutation's
+   * `success` flag inside the retry so an unconfirmed (HTTP 200, `success: false`)
+   * payload is retried rather than silently dropped. Logs a warning on final
+   * failure so the swallow is observable; non-blocking by design (back-comments
+   * are best-effort), so it never re-throws to the caller.
    */
   async createComment(issueId: string, body: string): Promise<void> {
-    await withNonFatalRetry(this.logger, "createComment", async () => {
-      await this.runGraphQL(buildIssueCommentMutation(), { issueId, body });
-    });
+    try {
+      await withRetryReturn(this.logger, "createComment", async () => {
+        const payload = await this.runGraphQL(buildIssueCommentMutation(), { issueId, body });
+        assertCommentCreated(payload);
+        return payload;
+      });
+    } catch (error) {
+      this.logger.warn({ error, issueId }, "createComment failed — comment not posted");
+    }
   }
 
   async createIssue(input: {

@@ -166,14 +166,14 @@ describe("LinearClient.updateIssueStateStrict", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("re-throws when Linear returns an unconfirmed issueUpdate payload", async () => {
+  it("retries then re-throws when Linear returns an unconfirmed issueUpdate payload", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse({ issueUpdate: { success: false } }));
     const { client } = makeClient(fetchMock);
 
     await expect(client.updateIssueStateStrict("issue-1", "state-done")).rejects.toThrow(
       /linear issue transition was not confirmed/,
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -197,5 +197,17 @@ describe("LinearClient.createComment", () => {
     const { client } = makeClient(fetchMock);
     await expect(client.createComment("issue-1", "hello")).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries then swallows when Linear returns an unconfirmed commentCreate payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({ commentCreate: { success: false } }));
+    const { client, logger } = makeClient(fetchMock);
+
+    await expect(client.createComment("issue-1", "hello")).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ issueId: "issue-1" }),
+      "createComment failed — comment not posted",
+    );
   });
 });
