@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { desc, eq, sql } from "drizzle-orm";
 
-import { normalizeLimit } from "./query-helpers.js";
+import { clampLimit } from "./store-utils.js";
 import type { AutomationRunRecord } from "../../automation/types.js";
 import type { RisolutoDatabase } from "./database.js";
 import { automationRuns } from "./schema.js";
@@ -80,7 +80,7 @@ class SqliteAutomationStore implements AutomationStorePort {
   }
 
   async listRuns(options: ListAutomationRunsOptions = {}): Promise<AutomationRunRecord[]> {
-    const limit = normalizeLimit(options.limit);
+    const limit = clampLimit(options.limit, 100, 500);
     const rows = (
       options.automationName
         ? this.db.select().from(automationRuns).where(eq(automationRuns.automationName, options.automationName))
@@ -92,11 +92,15 @@ class SqliteAutomationStore implements AutomationStorePort {
     return rows.map(toAutomationRunRecord);
   }
 
-  async countRuns(): Promise<number> {
-    const row = this.db
-      .select({ count: sql<number>`count(*)` })
-      .from(automationRuns)
-      .get();
+  async countRuns(options: ListAutomationRunsOptions = {}): Promise<number> {
+    const row = (
+      options.automationName
+        ? this.db
+            .select({ count: sql<number>`count(*)` })
+            .from(automationRuns)
+            .where(eq(automationRuns.automationName, options.automationName))
+        : this.db.select({ count: sql<number>`count(*)` }).from(automationRuns)
+    ).get();
     return row?.count ?? 0;
   }
 

@@ -17,6 +17,10 @@ export class LinearTrackerToolProvider implements TrackerToolProvider {
       return null;
     }
     const response = await handleLinearGraphqlToolCall(this.client, toolArgs);
+    // All Linear tool-call errors are intentionally non-fatal: the agent receives
+    // the error as a tool result and decides how to proceed. Auth failures (401),
+    // transport errors, and GraphQL errors are all converted to non-fatal
+    // toolCallFailure payloads inside handleLinearGraphqlToolCall's catch block.
     return { response, fatalFailure: null };
   }
 }

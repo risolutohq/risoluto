@@ -1,13 +1,13 @@
 export const meta = {
   name: "risoluto-clawpatch",
   description:
-    "Native whole-repo slice-by-slice code review: map the repo into semantic feature slices, review each across all 10 categories, merge+dedup, adversarially verify (3 skeptics/finding), then emit a review-handoff.v1 markdown for a fresh fixing session.",
+    "Native whole-repo slice-by-slice code review: map the repo into semantic feature slices, review each across all 10 categories, merge+dedup, adversarially verify (one combined skeptic runs 3 lenses/finding), then emit a review-handoff.v1 markdown for a fresh fixing session.",
   whenToUse:
     "Whole-repo clawpatch-style review when you want a verified, handoff-ready findings list (not auto-fix). Pass args.changedFiles for a diff-scoped run.",
   phases: [
     { title: "Map", detail: "one mapper agent per spine layer -> semantic feature slices", model: "sonnet" },
     { title: "Review", detail: "one reviewer per slice, all 10 categories, strict evidence", model: "sonnet" },
-    { title: "Verify", detail: "3 perspective-diverse skeptics per finding, refute-or-survive", model: "opus" },
+    { title: "Verify", detail: "one combined skeptic runs 3 lenses/finding, refute-or-survive", model: "opus" },
     { title: "Handoff", detail: "synthesize review-handoff.v1 markdown", model: "opus" },
   ],
 };
@@ -227,6 +227,9 @@ function slugify(s) {
 function sevRank(s) {
   return { critical: 4, high: 3, medium: 2, low: 1 }[s] || 0;
 }
+function confRank(c) {
+  return { high: 3, medium: 2, low: 1 }[c] || 0;
+}
 function primaryEvidence(f) {
   return (f.evidence && f.evidence[0]) || {};
 }
@@ -257,7 +260,7 @@ function dedupeBySignature(findings) {
     if (f.featureId && !cur.slices.includes(f.featureId)) cur.slices.push(f.featureId);
     cur.evidence = dedupeEvidence([...(cur.evidence || []), ...(f.evidence || [])]);
     if (sevRank(f.severity) > sevRank(cur.severity)) cur.severity = f.severity;
-    if (sevRank(f.confidence) > sevRank(cur.confidence)) cur.confidence = f.confidence;
+    if (confRank(f.confidence) > confRank(cur.confidence)) cur.confidence = f.confidence;
   }
   return [...map.values()];
 }
@@ -279,9 +282,73 @@ function compactFinding(f) {
     recommendation: f.recommendation,
     suggestedRegressionTest: f.suggestedRegressionTest ?? null,
     minimumFixScope: f.minimumFixScope ?? null,
+    unverified: f.unverified ?? false,
     featureId: f.featureId ?? null,
     slices: f.slices ?? (f.featureId ? [f.featureId] : []),
   };
+}
+
+// Map confirmed findings to deterministic ids/bands and a valid review-handoff.v1 object in JS,
+// so the embedded contract is always valid even when the synth agent fails (e.g. session limit).
+function sevToBand(sev) {
+  if (sevRank(sev) >= 3) return "HIGH"; // critical, high
+  if (sev === "medium") return "MED";
+  return "NIT"; // low or unknown
+}
+function rankConfirmed(confirmed) {
+  const bandOrder = { HIGH: 0, MED: 1, NIT: 2 };
+  const banded = confirmed
+    .map((f) => ({ ...f, _band: sevToBand(f.severity) }))
+    .sort((a, b) => bandOrder[a._band] - bandOrder[b._band] || confRank(b.confidence) - confRank(a.confidence));
+  const counters = { HIGH: 0, MED: 0, NIT: 0 };
+  const prefix = { HIGH: "H", MED: "M", NIT: "N" };
+  return banded.map((f) => ({ ...f, _id: `${prefix[f._band]}${++counters[f._band]}` }));
+}
+function buildHandoffJson(ranked, ids) {
+  const findings = ranked.map((f) => {
+    const ev = primaryEvidence(f);
+    const flag = f.unverified ? " [UNVERIFIED: skeptic verification skipped]" : "";
+    const problem = `${(f.reasoning || f.title || "").trim()}${flag}`.trim() || "(no description)";
+    return {
+      id: f._id,
+      severity: f._band,
+      file: normPath(ev.path) || "(unknown)",
+      line: ev.startLine ?? null,
+      problem,
+      fix: (f.recommendation || "").trim() || "(see reasoning)",
+      trace: `category=${f.category}; slice=${f.featureId || "na"}; layer=${f.layer || "na"}`,
+      status: "open",
+    };
+  });
+  const high = findings.filter((f) => f.severity === "HIGH").length;
+  const med = findings.filter((f) => f.severity === "MED").length;
+  const nit = findings.filter((f) => f.severity === "NIT").length;
+  return {
+    contract: "review-handoff.v1",
+    slug: ids.slug,
+    branch: ids.branch,
+    base: ids.base,
+    reviewed_by: ids.reviewedBy,
+    ac_summary: null,
+    summary: { high, med, nit },
+    findings,
+  };
+}
+function fallbackMarkdown(h, stats) {
+  const lines = [
+    `## Summary`,
+    `${h.summary.high} HIGH, ${h.summary.med} MED, ${h.summary.nit} NIT confirmed across ${stats.slices} slices ` +
+      `(${stats.deferred} deferred, ${stats.unverified} unverified). Synth agent unavailable - deterministic body.`,
+  ];
+  for (const band of ["HIGH", "MED", "NIT"]) {
+    const fs = h.findings.filter((x) => x.severity === band);
+    if (!fs.length) continue;
+    lines.push(``, `## ${band}`);
+    for (const f of fs) {
+      lines.push(`[${f.id}] ${f.file}:${f.line ?? "?"} - ${f.problem}`, `  fix: ${f.fix}`, `  trace: ${f.trace}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 // ------------------------------- prompts -----------------------------------
@@ -344,7 +411,7 @@ const REFUTE_LENSES = [
   },
 ];
 
-function refutePrompt(finding, lens, root) {
+function refutePrompt(finding, root) {
   const minimal = {
     title: finding.title,
     category: finding.category,
@@ -353,26 +420,27 @@ function refutePrompt(finding, lens, root) {
     reasoning: finding.reasoning,
     recommendation: finding.recommendation,
   };
+  const lensBlock = REFUTE_LENSES.map((l, i) => `${i + 1}. ${l.instruction}`).join("\n");
   return `You are an ADVERSARIAL SKEPTIC reviewing a single code-review finding for the Risoluto repo (root: ${root}, paths repo-relative).
-Your DEFAULT POSITION is that this finding is a FALSE POSITIVE. Refute it unless the evidence is undeniable.
+This is the ONLY automated verification pass before the finding reaches a human and a downstream cross-model review, so be rigorous but fair: cull the clear false positives, keep anything that holds up.
 
 Finding under review:
 ${JSON.stringify(minimal, null, 2)}
 
-Your lens for this pass:
-${lens.instruction}
+Run ALL THREE checks below against the CURRENT source (use Read / colgrep / rg). The finding is a FALSE POSITIVE if it fails ANY one of them:
+${lensBlock}
 ${FP_GUARDS}
 
-Use Read / colgrep to check the real source. Then return:
-- refuted: true if this is NOT a real, actionable, correctly-reasoned finding (when uncertain, refuted = true)
-- reason: one concrete sentence
+Calibration: refute ONLY when you can concretely show the failure by pointing at the current source. If all three checks pass - or you genuinely cannot disprove it - do NOT refute (the downstream review is the deeper filter). Then return:
+- refuted: true ONLY if you concretely disproved the finding on at least one check; otherwise false
+- reason: one concrete sentence citing what you checked
 - evidenceMatches: does the cited quote match the current file? true / false / null
-- adjustedSeverity: if the finding is real but mis-severitied, the corrected severity, else null
+- adjustedSeverity: if the finding is real but mis-severitied, the corrected (lower) severity, else null
 Return strict JSON per the schema.`;
 }
 
 function synthPrompt(confirmed, stats, ids) {
-  return `You are assembling the final REVIEW HANDOFF a fresh session will use to fix the repo. ${confirmed.length} findings survived adversarial verification (raw: ${stats.raw}, after dedup: ${stats.deduped}, refuted: ${stats.dropped}).
+  return `You are assembling the final REVIEW HANDOFF a fresh session will use to fix the repo. ${confirmed.length} findings survived adversarial verification (raw: ${stats.raw}, deduped: ${stats.deduped}, refuted: ${stats.dropped}, deferred unverified: ${stats.deferred}, skeptic-unavailable: ${stats.unverified}).
 
 Confirmed findings (JSON):
 ${JSON.stringify(confirmed, null, 2)}
@@ -448,8 +516,12 @@ if (args && Array.isArray(args.changedFiles) && args.changedFiles.length) {
   log(`since-filter: ${slices.length}/${before} slices touch the ${args.changedFiles.length} changed files`);
 }
 
-// Uncapped by design: review every slice and verify every finding, whatever the cost.
-// (No budget-based slice trimming - run without a +Nk directive so there is no agent ceiling.)
+// The harness enforces a hard 1000-agent lifetime cap regardless of token budget, so the fan-out
+// (maps + reviews + skeptics + synth) MUST be bounded. With one combined skeptic per finding the
+// verify stage is cheap enough to check every finding; the cap below is a backstop for an unusually
+// large finding set, applied after dedup (where the finding count is known).
+const MAX_AGENTS = 950;
+const SKEPTICS_PER_FINDING = 1; // one combined skeptic runs all REFUTE_LENSES in a single pass
 if (slices.length === 0) {
   log("no slices to review - emitting an empty handoff");
 }
@@ -471,47 +543,92 @@ const allFindings = reviewed.filter(Boolean).flat();
 const deduped = dedupeBySignature(allFindings);
 log(`review: ${allFindings.length} raw findings -> ${deduped.length} after cross-slice dedup`);
 
+// Backstop the verify fan-out under the 1000-agent cap. Order by severity then confidence so that
+// if the cap ever binds, the highest-impact findings are verified first and the tail is DEFERRED
+// (logged, never silently dropped). With one skeptic per finding this rarely binds.
+const verifyOrder = [...deduped].sort(
+  (a, b) => sevRank(b.severity) - sevRank(a.severity) || confRank(b.confidence) - confRank(a.confidence),
+);
+const verifyCap = Math.max(0, Math.floor((MAX_AGENTS - layers.length - slices.length - 1) / SKEPTICS_PER_FINDING));
+const toVerify = verifyOrder.slice(0, verifyCap);
+const deferred = verifyOrder.slice(verifyCap);
+if (deferred.length) {
+  log(
+    `verify-cap: ${toVerify.length}/${deduped.length} findings verified; ${deferred.length} lower-severity ` +
+      `DEFERRED unverified to stay under the agent cap (resume to cover them) - not silently dropped.`,
+  );
+}
+
 // --- Phase 3: Verify --------------------------------------------------------
 phase("Verify");
-const SURVIVE_THRESHOLD = Math.ceil(REFUTE_LENSES.length / 2); // 2 of 3 must NOT refute
+// One combined skeptic per finding runs all three lenses (evidence / reasoning / impact) in a single
+// pass - ~3x cheaper than a 3-agent panel, so EVERY finding is verified in one quota window instead
+// of deferring a tail. The downstream fixing-session review (Opus 4.8 / cross-model) is the deeper
+// second filter; this pass culls the obvious false positives the wide-net Review casts.
 const judged = await parallel(
-  deduped.map((f) => () =>
-    parallel(
-      REFUTE_LENSES.map((lens) => () =>
-        agent(refutePrompt(f, lens, root), {
-          label: `verify:${slugify(f.title).slice(0, 24)}:${lens.key}`,
-          phase: "Verify",
-          model: "opus",
-          schema: VERDICT_SCHEMA,
-        }),
-      ),
-    ).then((votes) => {
-      const v = votes.filter(Boolean);
-      const notRefuted = v.filter((x) => !x.refuted).length;
-      // Apply a downward severity correction agreed by any skeptic that still accepts it.
-      const adj = v.map((x) => x.adjustedSeverity).filter(Boolean);
-      const severity = adj.length ? adj.sort((a, b) => sevRank(a) - sevRank(b))[0] : f.severity;
-      return { ...f, severity, survives: notRefuted >= SURVIVE_THRESHOLD, votes: v };
-    }),
+  toVerify.map((f) => () =>
+    agent(refutePrompt(f, root), {
+      label: `verify:${slugify(f.title).slice(0, 32)}`,
+      phase: "Verify",
+      model: "opus",
+      schema: VERDICT_SCHEMA,
+    })
+      .then((vote) => {
+        const ran = vote ? 1 : 0;
+        const adj = vote && vote.adjustedSeverity ? vote.adjustedSeverity : null;
+        // Only ever correct severity DOWNWARD, never up.
+        const severity = adj && sevRank(adj) < sevRank(f.severity) ? adj : f.severity;
+        // Infra-robust verdict: a crashed / session-limited skeptic returns null, which is NOT a
+        // refutation (the old 3-vote code dropped such findings as if refuted). A finding the skeptic
+        // could not check survives but is flagged unverified for the downstream re-check - never
+        // silently dropped. It is killed only when the skeptic CONCRETELY refutes it.
+        const killed = !!(vote && vote.refuted);
+        return { ...f, severity, survives: !killed, unverified: ran === 0, votesRan: ran, vote };
+      })
+      .catch(() => {
+        // agent() threw (e.g. StructuredOutput failure, session limit). The finding survives
+        // unverified rather than being silently null-filtered and lost. This is the infra-robust
+        // path: a crash is NOT a refutation. Return a synthetic survival record.
+        return { ...f, severity: f.severity, survives: true, unverified: true, votesRan: 0, vote: null };
+      }),
   ),
 );
 const confirmed = judged.filter(Boolean).filter((f) => f.survives);
 const dropped = judged.filter(Boolean).filter((f) => !f.survives);
-log(`verify: ${confirmed.length} confirmed, ${dropped.length} refuted (of ${deduped.length} deduped)`);
+const unverifiedCount = confirmed.filter((f) => f.unverified).length;
+log(
+  `verify: ${confirmed.length} confirmed (${unverifiedCount} unverified), ` +
+    `${dropped.length} refuted of ${toVerify.length} checked; ${deferred.length} deferred`,
+);
 
 // --- Phase 4: Handoff -------------------------------------------------------
 phase("Handoff");
-const stats = { raw: allFindings.length, deduped: deduped.length, dropped: dropped.length, slices: slices.length };
-const synth = await agent(synthPrompt(confirmed.map(compactFinding), stats, ids), {
-  label: "handoff:synthesize",
-  phase: "Handoff",
-  model: "opus",
-  schema: HANDOFF_SCHEMA,
-});
+const stats = {
+  raw: allFindings.length,
+  deduped: deduped.length,
+  dropped: dropped.length,
+  deferred: deferred.length,
+  unverified: unverifiedCount,
+  slices: slices.length,
+};
+// JS owns the machine-readable contract: ids, counts, severity bands and status are derived
+// deterministically so the embedded review-handoff.v1 JSON is ALWAYS valid, even if the synth agent
+// fails (e.g. the session limit is hit right at the end). The synth agent only writes the prose body.
+const ranked = rankConfirmed(confirmed);
+const h = buildHandoffJson(ranked, ids);
+let body;
+try {
+  const synth = await agent(synthPrompt(confirmed.map(compactFinding), stats, ids), {
+    label: "handoff:synthesize",
+    phase: "Handoff",
+    model: "opus",
+    schema: HANDOFF_SCHEMA,
+  });
+  body = synth && synth.markdown ? synth.markdown : fallbackMarkdown(h, stats);
+} catch {
+  body = fallbackMarkdown(h, stats);
+}
 
-// Assemble the final markdown: deterministic header + valid json block + human body.
-// We serialize the handoff object ourselves so the embedded JSON is always valid.
-const h = synth.handoff;
 const header = [
   `# review-handoff.v1 - ${h.slug}`,
   ``,
@@ -519,9 +636,10 @@ const header = [
   `base: ${h.base}`,
   `reviewed_by: ${h.reviewed_by}`,
   `summary: ${h.summary.high} HIGH, ${h.summary.med} MED, ${h.summary.nit} NIT (HIGH blocks the PR)`,
-  `generated: ${date} by /risoluto-clawpatch  |  ${stats.raw} raw -> ${stats.deduped} deduped -> ${confirmed.length} confirmed (${stats.dropped} refuted) across ${stats.slices} slices`,
+  `generated: ${date} by /risoluto-clawpatch  |  ${stats.raw} raw -> ${stats.deduped} deduped -> ${confirmed.length} confirmed ` +
+    `(${stats.dropped} refuted, ${stats.deferred} deferred, ${stats.unverified} unverified) across ${stats.slices} slices`,
 ].join("\n");
 const jsonBlock = "```json\n" + JSON.stringify(h, null, 2) + "\n```";
-const handoffMarkdown = `${header}\n\n${jsonBlock}\n\n${synth.markdown}\n`;
+const handoffMarkdown = `${header}\n\n${jsonBlock}\n\n${body}\n`;
 
 return { handoffMarkdown, handoff: h, stats };

@@ -378,7 +378,8 @@ async function processAttempt(
     success: true,
     autoCommitSha: null,
     workspacePreserved: false,
-    error,
+    error: null,
+    probeError: error,
   };
 
   try {

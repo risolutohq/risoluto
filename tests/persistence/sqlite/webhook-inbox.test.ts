@@ -504,4 +504,25 @@ describe("SqliteWebhookInbox", () => {
       isNew: false,
     });
   });
+
+  it("discardVerified enables redelivery — re-insert returns isNew:true", async () => {
+    const dir = await createTempDir();
+    const store = createStore(dir);
+
+    try {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-04-01T10:00:00.000Z"));
+
+      // First insert
+      await store.inbox.insertVerified(createDelivery({ deliveryId: "redeliver-me" }));
+      // Discard it
+      await store.inbox.discardVerified("redeliver-me");
+      // Re-insert should be treated as a new delivery
+      const result = await store.inbox.insertVerified(createDelivery({ deliveryId: "redeliver-me" }));
+      expect(result.isNew).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      store.close();
+    }
+  });
 });

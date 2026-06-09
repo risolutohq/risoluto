@@ -46,7 +46,7 @@ function basePinoOptions(): pino.LoggerOptions {
  */
 export function buildLogfmtStream(output: NodeJS.WritableStream = process.stdout): Writable {
   return new Writable({
-    write(chunk: Buffer, _encoding: string, callback: () => void) {
+    write(chunk: Buffer, _encoding: string, callback: (error?: Error | null) => void) {
       const raw = chunk.toString();
       try {
         const obj = JSON.parse(raw) as Record<string, unknown>;
@@ -79,10 +79,15 @@ export function buildLogfmtStream(output: NodeJS.WritableStream = process.stdout
         }
 
         output.write(parts.join(" ") + "\n");
+        callback();
       } catch {
-        output.write(raw);
+        try {
+          output.write(raw);
+          callback();
+        } catch (error) {
+          callback(error instanceof Error ? error : new Error(String(error)));
+        }
       }
-      callback();
     },
   });
 }

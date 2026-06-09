@@ -129,7 +129,10 @@ const workflowDefinitionSchema = z
     states: z.array(
       z
         .object({
-          id: z.string().min(1),
+          id: z
+            .string()
+            .min(1)
+            .regex(/^[a-zA-Z0-9_-]+$/),
           roles: z.array(roleSchema),
           gates: z.array(z.string().min(1)),
           hooks: z.array(z.string().min(1)),
@@ -180,7 +183,20 @@ export function toWorkflowRunResolvedDefinitionConfig(
 }
 
 async function loadWorkflowDefinitions(workflowDir: string): Promise<WorkflowDefinition[]> {
-  const entries = (await readdir(workflowDir)).filter((entry) => entry.endsWith(".yaml") || entry.endsWith(".yml"));
+  let entries: string[];
+  try {
+    entries = (await readdir(workflowDir)).filter((entry) => entry.endsWith(".yaml") || entry.endsWith(".yml"));
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code: string }).code === "ENOENT"
+    ) {
+      return [];
+    }
+    throw error;
+  }
   const definitions = await Promise.all(entries.map((entry) => loadWorkflowDefinition(path.join(workflowDir, entry))));
   return definitions;
 }
@@ -352,7 +368,9 @@ function resolveWorkflowDefinition(
         produces: role.produces,
         dependsOn: role.dependsOn,
         ...(role.verifierMode ? { verifierMode: role.verifierMode } : {}),
-        ...(role.councillors ? { councillors: resolveCouncillors(role, modelProfile) } : {}),
+        ...(role.councillors && role.verifierMode === "council"
+          ? { councillors: resolveCouncillors(role, modelProfile) }
+          : {}),
       })),
     ),
     actions: definition.actions,

@@ -25,7 +25,7 @@ const CODEX_TIMEOUT_MS = 120_000; // 2 minutes
  * Returns null if git is unavailable, the repo has no commits, or the command fails.
  */
 async function getGitDiff(workspaceDir: string, defaultBranch: string): Promise<string | null> {
-  const opts: ExecFileOptions = { cwd: workspaceDir, maxBuffer: MAX_DIFF_BYTES * 2, encoding: "utf8" };
+  const opts: ExecFileOptions = { cwd: workspaceDir, maxBuffer: MAX_DIFF_BYTES * 2, encoding: "utf8" }; // headroom: reject at MAX_DIFF_BYTES but let git write up to 2× before we check
   try {
     const { stdout } = await execFileAsync("git", ["diff", `${defaultBranch}...HEAD`], opts);
     if (typeof stdout !== "string") return null;
@@ -101,6 +101,9 @@ function runCodexExec(prompt: string, cwd: string): Promise<string | null> {
       clearTimeout(timeoutId);
       if (!child.killed) {
         child.kill("SIGTERM");
+        setTimeout(() => {
+          if (!child.killed) child.kill("SIGKILL");
+        }, 5000).unref();
       }
       resolve(result);
     };

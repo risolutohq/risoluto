@@ -87,9 +87,9 @@ export function createWorkflowRunEvidenceStore(location: WorkflowRunArchiveLocat
 }
 
 export function redactEvidenceForDisplay(record: WorkflowRunEvidenceRecord): WorkflowRunEvidenceDisplay {
-  const content = redactSensitiveValue(record.content);
+  const content = structuredClone(record.content);
   const redactions = applyClassifiedRedactions(content, record.classifiedFields);
-  return { ...record, content, redactions };
+  return { ...record, content: redactSensitiveValue(content), redactions };
 }
 
 async function writeEvidenceRecord(

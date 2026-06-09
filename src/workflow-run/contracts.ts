@@ -122,13 +122,13 @@ export interface WorkflowRunHookReference {
 export interface WorkflowRunWorkspaceReference {
   path: string;
   key: string;
-  status: "prepared";
+  status: "preparing" | "prepared" | "failed";
 }
 
 export interface WorkflowRunRepoReference {
   url: string;
   branch: string;
-  status: "checked_out";
+  status: "checking_out" | "checked_out" | "failed";
 }
 
 export interface WorkflowRunWorkspaceCleanupReference {

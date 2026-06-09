@@ -36,7 +36,11 @@ export async function runDoctor(input: RunDoctorInput): Promise<DoctorResult> {
   ];
   return {
     type: "doctor.result",
-    status: checks.every((check) => check.status === "passed") ? "passed" : "failed",
+    status: checks.every((check) => check.status === "passed")
+      ? "passed"
+      : checks.some((check) => check.status === "failed")
+        ? "failed"
+        : "skipped",
     checks,
   };
 }

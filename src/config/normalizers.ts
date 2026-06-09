@@ -414,7 +414,7 @@ export function normalizeApprovalPolicy(value: unknown): string | Record<string,
   const record = asRecord(value);
   if (Object.keys(record).length === 0) return defaultApprovalPolicy();
   // Migrate previous { reject: { ... } } shape to { granular: { ... } }.
-  if ("reject" in record && !("granular" in record)) {
+  if ("reject" in record && !("granular" in record) && typeof record.reject === "object" && record.reject !== null) {
     return { granular: record.reject };
   }
   return record;

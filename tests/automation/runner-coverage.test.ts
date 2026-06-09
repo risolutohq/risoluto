@@ -201,10 +201,12 @@ describe("AutomationRunner", () => {
   });
 
   describe("implement mode", () => {
-    it("rejects when tracker is not available", async () => {
+    it("resolves with failed status when tracker is not available", async () => {
       const { runner } = createRunner({ tracker: undefined });
 
-      await expect(runner.run(makeConfig({ mode: "implement" }), "manual")).rejects.toThrow("tracker is not available");
+      const result = await runner.run(makeConfig({ mode: "implement" }), "manual");
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("tracker is not available");
     });
 
     it("sends notification with issue info after creating a tracker issue", async () => {
@@ -295,7 +297,7 @@ describe("AutomationRunner", () => {
   });
 
   describe("error handling", () => {
-    it("propagates errors from sub-methods as rejected promises", async () => {
+    it("catches sub-method errors and records them as failed runs", async () => {
       const orchestrator = {
         getSnapshot: vi.fn().mockImplementation(() => {
           throw new Error("snapshot exploded");
@@ -309,10 +311,16 @@ describe("AutomationRunner", () => {
         logger: createMockLogger(),
       });
 
-      await expect(runner.run(makeConfig(), "manual")).rejects.toThrow("snapshot exploded");
+      const result = await runner.run(makeConfig(), "manual");
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe("snapshot exploded");
+
+      const runs = await store.listRuns();
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ status: "failed", error: "snapshot exploded" });
     });
 
-    it("propagates non-Error thrown values", async () => {
+    it("catches non-Error thrown values and records them as failed runs", async () => {
       const orchestrator = {
         getSnapshot: vi.fn().mockImplementation(() => {
           throw "string error";
@@ -326,10 +334,12 @@ describe("AutomationRunner", () => {
         logger: createMockLogger(),
       });
 
-      await expect(runner.run(makeConfig(), "manual")).rejects.toBe("string error");
+      const result = await runner.run(makeConfig(), "manual");
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe("string error");
     });
 
-    it("does not call notification manager when run throws", async () => {
+    it("calls notification manager when run throws", async () => {
       const notificationManager = { notify: vi.fn().mockResolvedValue(undefined) };
       const orchestrator = {
         getSnapshot: vi.fn().mockImplementation(() => {
@@ -345,13 +355,12 @@ describe("AutomationRunner", () => {
         logger: createMockLogger(),
       });
 
-      await runner.run(makeConfig(), "manual").catch(() => {});
-
-      // The error bypasses the try-catch in run() because it uses
-      // `return this.runReport()` without `await`, so the notification
-      // manager's notify is never reached — the error at getSnapshot()
-      // happens before the notify() call.
-      expect(notificationManager.notify).not.toHaveBeenCalled();
+      const result = await runner.run(makeConfig(), "manual");
+      expect(result.status).toBe("failed");
+      expect(result.error).toBe("boom");
+      expect(notificationManager.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ severity: "critical", type: "automation_failed" }),
+      );
     });
   });
 

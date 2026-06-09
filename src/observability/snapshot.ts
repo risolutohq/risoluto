@@ -62,7 +62,16 @@ export async function writeComponentSnapshot(
   const tempPath = `${targetPath}.${randomUUID()}.tmp`;
   const content = JSON.stringify(snapshot, null, 2);
   await writeFile(tempPath, content, "utf8");
-  await rename(tempPath, targetPath);
+  try {
+    await rename(tempPath, targetPath);
+  } catch {
+    try {
+      await unlink(tempPath);
+    } catch {
+      /* Best effort — if unlink also fails the .tmp will be cleaned on next readdir pass. */
+    }
+    throw new Error(`failed to commit snapshot for ${snapshot.component}: rename failed`);
+  }
 }
 
 export async function readComponentSnapshots(root: string): Promise<ComponentObservabilitySnapshot[]> {
@@ -84,6 +93,15 @@ export async function readComponentSnapshots(root: string): Promise<ComponentObs
         try {
           const raw = await readFile(snapshotPath, "utf8");
           const snapshot = JSON.parse(raw) as ComponentObservabilitySnapshot;
+          if (
+            typeof snapshot.pid !== "number" ||
+            snapshot.pid <= 0 ||
+            typeof snapshot.component !== "string" ||
+            snapshot.component.length === 0
+          ) {
+            await unlink(snapshotPath).catch(() => undefined);
+            return null;
+          }
           if (!isProcessAlive(snapshot.pid)) {
             await unlink(snapshotPath).catch(() => undefined);
             return null;
@@ -97,6 +115,17 @@ export async function readComponentSnapshots(root: string): Promise<ComponentObs
   return snapshots.filter((snapshot): snapshot is ComponentObservabilitySnapshot => snapshot !== null);
 }
 
+/**
+ * Check whether a process with the given PID is alive.
+ *
+ * Uses `process.kill(pid, 0)` which only confirms *some* process with that
+ * PID is alive — it does not verify it is the same Risoluto component that
+ * wrote the snapshot. Linux recycles PIDs, so a short-lived original process
+ * that died could be replaced by an unrelated process with the same PID.
+ * Stale snapshots will persist until evicted by the next periodic write from
+ * the original component (which overwrites the snapshot file) or by manual
+ * cleanup of the observability directory.
+ */
 function isProcessAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;

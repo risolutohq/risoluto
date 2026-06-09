@@ -18,7 +18,7 @@ import type { PromptTemplate, PreviewResult } from "./types.js";
 export type { PromptTemplate, PreviewResult };
 
 function buildSampleContext() {
-  const now = new Date().toISOString();
+  const FIXED_TIMESTAMP = "2024-01-15T10:00:00.000Z";
   return {
     issue: {
       id: "sample-id",
@@ -31,8 +31,8 @@ function buildSampleContext() {
       url: "https://linear.app/example/issue/PROJ-42",
       labels: ["bug", "high-priority"],
       blockedBy: [],
-      createdAt: now,
-      updatedAt: now,
+      createdAt: FIXED_TIMESTAMP,
+      updatedAt: FIXED_TIMESTAMP,
     },
     workspace: { path: "/home/user/workspaces/PROJ-42", workspaceKey: "PROJ-42" },
     attempt: 1,

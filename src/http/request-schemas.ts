@@ -74,8 +74,8 @@ export type TemplateOverrideBody = z.infer<typeof templateOverrideSchema>;
 
 export const createWorkflowRunSchema = z
   .object({
-    title: z.string().min(1),
-    intent: z.string().min(1),
+    title: z.string().trim().min(1),
+    intent: z.string().trim().min(1),
     workflowDefinitionId: z.string().min(1).optional(),
     workspaceKey: z.string().min(1).optional(),
     /** Intake mode: "start" (default) creates a new run; "retry" resumes an existing mapped run. */
@@ -87,7 +87,10 @@ export const createWorkflowRunSchema = z
     /** External provider that owns the externalId. */
     externalProvider: z.enum(["api", "cli", "slack", "linear", "github"]).optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => (data.externalId ? Boolean(data.externalProvider) : !data.externalProvider), {
+    message: "externalId and externalProvider must both be present or both absent",
+  });
 
 export type CreateWorkflowRunBody = z.infer<typeof createWorkflowRunSchema>;
 

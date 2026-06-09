@@ -9,6 +9,7 @@ export interface RuntimeIssueView {
   identifier: string;
   title: string;
   state: string;
+  workflowRunId?: string | null;
   workspaceKey: string | null;
   workspacePath?: string | null;
   message: string | null;

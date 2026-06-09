@@ -66,8 +66,6 @@ describe("DefaultWebhookHealthTracker", () => {
     expect(health.stats.deliveriesReceived).toBe(0);
     expect(health.stats.lastDeliveryAt).toBeNull();
     expect(health.stats.lastEventType).toBeNull();
-    expect(health.lastDeliveryAt).toBeNull();
-    expect(health.lastEventType).toBeNull();
 
     tracker.stop();
   });

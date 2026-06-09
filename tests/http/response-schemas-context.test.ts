@@ -33,7 +33,7 @@ describe("gitContextResponseSchema", () => {
           github: {
             description: "A test repo",
             visibility: "private",
-            openPrCount: 2,
+            renderedPrCount: 2,
             pulls: [
               {
                 number: 1,
@@ -43,7 +43,6 @@ describe("gitContextResponseSchema", () => {
                 updatedAt: "2026-04-01T00:00:00Z",
                 url: "https://github.com/org/repo/pull/1",
                 headBranch: "feature/1",
-                checksStatus: null,
               },
             ],
             recentCommits: [{ sha: "abc1234", message: "fix: something", author: "dev", date: "2026-04-01T00:00:00Z" }],
@@ -51,7 +50,7 @@ describe("gitContextResponseSchema", () => {
         },
       ],
     });
-    expect(result.repos[0].github?.openPrCount).toBe(2);
+    expect(result.repos[0].github?.renderedPrCount).toBe(2);
   });
 
   it("parses with active branches", () => {

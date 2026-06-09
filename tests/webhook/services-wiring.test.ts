@@ -70,27 +70,6 @@ describe("registrar services wiring", () => {
     expect(getWebhookSecret()).toBe(storedSecret);
   });
 
-  it("registrar.stop() is idempotent and safe to call multiple times", () => {
-    const config = makeWebhookConfig();
-    const registrar = new WebhookRegistrar({
-      linearClient: {
-        listWebhooks: vi.fn(),
-        createWebhook: vi.fn(),
-        updateWebhook: vi.fn(),
-        deleteWebhook: vi.fn(),
-      },
-      secretsStore: { get: vi.fn(), set: vi.fn(), delete: vi.fn() },
-      getWebhookConfig: () => config,
-      onSecretResolved: vi.fn(),
-      logger: makeLogger(),
-    });
-
-    expect(() => {
-      registrar.stop();
-      registrar.stop();
-    }).not.toThrow();
-  });
-
   it("registrar does nothing when webhook config is absent", async () => {
     const onSecretResolved = vi.fn();
     const registrar = new WebhookRegistrar({

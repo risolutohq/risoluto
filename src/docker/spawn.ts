@@ -231,6 +231,11 @@ export function buildDockerRunArgs(input: DockerRunInput): DockerRunResult {
 
   const egressAllowlist = sandboxConfig.egressAllowlist ?? [];
   if (egressAllowlist.length > 0) {
+    for (const entry of egressAllowlist) {
+      if (/\s/.test(entry)) {
+        throw new Error(`egress allowlist entry must not contain whitespace: "${entry}"`);
+      }
+    }
     args.push("--cap-add=NET_ADMIN", "-e", `RISOLUTO_EGRESS_ALLOWLIST=${egressAllowlist.join(" ")}`);
   }
 

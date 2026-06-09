@@ -1,5 +1,8 @@
 import type { TokenUsageSnapshot, ReasoningEffort } from "./model.js";
 
+/** Deferred type alias for Codex wire-protocol rate-limits payload. Consumers must narrow at call site. */
+export type RateLimitsSnapshot = unknown;
+
 export interface RunOutcome {
   kind: "normal" | "failed" | "timed_out" | "stalled" | "cancelled";
   errorCode: string | null;
@@ -61,7 +64,7 @@ export interface AttemptRecord {
 export interface AttemptEvent extends RecentEvent {
   attemptId: string;
   usage?: TokenUsageSnapshot | null;
-  rateLimits?: unknown;
+  rateLimits?: RateLimitsSnapshot;
   content?: string | null;
 }
 

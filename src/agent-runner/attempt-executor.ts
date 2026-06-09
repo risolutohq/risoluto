@@ -258,7 +258,10 @@ function createAbortSignalBridge(source: AbortSignal): {
 
 function classifyLifecycleFailure(outcome: RunOutcome): { event: string; message: string } {
   const msg = outcome.errorMessage ?? "";
-  if (outcome.errorCode === "startup_failed" && msg.includes("auth is required")) {
+  if (
+    (outcome.errorCode === "startup_failed" || outcome.errorCode === "execution_failed") &&
+    msg.includes("auth is required")
+  ) {
     return { event: "auth_failed", message: "Codex authentication is required before the agent can start" };
   }
   if (

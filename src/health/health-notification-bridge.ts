@@ -45,14 +45,14 @@ export function attachHealthNotificationBridge(deps: HealthNotificationBridgeDep
       return;
     }
 
-    if (previousStatus === "down" && currentStatus === "ok") {
+    if (previousStatus === "down") {
       void notificationManager
         .notify({
           type: "health_recovered",
           severity: "info",
           timestamp: checkedAt,
           title: `${probe} health: recovered`,
-          message: `${probe} probe recovered from down → ok`,
+          message: `${probe} probe recovered from down → ${currentStatus}`,
           source: `health-probe:${probe}`,
           issue: { id: null, identifier: probe, title: `${probe} subsystem`, state: null, url: null },
           attempt: null,

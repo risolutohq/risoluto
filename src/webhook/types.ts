@@ -21,8 +21,6 @@ export interface WebhookHealthState {
   effectiveIntervalMs: number;
   stats: WebhookHealthStats;
   inboxStats?: PersistedWebhookInboxStats;
-  lastDeliveryAt: string | null;
-  lastEventType: string | null;
 }
 
 export type { WebhookInboxStats } from "../persistence/sqlite/webhook-inbox.js";

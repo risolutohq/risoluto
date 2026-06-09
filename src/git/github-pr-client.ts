@@ -17,7 +17,8 @@ export function isPrStatusResponse(value: unknown): value is PrStatusResponse {
     (value["state"] === "open" || value["state"] === "closed") &&
     typeof value["merged"] === "boolean" &&
     typeof value["number"] === "number" &&
-    typeof value["html_url"] === "string"
+    typeof value["html_url"] === "string" &&
+    (typeof value["merge_commit_sha"] === "string" || value["merge_commit_sha"] === null)
   );
 }
 
@@ -136,15 +137,28 @@ export class GitHubPrClient implements GithubApiToolClient {
       const created = await this.githubRequest(`/repos/${owner}/${repo}/pulls`, { method: "POST", body }, tokenEnvName);
       return isPrCreateResult(created) ? created : undefined;
     } catch (error) {
-      if (!isDuplicatePrError(error)) throw error;
-      const existing = await this.githubRequest(
-        `/repos/${owner}/${repo}/pulls?head=${owner}:${encodeURIComponent(branchName)}&state=open`,
-        { method: "GET" },
-        tokenEnvName,
-      );
-      const first = Array.isArray(existing) ? existing[0] : undefined;
-      return isPrCreateResult(first) ? first : undefined;
+      return await this.refetchExistingPr(error, owner, repo, branchName, tokenEnvName);
     }
+  }
+
+  private async refetchExistingPr(
+    error: unknown,
+    owner: string,
+    repo: string,
+    branchName: string,
+    tokenEnvName: string,
+  ): Promise<PrCreateResult | undefined> {
+    if (!isDuplicatePrError(error)) throw error;
+    const existing = await this.githubRequest(
+      `/repos/${owner}/${repo}/pulls?head=${owner}:${encodeURIComponent(branchName)}&state=open`,
+      { method: "GET" },
+      tokenEnvName,
+    );
+    const first = Array.isArray(existing) ? existing[0] : undefined;
+    if (!isPrCreateResult(first)) {
+      return undefined;
+    }
+    return first;
   }
 
   async addPrComment(input: {

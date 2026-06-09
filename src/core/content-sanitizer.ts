@@ -1,4 +1,4 @@
-const REDACT_KEYS = /secret|token|key|password|credential|authorization|auth|webhook/i;
+export const REDACT_KEYS = /secret|token|key|password|credential|authorization|auth|webhook/i;
 // Keys whose value is a scheme + credential segment (e.g. `Authorization: Basic <b64>`)
 // must consume the whole segment, not stop at the first whitespace after the scheme.
 const FULL_SEGMENT_KEYS = /authorization|password/i;

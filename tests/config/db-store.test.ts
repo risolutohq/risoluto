@@ -302,7 +302,7 @@ describe("DbConfigStore — persistence", () => {
   });
 
   it("rejects dangerous keys", async () => {
-    await store.set("__proto__.polluted", true);
+    await expect(store.set("__proto__.polluted", true)).rejects.toThrow(TypeError);
     const map = store.toMap();
     expect(map).not.toHaveProperty("__proto__");
   });

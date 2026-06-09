@@ -215,7 +215,7 @@ async function deleteBranch(
     method: "DELETE",
     headers: githubHeaders(`Bearer ${token}`),
   });
-  if (!response.ok && response.status !== 204) {
+  if (!response.ok && response.status !== 204 && response.status !== 422) {
     throw new Error(`GitHub sandbox branch cleanup returned HTTP ${response.status}`);
   }
 }

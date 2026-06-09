@@ -409,7 +409,10 @@ export class WorkspaceManager implements WorkspacePort {
         stdio: ["ignore", "pipe", "pipe"],
       });
 
+      let timedOut = false;
+
       const timer = setTimeout(() => {
+        timedOut = true;
         child.kill("SIGTERM");
         // Escalate to SIGKILL if the hook ignores SIGTERM, so it can't orphan.
         const killTimer = setTimeout(() => child.kill("SIGKILL"), 2000);
@@ -437,6 +440,9 @@ export class WorkspaceManager implements WorkspacePort {
         clearTimeout(timer);
         if (code === 0) {
           resolve();
+          return;
+        }
+        if (timedOut) {
           return;
         }
         this.logger.warn(

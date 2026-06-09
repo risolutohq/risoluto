@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 import { handleNotification } from "../../src/agent-runner/notification-handler.js";
-import { createTurnState, type TurnState } from "../../src/agent-runner/turn-state.js";
+import { createTurnState, type TurnState, consumeReviewSummary } from "../../src/agent-runner/turn-state.js";
 import { createIssue } from "../orchestrator/issue-test-factories.js";
 
 const FIXED_ISO = "2024-01-01T00:00:00.000Z";
@@ -783,6 +783,28 @@ describe("handleNotification", () => {
         event: "agent_plan",
         content: planText,
       });
+    });
+
+    it("stores review summary under turnId not item.id for exitedReviewMode", () => {
+      const reviewTurnId = "turn-review-1";
+      const reviewItemId = "item-xyz-not-the-turn-id";
+
+      handleNotification({
+        state,
+        notification: {
+          method: "item/completed",
+          params: { item: { type: "exitedReviewMode", id: reviewItemId, review: "Found 2 issues" } },
+        },
+        issue,
+        threadId: "thread-1",
+        turnId: reviewTurnId,
+        onEvent,
+      });
+
+      // Summary should be stored under reviewTurnId, not reviewItemId
+      expect(consumeReviewSummary(state, reviewItemId)).toBeNull();
+      expect(consumeReviewSummary(state, reviewTurnId)).toBe("Found 2 issues");
+      expect(consumeReviewSummary(state, reviewTurnId)).toBeNull();
     });
   });
 });

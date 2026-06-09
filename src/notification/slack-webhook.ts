@@ -45,11 +45,15 @@ function neutralizeCodeFence(text: string): string {
 }
 
 function slackColorForSeverity(severity: NotificationEvent["severity"]): string {
-  return severity === "critical" ? "#d32f2f" : "#1d4ed8";
+  if (severity === "critical") return "#d32f2f";
+  if (severity === "warning") return "#f59e0b";
+  return "#1d4ed8";
 }
 
 function slackSeverityTag(severity: NotificationEvent["severity"]): string {
-  return severity === "critical" ? "CRITICAL" : "INFO";
+  if (severity === "critical") return "CRITICAL";
+  if (severity === "warning") return "WARNING";
+  return "INFO";
 }
 
 function buildSlackPayload(event: NotificationEvent): Record<string, unknown> {

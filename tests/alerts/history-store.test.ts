@@ -96,13 +96,13 @@ describe("AlertHistoryStore (SQLite in-memory)", () => {
     expect(records).toHaveLength(1);
   });
 
-  it("normalizes limit — values below 1 clamp to 1", async () => {
+  it("normalizes limit — values below 1 clamp to default", async () => {
     store = freshStore();
     await store.create(makeInput({ ruleName: "a" }));
     await store.create(makeInput({ ruleName: "b" }));
 
     const records = await store.list({ limit: 0 });
-    expect(records).toHaveLength(1);
+    expect(records).toHaveLength(2);
   });
 
   it("normalizes limit — values above 500 clamp to 500", async () => {

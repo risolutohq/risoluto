@@ -110,10 +110,22 @@ export async function ensureBaseClone(ctx: WorktreeContext, repoUrl: string, bas
     const tempDir = await mkdtemp(path.join(parent, ".clone-"));
     try {
       await ctx.runGit(["clone", "--bare", "--", repoUrl, tempDir], { cwd: ".", env: ctx.env });
-      await rm(baseDir, { recursive: true, force: true });
+      // Atomic rename replaces the destination directly without a preceding rm,
+      // so a concurrent observer never sees a missing baseDir.  On Linux rename(2)
+      // atomically replaces an empty directory; if the destination is non-empty the
+      // rename fails with ENOTEMPTY, which is caught below and treated as
+      // "already cloned by another process".
       await rename(tempDir, baseDir);
     } catch (error) {
       await rm(tempDir, { recursive: true, force: true });
+      // If rename failed because another process already cloned the base dir,
+      // the rev-parse check on the next invocation will pick it up — treat this
+      // as non-fatal.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOTEMPTY") {
+        ctx.logger.warn({ baseDir }, "base clone already populated by another process");
+        return;
+      }
       throw error;
     }
   });

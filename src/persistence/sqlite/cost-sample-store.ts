@@ -1,4 +1,4 @@
-import { and, asc, desc, gte, lt } from "drizzle-orm";
+import { asc, desc, gte, lt } from "drizzle-orm";
 
 import {
   COST_SAMPLE_RETENTION_MS,
@@ -58,7 +58,7 @@ export class SqliteCostSampleStore implements CostSampleStorePort {
         ? this.db
             .select()
             .from(costSamples)
-            .where(and(gte(costSamples.sampledAt, since)))
+            .where(gte(costSamples.sampledAt, since))
             .orderBy(desc(costSamples.sampledAt))
             .limit(limit)
             .all()

@@ -8,8 +8,10 @@ import { timedSubprobe } from "../timed-probe.js";
  *   2. `GET /repos/{owner}/{repo}` for every distinct repo in last 24h + the configured fallback
  *   3. `GET /rate_limit` — headroom check, free, doesn't count against quota
  *
- * All three sub-probes run in parallel via `Promise.allSettled` so a slow
- * repo lookup can't hold up the auth check. Per-sub-probe latency is
+ * All three sub-probes run in parallel via `Promise.all` so a slow
+ * repo lookup can't hold up the auth check. Each sub-probe body catches
+ * its own errors and returns a `down(...)` decision, so `Promise.all`
+ * will never reject. Per-sub-probe latency is
  * banded ok / slow / down. Failure is mapped to a specific
  * `HealthFailureKind` so operators can tell `auth_failure` from
  * `config_drift` from `unreachable` at a glance.
@@ -34,7 +36,7 @@ export interface GithubHttpResult {
   status: number;
   /** Header value of `X-OAuth-Scopes`, lowercase + trimmed list. Empty when missing. */
   scopes: string[];
-  /** Optional body excerpt for diagnostic detail (truncated to ~200 chars). */
+  /** Optional body excerpt for diagnostic detail (truncated to ~1000 chars). */
   bodyExcerpt: string;
 }
 

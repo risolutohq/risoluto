@@ -17,18 +17,25 @@ interface ContainerStats {
  * Returns null if the container is not running or stats are unavailable.
  */
 export async function getContainerStats(containerName: string): Promise<ContainerStats | null> {
+  let stdout: string;
   try {
-    const { stdout } = await execFileAsync("docker", [
+    const result = await execFileAsync("docker", [
       "stats",
       "--no-stream",
       "--format",
       '{"cpu":"{{.CPUPerc}}","mem":"{{.MemUsage}}","memPerc":"{{.MemPerc}}","net":"{{.NetIO}}","pids":"{{.PIDs}}"}',
       containerName,
     ]);
-    const trimmed = stdout.trim();
-    if (!trimmed) {
-      return null;
-    }
+    stdout = result.stdout;
+  } catch (err) {
+    console.debug("[docker/stats] getContainerStats exec failed:", err);
+    return null;
+  }
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
     const parsed = JSON.parse(trimmed) as Record<string, string>;
     const memParts = (parsed.mem ?? "").split(" / ");
     return {
@@ -39,8 +46,8 @@ export async function getContainerStats(containerName: string): Promise<Containe
       netIO: parsed.net ?? "0B / 0B",
       pids: parsed.pids ?? "0",
     };
-  } catch (err) {
-    console.debug("[docker/stats] getContainerStats failed:", err);
+  } catch {
+    /* JSON parse failure — container stats unreadable */
     return null;
   }
 }

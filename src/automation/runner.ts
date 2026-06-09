@@ -54,12 +54,12 @@ export class AutomationRunner {
 
       switch (config.mode) {
         case "implement":
-          return this.runImplement(config, run);
+          return await this.runImplement(config, run);
         case "findings":
-          return this.runFindings(config, run);
+          return await this.runFindings(config, run);
         case "report":
         default:
-          return this.runReport(config, run);
+          return await this.runReport(config, run);
       }
     } catch (error) {
       const message = toErrorString(error);

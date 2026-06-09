@@ -613,6 +613,7 @@ class SetupServiceImpl implements SetupPort {
   }
 
   async reset(): Promise<{ ok: true }> {
+    await this.cancelPkceAuth();
     await this.deps.orchestrator.stop();
     await Promise.all(this.deps.secretsStore.list().map((key) => this.deps.secretsStore.delete(key)));
     await Promise.all([

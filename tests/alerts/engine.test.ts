@@ -56,18 +56,18 @@ describe("AlertEngine", () => {
       identifier: "ENG-1",
       error: "worker crashed",
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(notificationManager.notify).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "alert_fired",
-        severity: "critical",
-        issue: expect.objectContaining({
-          identifier: "ENG-1",
+    await vi.waitFor(() => {
+      expect(notificationManager.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "alert_fired",
+          severity: "critical",
+          issue: expect.objectContaining({
+            identifier: "ENG-1",
+          }),
         }),
-      }),
-      { channelNames: ["ops-webhook"] },
-    );
+        { channelNames: ["ops-webhook"] },
+      );
+    });
     const history = await historyStore.list();
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({
@@ -177,12 +177,13 @@ describe("AlertEngine", () => {
       identifier: "ENG-2",
       error: "worker crashed",
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const history = await historyStore.list();
-    expect(history[0]).toMatchObject({
-      ruleName: "worker-failures",
-      status: "failed",
+    await vi.waitFor(async () => {
+      const history = await historyStore.list();
+      expect(history).toHaveLength(1);
+      expect(history[0]).toMatchObject({
+        ruleName: "worker-failures",
+        status: "failed",
+      });
     });
   });
 
@@ -421,7 +422,12 @@ describe("AlertEngine", () => {
 
     // Same issueId — should be suppressed
     eventBus.emit("worker.failed", { issueId: "id-42" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(
+      () => {
+        expect(notificationManager.notify).toHaveBeenCalledOnce();
+      },
+      { timeout: 100 },
+    );
     expect(notificationManager.notify).toHaveBeenCalledOnce();
   });
 

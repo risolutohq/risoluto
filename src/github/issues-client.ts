@@ -93,10 +93,12 @@ export class GitHubIssuesClient {
 
   private getOwnerRepo(): { owner: string; repo: string } {
     const config = this.getConfig();
-    return {
-      owner: config.tracker.owner ?? "",
-      repo: config.tracker.repo ?? "",
-    };
+    const owner = config.tracker.owner ?? "";
+    const repo = config.tracker.repo ?? "";
+    if (!owner || !repo) {
+      throw new Error("Tracker owner or repo is not configured. Set tracker.owner and tracker.repo.");
+    }
+    return { owner, repo };
   }
 
   private getToken(): string {

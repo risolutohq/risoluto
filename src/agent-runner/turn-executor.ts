@@ -213,7 +213,7 @@ async function tryCompactAndRetry(
     // or a model that keeps overflowing after every compaction loops forever.
     const compactionCount = (state.compactionCount ?? 0) + 1;
     state.compactionCount = compactionCount;
-    if (compactionCount > input.config.agent.maxTurns) {
+    if (compactionCount >= input.config.agent.maxTurns) {
       return {
         kind: "failed",
         errorCode: "context_window_exceeded",

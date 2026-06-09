@@ -1,4 +1,5 @@
 import type { AgentRunnerEventHandler } from "../agent-runner/contracts.js";
+import type { StopSignal } from "../core/signal-detection.js";
 import type {
   Issue,
   ModelSelection,
@@ -47,6 +48,8 @@ export interface DispatchRequest {
   modelSelection: ModelSelection;
   promptTemplate: string;
   workspace: Workspace;
+  /** Thread ID from a previous attempt for resume on retry. */
+  previousThreadId?: string | null;
   /** Full config snapshot (workflow + overlay + secrets) */
   config: ServiceConfig;
   /** Pre-computed Codex TOML config (avoids data plane reading auth.json) */
@@ -66,6 +69,8 @@ export type DispatchEvent = RecentEvent & {
   usageMode?: "absolute_total" | "delta";
   rateLimits?: unknown;
   content?: string | null;
+  stopSignal?: StopSignal | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 /**

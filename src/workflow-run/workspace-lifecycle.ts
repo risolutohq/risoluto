@@ -53,6 +53,13 @@ export class WorkflowRunDirtyWorkspaceError extends Error {
   }
 }
 
+export class WorkflowRunApprovalRequiredError extends Error {
+  constructor(readonly checkoutPath: string) {
+    super(`dirty workspace requires operator approval for ${checkoutPath}`);
+    this.name = "WorkflowRunApprovalRequiredError";
+  }
+}
+
 export class WorkflowRunAutoStashNotImplementedError extends Error {
   constructor(readonly checkoutPath: string) {
     super(`auto_stash dirty workspace policy is not yet implemented for ${checkoutPath}`);
@@ -75,7 +82,7 @@ export async function prepareWorkflowRunWorktree(input: PrepareWorkflowRunWorktr
     throw new WorkflowRunDirtyWorkspaceError(input.existingCheckoutPath);
   }
   if (dirty && input.dirtyPolicy === "require_approval") {
-    throw new WorkflowRunDirtyWorkspaceError(input.existingCheckoutPath);
+    throw new WorkflowRunApprovalRequiredError(input.existingCheckoutPath);
   }
   if (dirty && input.dirtyPolicy === "auto_stash") {
     throw new WorkflowRunAutoStashNotImplementedError(input.existingCheckoutPath);
@@ -91,6 +98,9 @@ export function classifyWorkflowRunWorktreeRetention(
   }
 
   const ageMs = Date.parse(input.now) - Date.parse(input.finishedAt);
+  if (isNaN(ageMs)) {
+    return { action: "keep", reason: "retention_window_active" };
+  }
   const retentionMs = Math.max(0, input.retentionDays) * MS_PER_DAY;
   if (ageMs <= retentionMs) {
     return { action: "keep", reason: "retention_window_active" };
@@ -145,7 +155,7 @@ function sanitizeBranchText(value: string): string {
     output += next;
     previousDash = next === "-";
   }
-  return trimBranchSeparators(output).replaceAll("..", ".") || "workflow-run";
+  return trimBranchSeparators(output).replace(/\.{2,}/g, ".") || "workflow-run";
 }
 
 function trimBranchSeparators(value: string): string {

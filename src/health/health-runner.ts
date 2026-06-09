@@ -69,7 +69,7 @@ export class HealthRunner {
     }
   }
 
-  /** Snapshot of the latest aggregated results. Always returns four fields (one per id, plus a synthetic for any unconfigured probe). */
+  /** Snapshot of the latest aggregated results. Always returns three probe results (one per id, plus a synthetic for any unconfigured probe). */
   getChecks(): HealthChecks {
     return {
       github: this.resolveResult("github"),
@@ -299,14 +299,14 @@ function rankStatus(status: HealthCheckStatus): number {
   switch (status) {
     case "ok":
       return 0;
-    case "slow":
-      return 1;
     case "unknown":
       return 1;
-    case "degraded":
+    case "slow":
       return 2;
-    case "down":
+    case "degraded":
       return 3;
+    case "down":
+      return 4;
   }
 }
 

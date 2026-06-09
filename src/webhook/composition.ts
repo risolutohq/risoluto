@@ -58,8 +58,12 @@ export function buildWebhookHandlerDeps(input: {
   webhook: WebhookRuntime;
   logger: RisolutoLogger;
 }): WebhookHandlerDeps {
-  return input.webhook.buildHandlerDeps({
+  const deps = input.webhook.buildHandlerDeps({
     orchestrator: input.orchestrator,
     logger: input.logger,
-  })!;
+  });
+  if (!deps) {
+    throw new Error("buildWebhookHandlerDeps called with webhookUrlSet=false");
+  }
+  return deps;
 }

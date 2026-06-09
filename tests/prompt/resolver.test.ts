@@ -73,4 +73,30 @@ describe("createTemplateResolver — stored-body re-validation (RIS-238)", () =>
     });
     await expect(resolve("ENG-1")).resolves.toBe("");
   });
+
+  it("uses the system-selected template when no per-issue override exists", async () => {
+    const { resolve } = makeResolver({
+      templates: {
+        "template-a": makeTemplate("template-a", VALID_BODY),
+        default: makeTemplate("default", "fallback default"),
+      },
+      selectedTemplateId: "template-a",
+    });
+    await expect(resolve("ENG-1")).resolves.toBe(VALID_BODY);
+  });
+
+  it("falls through to default when the system-selected template body is invalid", async () => {
+    const { resolve, logger } = makeResolver({
+      templates: {
+        "template-a": makeTemplate("template-a", INVALID_BODY),
+        default: makeTemplate("default", VALID_BODY),
+      },
+      selectedTemplateId: "template-a",
+    });
+    await expect(resolve("ENG-1")).resolves.toBe(VALID_BODY);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ source: "selected:template-a" }),
+      expect.stringContaining("failed policy re-validation"),
+    );
+  });
 });

@@ -188,10 +188,19 @@ function ciCheck(input: PrPublishPolicyInput): PublishCheck {
 }
 
 function operatorApprovalCheck(input: PrPublishPolicyInput, requiredPermission: OperatorPermission): PublishCheck {
+  const approval = input.operatorApproval;
+  let summary: string;
+  if (!approval) {
+    summary = "operator approval missing";
+  } else if (approval.permission !== requiredPermission) {
+    summary = `operator approval has wrong permission (got ${approval.permission}, need ${requiredPermission})`;
+  } else {
+    summary = "operator approval recorded";
+  }
   return {
     id: "operator_approval",
-    status: input.operatorApproval?.permission === requiredPermission ? "passed" : "failed",
-    summary: input.operatorApproval ? "operator approval recorded" : "operator approval missing",
+    status: approval?.permission === requiredPermission ? "passed" : "failed",
+    summary,
   };
 }
 

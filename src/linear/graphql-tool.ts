@@ -1,10 +1,5 @@
 import { LinearClient } from "./client.js";
-import {
-  type ToolCallResult,
-  toolCallSuccess,
-  toolCallFailure,
-  toolCallErrorPayload,
-} from "../utils/tool-call-result.js";
+import { type ToolCallResult, toolCallSuccess, toolCallFailure } from "../utils/tool-call-result.js";
 
 function extractInput(args: unknown): { query: string; variables?: Record<string, unknown> } {
   if (typeof args === "string") {
@@ -27,8 +22,9 @@ function extractInput(args: unknown): { query: string; variables?: Record<string
 
 function countOperations(query: string): number {
   const operationKeywords = /\b(query|mutation|subscription)\b/gi;
+  const stripped = query.replace(/^[ \t]*#.*$/gm, "");
   let count = 0;
-  while (operationKeywords.exec(query) !== null) {
+  while (operationKeywords.exec(stripped) !== null) {
     count++;
   }
   return count;
@@ -46,10 +42,14 @@ const MUTATING_OPERATION = /\b(mutation|subscription)\b/i;
 const SECRET_BEARING_FIELD = /secret|token|password|credential|api[_-]?key|private[_-]?key/i;
 
 function assertReadOnlyQuery(query: string): void {
-  if (MUTATING_OPERATION.test(query)) {
+  // Strip string-literal contents and `#` comments so an operation keyword or a
+  // secret-like word appearing inside a string value or a comment is not misread
+  // as a mutation or a secret-bearing selection.
+  const sanitized = query.replace(/"((?:[^"\\]|\\.)*)"/g, '""').replace(/#.*$/gm, "");
+  if (MUTATING_OPERATION.test(sanitized)) {
     throw new Error("linear_graphql only permits read-only query operations (mutation/subscription rejected)");
   }
-  if (SECRET_BEARING_FIELD.test(query)) {
+  if (SECRET_BEARING_FIELD.test(sanitized)) {
     throw new Error("linear_graphql rejects secret-bearing fields (e.g. webhook secret, tokens)");
   }
 }
@@ -65,9 +65,6 @@ export async function handleLinearGraphqlToolCall(client: LinearClient, args: un
     assertReadOnlyQuery(input.query);
 
     const response = await client.runGraphQL(input.query, input.variables);
-    if (Array.isArray(response.errors) && response.errors.length > 0) {
-      return toolCallErrorPayload(response);
-    }
     return toolCallSuccess(response);
   } catch (error) {
     return toolCallFailure(error);

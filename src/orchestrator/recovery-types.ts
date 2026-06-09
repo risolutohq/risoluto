@@ -22,6 +22,8 @@ export interface RecoveryResult extends RecoveryAssessment {
   autoCommitSha: string | null;
   workspacePreserved: boolean;
   error: string | null;
+  /** Non-fatal warning from container probe (e.g. listing failed). */
+  probeError: string | null;
 }
 
 export interface RecoveryReport {

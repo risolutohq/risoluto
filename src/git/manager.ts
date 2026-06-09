@@ -226,7 +226,11 @@ export class GitManager implements GitIntegrationPort {
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
-    } catch {
+    } catch (error) {
+      this.logger?.warn(
+        { error: (error as Error).message ?? String(error), repoDir, fromRef },
+        "git diffNameOnly failed",
+      );
       return [];
     }
   }
@@ -243,7 +247,11 @@ export class GitManager implements GitIntegrationPort {
         additions: addMatch ? parseInt(addMatch[1], 10) : 0,
         deletions: delMatch ? parseInt(delMatch[1], 10) : 0,
       };
-    } catch {
+    } catch (error) {
+      this.logger?.warn(
+        { error: (error as Error).message ?? String(error), repoDir, fromRef },
+        "git diffShortStat failed",
+      );
       return { additions: 0, deletions: 0 };
     }
   }

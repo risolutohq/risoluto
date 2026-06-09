@@ -11,7 +11,7 @@ import type {
 import { isRecord } from "../../utils/type-guards.js";
 import type { NotificationDeliveryFailure } from "../../core/types.js";
 import type { RisolutoDatabase } from "./database.js";
-import { normalizeLimit } from "./query-helpers.js";
+import { clampLimit } from "./store-utils.js";
 import { alertHistory } from "./schema.js";
 
 export class AlertHistoryStore {
@@ -55,7 +55,7 @@ class SqliteAlertHistoryStore implements AlertHistoryStorePort {
   }
 
   async list(options: ListAlertHistoryOptions = {}): Promise<AlertHistoryRecord[]> {
-    const limit = normalizeLimit(options.limit);
+    const limit = clampLimit(options.limit, 100, 500);
     const rows = (
       options.ruleName
         ? this.db.select().from(alertHistory).where(eq(alertHistory.ruleName, options.ruleName))

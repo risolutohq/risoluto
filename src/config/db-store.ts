@@ -176,7 +176,7 @@ export class DbConfigStore implements ConfigOverlayPort {
 
     const before = this.toMap();
     const after = this.toMap();
-    setOverlayPathValue(after, segments, value);
+    setOverlayPathValue(after, segments, value, { dangerousKeyMode: "throw" });
     if (stableStringify(after) === stableStringify(before)) return false;
 
     this.commit(after);

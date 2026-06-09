@@ -51,7 +51,7 @@ async function runDoctorLivePreflight(envFile: string): Promise<LivePreflightRep
 
 async function resolveDoctorLiveEnv(envFile: string): Promise<NodeJS.ProcessEnv> {
   if (!(await fileExists(envFile))) {
-    return process.env;
+    return { ...process.env };
   }
   const fileEnv = await loadLiveEnvFile(envFile);
   const env = { ...process.env, ...fileEnv };

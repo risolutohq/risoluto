@@ -29,13 +29,26 @@ export async function startWorkflowRunCommand(argv: string[]): Promise<number> {
   const intent = requireNonEmpty(parsed.values.intent, "--intent");
   const workflowDefinitionId = parsed.values["workflow-definition"]?.trim() || DEFAULT_WORKFLOW_DEFINITION_ID;
   const dataDir = resolveDataDir(parsed.values["data-dir"]);
-  const [rules, workflowRegistry] = await Promise.all([
+  const dataDirWorkflowDir = path.resolve(dataDir, ".risoluto", "workflows");
+  const cwdWorkflowDir = path.resolve(".risoluto", "workflows");
+  const [rules, dataDirRegistry] = await Promise.all([
     loadCliIntakeRules(dataDir),
     loadWorkflowDefinitionRegistry({
-      workflowDir: path.resolve(".risoluto", "workflows"),
+      workflowDir: dataDirWorkflowDir,
       globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
     }),
   ]);
+  let workflowRegistry = dataDirRegistry;
+  if (dataDirWorkflowDir !== cwdWorkflowDir) {
+    try {
+      dataDirRegistry.resolve(workflowDefinitionId);
+    } catch {
+      workflowRegistry = await loadWorkflowDefinitionRegistry({
+        workflowDir: cwdWorkflowDir,
+        globalDefaults: DEFAULT_WORKFLOW_RESOLUTION_DEFAULTS,
+      });
+    }
+  }
   const workflowDefinition = workflowRegistry.resolve(workflowDefinitionId);
   const intake = await acceptWorkflowRunIntake({
     dataDir,

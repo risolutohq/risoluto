@@ -345,12 +345,21 @@ export class LinearClient {
 
   /**
    * Transition a Linear issue to the given state ID.
-   * Retries up to 3 times with exponential backoff. Non-blocking on failure.
+   * Retries up to 3 times with exponential backoff. Logs a warning on final
+   * failure so the swallow is observable; callers that must distinguish
+   * success from failure should use {@link updateIssueStateStrict} instead.
    */
   async updateIssueState(issueId: string, stateId: string): Promise<void> {
-    await withNonFatalRetry(this.logger, "updateIssueState", async () => {
-      await this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
-    });
+    try {
+      const payload = await withRetryReturn(this.logger, "updateIssueState", async () => {
+        const pl = await this.runGraphQL(buildIssueTransitionMutation(), { issueId, stateId });
+        assertIssueTransitionSucceeded(pl);
+        return pl;
+      });
+      void payload;
+    } catch (error) {
+      this.logger.warn({ error, issueId, stateId }, "updateIssueState failed — state transition not confirmed");
+    }
   }
 
   /**

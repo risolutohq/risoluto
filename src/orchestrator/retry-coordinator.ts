@@ -73,7 +73,9 @@ class RetryCoordinatorImpl implements RetryCoordinator {
         this.queuePreparedRetry(prepared, strategy.delayMs, strategy.reason);
         return;
       case "compact_and_retry":
-      case "default":
+        this.handleErrorRetry(prepared, { startFreshSession: true });
+        return;
+      default:
         this.handleErrorRetry(prepared);
         return;
     }
@@ -94,13 +96,13 @@ class RetryCoordinatorImpl implements RetryCoordinator {
     }
   }
 
-  private handleErrorRetry(prepared: PreparedWorkerOutcome): void {
+  private handleErrorRetry(prepared: PreparedWorkerOutcome, opts?: { startFreshSession?: boolean }): void {
     const { outcome, entry } = prepared;
     const currentAttempt = prepared.attempt ?? 0;
     const delayMs = computeBackoffForAttempt(currentAttempt, this.runtime.getConfig().agent.maxRetryBackoffMs);
 
     this.queuePreparedRetry(prepared, delayMs, outcome.errorCode ?? "turn_failed", {
-      threadId: entry.sessionId ?? outcome.threadId,
+      threadId: opts?.startFreshSession ? null : (entry.sessionId ?? outcome.threadId),
     });
   }
 

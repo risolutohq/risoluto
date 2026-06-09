@@ -54,8 +54,6 @@ function makeHealthTracker(overrides: Partial<WebhookHealthState> = {}): Webhook
     status: "connected",
     effectiveIntervalMs: 120_000,
     stats: { deliveriesReceived: 5, lastDeliveryAt: "2026-03-30T10:00:00Z", lastEventType: "Issue" },
-    lastDeliveryAt: "2026-03-30T10:00:00Z",
-    lastEventType: "Issue",
     ...overrides,
   };
   return {
@@ -145,8 +143,6 @@ describe("webhook health in snapshot", () => {
       status: "connected",
       effectiveIntervalMs: 120_000,
       stats: { deliveriesReceived: 10, lastDeliveryAt: "2026-03-30T12:00:00Z", lastEventType: "Comment" },
-      lastDeliveryAt: "2026-03-30T12:00:00Z",
-      lastEventType: "Comment",
     });
     const { orchestrator } = createOrchestrator({ webhookHealthTracker: tracker });
 
@@ -159,8 +155,6 @@ describe("webhook health in snapshot", () => {
         lastDeliveryAt: "2026-03-30T12:00:00Z",
         lastEventType: "Comment",
       },
-      lastDeliveryAt: "2026-03-30T12:00:00Z",
-      lastEventType: "Comment",
     });
   });
 
@@ -200,8 +194,6 @@ describe("serializeSnapshot webhook health", () => {
       status: "connected",
       effectiveIntervalMs: 120_000,
       stats: { deliveriesReceived: 7, lastDeliveryAt: "2026-03-30T10:00:00Z", lastEventType: "Issue" },
-      lastDeliveryAt: "2026-03-30T10:00:00Z",
-      lastEventType: "Issue",
     });
 
     const result = serializeSnapshot(snapshot);
@@ -213,8 +205,6 @@ describe("serializeSnapshot webhook health", () => {
         last_delivery_at: "2026-03-30T10:00:00Z",
         last_event_type: "Issue",
       },
-      last_delivery_at: "2026-03-30T10:00:00Z",
-      last_event_type: "Issue",
     });
   });
 
@@ -229,8 +219,6 @@ describe("serializeSnapshot webhook health", () => {
       status: "degraded",
       effectiveIntervalMs: 15_000,
       stats: { deliveriesReceived: 3, lastDeliveryAt: null, lastEventType: null },
-      lastDeliveryAt: null,
-      lastEventType: null,
     });
 
     const result = serializeSnapshot(snapshot);

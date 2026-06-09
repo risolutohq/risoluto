@@ -36,6 +36,10 @@ export function createTemplateResolver(deps: TemplateResolverDeps): (identifier:
     const mergedConfigMap = configStore.getMergedConfigMap();
     const systemConfig = mergedConfigMap.system;
     if (!isRecord(systemConfig)) {
+      logger.warn(
+        { systemConfig: typeof mergedConfigMap.system },
+        "config.system is not a record — skipping selectedTemplateId lookup",
+      );
       return null;
     }
     const selectedTemplateId = systemConfig.selectedTemplateId;

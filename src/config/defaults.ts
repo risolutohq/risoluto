@@ -19,7 +19,7 @@ export const DEFAULT_CONFIG_SECTIONS: Record<string, Record<string, unknown>> = 
   },
 
   workspace: {
-    root: "../risoluto-workspaces",
+    root: "~/risoluto-workspaces",
     strategy: "directory",
     branch_prefix: "risoluto/",
     branch_template: "risoluto/{workflow}/{date}-{short-intent}-{run-id}",

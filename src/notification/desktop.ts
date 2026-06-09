@@ -20,7 +20,7 @@ interface DesktopNotificationChannelOptions {
 }
 
 function escapeAppleScript(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", " ").replaceAll("\r", "");
 }
 
 function escapePowerShell(value: string): string {

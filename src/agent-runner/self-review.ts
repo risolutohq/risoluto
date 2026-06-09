@@ -21,6 +21,9 @@ const REVIEW_PASS_PHRASES = [
   "no changes required",
   "looks good",
   "no problems",
+  "no fix required",
+  "no fixes required",
+  "no fixes needed",
 ] as const;
 
 const REVIEW_FAIL_PHRASES = ["issue", "problem", "fix required", "error found"] as const;
@@ -49,11 +52,31 @@ export async function runSelfReview(
   timeoutMs: number,
 ): Promise<SelfReviewResult | null> {
   try {
-    const result = await connection.request(CODEX_METHOD.ReviewStart, {
+    const reviewStart = connection.request(CODEX_METHOD.ReviewStart, {
       threadId,
       delivery: "inline",
       target: { type: "uncommittedChanges" },
     });
+    const aborted = new Promise<never>((_, reject) => {
+      signal.addEventListener(
+        "abort",
+        () => {
+          const reason =
+            signal.reason instanceof Error
+              ? signal.reason
+              : new DOMException("The operation was aborted.", "AbortError");
+          reject(reason);
+        },
+        { once: true },
+      );
+    });
+    if (signal.aborted) {
+      // Already aborted before we entered — bail immediately rather than
+      // racing a connection.request that won't receive the signal via its
+      // internal timeout.
+      return null;
+    }
+    const result = await Promise.race([reviewStart, aborted]);
     const review = asRecord(result);
     const reviewTurnId = extractTurnId(review);
     if (reviewTurnId) {

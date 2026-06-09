@@ -43,10 +43,10 @@ export function evaluateWorkflowBudget(input: WorkflowBudgetCheckInput): Workflo
   const costUsd = computeWorkflowCostUsd(usage);
   const evidence = { elapsedMs, maxWallClockMs, costUsd, maxCostUsd, usageByModelProfile: usage.usageByModelProfile };
 
-  if (elapsedMs > maxWallClockMs) {
+  if (elapsedMs >= maxWallClockMs) {
     return { status: "failed", reason: `wall-clock budget exceeded before ${input.nextStepLabel}`, evidence };
   }
-  if (costUsd > maxCostUsd) {
+  if (costUsd >= maxCostUsd) {
     return { status: "failed", reason: `cost budget exceeded before ${input.nextStepLabel}`, evidence };
   }
   return { status: "passed", evidence };

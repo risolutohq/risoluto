@@ -29,5 +29,5 @@ export interface AutomationStorePort {
   createRun(input: CreateAutomationRunInput): Promise<AutomationRunRecord>;
   finishRun(id: string, input: FinishAutomationRunInput): Promise<AutomationRunRecord | null>;
   listRuns(options?: ListAutomationRunsOptions): Promise<AutomationRunRecord[]>;
-  countRuns(): Promise<number>;
+  countRuns(options?: ListAutomationRunsOptions): Promise<number>;
 }

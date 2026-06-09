@@ -25,6 +25,7 @@ export function issueView(issue: Issue, extra?: Partial<RuntimeIssueView>): Runt
     identifier: issue.identifier,
     title: issue.title,
     state: issue.state,
+    workflowRunId: issue.workflowRunId ?? null,
     workspaceKey: null,
     message: null,
     status: issue.state,

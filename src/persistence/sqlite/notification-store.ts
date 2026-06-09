@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { desc, eq, sql } from "drizzle-orm";
 
 import type { NotificationDeliverySummary, NotificationRecord } from "../../core/notification-types.js";
-import { normalizeLimit } from "./query-helpers.js";
+import { clampLimit } from "./store-utils.js";
 import type { RisolutoDatabase } from "./database.js";
 import { notifications } from "./schema.js";
 import type {
@@ -59,7 +59,7 @@ class SqliteNotificationStore implements NotificationStorePort {
   }
 
   async list(options: ListNotificationsOptions = {}): Promise<NotificationRecord[]> {
-    const limit = normalizeLimit(options.limit);
+    const limit = clampLimit(options.limit, 100, 500);
     const rows = (
       options.unreadOnly
         ? this.db.select().from(notifications).where(eq(notifications.read, false))
@@ -123,8 +123,10 @@ class SqliteNotificationStore implements NotificationStorePort {
       return { updatedCount: 0, unreadCount: 0 };
     }
     const updatedAt = new Date().toISOString();
-    this.db.update(notifications).set({ read: true, updatedAt }).where(eq(notifications.read, false)).run();
-    return { updatedCount: unreadCount, unreadCount: 0 };
+    const result = this.db.$client
+      .prepare("UPDATE notifications SET read = 1, updated_at = ? WHERE read = 0")
+      .run(updatedAt);
+    return { updatedCount: result.changes, unreadCount: 0 };
   }
 
   private async getById(id: string): Promise<NotificationRecord | null> {
@@ -147,6 +149,7 @@ function parseJson<T>(value: string | null): T | null {
   try {
     return JSON.parse(value) as T;
   } catch {
+    /* corrupt JSON — return null */
     return null;
   }
 }

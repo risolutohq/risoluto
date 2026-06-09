@@ -39,6 +39,14 @@ export function getRequestId(req: Request): string {
   return (req as Request & { requestId?: string }).requestId ?? "unknown";
 }
 
+/**
+ * Build a trace record from a metric input.
+ *
+ * Callers who supply `durationMs` **must** also supply `startedAt`, otherwise
+ * the record will carry a contradictory zero-interval `[startedAt, endedAt]`
+ * alongside a non-zero `durationMs`. If `startedAt` is omitted, it defaults to
+ * `endedAt` (both resolved to `now`).
+ */
 export function buildTraceRecord(
   component: string,
   input: {

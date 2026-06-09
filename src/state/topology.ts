@@ -5,6 +5,7 @@ export { DEFAULT_ACTIVE_STATES, DEFAULT_TERMINAL_STATES } from "./machine.js";
 
 const STATE_MACHINE_TOPOLOGY_CACHE = new WeakMap<object, WorkflowStateTopology>();
 const TRACKER_STATE_CACHE = new WeakMap<ServiceConfig, { active: Set<string> }>();
+const TRACKER_TOPOLOGY_CACHE = new WeakMap<ServiceConfig, WorkflowStateTopology>();
 
 export interface WorkflowStageDefinition {
   key: string;
@@ -110,7 +111,13 @@ export {
 
 function getWorkflowStateTopology(config: ServiceConfig): WorkflowStateTopology {
   if (!config.stateMachine) {
-    return buildTrackerTopology(config);
+    const cached = TRACKER_TOPOLOGY_CACHE.get(config);
+    if (cached) {
+      return cached;
+    }
+    const topology = buildTrackerTopology(config);
+    TRACKER_TOPOLOGY_CACHE.set(config, topology);
+    return topology;
   }
 
   const cached = STATE_MACHINE_TOPOLOGY_CACHE.get(config.stateMachine);

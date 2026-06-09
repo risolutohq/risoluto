@@ -106,9 +106,11 @@ describe("handleLinearGraphqlToolCall", () => {
     expect(runGraphQL).toHaveBeenCalledOnce();
   });
 
-  it("returns success=false when the GraphQL payload contains top-level errors", async () => {
+  it("returns success=false when the GraphQL client throws", async () => {
     const client = {
-      runGraphQL: vi.fn(async () => ({ data: null, errors: [{ message: "boom" }] })),
+      runGraphQL: vi.fn(async () => {
+        throw new Error("GraphQL error: boom");
+      }),
     } as unknown as LinearClient;
 
     const response = await handleLinearGraphqlToolCall(client, {
@@ -116,9 +118,7 @@ describe("handleLinearGraphqlToolCall", () => {
     });
 
     expect(response.success).toBe(false);
-    expect(JSON.parse(response.contentItems[0].text)).toEqual({
-      data: null,
-      errors: [{ message: "boom" }],
-    });
+    const parsed = JSON.parse(response.contentItems[0].text);
+    expect(parsed.error).toContain("GraphQL error: boom");
   });
 });

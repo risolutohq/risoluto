@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { openDatabase, closeDatabase } from "../../../src/persistence/sqlite/database.js";
+import { openDatabase, closeDatabase, CURRENT_SCHEMA_VERSION } from "../../../src/persistence/sqlite/database.js";
 
 describe("Schema v3 — config + webhook inbox tables", () => {
   it("creates all Phase 1 tables on fresh database", () => {
@@ -38,8 +38,7 @@ describe("Schema v3 — config + webhook inbox tables", () => {
       const row = raw.prepare("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").get() as {
         version: number;
       };
-      // v3 was the baseline; v4 adds the `summary` column. Version only goes up.
-      expect(row.version).toBeGreaterThanOrEqual(8);
+      expect(row.version).toBe(CURRENT_SCHEMA_VERSION);
     } finally {
       closeDatabase(db);
     }

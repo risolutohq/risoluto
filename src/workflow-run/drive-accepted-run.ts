@@ -155,53 +155,7 @@ async function finishDrivenRun(
 ): Promise<DriveAcceptedWorkflowRunResult> {
   await persistExecutorEvents(archive, input, result.events);
   if (result.status === "done") {
-    const createdAt = (input.now ?? defaultNow)();
-    // Publish the PR BEFORE the run is finalized as done. If publishing fails, move the run
-    // to blocked with a handoff rather than leaving a terminal "done" run with no PR (RIS-260).
-    let published: { pullRequestUrl: string | null } | null = null;
-    if (input.publishOnDone) {
-      try {
-        published = await input.publishOnDone();
-      } catch (error) {
-        return await finishPublishFailedRun(archive, input, result.roleExecutions, toErrorString(error));
-      }
-    }
-    // The PR is published (or there was no publish step) — only now finalize the run as done. The
-    // executor's terminal "done" write was deferred (see recordStatus above) so the publish-failure
-    // path above could still route to blocked past the archive's terminal guard (RIS-260).
-    await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
-    // Update publish_result.v1 with the actual PR URL now that it is known (NIN-75). The action runner
-    // writes pullRequestUrl: null at policy evaluation time; this stamps the real URL so the post-run
-    // auto-merge gate reads an artifact that passes isPublishReadyForAutoMerge.
-    if (published?.pullRequestUrl) {
-      await updatePublishResultUrl(archive, input.workflowRun.id, published.pullRequestUrl);
-    }
-    // Post-publish verification reconfirm (NIN-103): update the archived verification artifact with
-    // post-publish evidence so the auto-merge gate reads the reconfirmed decision.
-    if (published) {
-      await reconfirmAndPersistVerification(archive, input.workflowRun.id, result, published);
-    }
-    // The run is finalized done and the PR is published — now run the auto-merge completion gate (NIN-272).
-    // Post-finalization and best-effort: the callback owns its result/errors, so it can never un-do the run.
-    if (published?.pullRequestUrl && input.completeAutoMergeOnDone) {
-      await input.completeAutoMergeOnDone({ pullRequestUrl: published.pullRequestUrl });
-    }
-    const handoff = await writeDoneHandoff(
-      archive,
-      { workflowRunId: input.workflowRun.id, createdAt, ...(input.budget ? { budget: input.budget } : {}) },
-      location,
-      result,
-      memoryRecord,
-      evidenceRefs,
-      published?.pullRequestUrl ?? null,
-    );
-    return {
-      outcome: "done",
-      workflowRunId: input.workflowRun.id,
-      roleExecutions: result.roleExecutions,
-      handoffArtifactId: handoff.artifactId,
-      ...(published ? { pullRequestUrl: published.pullRequestUrl } : {}),
-    };
+    return finishDoneRun(archive, input, location, result, memoryRecord, evidenceRefs);
   }
   const { reason, kind } = blockedOutcome(result.events);
   const handoff = await writeBlockedHandoff(archive, input, reason, kind);
@@ -211,6 +165,55 @@ async function finishDrivenRun(
     roleExecutions: result.roleExecutions,
     reason,
     handoffArtifactId: handoff.artifactId,
+  };
+}
+
+async function finishDoneRun(
+  archive: WorkflowRunArchive,
+  input: DriveAcceptedWorkflowRunInput,
+  location: WorkflowRunArchiveLocation,
+  result: WorkflowExecutorResult,
+  memoryRecord: WorkflowRunAttemptMemoryRecord,
+  evidenceRefs: readonly EvidenceRef[],
+): Promise<DriveAcceptedWorkflowRunResult> {
+  const createdAt = (input.now ?? defaultNow)();
+  let published: { pullRequestUrl: string | null } | null = null;
+  if (input.publishOnDone) {
+    try {
+      published = await input.publishOnDone();
+    } catch (error) {
+      return await finishPublishFailedRun(archive, input, result.roleExecutions, toErrorString(error));
+    }
+  }
+  await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
+  if (published?.pullRequestUrl) {
+    await updatePublishResultUrl(archive, input.workflowRun.id, published.pullRequestUrl);
+  }
+  if (published) {
+    await reconfirmAndPersistVerification(archive, input.workflowRun.id, result, published);
+  }
+  if (published?.pullRequestUrl && input.completeAutoMergeOnDone) {
+    try {
+      await input.completeAutoMergeOnDone({ pullRequestUrl: published.pullRequestUrl });
+    } catch {
+      /* auto-merge completion failure is non-fatal — run is already done */
+    }
+  }
+  const handoff = await writeDoneHandoff(
+    archive,
+    { workflowRunId: input.workflowRun.id, createdAt, ...(input.budget ? { budget: input.budget } : {}) },
+    location,
+    result,
+    memoryRecord,
+    evidenceRefs,
+    published?.pullRequestUrl ?? null,
+  );
+  return {
+    outcome: "done",
+    workflowRunId: input.workflowRun.id,
+    roleExecutions: result.roleExecutions,
+    handoffArtifactId: handoff.artifactId,
+    ...(published ? { pullRequestUrl: published.pullRequestUrl } : {}),
   };
 }
 
@@ -319,10 +322,7 @@ async function persistExecutorEvents(
   await archive.appendWorkflowRunEvents(input.workflowRun.id, records);
 }
 
-interface EvidenceRef {
-  readonly evidenceId: string;
-  readonly path: string;
-}
+import type { EvidenceRef } from "./drive-done-handoff.js";
 
 interface EvidenceCapturingHook {
   readonly runHook: (input: WorkflowHookExecutionInput) => Promise<WorkflowHookExecutionResult>;

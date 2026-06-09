@@ -222,7 +222,7 @@ describe("GET /api/v1/git/context", () => {
       const github = repos[0].github as Record<string, unknown>;
       expect(github).toMatchObject({ description: "The app repo" });
       expect(github.visibility).toBe("private");
-      expect(github.openPrCount).toBe(1);
+      expect(github.renderedPrCount).toBe(1);
 
       const pulls = github.pulls as Array<Record<string, unknown>>;
       expect(pulls).toHaveLength(1);

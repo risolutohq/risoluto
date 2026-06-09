@@ -63,6 +63,9 @@ function makeResponse(): Response & { _status: number; _body: unknown } {
   const res = {
     _status: 200,
     _body: null as unknown,
+    setHeader(_name: string, _value: string) {
+      return res;
+    },
     status(code: number) {
       res._status = code;
       return res;

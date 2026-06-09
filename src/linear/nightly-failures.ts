@@ -135,15 +135,19 @@ async function closeRecoveredIssues(
   }
 
   const closedStateId = await client.resolveStateId(config.closedStateName);
-  for (const entry of Object.values(history.entries)) {
-    if (!shouldAutoCloseIssue(entry) || !entry.issueId || !closedStateId) {
-      continue;
-    }
-    const issue = await client.getIssueById(entry.issueId);
-    if (issue?.stateName !== config.closedStateName) {
-      await client.updateIssueState(entry.issueId, closedStateId);
-    }
-  }
+  const recoveryPromises = Object.values(history.entries)
+    .filter((entry) => shouldAutoCloseIssue(entry) && entry.issueId && closedStateId)
+    .map(async (entry) => {
+      try {
+        const issue = await client.getIssueById(entry.issueId!);
+        if (issue?.stateName !== config.closedStateName && closedStateId) {
+          await client.updateIssueState(entry.issueId!, closedStateId);
+        }
+      } catch {
+        // Individual close failure should not block other entries.
+      }
+    });
+  await Promise.all(recoveryPromises);
   writeFailureHistory(historyPath, history);
 }
 

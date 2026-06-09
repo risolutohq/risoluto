@@ -155,7 +155,10 @@ export class JsonRpcConnection {
     try {
       parsed = JSON.parse(line);
     } catch (error) {
-      this.logger.warn({ line, error: toErrorString(error) }, "non-JSON line from codex");
+      this.logger.warn(
+        { line: sanitizeContent(line) || null, error: toErrorString(error) },
+        "non-JSON line from codex",
+      );
       return;
     }
 

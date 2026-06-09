@@ -123,7 +123,13 @@ export class LinearTrackerAdapter implements TrackerPort {
     }
     return Promise.all(
       issues.map(async (issue) => {
-        const wrId = await this.lookupWorkflowRunId!(issue.id).catch(() => undefined);
+        const wrId = await this.lookupWorkflowRunId!(issue.id).catch((error) => {
+          this.logger?.warn(
+            { error: toErrorString(error), issueId: issue.id },
+            "lookupWorkflowRunId failed, proceeding without wr_UUID",
+          );
+          return undefined;
+        });
         return withWorkflowRunId(issue, wrId);
       }),
     );

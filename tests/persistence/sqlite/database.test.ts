@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import BetterSqlite3 from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -432,5 +433,221 @@ describe("closeDatabase", () => {
     expect(() => {
       db.select().from(attempts).all();
     }).toThrow();
+  });
+});
+
+describe("v6 schema migration — pull_requests owner/repo split", () => {
+  function createLegacyDb(dbPath: string): void {
+    const raw = new BetterSqlite3(dbPath);
+    try {
+      raw.exec(`
+        CREATE TABLE IF NOT EXISTS schema_version (
+          version   INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL
+        )
+      `);
+      raw.prepare("INSERT INTO schema_version (version, applied_at) VALUES (?, ?)").run(5, new Date().toISOString());
+
+      raw.exec(`
+        CREATE TABLE pull_requests (
+          attempt_id       TEXT,
+          issue_id         TEXT NOT NULL,
+          owner            TEXT,
+          repo             TEXT NOT NULL,
+          number           INTEGER NOT NULL,
+          url              TEXT NOT NULL,
+          branch_name      TEXT NOT NULL,
+          status           TEXT NOT NULL DEFAULT 'open',
+          merged_at        TEXT,
+          merge_commit_sha TEXT,
+          created_at       TEXT NOT NULL,
+          updated_at       TEXT NOT NULL
+        )
+      `);
+
+      raw
+        .prepare(`
+        INSERT INTO pull_requests (attempt_id, issue_id, owner, repo, number, url, branch_name, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+        .run(
+          "att-1",
+          "issue-1",
+          null,
+          "acme/widget",
+          42,
+          "https://github.com/acme/widget/pull/42",
+          "main",
+          "open",
+          new Date().toISOString(),
+          new Date().toISOString(),
+        );
+
+      raw
+        .prepare(`
+        INSERT INTO pull_requests (attempt_id, issue_id, owner, repo, number, url, branch_name, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+        .run(
+          "att-2",
+          "issue-2",
+          null,
+          "alt/foobar",
+          7,
+          "https://github.com/alt/foobar/pull/7",
+          "dev",
+          "merged",
+          new Date().toISOString(),
+          new Date().toISOString(),
+        );
+
+      raw
+        .prepare(`
+        INSERT INTO pull_requests (attempt_id, issue_id, owner, repo, number, url, branch_name, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+        .run(
+          "att-3",
+          "issue-3",
+          null,
+          "single/norepo",
+          1,
+          "https://github.com/single/norepo/pull/1",
+          "main",
+          "open",
+          new Date().toISOString(),
+          new Date().toISOString(),
+        );
+    } finally {
+      raw.close();
+    }
+  }
+
+  it("splits repo field into owner and repo columns when repo contains a slash", async () => {
+    const dir = await createTempDir();
+    const dbPath = path.join(dir, "v6-migration.db");
+
+    createLegacyDb(dbPath);
+
+    const db = openDatabase(dbPath);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = (db as any).session.client;
+      const rows = raw
+        .prepare("SELECT pr_id, owner, repo, pull_number FROM pull_requests ORDER BY issue_id")
+        .all() as Array<{
+        pr_id: string;
+        owner: string;
+        repo: string;
+        pull_number: number;
+      }>;
+
+      expect(rows).toHaveLength(3);
+
+      expect(rows[0].pr_id).toBe("acme/widget#42");
+      expect(rows[0].owner).toBe("acme");
+      expect(rows[0].repo).toBe("widget");
+      expect(rows[0].pull_number).toBe(42);
+
+      expect(rows[1].pr_id).toBe("alt/foobar#7");
+      expect(rows[1].owner).toBe("alt");
+      expect(rows[1].repo).toBe("foobar");
+      expect(rows[1].pull_number).toBe(7);
+
+      expect(rows[2].pr_id).toBe("single/norepo#1");
+      expect(rows[2].owner).toBe("single");
+      expect(rows[2].repo).toBe("norepo");
+      expect(rows[2].pull_number).toBe(1);
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  it("falls back to old owner column when repo field has no slash", async () => {
+    const dir = await createTempDir();
+    const dbPath = path.join(dir, "v6-noslash.db");
+
+    const raw = new BetterSqlite3(dbPath);
+    try {
+      raw.exec(`
+        CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)
+      `);
+      raw.prepare("INSERT INTO schema_version (version, applied_at) VALUES (?, ?)").run(5, new Date().toISOString());
+
+      raw.exec(`
+        CREATE TABLE pull_requests (
+          attempt_id       TEXT,
+          issue_id         TEXT NOT NULL,
+          owner            TEXT,
+          repo             TEXT NOT NULL,
+          number           INTEGER NOT NULL,
+          url              TEXT NOT NULL,
+          branch_name      TEXT NOT NULL,
+          status           TEXT NOT NULL DEFAULT 'open',
+          merged_at        TEXT,
+          merge_commit_sha TEXT,
+          created_at       TEXT NOT NULL,
+          updated_at       TEXT NOT NULL
+        )
+      `);
+
+      // repo has no slash — the migration should use the old owner column
+      raw
+        .prepare(`
+        INSERT INTO pull_requests (attempt_id, issue_id, owner, repo, number, url, branch_name, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+        .run(
+          "att-4",
+          "issue-4",
+          "legacy-owner",
+          "single-repo",
+          3,
+          "https://github.com/legacy-owner/single-repo/pull/3",
+          "main",
+          "open",
+          new Date().toISOString(),
+          new Date().toISOString(),
+        );
+    } finally {
+      raw.close();
+    }
+
+    const db = openDatabase(dbPath);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = (db as any).session.client;
+      const row = raw
+        .prepare("SELECT pr_id, owner, repo, pull_number FROM pull_requests WHERE issue_id = ?")
+        .get("issue-4") as {
+        pr_id: string;
+        owner: string;
+        repo: string;
+        pull_number: number;
+      };
+
+      // repo has no slash: pr_id uses "unknown/" prefix, owner from old owner column
+      expect(row.pr_id).toBe("unknown/single-repo#3");
+      expect(row.owner).toBe("legacy-owner");
+      expect(row.repo).toBe("single-repo");
+      expect(row.pull_number).toBe(3);
+    } finally {
+      closeDatabase(db);
+    }
+  });
+
+  it("v6 migration is idempotent — running openDatabase twice produces no error", async () => {
+    const dir = await createTempDir();
+    const dbPath = path.join(dir, "v6-idempotent.db");
+
+    createLegacyDb(dbPath);
+
+    const db1 = openDatabase(dbPath);
+    closeDatabase(db1);
+
+    expect(() => {
+      const db2 = openDatabase(dbPath);
+      closeDatabase(db2);
+    }).not.toThrow();
   });
 });

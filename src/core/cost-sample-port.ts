@@ -34,7 +34,7 @@ export interface RecentSamplesOptions {
 export interface CostSampleStorePort {
   /** Append a sample and opportunistically truncate older than the retention window. */
   append(input: CostSampleInput): void;
-  /** Most-recent samples first by `atMs`, capped by `limit`. */
+  /** Returns samples in chronological (oldest-first) order, capped by `limit`. The limit retains the freshest rows. */
   recentSamples(options?: RecentSamplesOptions): CostSampleRecord[];
 }
 

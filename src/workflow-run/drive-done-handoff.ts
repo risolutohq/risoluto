@@ -13,7 +13,7 @@ import type { WorkflowExecutorResult } from "./executor.js";
 import { renderHandoffMarkdown, type HandoffArtifact } from "./handoff-contract.js";
 import type { WorkflowRunAttemptMemoryRecord } from "./memory-store.js";
 
-interface EvidenceRef {
+export interface EvidenceRef {
   readonly evidenceId: string;
   readonly path: string;
 }

@@ -129,7 +129,11 @@ export function registerIssueRoutes(app: Express, deps: HttpRouteDeps): void {
         res.status(404).json({ error: { code: "not_found", message: "issue not running" } });
         return;
       }
-      res.json({ ok: result.ok, message: result.ok ? "steer sent" : "steer failed" });
+      if (!result.ok) {
+        res.status(502).json({ ok: false, message: "steer failed" });
+        return;
+      }
+      res.json({ ok: true, message: "steer sent" });
     })
     .all((_req, res) => {
       methodNotAllowed(res, ["POST"]);

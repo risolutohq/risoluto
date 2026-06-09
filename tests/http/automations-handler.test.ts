@@ -74,6 +74,46 @@ describe("automation handlers", () => {
     expect((res._body as { runs: unknown[] }).runs).toHaveLength(1);
   });
 
+  it("filters automation runs by automation_name query param", async () => {
+    const store = AutomationStore.create(openDatabase(":memory:"));
+    // Seed two runs with different automation names
+    const run1 = await store.createRun({
+      automationName: "nightly-report",
+      mode: "report",
+      trigger: "schedule",
+      repoUrl: "https://github.com/acme/app",
+      startedAt: "2026-04-04T11:00:00.000Z",
+    });
+    await store.createRun({
+      automationName: "weekly-digest",
+      mode: "report",
+      trigger: "schedule",
+      repoUrl: "https://github.com/acme/app",
+      startedAt: "2026-04-04T12:00:00.000Z",
+    });
+    await store.finishRun(run1.id, {
+      status: "completed",
+      output: "ok",
+      details: null,
+      issueId: null,
+      issueIdentifier: null,
+      issueUrl: null,
+      error: null,
+      finishedAt: "2026-04-04T11:01:00.000Z",
+    });
+
+    const res = makeMockResponse();
+    await handleListAutomationRuns(
+      { automationStore: store },
+      makeRequest({ query: { automation_name: "nightly-report", limit: "10" } }),
+      res,
+    );
+
+    expect(res._status).toBe(200);
+    const body = res._body as { runs: unknown[] };
+    expect(body.runs).toHaveLength(1);
+  });
+
   it("runs an automation immediately through the scheduler", async () => {
     const res = makeMockResponse();
     const runNow = vi.fn().mockResolvedValue({

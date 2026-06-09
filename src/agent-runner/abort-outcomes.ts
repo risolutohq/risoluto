@@ -61,7 +61,14 @@ export function classifyRunError(
   if (message.includes("startup readiness")) {
     return { kind: "failed", errorCode: "startup_timeout", errorMessage: message, threadId, turnId, turnCount };
   }
-  return { kind: "failed", errorCode: "startup_failed", errorMessage: message, threadId, turnId, turnCount };
+  return {
+    kind: "failed",
+    errorCode: threadId !== null ? "execution_failed" : "startup_failed",
+    errorMessage: message,
+    threadId,
+    turnId,
+    turnCount,
+  };
 }
 
 export function failureOutcome(

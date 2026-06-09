@@ -16,6 +16,18 @@ import type {
 
 export { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 
+export class WorkflowRunArchiveParseError extends Error {
+  constructor(
+    readonly filePath: string,
+    readonly runId: string,
+    cause: unknown,
+  ) {
+    const message = `failed to parse ${filePath} for run ${runId}: ${String(cause)}`;
+    super(message, { cause: cause instanceof Error ? cause : undefined });
+    this.name = "WorkflowRunArchiveParseError";
+  }
+}
+
 export interface WorkflowRunArchiveLocation {
   dataDir?: string;
   archiveDir?: string;
@@ -129,9 +141,20 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
     throw error;
   }
 
-  const workflowRuns = await Promise.all(
-    entries.map(async (entry) => readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry))),
-  );
+  const workflowRuns = (
+    await Promise.all(
+      entries.map(async (entry) => {
+        try {
+          return await readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry));
+        } catch (error) {
+          if (error instanceof WorkflowRunArchiveParseError || (error as NodeJS.ErrnoException).code === "ENOENT") {
+            return null;
+          }
+          throw error;
+        }
+      }),
+    )
+  ).filter((item): item is WorkflowRunStartRecord => item !== null);
   return [...workflowRuns].sort(
     (left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id),
   );
@@ -174,12 +197,20 @@ async function readWorkflowRunEventsFromArchive(
   archiveRoot: string,
   workflowRunId: string,
 ): Promise<WorkflowRunEventRecord[]> {
-  const content = await readFile(runLogPath(archiveRoot, workflowRunId), "utf8");
-  return content
+  const runDir = workflowRunDir(archiveRoot, workflowRunId);
+  const logPath = runLogPathForRunDir(runDir);
+  const raw = await readFile(logPath, "utf8");
+  return raw
     .trim()
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as WorkflowRunEventRecord);
+    .map((line) => {
+      try {
+        return JSON.parse(line) as WorkflowRunEventRecord;
+      } catch (error) {
+        throw new WorkflowRunArchiveParseError(logPath, workflowRunId, error);
+      }
+    });
 }
 
 async function nextWorkflowRunEventSequenceForRunDir(artifactDir: string): Promise<number> {
@@ -188,8 +219,27 @@ async function nextWorkflowRunEventSequenceForRunDir(artifactDir: string): Promi
   return Math.max(0, ...sequences) + 1;
 }
 
+export class WorkflowRunArchiveError extends Error {
+  constructor(
+    message: string,
+    public readonly artifactDir: string,
+    public readonly runId?: string,
+    public override readonly cause?: unknown,
+  ) {
+    super(message);
+  }
+}
+
 async function readWorkflowRunEventsFromRunDir(artifactDir: string): Promise<WorkflowRunEventRecord[]> {
-  const content = await readFile(runLogPathForRunDir(artifactDir), "utf8");
+  let content: string;
+  try {
+    content = await readFile(runLogPathForRunDir(artifactDir), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new WorkflowRunArchiveError("events log not found in run dir", artifactDir, undefined, error);
+    }
+    throw error;
+  }
   return content
     .trim()
     .split("\n")
@@ -255,9 +305,13 @@ async function readWorkflowRunArtifactFromArchive(
   archiveRoot: string,
   input: ReadWorkflowRunArtifactInput,
 ): Promise<WorkflowRunArtifactPayload> {
-  return JSON.parse(
-    await readFile(artifactPath(archiveRoot, input.workflowRunId, input.artifactId), "utf8"),
-  ) as WorkflowRunArtifactPayload;
+  const artifactFilePath = artifactPath(archiveRoot, input.workflowRunId, input.artifactId);
+  const raw = await readFile(artifactFilePath, "utf8");
+  try {
+    return JSON.parse(raw) as WorkflowRunArtifactPayload;
+  } catch (error) {
+    throw new WorkflowRunArchiveParseError(artifactFilePath, input.workflowRunId, error);
+  }
 }
 
 function toWorkflowRunAcceptedEvent(workflowRun: WorkflowRunStartRecord): WorkflowRunEventRecord {
@@ -297,17 +351,20 @@ function workflowRunDir(archiveRoot: string, workflowRunId: string): string {
   return path.join(archiveRoot, "workflow-runs", workflowRunId);
 }
 
-function runLogPath(archiveRoot: string, workflowRunId: string): string {
-  return path.join(workflowRunDir(archiveRoot, workflowRunId), "events.jsonl");
-}
-
 function artifactPath(archiveRoot: string, workflowRunId: string, artifactId: string): string {
   assertSafeArchiveId(artifactId, "artifactId");
   return path.join(workflowRunDir(archiveRoot, workflowRunId), "artifacts", `${artifactId}.json`);
 }
 
 async function readWorkflowRunMetadataFromDir(artifactDir: string): Promise<WorkflowRunStartRecord> {
-  return JSON.parse(await readFile(metadataPathForRunDir(artifactDir), "utf8")) as WorkflowRunStartRecord;
+  const metadataPath = metadataPathForRunDir(artifactDir);
+  const raw = await readFile(metadataPath, "utf8");
+  try {
+    return JSON.parse(raw) as WorkflowRunStartRecord;
+  } catch (error) {
+    const runId = path.basename(artifactDir);
+    throw new WorkflowRunArchiveParseError(metadataPath, runId, error);
+  }
 }
 
 function metadataPathForRunDir(artifactDir: string): string {

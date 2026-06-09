@@ -48,6 +48,13 @@ describe("outcomeForAbort", () => {
     expect(result.errorMessage).toMatch(/model/);
   });
 
+  it("returns cancelled/operator_abort for operator_abort reason", () => {
+    const result = outcomeForAbort(makeSignal("operator_abort"), null, null, 0);
+    expect(result.kind).toBe("cancelled");
+    expect(result.errorCode).toBe("operator_abort");
+    expect(result.errorMessage).toMatch(/operator/);
+  });
+
   it("falls back to generic cancelled for unknown reason", () => {
     const result = outcomeForAbort(makeSignal("something_unknown"), null, null, 0);
     expect(result.kind).toBe("cancelled");

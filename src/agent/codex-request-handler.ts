@@ -140,9 +140,21 @@ function handleApprovalRequest(
   return { response: { decision: CODEX_DENY_DECISION }, fatalFailure: null };
 }
 
-function handlePermissionsRequest(params: Record<string, unknown>, policy: CodexApprovalPolicy): CodexRequestResult {
+function handlePermissionsRequest(
+  params: Record<string, unknown>,
+  policy: CodexApprovalPolicy,
+  sideChannel?: CodexRequestSideChannel,
+): CodexRequestResult {
   const decision = decideCodexApproval({ method: "item/permissions/requestApproval", params }, policy);
   const permissions = decision.approved ? (params.permissionProfile ?? params.permissions ?? null) : null;
+  sideChannel?.({
+    event: decision.approved ? "tool_permissions_granted" : "tool_permissions_denied",
+    message: decision.approved ? "Permissions request granted" : "Permissions request denied",
+    metadata: {
+      permissions,
+      denialReason: decision.reason ?? null,
+    },
+  });
   return {
     response: { permissions, scope: "session" },
     fatalFailure: null,
@@ -198,7 +210,7 @@ export async function handleCodexRequest(
     return handleApprovalRequest(method, asRecord(request.params), approvalPolicy, sideChannel);
   }
   if (method === "item/permissions/requestApproval") {
-    return handlePermissionsRequest(asRecord(request.params), approvalPolicy);
+    return handlePermissionsRequest(asRecord(request.params), approvalPolicy, sideChannel);
   }
   if (method === "item/tool/call") {
     return handleToolCall(asRecord(request.params), trackerToolProvider, githubToolClient);
@@ -207,7 +219,7 @@ export async function handleCodexRequest(
     return handleUserInputRequest(asRecord(request.params), sideChannel);
   }
 
-  const fatal = FATAL_METHOD_RESPONSES[method];
+  const fatal = Object.hasOwn(FATAL_METHOD_RESPONSES, method) ? FATAL_METHOD_RESPONSES[method] : undefined;
   if (fatal) {
     const resolved = typeof fatal === "function" ? fatal(method) : fatal;
     return fatalResult(resolved.code, resolved.message);

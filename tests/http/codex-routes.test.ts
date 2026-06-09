@@ -176,7 +176,7 @@ describe("Codex admin routes", () => {
           limit: 7,
           sortKey: "updated_at",
           archived: true,
-          cwd: undefined,
+          cwd: "/tmp",
           modelProviders: ["openai", "azure"],
           sourceKinds: ["cli", "vscode"],
         });

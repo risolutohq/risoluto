@@ -141,7 +141,11 @@ export function registerCodexRoutes(app: Express, deps: HttpRouteDeps): void {
     .route("/api/v1/codex/mcp/oauth/login")
     .post(
       withControlPlane(deps, async (controlPlane, req, res) => {
-        const name = typeof req.body?.name === "string" ? req.body.name : "";
+        const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+        if (!name) {
+          res.status(400).json({ error: { code: "missing_name", message: "name is required" } });
+          return;
+        }
         res.json(await adminService(controlPlane).startMcpOauthLogin(name));
       }),
     )
@@ -180,7 +184,7 @@ export function registerCodexRoutes(app: Express, deps: HttpRouteDeps): void {
           limit: parseBoundedLimit(req.query.limit, 25),
           sortKey: req.query.sortKey === "updated_at" ? "updated_at" : "created_at",
           archived,
-          cwd: undefined,
+          cwd: typeof req.query.cwd === "string" ? req.query.cwd : undefined,
           modelProviders,
           sourceKinds,
         });
@@ -221,7 +225,11 @@ export function registerCodexRoutes(app: Express, deps: HttpRouteDeps): void {
     .route("/api/v1/codex/threads/:threadId/name")
     .post(
       withControlPlane(deps, async (controlPlane, req, res) => {
-        const name = typeof req.body?.name === "string" ? req.body.name : "";
+        const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+        if (!name) {
+          res.status(400).json({ error: { code: "missing_name", message: "name is required" } });
+          return;
+        }
         res.json(await adminService(controlPlane).renameThread(threadIdParam(req), name));
       }),
     )

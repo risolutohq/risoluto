@@ -15,7 +15,7 @@ import type { WorkspacePort } from "../workspace/port.js";
 
 interface WorkspaceInventoryEntry {
   workspace_key: string;
-  path: string;
+  path?: string;
   status: "running" | "retrying" | "completed" | "orphaned";
   strategy: string;
   issue: {
@@ -38,6 +38,29 @@ interface WorkspaceInventoryResponse {
 /* ------------------------------------------------------------------ */
 /*  Disk usage helpers                                                  */
 /* ------------------------------------------------------------------ */
+
+async function runWithConcurrencyLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: (R | undefined)[] = new Array(items.length);
+  const pending = new Set<Promise<void>>();
+  let idx = 0;
+  for (const item of items) {
+    const i = idx++;
+    const p: Promise<void> = fn(item).then((value) => {
+      results[i] = value;
+      pending.delete(p);
+    });
+    pending.add(p);
+    if (pending.size >= limit) {
+      await Promise.race(pending);
+    }
+  }
+  await Promise.all(pending);
+  return results as R[];
+}
 
 async function computeDirSize(dirPath: string): Promise<number> {
   let total = 0;
@@ -125,9 +148,10 @@ export interface WorkspaceInventoryDeps {
 
 export async function handleWorkspaceInventory(
   deps: WorkspaceInventoryDeps,
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> {
+  const includePaths = req.query?.includePaths === "true";
   const config = deps.configStore?.getConfig() ?? null;
   const workspaceRoot = config?.workspace.root;
   const strategy = config?.workspace.strategy ?? "directory";
@@ -157,24 +181,22 @@ export async function handleWorkspaceInventory(
     throw error;
   }
 
-  const workspaces: WorkspaceInventoryEntry[] = await Promise.all(
-    fsEntries.map(async (key) => {
-      const wsPath = path.join(workspaceRoot, key);
-      const { status, issue } = classifyWorkspace(key, snapshot.running, snapshot.retrying, snapshot.completed ?? []);
+  const workspaces: WorkspaceInventoryEntry[] = await runWithConcurrencyLimit(fsEntries, 4, async (key) => {
+    const wsPath = path.join(workspaceRoot, key);
+    const { status, issue } = classifyWorkspace(key, snapshot.running, snapshot.retrying, snapshot.completed ?? []);
 
-      const [diskBytes, lastModified] = await Promise.all([computeDirSize(wsPath), getDirMtime(wsPath)]);
+    const [diskBytes, lastModified] = await Promise.all([computeDirSize(wsPath), getDirMtime(wsPath)]);
 
-      return {
-        workspace_key: key,
-        path: wsPath,
-        status,
-        strategy,
-        issue,
-        disk_bytes: diskBytes,
-        last_modified_at: lastModified,
-      };
-    }),
-  );
+    return {
+      workspace_key: key,
+      ...(includePaths ? { path: wsPath } : {}),
+      status,
+      strategy,
+      issue,
+      disk_bytes: diskBytes,
+      last_modified_at: lastModified,
+    };
+  });
 
   const statusOrder: Record<string, number> = { running: 0, retrying: 1, completed: 2, orphaned: 3 };
   workspaces.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));

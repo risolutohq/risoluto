@@ -342,6 +342,19 @@ describe("HTTP routes", () => {
     expect(body.message).toBe("steer sent");
   });
 
+  it("POST /api/v1/:identifier/steer returns 502 when steer fails (ok:false)", async () => {
+    orchestrator.steerIssue.mockResolvedValueOnce({ ok: false });
+    const res = await fetchRoute("/api/v1/MT-42/steer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "focus on tests" }),
+    });
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.message).toBe("steer failed");
+  });
+
   it("POST /api/v1/:identifier/steer returns 400 with empty body", async () => {
     const res = await fetchRoute("/api/v1/MT-42/steer", {
       method: "POST",

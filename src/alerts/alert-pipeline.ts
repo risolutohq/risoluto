@@ -163,7 +163,7 @@ function buildAlertSummary(payload: EventPayload): Record<string, string | null>
 
 function buildAlertMessage(rule: AlertRuleConfig, eventType: string, payload: EventPayload): string {
   const issueIdentifier = extractString(payload, ["identifier", "issueIdentifier"]);
-  const error = extractString(payload, ["error", "message"]);
+  const error = sanitizeContent(extractString(payload, ["error", "message"]));
   if (issueIdentifier && error) {
     return `${issueIdentifier} matched ${rule.name}: ${error}`;
   }
