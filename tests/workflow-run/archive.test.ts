@@ -277,6 +277,25 @@ describe("WorkflowRunArchive", () => {
     await expect(recovered.listWorkflowRuns()).resolves.toHaveLength(1);
   });
 
+  it("public readWorkflowRunEvents tolerates a torn final line before any healing append (audit review)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const run = archive.createWorkflowRunRecord({
+      title: "Torn tail read",
+      intent: "A crash mid-append must not make the run unreadable via the public API.",
+      source: "cli",
+      id: () => "wr_torn_read",
+      now: () => "2026-05-26T18:30:00.000Z",
+    });
+    await archive.storeWorkflowRun(run);
+    // Simulate a crash mid-appendFile: a partial JSON line with no trailing newline. No append has
+    // healed the log yet, so the public reader must drop the unacknowledged torn line, not throw.
+    await appendFile(eventsPathFor(dataDir, run.id), '{"at":"2026-05-26T18:30:30.000Z","eventType":"torn');
+
+    const events = await createWorkflowRunArchive({ dataDir }).readWorkflowRunEvents(run.id);
+    expect(events.map((event) => event.eventType)).toEqual(["workflow_run.accepted"]);
+  });
+
   it("writes run metadata atomically: a status update leaves no temp file behind (audit T-5)", async () => {
     const dataDir = await createTempDir();
     const archive = createWorkflowRunArchive({ dataDir });

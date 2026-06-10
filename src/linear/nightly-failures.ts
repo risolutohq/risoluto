@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { LinearClient } from "./client.js";
 import {
@@ -340,4 +341,8 @@ export async function createOrUpdateNightlyIssue(
   const { fingerprint, result } = await processFailureSummary(client, summary, config, history);
   persistFailureResult(history, historyPath, summary, fingerprint, result);
   return result;
+}
+
+export function readNightlyFailureSummary(path: string): NightlyFailureSummary {
+  return JSON.parse(readFileSync(path, "utf8")) as NightlyFailureSummary;
 }

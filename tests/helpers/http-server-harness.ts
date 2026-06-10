@@ -186,6 +186,13 @@ export interface TestServerOverrides {
   webhookSecret?: string;
   /** Whether to open a real SQLite database in the temp dir (Tier 2). */
   withDatabase?: boolean;
+  /**
+   * Whether to wire `archiveDir` (which activates the run-create routes). Default `true`. Set `false`
+   * to construct a minimal server with neither `archiveDir` nor an event bus — the only configuration
+   * where `HttpServer` is allowed to start without an `eventBus`, used to assert the SSE endpoint is
+   * absent (404) when no bus is configured.
+   */
+  withArchiveDir?: boolean;
   /** Provide a config store for config/transitions routes (Tier 2). */
   configStore?: ConfigStore;
   /** Provide a config overlay store for overlay CRUD routes (Tier 2). */
@@ -278,15 +285,18 @@ export async function startTestServer(overrides: TestServerOverrides = {}): Prom
   const logger = overrides.logger ?? buildSilentLogger();
 
   /* ---- server ---- */
+  // archiveDir activates the run-create routes, which require an eventBus (HttpServer refuses to start
+  // otherwise). When archiveDir is wired, default to a throwaway bus if the test didn't supply one;
+  // when it isn't, leave the bus unset so the no-bus / SSE-absent path stays constructible.
+  const useArchiveDir = overrides.withArchiveDir !== false;
+  const resolvedEventBus = eventBus ?? (useArchiveDir ? new TypedEventBus<RisolutoEventMap>() : null);
   const server = new HttpServer({
     orchestrator,
     tracker,
     logger,
-    // archiveDir is always set here, so the run-create routes are active and HttpServer now requires
-    // an eventBus (else it refuses to start). Default to a throwaway bus when a test didn't supply one.
-    eventBus: eventBus ?? new TypedEventBus<RisolutoEventMap>(),
+    ...(resolvedEventBus ? { eventBus: resolvedEventBus } : {}),
     webhookHandlerDeps,
-    archiveDir: dataDir,
+    ...(useArchiveDir ? { archiveDir: dataDir } : {}),
     configStore: overrides.configStore,
     configOverlayStore: overrides.configOverlayStore,
     secretsStore: overrides.secretsStore,

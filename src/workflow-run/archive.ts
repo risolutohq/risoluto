@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { withKeyedSerialChain } from "../utils/serial-chain.js";
@@ -127,16 +127,25 @@ function createWorkflowRunRecordInArchive(
 async function writeFileAtomic(filePath: string, data: string): Promise<void> {
   const tmpPath = `${filePath}.tmp-${randomUUID()}`;
   await writeFile(tmpPath, data, "utf8");
-  await rename(tmpPath, filePath);
+  try {
+    await rename(tmpPath, filePath);
+  } catch (error) {
+    // rename can fail (EXDEV on bind mounts, EPERM after a read-only remount under ENOSPC). Remove the
+    // sibling temp file so a burst of failures can't strand orphaned .tmp- files in the run directory.
+    await rm(tmpPath, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 async function storeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Promise<void> {
   await mkdir(workflowRun.artifactDir, { recursive: true });
   await writeFileAtomic(metadataPathForRunDir(workflowRun.artifactDir), `${JSON.stringify(workflowRun, null, 2)}\n`);
-  await writeFile(
+  // Atomic so a crash mid-write can't leave a torn accepted-event line. The recovery reader drops a
+  // torn final line as unacknowledged, which would silently erase the (already metadata-committed)
+  // accepted event and reassign sequence 1 to a later event; write-temp-then-rename prevents that.
+  await writeFileAtomic(
     runLogPathForRunDir(workflowRun.artifactDir),
     `${JSON.stringify(toWorkflowRunAcceptedEvent(workflowRun))}\n`,
-    "utf8",
   );
 }
 
@@ -201,7 +210,15 @@ async function appendSequencedEvents(
   const cachedNext = nextSequenceCache.get(artifactDir);
   if (cachedNext !== undefined) {
     const sequencedEvents = sequenceEvents(events, cachedNext);
-    await appendFile(logPath, `${serializeEvents(sequencedEvents)}\n`, "utf8");
+    try {
+      await appendFile(logPath, `${serializeEvents(sequencedEvents)}\n`, "utf8");
+    } catch (error) {
+      // A partial appendFile (e.g. ENOSPC) leaves a torn tail. Drop the now-untrustworthy cache so the
+      // next append takes the cache-miss path, re-reads (dropping the torn tail), and atomically
+      // rewrites — instead of appending again onto the partial line under a stale sequence.
+      nextSequenceCache.delete(artifactDir);
+      throw error;
+    }
     nextSequenceCache.set(artifactDir, cachedNext + sequencedEvents.length);
     return sequencedEvents;
   }
@@ -234,6 +251,29 @@ async function appendWorkflowRunEventsToArchive(
   return appendWorkflowRunEventsToRunDir(workflowRunDir(archiveRoot, workflowRunId), events);
 }
 
+/**
+ * Parse JSON-lines event-log content, tolerating a torn FINAL line. A crash mid-append can leave a
+ * partial last line: that append never returned, so no caller ever saw those events — drop it. A
+ * malformed line anywhere earlier is real corruption and is surfaced as WorkflowRunArchiveParseError.
+ * Shared by the public reader and the recovery reader so both apply identical torn-tail semantics — a
+ * crashed run stays readable via the public API instead of throwing until a later write heals the log.
+ */
+function parseEventLogContent(content: string, logPath: string, runId: string): WorkflowRunEventRecord[] {
+  const lines = content.trim().split("\n").filter(Boolean);
+  return lines
+    .map((line, index) => {
+      try {
+        return JSON.parse(line) as WorkflowRunEventRecord;
+      } catch (error) {
+        if (index === lines.length - 1) {
+          return null;
+        }
+        throw new WorkflowRunArchiveParseError(logPath, runId, error);
+      }
+    })
+    .filter((event): event is WorkflowRunEventRecord => event !== null);
+}
+
 async function readWorkflowRunEventsFromArchive(
   archiveRoot: string,
   workflowRunId: string,
@@ -241,17 +281,7 @@ async function readWorkflowRunEventsFromArchive(
   const runDir = workflowRunDir(archiveRoot, workflowRunId);
   const logPath = runLogPathForRunDir(runDir);
   const raw = await readFile(logPath, "utf8");
-  return raw
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as WorkflowRunEventRecord;
-      } catch (error) {
-        throw new WorkflowRunArchiveParseError(logPath, workflowRunId, error);
-      }
-    });
+  return parseEventLogContent(raw, logPath, workflowRunId);
 }
 
 export class WorkflowRunArchiveError extends Error {
@@ -276,23 +306,7 @@ async function readWorkflowRunEventsFromRunDir(artifactDir: string): Promise<Wor
     }
     throw error;
   }
-  const lines = content.trim().split("\n").filter(Boolean);
-  return lines
-    .map((line, index) => {
-      try {
-        return JSON.parse(line) as WorkflowRunEventRecord;
-      } catch (error) {
-        // A torn FINAL line is an unacknowledged append — the process crashed mid-appendFile before
-        // the write returned, so no caller ever saw those events. Drop it so the next append's
-        // sequence computation isn't poisoned by a raw SyntaxError. A malformed line anywhere earlier
-        // is real corruption — surface it like the archive-keyed reader does.
-        if (index === lines.length - 1) {
-          return null;
-        }
-        throw new WorkflowRunArchiveParseError(logPath, artifactDir, error);
-      }
-    })
-    .filter((event): event is WorkflowRunEventRecord => event !== null);
+  return parseEventLogContent(content, logPath, path.basename(artifactDir));
 }
 
 async function writeWorkflowRunArtifactToArchive(
@@ -350,6 +364,12 @@ async function updateWorkflowRunStatusInArchive(
     }
     const updated = { ...workflowRun, status };
     await writeFileAtomic(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`);
+    // A run that has reached a terminal status takes no further appends in normal flow, so drop its
+    // sequence-cache entry to bound nextSequenceCache in a long-lived daemon. A stray later append is
+    // a safe cache miss (re-reads + recomputes), so eviction never corrupts sequencing.
+    if (TERMINAL_RUN_STATUSES.has(status)) {
+      nextSequenceCache.delete(updated.artifactDir);
+    }
     return updated;
   });
 }

@@ -374,7 +374,10 @@ describe("SSE contract tests (full HttpServer stack)", () => {
   // ---- Endpoint absent when no event bus ----
 
   it("returns 404 on /api/v1/events when event bus is not configured", async () => {
-    ctx = await startTestServer(); // No eventBus override → Tier 1
+    // No eventBus and no archiveDir → the only config where HttpServer starts busless, so the SSE
+    // route is never registered. (With archiveDir the T-6 invariant requires a bus, so this is the
+    // sole way to exercise the SSE-absent path.)
+    ctx = await startTestServer({ withArchiveDir: false });
 
     const response = await fetch(`${ctx.baseUrl}/api/v1/events`);
 

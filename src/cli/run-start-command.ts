@@ -251,6 +251,7 @@ function buildDriveOptionals(
     ...(deps.now ? { now: deps.now, councilClock: deps.now } : {}),
     ...(publishHandler ? { publishOnDone: publishHandler } : {}),
     ...(completeAutoMergeOnDone ? { completeAutoMergeOnDone } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {}),
   };
 }
 
