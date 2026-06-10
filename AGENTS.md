@@ -55,7 +55,7 @@ flowchart LR
 
 Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `reach:check` (fast, read-only) fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter (a green test suite is not reachability), `typecheck` runs `tsc --noEmit`, and `typecheck:coverage` (type-coverage >= 95%) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
 
-When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:e2e` (intake-adapter e2e tier: CLI / HTTP / Slack → engine), `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
+When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:e2e` (intake-adapter e2e tier: CLI / HTTP / Slack → engine), `test:integration:live` (requires `.env.live.local`), or `test:docker`.
 
 ## Code-style ceilings (enforced by OXLint)
 
@@ -65,12 +65,11 @@ Refactor before a function's branching would breach the complexity cap — split
 
 OXLint ignores `*.mjs` (via `ignorePatterns`), so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to this ceiling — it applies to `.ts` files only.
 
-## Test tiers (5 vitest configs)
+## Test tiers (4 vitest configs)
 
 - `vitest.config.ts` — default unit suite (`pnpm test`)
 - `vitest.integration.config.ts` — `pnpm run test:integration*`
 - `vitest.live.config.ts` — real external APIs (needs `.env.live.local`)
-- `vitest.load.config.ts` — load / perf tier
 - `vitest.e2e.config.ts` — intake-adapter e2e tier (`pnpm run test:e2e`): CLI / HTTP / Slack → engine
 
 Quarantined tests live in `quarantine.json` (currently empty). Do not silently add to it — quarantine is for flaky tests with an open ticket, not for ones an agent could not fix.
@@ -81,7 +80,7 @@ The core primitive is `Workflow Run`, not tracker issue. Trackers are intake, mi
 
 ## Commit / release flow
 
-Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks` (secret scan) + `lint-staged` (oxlint --fix + oxfmt on staged `.ts` / `.json` / `.yml`). `semantic-release` (`.releaserc.yml`) handles changelog + git tagging from commit subjects — write subjects accordingly (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`).
+Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks` (secret scan) + `lint-staged` (oxlint --fix + oxfmt on staged `.ts` / `.json` / `.yml`). Write Conventional Commit subjects (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`); releases/tags are cut manually (no automated release pipeline).
 
 ## Living context (read on demand)
 
