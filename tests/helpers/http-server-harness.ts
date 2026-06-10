@@ -286,17 +286,17 @@ export async function startTestServer(overrides: TestServerOverrides = {}): Prom
 
   /* ---- server ---- */
   // archiveDir activates the run-create routes, which require an eventBus (HttpServer refuses to start
-  // otherwise). When archiveDir is wired, default to a throwaway bus if the test didn't supply one;
-  // when it isn't, leave the bus unset so the no-bus / SSE-absent path stays constructible.
+  // without one), so the two are wired together: default a throwaway bus only when archiveDir is set.
+  // The busless case — no archiveDir and no supplied bus — is the sole SSE-absent config it accepts.
   const useArchiveDir = overrides.withArchiveDir !== false;
-  const resolvedEventBus = eventBus ?? (useArchiveDir ? new TypedEventBus<RisolutoEventMap>() : null);
+  const eventBusOverride = eventBus ?? (useArchiveDir ? new TypedEventBus<RisolutoEventMap>() : undefined);
   const server = new HttpServer({
     orchestrator,
     tracker,
     logger,
-    ...(resolvedEventBus ? { eventBus: resolvedEventBus } : {}),
-    webhookHandlerDeps,
+    ...(eventBusOverride ? { eventBus: eventBusOverride } : {}),
     ...(useArchiveDir ? { archiveDir: dataDir } : {}),
+    webhookHandlerDeps,
     configStore: overrides.configStore,
     configOverlayStore: overrides.configOverlayStore,
     secretsStore: overrides.secretsStore,

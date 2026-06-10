@@ -3,6 +3,7 @@ import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "nod
 import path from "node:path";
 
 import { withKeyedSerialChain } from "../utils/serial-chain.js";
+import { isErrorCode } from "../utils/type-guards.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 import { parseWorkflowRunArtifact, type WorkflowRunArtifactProducer } from "./artifact-contracts.js";
 import type {
@@ -139,14 +140,16 @@ async function writeFileAtomic(filePath: string, data: string): Promise<void> {
 
 async function storeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Promise<void> {
   await mkdir(workflowRun.artifactDir, { recursive: true });
-  await writeFileAtomic(metadataPathForRunDir(workflowRun.artifactDir), `${JSON.stringify(workflowRun, null, 2)}\n`);
-  // Atomic so a crash mid-write can't leave a torn accepted-event line. The recovery reader drops a
-  // torn final line as unacknowledged, which would silently erase the (already metadata-committed)
-  // accepted event and reassign sequence 1 to a later event; write-temp-then-rename prevents that.
-  await writeFileAtomic(
-    runLogPathForRunDir(workflowRun.artifactDir),
-    `${JSON.stringify(toWorkflowRunAcceptedEvent(workflowRun))}\n`,
-  );
+  // Both writes are atomic (write-temp-then-rename) and target distinct files, so they run concurrently.
+  // The event log must be atomic too: the recovery reader drops a torn final line as unacknowledged,
+  // which would silently erase the (already metadata-committed) accepted event and reassign sequence 1.
+  await Promise.all([
+    writeFileAtomic(metadataPathForRunDir(workflowRun.artifactDir), `${JSON.stringify(workflowRun, null, 2)}\n`),
+    writeFileAtomic(
+      runLogPathForRunDir(workflowRun.artifactDir),
+      `${JSON.stringify(toWorkflowRunAcceptedEvent(workflowRun))}\n`,
+    ),
+  ]);
 }
 
 async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowRunStartRecord[]> {
@@ -155,7 +158,7 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
   try {
     entries = await readdir(workflowRunsDir);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrorCode(error, "ENOENT")) {
       return [];
     }
     throw error;
@@ -167,7 +170,7 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
         try {
           return await readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry));
         } catch (error) {
-          if (error instanceof WorkflowRunArchiveParseError || (error as NodeJS.ErrnoException).code === "ENOENT") {
+          if (error instanceof WorkflowRunArchiveParseError || isErrorCode(error, "ENOENT")) {
             return null;
           }
           throw error;
@@ -301,7 +304,7 @@ async function readWorkflowRunEventsFromRunDir(artifactDir: string): Promise<Wor
   try {
     content = await readFile(logPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrorCode(error, "ENOENT")) {
       throw new WorkflowRunArchiveError("events log not found in run dir", artifactDir, undefined, error);
     }
     throw error;

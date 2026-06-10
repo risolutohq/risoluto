@@ -12,11 +12,10 @@
  * the constructor-level bus (which the existing webhook e2e cannot, since it
  * never POSTs to this route).
  */
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createAcceptedRunDriver } from "../../src/cli/accepted-run-driver.js";
 import { TypedEventBus } from "../../src/core/event-bus.js";
@@ -27,6 +26,7 @@ import {
   workflowRunArtifactIdForContract,
   type WorkflowRunRoleDispatch,
 } from "../../src/workflow-run/run-role-runner.js";
+import { useTempDirs } from "../helpers.js";
 import { buildSilentLogger, buildStubOrchestrator } from "../helpers/http-server-harness.js";
 import { E2E_DEFAULT_WORKFLOW_ID, E2E_FIXED_TIME } from "./intake-harness.js";
 
@@ -61,17 +61,7 @@ states:
 actions: []
 `;
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
-async function makeTempDir(prefix: string): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
-  tempDirs.push(dir);
-  return dir;
-}
+const makeTempDir = useTempDirs("risoluto-e2e-api-");
 
 function buildFakeRoleArtifact(contractId: string, workflowRunId: string): unknown {
   const base = { version: 1 as const, workflowRunId, createdAt: E2E_FIXED_TIME };
@@ -110,7 +100,7 @@ function buildDispatchRole(archive: ReturnType<typeof createWorkflowRunArchive>)
 }
 
 async function writeWorkflowFixture(): Promise<string> {
-  const workflowDir = await makeTempDir("risoluto-e2e-api-wf-");
+  const workflowDir = await makeTempDir();
   await writeFile(path.join(workflowDir, `${E2E_DEFAULT_WORKFLOW_ID}.yaml`), E2E_WORKFLOW_YAML, "utf8");
   return workflowDir;
 }
@@ -129,7 +119,7 @@ function postCreateRun(baseUrl: string): Promise<globalThis.Response> {
 
 describe("HTTP API create-run e2e (audit T-2)", () => {
   it("POST /api/v1/workflow-runs drives a run to an archived review.v1 via the top-level event bus", async () => {
-    const archiveDir = await makeTempDir("risoluto-e2e-api-arc-");
+    const archiveDir = await makeTempDir();
     const workflowDir = await writeWorkflowFixture();
     const archive = createWorkflowRunArchive({ archiveDir });
     const logger = buildSilentLogger();
@@ -188,7 +178,7 @@ describe("HTTP API create-run e2e (audit T-2)", () => {
     // The run-create route emits workflow_run.accepted on the top-level eventBus; without it an
     // API-created run would strand in `accepted` forever. The dep validator now fails closed at
     // startup rather than letting that misconfiguration ship — a future mis-wiring can't pass CI.
-    const archiveDir = await makeTempDir("risoluto-e2e-api-bites-");
+    const archiveDir = await makeTempDir();
     const logger = buildSilentLogger();
     expect(() => new HttpServer({ orchestrator: buildStubOrchestrator(), logger, archiveDir })).toThrow(
       /run-create routes active.*without an eventBus/,

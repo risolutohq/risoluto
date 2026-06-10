@@ -204,14 +204,14 @@ async function driveWithDeps(
     : deps.publishOnDone;
   // Resolve the auto-merge client: injected dep wins; fall back to the live path's client.
   const autoMergeClient = deps.requestAutoMerge ?? live?.requestAutoMerge;
-  const completeAutoMergeOnDone = buildCompleteAutoMergeCallback(
+  const completeAutoMergeOnDone = buildCompleteAutoMergeCallback({
     dataDir,
-    accepted.workflowRun.id,
+    workflowRunId: accepted.workflowRun.id,
     autoMergeClient,
     publishMode,
     publishHandler,
-    deps.logger,
-  );
+    logger: deps.logger,
+  });
   return driveAcceptedWorkflowRun({
     dataDir,
     definition: accepted.definition,
@@ -260,14 +260,19 @@ function buildDriveOptionals(
  * wired, `publishMode` is `auto_merge`, and a publish handler is present (so the PR URL reaches the
  * callback). Returns `undefined` when any precondition is absent — the done path skips silently.
  */
+interface CompleteAutoMergeCallbackInput {
+  readonly dataDir: string;
+  readonly workflowRunId: string;
+  readonly autoMergeClient: ((request: AutoMergeRequest) => Promise<void>) | undefined;
+  readonly publishMode: PrPublishMode | undefined;
+  readonly publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined;
+  readonly logger: Pick<RisolutoLogger, "warn"> | undefined;
+}
+
 function buildCompleteAutoMergeCallback(
-  dataDir: string,
-  workflowRunId: string,
-  autoMergeClient: ((request: AutoMergeRequest) => Promise<void>) | undefined,
-  publishMode: PrPublishMode | undefined,
-  publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined,
-  logger: Pick<RisolutoLogger, "warn"> | undefined,
-): ((input: { pullRequestUrl: string }) => Promise<void>) | undefined {
+  input: CompleteAutoMergeCallbackInput,
+): ((arg: { pullRequestUrl: string }) => Promise<void>) | undefined {
+  const { dataDir, workflowRunId, autoMergeClient, publishMode, publishHandler, logger } = input;
   if (!autoMergeClient || publishMode !== "auto_merge" || !publishHandler) {
     return undefined;
   }
