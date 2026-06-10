@@ -1,25 +1,12 @@
 import { createHash, createHmac } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, it } from "vitest";
 
-import { afterEach, describe, expect, it } from "vitest";
-
+import { useTempDirs } from "../helpers.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { recordSlackOperatorApproval } from "../../src/workflow-run/slack-operator-approval.js";
 
 const TEST_SECRET = "slack-signing-secret";
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-slack-operator-approval-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
+const createTempDir = useTempDirs("risoluto-slack-operator-approval-");
 
 describe("recordSlackOperatorApproval", () => {
   it("rejects a Slack approval outside the replay window before writing an artifact", async () => {

@@ -1,10 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, it } from "vitest";
 
-import { afterEach, describe, expect, it } from "vitest";
-
+import { useTempDirs } from "../helpers.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { parseWorkflowRunArtifact } from "../../src/workflow-run/artifact-contracts.js";
 import {
@@ -16,17 +13,7 @@ import {
 import type { WorkflowRunIntakeRule } from "../../src/workflow-run/intake-core.js";
 
 const TEST_SECRET = "slack-signing-secret";
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-slack-interactions-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
+const createTempDir = useTempDirs("risoluto-slack-interactions-");
 
 describe("Slack workflow-run interactions", () => {
   it("creates a Workflow Run from a Slack modal through the shared intake pipeline", async () => {

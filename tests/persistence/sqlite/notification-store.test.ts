@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
@@ -8,18 +6,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { closeDatabase, openDatabase, type RisolutoDatabase } from "../../../src/persistence/sqlite/database.js";
 import { NotificationStore } from "../../../src/persistence/sqlite/notification-store.js";
 import { notifications } from "../../../src/persistence/sqlite/schema.js";
+import { useTempDirs } from "../../helpers.js";
 
-const tempDirs: string[] = [];
+const createTempDir = useTempDirs("risoluto-notification-store-test-");
 
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-notification-store-test-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 function createSqliteStore(dir: string): {

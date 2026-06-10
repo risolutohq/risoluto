@@ -1,24 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
+import { useTempDirs } from "../helpers.js";
 import { completeAutoMerge, type AutoMergeCompletionInput } from "../../src/workflow-run/auto-merge-completion.js";
 
 const workflowRunId = "wr_auto_merge";
 const createdAt = "2026-06-01T00:45:00.000Z";
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-auto-merge-"));
-  tempDirs.push(dir);
-  return dir;
-}
+const createTempDir = useTempDirs("risoluto-auto-merge-");
 
 describe("auto-merge completion", () => {
   it("requests auto-merge only when every composed precondition is satisfied", async () => {

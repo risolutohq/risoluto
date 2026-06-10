@@ -1,23 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, it } from "vitest";
 
-import { afterEach, describe, expect, it } from "vitest";
-
+import { useTempDirs } from "../helpers.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { writeWorkflowRunRecord } from "../../src/workflow-run/artifacts.js";
 
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-workflow-run-archive-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
+const createTempDir = useTempDirs("risoluto-workflow-run-archive-");
 
 describe("WorkflowRunArchive", () => {
   it("stores and projects Workflow Run metadata through the archive interface", async () => {

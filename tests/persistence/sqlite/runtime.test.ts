@@ -1,30 +1,12 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { openDatabase, closeDatabase } from "../../../src/persistence/sqlite/database.js";
 import { seedDefaults, initPersistenceRuntime } from "../../../src/persistence/sqlite/runtime.js";
 import { config, promptTemplates } from "../../../src/persistence/sqlite/schema.js";
 import { SqliteWebhookInbox } from "../../../src/persistence/sqlite/webhook-inbox.js";
-import { createMockLogger } from "../../helpers.js";
+import { createMockLogger, useTempDirs } from "../../helpers.js";
 
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-runtime-test-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map(async (dir) => {
-      await rm(dir, { recursive: true, force: true });
-    }),
-  );
-});
+const createTempDir = useTempDirs("risoluto-runtime-test-");
 
 describe("seedDefaults", () => {
   it("seeds the default prompt template when config rows already exist", () => {

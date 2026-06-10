@@ -1,24 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, it } from "vitest";
 
-import { afterEach, describe, expect, it } from "vitest";
-
+import { useTempDirs } from "../helpers.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { parseWorkflowRunArtifact } from "../../src/workflow-run/artifact-contracts.js";
 import { renderHandoffMarkdown, type HandoffArtifact } from "../../src/workflow-run/handoff-contract.js";
 
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-workflow-run-handoff-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
+const createTempDir = useTempDirs("risoluto-workflow-run-handoff-");
 
 describe("handoff.v1", () => {
   it("emits schema-valid JSON and rendered Markdown for done and blocked runs", async () => {
