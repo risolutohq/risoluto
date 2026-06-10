@@ -1,5 +1,4 @@
-import { mkdtemp, readdir, rm } from "node:fs/promises";
-import os from "node:os";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,20 +16,14 @@ import { createWorkflowRunMemoryStore } from "../../src/workflow-run/memory-stor
 import type { ResolvedWorkflowDefinition } from "../../src/workflow-definition/registry.js";
 import type { WorkflowRunRoleExecutor } from "../../src/workflow-run/run-role-runner.js";
 import { driveWorkflowRun } from "../../src/workflow-run/workflow-run-driver.js";
+import { useTempDirs } from "../helpers.js";
 
 const FIXED_TIME = "2026-06-08T12:00:00.000Z";
-const tempDirs: string[] = [];
+const createTempDir = useTempDirs("risoluto-mem-");
 
-afterEach(async () => {
+afterEach(() => {
   vi.clearAllMocks();
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-mem-"));
-  tempDirs.push(dir);
-  return dir;
-}
 
 async function acceptedRun(archiveDir: string) {
   return acceptWorkflowRunIntake({

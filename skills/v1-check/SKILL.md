@@ -1,6 +1,6 @@
 ---
 name: v1-check
-description: Run the canonical Risoluto v1 pre-commit / pre-PR gate (build → lint → format:check → reach:check → test → typecheck → typecheck:coverage). Use when the user says "/v1-check", asks to "run checks", "verify the branch", "run the gate", or before pushing / opening a PR. Stops at the first failing step and surfaces the failing command's output verbatim.
+description: Run the canonical Risoluto v1 pre-commit / pre-PR gate (build → lint → format:check → reach:check → test → test:integration → typecheck → typecheck:coverage → knip → circular). Use when the user says "/v1-check", asks to "run checks", "verify the branch", "run the gate", or before pushing / opening a PR. Stops at the first failing step and surfaces the failing command's output verbatim.
 ---
 
 # /v1-check
@@ -15,8 +15,11 @@ pnpm run lint
 pnpm run format:check
 pnpm run reach:check
 pnpm test
+pnpm run test:integration
 pnpm run typecheck
 pnpm run typecheck:coverage
+pnpm run knip
+pnpm run circular
 ```
 
 `reach:check` is a fast read-only step: it fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter (a green test suite is not reachability).
@@ -26,16 +29,16 @@ pnpm run typecheck:coverage
 - **Run each command separately**, not chained with `&&`, so you can report per-step status (pass / fail / skipped) without losing which step failed.
 - **Stop at the first failure.** Do not run downstream steps — they produce noise that hides the real fault.
 - On failure, print the full stdout/stderr of the failing step verbatim. Do not summarize the error away.
-- On full pass, print a one-line confirmation of all 7 steps and any non-zero warnings worth surfacing (e.g., lint warnings that did not fail the run).
+- On full pass, print a one-line confirmation of all 10 steps and any non-zero warnings worth surfacing (e.g., lint warnings that did not fail the run).
 
 ## When to extend
 
-If the user's changes touched integration boundaries, also run the relevant focused integration suite
-**after** the gate passes. Integration boundaries include anything under `src/integrations/`, `src/live/`,
-HTTP routes or schemas, OpenAPI generation/contract files, workflow-run contracts/executor/archive/artifact
-behavior, workflow definitions, or `src/storage/` adapters.
+The default `test:integration` suite runs in the gate above. If the user's changes touched a specific
+boundary, also run the relevant focused suite **after** the gate passes. Integration boundaries include
+anything under `src/integrations/`, `src/live/`, HTTP routes or schemas, OpenAPI generation/contract
+files, workflow-run contracts/executor/archive/artifact behavior, workflow definitions, or `src/storage/`
+adapters.
 
-- `pnpm run test:integration` — default integration suite
 - `pnpm run test:e2e` — intake-adapter e2e tier (CLI / HTTP / Slack → engine)
 - `pnpm run test:integration:live` — real external APIs (needs `.env.live.local`)
 

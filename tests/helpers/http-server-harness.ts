@@ -186,6 +186,13 @@ export interface TestServerOverrides {
   webhookSecret?: string;
   /** Whether to open a real SQLite database in the temp dir (Tier 2). */
   withDatabase?: boolean;
+  /**
+   * Whether to wire `archiveDir` (which activates the run-create routes). Default `true`. Set `false`
+   * to construct a minimal server with neither `archiveDir` nor an event bus — the only configuration
+   * where `HttpServer` is allowed to start without an `eventBus`, used to assert the SSE endpoint is
+   * absent (404) when no bus is configured.
+   */
+  withArchiveDir?: boolean;
   /** Provide a config store for config/transitions routes (Tier 2). */
   configStore?: ConfigStore;
   /** Provide a config overlay store for overlay CRUD routes (Tier 2). */
@@ -278,13 +285,18 @@ export async function startTestServer(overrides: TestServerOverrides = {}): Prom
   const logger = overrides.logger ?? buildSilentLogger();
 
   /* ---- server ---- */
+  // archiveDir activates the run-create routes, which require an eventBus (HttpServer refuses to start
+  // without one), so the two are wired together: default a throwaway bus only when archiveDir is set.
+  // The busless case — no archiveDir and no supplied bus — is the sole SSE-absent config it accepts.
+  const useArchiveDir = overrides.withArchiveDir !== false;
+  const eventBusOverride = eventBus ?? (useArchiveDir ? new TypedEventBus<RisolutoEventMap>() : undefined);
   const server = new HttpServer({
     orchestrator,
     tracker,
     logger,
-    eventBus: eventBus ?? undefined,
+    ...(eventBusOverride ? { eventBus: eventBusOverride } : {}),
+    ...(useArchiveDir ? { archiveDir: dataDir } : {}),
     webhookHandlerDeps,
-    archiveDir: dataDir,
     configStore: overrides.configStore,
     configOverlayStore: overrides.configOverlayStore,
     secretsStore: overrides.secretsStore,

@@ -50,6 +50,8 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run reach:check
       - run: pnpm run typecheck:coverage
+      - run: pnpm run knip
+      - run: pnpm run circular
 
   test:
     name: Test (Node ${{ matrix.node-version }})

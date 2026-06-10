@@ -1,24 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { describe, expect, it } from "vitest";
 
-import { afterEach, describe, expect, it } from "vitest";
-
+import { useTempDirs } from "../helpers.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { acceptTrackerIssueWorkflowRun } from "../../src/workflow-run/tracker-intake.js";
 import type { WorkflowRunIntakeRule } from "../../src/workflow-run/intake-core.js";
 
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-tracker-intake-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
+const createTempDir = useTempDirs("risoluto-tracker-intake-");
 
 describe("tracker workflow-run intake adapters", () => {
   it("reconciles webhook delivery and polling for the same Linear issue into one Workflow Run", async () => {

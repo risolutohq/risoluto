@@ -18,6 +18,8 @@ import { SqliteAttemptStore } from "../../src/persistence/sqlite/attempt-store-s
 import type { RisolutoDatabase } from "../../src/persistence/sqlite/database.js";
 import { buildStubOrchestrator, buildSilentLogger } from "../helpers/http-server-harness.js";
 import { HttpServer } from "../../src/http/server.js";
+import { TypedEventBus } from "../../src/core/event-bus.js";
+import type { RisolutoEventMap } from "../../src/core/risoluto-events.js";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
@@ -239,6 +241,7 @@ describe("GET /api/v1/attempts/:attempt_id/checkpoints", () => {
       logger: buildSilentLogger(),
       attemptStore: store,
       archiveDir: dataDir,
+      eventBus: new TypedEventBus<RisolutoEventMap>(),
     });
     const { port } = await server.start(0);
     baseUrl = `http://127.0.0.1:${port}`;

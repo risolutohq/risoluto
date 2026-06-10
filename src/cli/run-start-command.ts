@@ -1,7 +1,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import type { ModelSelection, Workspace } from "../core/types.js";
+import type { ModelSelection, RisolutoLogger, Workspace } from "../core/types.js";
 import type { RunAttemptDispatcher } from "../dispatch/types.js";
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "../workflow-run/artifacts.js";
@@ -72,6 +72,12 @@ export interface RunStartCommandDeps {
    * `auto_merge` and the `evaluateMergePolicy` action effect is wired.
    */
   readonly mergePolicyForPublish?: (workflowRunId: string) => Promise<MergePolicyEvaluation | null>;
+  /**
+   * Optional structured logger for surfacing a blocked auto-merge on the done path. Absent on the
+   * manual CLI path (which prints the run outcome to the console); injected by tests and any future
+   * daemon caller so a blocked auto-merge leaves an operator-visible trail instead of being discarded.
+   */
+  readonly logger?: Pick<RisolutoLogger, "warn">;
 }
 
 export async function startAndDriveRunCommand(argv: string[], deps: RunStartCommandDeps = {}): Promise<number> {
@@ -198,13 +204,14 @@ async function driveWithDeps(
     : deps.publishOnDone;
   // Resolve the auto-merge client: injected dep wins; fall back to the live path's client.
   const autoMergeClient = deps.requestAutoMerge ?? live?.requestAutoMerge;
-  const completeAutoMergeOnDone = buildCompleteAutoMergeCallback(
+  const completeAutoMergeOnDone = buildCompleteAutoMergeCallback({
     dataDir,
-    accepted.workflowRun.id,
+    workflowRunId: accepted.workflowRun.id,
     autoMergeClient,
     publishMode,
     publishHandler,
-  );
+    logger: deps.logger,
+  });
   return driveAcceptedWorkflowRun({
     dataDir,
     definition: accepted.definition,
@@ -244,6 +251,7 @@ function buildDriveOptionals(
     ...(deps.now ? { now: deps.now, councilClock: deps.now } : {}),
     ...(publishHandler ? { publishOnDone: publishHandler } : {}),
     ...(completeAutoMergeOnDone ? { completeAutoMergeOnDone } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {}),
   };
 }
 
@@ -252,27 +260,40 @@ function buildDriveOptionals(
  * wired, `publishMode` is `auto_merge`, and a publish handler is present (so the PR URL reaches the
  * callback). Returns `undefined` when any precondition is absent — the done path skips silently.
  */
+interface CompleteAutoMergeCallbackInput {
+  readonly dataDir: string;
+  readonly workflowRunId: string;
+  readonly autoMergeClient: ((request: AutoMergeRequest) => Promise<void>) | undefined;
+  readonly publishMode: PrPublishMode | undefined;
+  readonly publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined;
+  readonly logger: Pick<RisolutoLogger, "warn"> | undefined;
+}
+
 function buildCompleteAutoMergeCallback(
-  dataDir: string,
-  workflowRunId: string,
-  autoMergeClient: ((request: AutoMergeRequest) => Promise<void>) | undefined,
-  publishMode: PrPublishMode | undefined,
-  publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined,
-): ((input: { pullRequestUrl: string }) => Promise<void>) | undefined {
+  input: CompleteAutoMergeCallbackInput,
+): ((arg: { pullRequestUrl: string }) => Promise<void>) | undefined {
+  const { dataDir, workflowRunId, autoMergeClient, publishMode, publishHandler, logger } = input;
   if (!autoMergeClient || publishMode !== "auto_merge" || !publishHandler) {
     return undefined;
   }
   return async ({ pullRequestUrl }: { pullRequestUrl: string }) => {
     const pr = parsePrUrl(pullRequestUrl);
     if (!pr) {
+      logger?.warn({ workflowRunId, pullRequestUrl }, "auto-merge skipped: PR URL did not parse as a GitHub PR");
       return;
     }
-    await completeAutoMergeForRun({
+    const completion = await completeAutoMergeForRun({
       dataDir,
       workflowRunId,
       pullRequest: pr,
       requestAutoMerge: autoMergeClient,
     });
+    if (completion.status === "blocked") {
+      logger?.warn(
+        { workflowRunId, reason: completion.reason },
+        "auto-merge blocked on done path; PR left open for manual merge",
+      );
+    }
   };
 }
 

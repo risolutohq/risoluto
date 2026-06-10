@@ -43,3 +43,12 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 export function toErrorString(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * True when `error` is an Error carrying a `code` property equal to `code` (e.g. a Node
+ * `ErrnoException` with `code === "ENOENT"`). Use to discriminate expected filesystem
+ * conditions from genuine failures before swallowing a caught error.
+ */
+export function isErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
+}

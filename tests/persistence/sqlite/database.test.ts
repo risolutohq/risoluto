@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import BetterSqlite3 from "better-sqlite3";
@@ -9,21 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { closeDatabase, openDatabase } from "../../../src/persistence/sqlite/database.js";
 import { attemptEvents, attempts, issueIndex, notifications } from "../../../src/persistence/sqlite/schema.js";
 import type { RisolutoDatabase } from "../../../src/persistence/sqlite/database.js";
+import { useTempDirs } from "../../helpers.js";
 
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-sqlite-test-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-  tempDirs.length = 0;
-});
+const createTempDir = useTempDirs("risoluto-sqlite-test-");
 
 describe("openDatabase", () => {
   it("creates tables on first open", async () => {

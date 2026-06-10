@@ -1,6 +1,27 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import type { Response as ExpressResponse } from "express";
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
 import type { RisolutoLogger } from "../src/core/types.js";
+
+/**
+ * Returns a temp-dir factory whose directories are removed after each test in the calling file.
+ * Call once at the test file's top level — `const createTempDir = useTempDirs("prefix-")` — then
+ * `await createTempDir()` per test. Replaces the copy-pasted mkdtemp + afterEach cleanup boilerplate.
+ */
+export function useTempDirs(prefix: string): () => Promise<string> {
+  const dirs: string[] = [];
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+  return async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
+    dirs.push(dir);
+    return dir;
+  };
+}
 
 /**
  * Creates a mock RisolutoLogger for testing.

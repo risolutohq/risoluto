@@ -1,6 +1,5 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 
 import express from "express";
@@ -13,24 +12,17 @@ import { createWriteGuard } from "../../src/http/write-guard.js";
 import { startWorkflowRunCommand } from "../../src/cli/workflow-run-start-command.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import type { WorkflowRunIntakeRule } from "../../src/workflow-run/intake-rules.js";
-import { createMockLogger } from "../helpers.js";
+import { createMockLogger, useTempDirs } from "../helpers.js";
 
 // ---------------------------------------------------------------------------
 // Shared test infrastructure
 // ---------------------------------------------------------------------------
 
-const tempDirs: string[] = [];
+const createTempDir = useTempDirs("risoluto-intake-rules-eval-");
 
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-intake-rules-eval-"));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
+afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 /**

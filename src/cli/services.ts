@@ -1,3 +1,4 @@
+import { isErrorCode, toErrorString } from "../utils/type-guards.js";
 import { AuditLogger } from "../audit/logger.js";
 import { createMetricsCollector } from "../observability/metrics.js";
 import { createObservabilityHub } from "../observability/hub.js";
@@ -280,7 +281,15 @@ function createRuntimeServices(
       try {
         const record = await archive.loadWorkflowRun(workflowRunId);
         return record.resolvedWorkflowDefinition?.statusMapping;
-      } catch {
+      } catch (error) {
+        // ENOENT = run not archived yet (expected) → silent fallback. Anything else (corrupt
+        // metadata, EACCES) silently degrades tracker status projection, so surface it.
+        if (!isErrorCode(error, "ENOENT")) {
+          logger.warn(
+            { workflowRunId, error: toErrorString(error) },
+            "resolveWorkflowStatusMapping failed; falling back to default status projection",
+          );
+        }
         return undefined;
       }
     },

@@ -1,7 +1,6 @@
 import type { HttpRouteDeps } from "./route-types.js";
 
 const OPTIONAL_ROUTE_DEPS: Array<{ key: keyof HttpRouteDeps; feature: string }> = [
-  { key: "eventBus", feature: "/api/v1/events SSE stream" },
   { key: "tracker", feature: "tracker-backed APIs" },
   { key: "codexControlPlane", feature: "Codex admin APIs" },
   { key: "attemptStore", feature: "attempt and PR APIs" },
@@ -27,6 +26,23 @@ export function validateHttpDeps(deps: HttpRouteDeps): void {
       continue;
     }
     deps.logger.warn({ feature: entry.feature }, "http route dependency missing; related endpoints may be unavailable");
+  }
+
+  // eventBus drives accepted runs forward. The POST /api/v1/workflow-runs route accepts a run and
+  // emits `workflow_run.accepted` for the driver to pick up. With archiveDir present that route can
+  // create runs, so a missing bus would strand every API-created run in `accepted` forever with no
+  // signal (M-1). Fail closed at startup instead. When archiveDir is absent the bus only powers the
+  // SSE stream, so a warning suffices.
+  if (isMissing(deps.eventBus)) {
+    if (!isMissing(deps.archiveDir)) {
+      throw new Error(
+        "HttpServer was given archiveDir (run-create routes active) without an eventBus; API-created runs would never be driven",
+      );
+    }
+    deps.logger.warn(
+      { feature: "/api/v1/events SSE stream" },
+      "http route dependency missing; related endpoints may be unavailable",
+    );
   }
 
   const config = typeof deps.configStore?.getConfig === "function" ? deps.configStore.getConfig() : null;

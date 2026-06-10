@@ -5,6 +5,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createLogger } from "../../src/core/logger.js";
+import { TypedEventBus } from "../../src/core/event-bus.js";
+import type { RisolutoEventMap } from "../../src/core/risoluto-events.js";
 import { HttpServer } from "../../src/http/server.js";
 import { openDatabase, closeDatabase, type RisolutoDatabase } from "../../src/persistence/sqlite/database.js";
 import { SqliteAttemptStore } from "../../src/persistence/sqlite/attempt-store-sqlite.js";
@@ -64,6 +66,7 @@ describe("GET /api/v1/prs", () => {
       logger: buildSilentLogger(),
       attemptStore: store,
       archiveDir: dataDir,
+      eventBus: new TypedEventBus<RisolutoEventMap>(),
     });
     const { port } = await server.start(0);
     baseUrl = `http://127.0.0.1:${port}`;

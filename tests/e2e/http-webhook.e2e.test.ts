@@ -190,7 +190,13 @@ async function createHttpWebhookE2E(): Promise<{
     logger,
   };
 
-  const server = new HttpServer({ orchestrator: buildStubOrchestrator(), logger, webhookHandlerDeps, archiveDir });
+  const server = new HttpServer({
+    orchestrator: buildStubOrchestrator(),
+    logger,
+    webhookHandlerDeps,
+    archiveDir,
+    eventBus,
+  });
   const { port } = await server.start(0);
   const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -291,12 +297,22 @@ describe("HTTP webhook intake e2e (verification ladder NIN-153)", () => {
         resolveIntakeSettled?.();
         return result;
       },
-      // eventBus intentionally absent — workflow_run.accepted is never emitted, driver never runs.
+      // webhook-handler eventBus intentionally absent — the webhook path never emits
+      // workflow_run.accepted, so the driver never runs (this is what the test proves).
       webhookInbox: buildFakeInbox(),
       logger,
     };
 
-    const server = new HttpServer({ orchestrator: buildStubOrchestrator(), logger, webhookHandlerDeps, archiveDir });
+    // A top-level eventBus is wired only to satisfy the run-create invariant (HttpServer refuses to
+    // start with archiveDir but no bus). It is connected to no driver, so it cannot drive the run —
+    // the webhook path's missing handler-bus is still what leaves review.v1 absent.
+    const server = new HttpServer({
+      orchestrator: buildStubOrchestrator(),
+      logger,
+      webhookHandlerDeps,
+      archiveDir,
+      eventBus: new TypedEventBus<RisolutoEventMap>(),
+    });
     const { port } = await server.start(0);
     try {
       const payload = JSON.stringify({

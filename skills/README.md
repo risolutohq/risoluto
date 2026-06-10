@@ -36,7 +36,7 @@ One canonical body per skill, symlinked into both `.claude/skills/` and `.agents
 | **`/init-research`**     | Initialize or refresh the private `research/` submodule (`risolutohq/risoluto-research`). Idempotent. Hard prerequisite — most skills fail fast if it is missing.                                                                  |
 | **`/risoluto-vault`**    | Configure `research/` as a scoped Obsidian vault: `.obsidian/` config, Templater templates, Dataview view notes, pinned plugin set, relative-link enforcement. Idempotent — repairs drift without clobbering operator preferences. |
 | **`/risoluto-features`** | Regenerate `RISOLUTO_FEATURES.md`, the code-backed inventory of every shipped feature (two-repo map-reduce). It is the **dedup anchor** for both research modes and the home for the exit-gate usage signal.                       |
-| **`/v1-check`**          | Run the canonical pre-commit / pre-PR gate in order: build → lint → format:check → reach:check → test → typecheck → typecheck:coverage. Stops at the first failure and surfaces its output verbatim.                                |
+| **`/v1-check`**          | Run the canonical pre-commit / pre-PR gate in order: build → lint → format:check → reach:check → test → test:integration → typecheck → typecheck:coverage → knip → circular. Stops at the first failure and surfaces its output verbatim.                                |
 
 ## Mode A — targeted adoption (study one source)
 

@@ -214,6 +214,7 @@ async function createSlackIntakeE2E(): Promise<{
     logger,
     slackWebhookDeps,
     archiveDir,
+    eventBus,
   });
   const { port } = await server.start(0);
   const baseUrl = `http://127.0.0.1:${port}`;

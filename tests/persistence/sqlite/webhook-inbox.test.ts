@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
@@ -9,15 +7,9 @@ import { createLogger } from "../../../src/core/logger.js";
 import { closeDatabase, openDatabase, type RisolutoDatabase } from "../../../src/persistence/sqlite/database.js";
 import { webhookInbox } from "../../../src/persistence/sqlite/schema.js";
 import { SqliteWebhookInbox } from "../../../src/persistence/sqlite/webhook-inbox.js";
-import { createMockLogger } from "../../helpers.js";
+import { createMockLogger, useTempDirs } from "../../helpers.js";
 
-const tempDirs: string[] = [];
-
-async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "risoluto-webhook-inbox-test-"));
-  tempDirs.push(dir);
-  return dir;
-}
+const createTempDir = useTempDirs("risoluto-webhook-inbox-test-");
 
 function createStore(dir: string): {
   db: RisolutoDatabase;
@@ -71,9 +63,8 @@ function getRow(db: RisolutoDatabase, deliveryId: string) {
   return db.select().from(webhookInbox).where(eq(webhookInbox.deliveryId, deliveryId)).get();
 }
 
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 describe("SqliteWebhookInbox", () => {

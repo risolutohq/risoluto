@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { withKeyedSerialChain } from "../utils/serial-chain.js";
+import { isErrorCode } from "../utils/type-guards.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "./contracts.js";
 import { parseWorkflowRunArtifact, type WorkflowRunArtifactProducer } from "./artifact-contracts.js";
 import type {
@@ -119,14 +120,41 @@ function createWorkflowRunRecordInArchive(
   };
 }
 
+/**
+ * Write `data` to `filePath` atomically: write a sibling temp file then rename over the target.
+ * rename(2) within the same directory is atomic on POSIX, so a crash mid-write can never leave a
+ * partial file that {@link listWorkflowRunsInArchive} would then silently drop from listings.
+ */
+async function writeFileAtomic(filePath: string, data: string): Promise<void> {
+  const tmpPath = `${filePath}.tmp-${randomUUID()}`;
+  await writeFile(tmpPath, data, "utf8");
+  try {
+    await rename(tmpPath, filePath);
+  } catch (error) {
+    // rename can fail (EXDEV on bind mounts, EPERM after a read-only remount under ENOSPC). Remove the
+    // sibling temp file so a burst of failures can't strand orphaned .tmp- files in the run directory.
+    await rm(tmpPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 async function storeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Promise<void> {
   await mkdir(workflowRun.artifactDir, { recursive: true });
-  await writeFile(metadataPathForRunDir(workflowRun.artifactDir), `${JSON.stringify(workflowRun, null, 2)}\n`, "utf8");
-  await writeFile(
-    runLogPathForRunDir(workflowRun.artifactDir),
-    `${JSON.stringify(toWorkflowRunAcceptedEvent(workflowRun))}\n`,
-    "utf8",
-  );
+  // Both writes are atomic (write-temp-then-rename) and target distinct files, so they run concurrently.
+  // The event log must be atomic too: the recovery reader drops a torn final line as unacknowledged,
+  // which would silently erase the (already metadata-committed) accepted event and reassign sequence 1.
+  await Promise.all([
+    writeFileAtomic(metadataPathForRunDir(workflowRun.artifactDir), `${JSON.stringify(workflowRun, null, 2)}\n`),
+    writeFileAtomic(
+      runLogPathForRunDir(workflowRun.artifactDir),
+      `${JSON.stringify(toWorkflowRunAcceptedEvent(workflowRun))}\n`,
+    ),
+  ]);
+  // The log now holds exactly the accepted event (sequence 1), so the next append is 2. Seed the cache
+  // so the first appendWorkflowRunEvents takes the cache-hit fast path (a plain appendFile) instead of
+  // re-reading and atomically rewriting the whole log it just wrote. A crash drops this in-process cache,
+  // so a restart still re-reads and recovers via the cache-miss path.
+  nextSequenceCache.set(workflowRun.artifactDir, 2);
 }
 
 async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowRunStartRecord[]> {
@@ -135,7 +163,7 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
   try {
     entries = await readdir(workflowRunsDir);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrorCode(error, "ENOENT")) {
       return [];
     }
     throw error;
@@ -147,7 +175,7 @@ async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowR
         try {
           return await readWorkflowRunMetadataFromDir(path.join(workflowRunsDir, entry));
         } catch (error) {
-          if (error instanceof WorkflowRunArchiveParseError || (error as NodeJS.ErrnoException).code === "ENOENT") {
+          if (error instanceof WorkflowRunArchiveParseError || isErrorCode(error, "ENOENT")) {
             return null;
           }
           throw error;
@@ -170,19 +198,57 @@ async function appendWorkflowRunEventsToRunDir(
 
   // Serialize the read-then-append per run directory so two concurrent appends can't read the same
   // next-sequence and emit duplicate sequence numbers / attempt indices (RIS-263).
-  return withKeyedSerialChain(runEventAppendChains, artifactDir, async () => {
-    const firstSequence = await nextWorkflowRunEventSequenceForRunDir(artifactDir);
-    const sequencedEvents = events.map((event, index) => ({
-      ...event,
-      sequence: firstSequence + index,
-    }));
-    await appendFile(
-      runLogPathForRunDir(artifactDir),
-      `${sequencedEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
-      "utf8",
-    );
+  return withKeyedSerialChain(runEventAppendChains, artifactDir, () => appendSequencedEvents(artifactDir, events));
+}
+
+/**
+ * Sequence and persist `events` under the single-writer guarantee of the per-dir serial chain.
+ *
+ * Steady state (cache hit): the log was last written by us and ends cleanly, so a fast appendFile is
+ * safe and avoids re-reading the whole log just to compute max(sequence)+1. First touch / recovery
+ * (cache miss, e.g. after a restart): the log may end in a torn line from a crash mid-append, so read
+ * the valid events (the reader drops the torn final line) and rewrite the whole log atomically — this
+ * removes the torn line and prevents the next append from concatenating onto a newline-less tail.
+ */
+async function appendSequencedEvents(
+  artifactDir: string,
+  events: WorkflowRunEventRecord[],
+): Promise<WorkflowRunEventRecord[]> {
+  const logPath = runLogPathForRunDir(artifactDir);
+  const cachedNext = nextSequenceCache.get(artifactDir);
+  if (cachedNext !== undefined) {
+    const sequencedEvents = sequenceEvents(events, cachedNext);
+    try {
+      await appendFile(logPath, `${serializeEvents(sequencedEvents)}\n`, "utf8");
+    } catch (error) {
+      // A partial appendFile (e.g. ENOSPC) leaves a torn tail. Drop the now-untrustworthy cache so the
+      // next append takes the cache-miss path, re-reads (dropping the torn tail), and atomically
+      // rewrites — instead of appending again onto the partial line under a stale sequence.
+      nextSequenceCache.delete(artifactDir);
+      throw error;
+    }
+    nextSequenceCache.set(artifactDir, cachedNext + sequencedEvents.length);
     return sequencedEvents;
-  });
+  }
+  const existing = await readWorkflowRunEventsFromRunDir(artifactDir);
+  const firstSequence = nextSequenceFromEvents(existing);
+  const sequencedEvents = sequenceEvents(events, firstSequence);
+  await writeFileAtomic(logPath, `${serializeEvents([...existing, ...sequencedEvents])}\n`);
+  nextSequenceCache.set(artifactDir, firstSequence + sequencedEvents.length);
+  return sequencedEvents;
+}
+
+function sequenceEvents(events: readonly WorkflowRunEventRecord[], firstSequence: number): WorkflowRunEventRecord[] {
+  return events.map((event, index) => ({ ...event, sequence: firstSequence + index }));
+}
+
+function serializeEvents(events: readonly WorkflowRunEventRecord[]): string {
+  return events.map((event) => JSON.stringify(event)).join("\n");
+}
+
+function nextSequenceFromEvents(events: readonly WorkflowRunEventRecord[]): number {
+  const sequences = events.map((event, index) => (typeof event.sequence === "number" ? event.sequence : index + 1));
+  return Math.max(0, ...sequences) + 1;
 }
 
 async function appendWorkflowRunEventsToArchive(
@@ -193,6 +259,29 @@ async function appendWorkflowRunEventsToArchive(
   return appendWorkflowRunEventsToRunDir(workflowRunDir(archiveRoot, workflowRunId), events);
 }
 
+/**
+ * Parse JSON-lines event-log content, tolerating a torn FINAL line. A crash mid-append can leave a
+ * partial last line: that append never returned, so no caller ever saw those events — drop it. A
+ * malformed line anywhere earlier is real corruption and is surfaced as WorkflowRunArchiveParseError.
+ * Shared by the public reader and the recovery reader so both apply identical torn-tail semantics — a
+ * crashed run stays readable via the public API instead of throwing until a later write heals the log.
+ */
+function parseEventLogContent(content: string, logPath: string, runId: string): WorkflowRunEventRecord[] {
+  const lines = content.trim().split("\n").filter(Boolean);
+  return lines
+    .map((line, index) => {
+      try {
+        return JSON.parse(line) as WorkflowRunEventRecord;
+      } catch (error) {
+        if (index === lines.length - 1) {
+          return null;
+        }
+        throw new WorkflowRunArchiveParseError(logPath, runId, error);
+      }
+    })
+    .filter((event): event is WorkflowRunEventRecord => event !== null);
+}
+
 async function readWorkflowRunEventsFromArchive(
   archiveRoot: string,
   workflowRunId: string,
@@ -200,23 +289,7 @@ async function readWorkflowRunEventsFromArchive(
   const runDir = workflowRunDir(archiveRoot, workflowRunId);
   const logPath = runLogPathForRunDir(runDir);
   const raw = await readFile(logPath, "utf8");
-  return raw
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as WorkflowRunEventRecord;
-      } catch (error) {
-        throw new WorkflowRunArchiveParseError(logPath, workflowRunId, error);
-      }
-    });
-}
-
-async function nextWorkflowRunEventSequenceForRunDir(artifactDir: string): Promise<number> {
-  const events = await readWorkflowRunEventsFromRunDir(artifactDir);
-  const sequences = events.map((event, index) => (typeof event.sequence === "number" ? event.sequence : index + 1));
-  return Math.max(0, ...sequences) + 1;
+  return parseEventLogContent(raw, logPath, workflowRunId);
 }
 
 export class WorkflowRunArchiveError extends Error {
@@ -231,20 +304,17 @@ export class WorkflowRunArchiveError extends Error {
 }
 
 async function readWorkflowRunEventsFromRunDir(artifactDir: string): Promise<WorkflowRunEventRecord[]> {
+  const logPath = runLogPathForRunDir(artifactDir);
   let content: string;
   try {
-    content = await readFile(runLogPathForRunDir(artifactDir), "utf8");
+    content = await readFile(logPath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isErrorCode(error, "ENOENT")) {
       throw new WorkflowRunArchiveError("events log not found in run dir", artifactDir, undefined, error);
     }
     throw error;
   }
-  return content
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as WorkflowRunEventRecord);
+  return parseEventLogContent(content, logPath, path.basename(artifactDir));
 }
 
 async function writeWorkflowRunArtifactToArchive(
@@ -282,6 +352,11 @@ function withRunStatusLock<T>(workflowRunId: string, operation: () => Promise<T>
 // next event sequence (RIS-263).
 const runEventAppendChains = new Map<string, Promise<unknown>>();
 
+// Cache of the next event sequence per run directory, maintained inside the per-dir serial chain so
+// steady-state appends don't re-read the whole log to compute it. Keyed by artifactDir; self-heals
+// from the log on first touch after a restart.
+const nextSequenceCache = new Map<string, number>();
+
 async function updateWorkflowRunStatusInArchive(
   archiveRoot: string,
   workflowRunId: string,
@@ -296,7 +371,13 @@ async function updateWorkflowRunStatusInArchive(
       return workflowRun;
     }
     const updated = { ...workflowRun, status };
-    await writeFile(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+    await writeFileAtomic(metadataPathForRunDir(updated.artifactDir), `${JSON.stringify(updated, null, 2)}\n`);
+    // A run that has reached a terminal status takes no further appends in normal flow, so drop its
+    // sequence-cache entry to bound nextSequenceCache in a long-lived daemon. A stray later append is
+    // a safe cache miss (re-reads + recomputes), so eviction never corrupts sequencing.
+    if (TERMINAL_RUN_STATUSES.has(status)) {
+      nextSequenceCache.delete(updated.artifactDir);
+    }
     return updated;
   });
 }

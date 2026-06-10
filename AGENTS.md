@@ -38,7 +38,7 @@ The `skills/risoluto-features/` skill writes into this submodule and fails hard 
 The pre-commit / pre-PR gate is:
 
 ```bash
-pnpm run build && pnpm run lint && pnpm run format:check && pnpm run reach:check && pnpm test && pnpm run typecheck && pnpm run typecheck:coverage
+pnpm run build && pnpm run lint && pnpm run format:check && pnpm run reach:check && pnpm test && pnpm run test:integration && pnpm run typecheck && pnpm run typecheck:coverage && pnpm run knip && pnpm run circular
 ```
 
 ```mermaid
@@ -47,15 +47,18 @@ flowchart LR
   L["lint<br/>oxlint, complexity 15"]
   F["format:check<br/>oxfmt, read-only"]
   RC["reach:check<br/>capability reachable from intake"]
-  T["test<br/>vitest"]
+  T["test<br/>vitest unit"]
+  TI["test:integration<br/>adapter contracts"]
   TC["typecheck<br/>tsc --noEmit"]
   TCC["typecheck:coverage<br/>type-coverage >= 95"]
-  B --> L --> F --> RC --> T --> TC --> TCC --> PASS["all green"]
+  K["knip<br/>dead code/exports"]
+  CIR["circular<br/>madge, no cycles"]
+  B --> L --> F --> RC --> T --> TI --> TC --> TCC --> K --> CIR --> PASS["all green"]
 ```
 
-Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `reach:check` (fast, read-only) fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter (a green test suite is not reachability), `typecheck` runs `tsc --noEmit`, and `typecheck:coverage` (type-coverage >= 95%) is the final spend. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
+Run the steps in that order — `build` first surfaces TS errors before lint waste, `format:check` is a fast read-only gate, `reach:check` (fast, read-only) fails when a capability in `src/reachability/capability-manifest.json` is no longer reachable from its declared intake adapter (a green test suite is not reachability), `test` is the unit suite and `test:integration` then covers the adapter contracts — a boundary regression a green unit suite misses (e.g. an HTTP dep-validation invariant), `typecheck` runs `tsc --noEmit`, `typecheck:coverage` (type-coverage >= 95%) is the type spend, and `knip` (dead code/exports) + `circular` (madge import cycles) are the final static gates. The Claude Code `/v1-check` skill runs the same sequence and reports per-step status.
 
-When changes touch integration boundaries, also run the relevant focused suite: `test:integration`, `test:integration:sqlite`, `test:integration:contracts`, `test:e2e` (intake-adapter e2e tier: CLI / HTTP / Slack → engine), `test:integration:live` (requires `.env.live.local`), `test:load`, or `test:docker`.
+`test:integration` runs in the gate above. When a change touches a specific boundary, also run the relevant focused suite: `test:integration:sqlite`, `test:integration:contracts`, `test:e2e` (intake-adapter e2e tier: CLI / HTTP / Slack → engine), `test:integration:live` (requires `.env.live.local`), or `test:docker`.
 
 ## Code-style ceilings (enforced by OXLint)
 
@@ -65,12 +68,11 @@ Refactor before a function's branching would breach the complexity cap — split
 
 OXLint ignores `*.mjs` (via `ignorePatterns`), so skill scripts (e.g. `research.mjs`, `synthesize.mjs`) are **not** subject to this ceiling — it applies to `.ts` files only.
 
-## Test tiers (5 vitest configs)
+## Test tiers (4 vitest configs)
 
 - `vitest.config.ts` — default unit suite (`pnpm test`)
 - `vitest.integration.config.ts` — `pnpm run test:integration*`
 - `vitest.live.config.ts` — real external APIs (needs `.env.live.local`)
-- `vitest.load.config.ts` — load / perf tier
 - `vitest.e2e.config.ts` — intake-adapter e2e tier (`pnpm run test:e2e`): CLI / HTTP / Slack → engine
 
 Quarantined tests live in `quarantine.json` (currently empty). Do not silently add to it — quarantine is for flaky tests with an open ticket, not for ones an agent could not fix.
@@ -81,7 +83,7 @@ The core primitive is `Workflow Run`, not tracker issue. Trackers are intake, mi
 
 ## Commit / release flow
 
-Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks` (secret scan) + `lint-staged` (oxlint --fix + oxfmt on staged `.ts` / `.json` / `.yml`). `semantic-release` (`.releaserc.yml`) handles changelog + git tagging from commit subjects — write subjects accordingly (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`).
+Conventional Commits enforced via `commitlint`. Husky pre-commit runs `gitleaks` (secret scan) + `lint-staged` (oxlint --fix + oxfmt on staged `.ts` / `.json` / `.yml`). Write Conventional Commit subjects (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`); releases/tags are cut manually (no automated release pipeline).
 
 ## Living context (read on demand)
 

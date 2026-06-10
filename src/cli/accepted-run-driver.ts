@@ -98,6 +98,7 @@ async function driveRun(deps: AcceptedRunDriverDeps, workflowRunId: string): Pro
     synthesizeCouncil: council.synthesizeCouncil,
     councilClock: nowFn,
     now: nowFn,
+    logger: deps.logger,
   });
 
   deps.onSettled?.(result);

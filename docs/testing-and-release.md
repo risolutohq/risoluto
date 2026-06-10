@@ -78,10 +78,6 @@ The integration tier verified against real third-party systems, in three sub-tie
 
 End-to-end through each **intake adapter** against the real surface, faking only true externals, and asserting an archived artifact or event — never an internal call. `vitest.e2e.config.ts` / `pnpm run test:e2e`; covers CLI `run start`, the HTTP webhook, and Slack intake (including signature rejection + replay dedup). This is Rung 3 of the [reachability ladder](./reachability-ladder.md); wired into CI as the `e2e` job.
 
-### Load / perf
-
-Throughput and latency under concurrency. `vitest.load.config.ts` / `pnpm run test:load`. Off the fast loop — run when changing scheduler, dispatch, or persistence hot paths.
-
 ## Test model profiles
 
 Tests select a **profile**, not a specific model. Profiles are central, versioned, tunable per environment:
@@ -97,14 +93,13 @@ Tests select a **profile**, not a specific model. Profiles are central, versione
 
 ## Release flow
 
-`semantic-release` (`.releaserc.yml`) derives the version, changelog, and git tag from Conventional
-Commit subjects — there are no manual version bumps. Supporting tooling:
+Releases and tags are cut **manually** (the only tag today is `v0.1.0`); there is no automated
+release pipeline pre-1.0. Conventional Commit subjects still carry the release-note intent, so write
+them accordingly. Supporting tooling:
 
 - **commitlint** enforces Conventional Commits (`feat:` / `fix:` / `chore:` / `docs:` / `test:` / `ci:` / `refactor:`); a non-conforming subject fails the commit.
 - **Husky** wires the hooks: pre-commit runs `gitleaks` (secret scan) + `lint-staged` (`oxlint --fix` + `oxfmt` on staged `.ts` / `.json` / `.yml`); pre-push runs the fast 80/20 gate (`slug:check`, then build + test + format:check; `FULL_CHECK=1` runs the CI mirror).
 - **gitleaks** (`.gitleaks.toml`) blocks secrets from entering history.
-
-Because the version and changelog are commit-derived, the subject line _is_ the release note — write it accordingly.
 
 ## Test quarantine
 

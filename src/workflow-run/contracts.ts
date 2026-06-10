@@ -1,6 +1,17 @@
 export const DEFAULT_WORKFLOW_DEFINITION_ID = "single-operator-afk-coder";
 
 export type WorkflowRunSource = "api" | "cli" | "github" | "linear" | "slack";
+
+// Intake-side aliases of the run source. Defined here (rather than in intake-core.ts) so the
+// intake idempotency store can reference them without an intake-core ↔ idempotency import cycle.
+export type WorkflowRunIntakeSource = WorkflowRunSource;
+
+export interface WorkflowRunIntakeExternalObject {
+  readonly provider: WorkflowRunIntakeSource;
+  readonly id: string;
+  readonly url: string | null;
+}
+
 export type WorkflowRunStatus =
   | "accepted"
   | "queued"
