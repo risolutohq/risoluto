@@ -9,8 +9,9 @@ import {
   writeWorkflowRunRecord,
 } from "./artifacts.js";
 import type {
+  WorkflowRunIntakeExternalObject,
+  WorkflowRunIntakeSource,
   WorkflowRunResolvedDefinitionConfig,
-  WorkflowRunSource,
   WorkflowRunStartRecord,
   WorkflowRunTrigger,
 } from "./contracts.js";
@@ -28,17 +29,12 @@ import {
   type WorkflowRunIntakeRule,
 } from "./intake-rules.js";
 
-export type WorkflowRunIntakeSource = WorkflowRunSource;
 export type WorkflowRunIntakeMode = "retry" | "start";
 export type WorkflowRunIntakeAction = "created" | "deduplicated" | "retried";
 export type { WorkflowRunIntakeRule } from "./intake-rules.js";
+// Re-exported from contracts.ts (moved there to break the intake-core ↔ idempotency cycle).
+export type { WorkflowRunIntakeExternalObject, WorkflowRunIntakeSource } from "./contracts.js";
 export { AmbiguousWorkflowRunIntakeError, InvalidWorkflowRunIntakeError };
-
-export interface WorkflowRunIntakeExternalObject {
-  readonly provider: WorkflowRunIntakeSource;
-  readonly id: string;
-  readonly url: string | null;
-}
 
 export interface WorkflowRunIntentArtifact {
   readonly version: 1;

@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync, renameSync } from "node:fs";
-import path from "node:path";
 
 interface FailureHistoryEntry {
   fingerprint: string;
@@ -94,8 +93,4 @@ export function shouldAutoCloseIssue(entry: FailureHistoryEntry): boolean {
     entry.recentResults.length >= 3 &&
     entry.recentResults.slice(-3).every((value) => value === false)
   );
-}
-
-export function defaultHistoryPath(): string {
-  return path.join(process.cwd(), "reports", "nightly-linear-history.json");
 }

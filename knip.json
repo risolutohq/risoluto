@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
-  "project": ["src/**/*.ts", "tests/**/*.ts"],
-  "entry": ["src/dispatch/entrypoint.ts"],
+  "project": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
+  "entry": ["src/dispatch/entrypoint.ts", "scripts/**/*.ts"],
   "ignore": [
     "src/config/index.ts",
     "src/dispatch/index.ts",

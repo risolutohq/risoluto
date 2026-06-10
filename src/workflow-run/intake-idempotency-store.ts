@@ -5,7 +5,7 @@ import path from "node:path";
 import { z } from "zod";
 
 import type { WorkflowRunArchiveLocation } from "./archive.js";
-import type { WorkflowRunIntakeExternalObject, WorkflowRunIntakeSource } from "./intake-core.js";
+import type { WorkflowRunIntakeExternalObject, WorkflowRunIntakeSource } from "./contracts.js";
 
 const mappingSchema = z.object({
   provider: z.string().min(1),

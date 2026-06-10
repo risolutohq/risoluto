@@ -92,8 +92,6 @@ export const createWorkflowRunSchema = z
     message: "externalId and externalProvider must both be present or both absent",
   });
 
-export type CreateWorkflowRunBody = z.infer<typeof createWorkflowRunSchema>;
-
 export const triggerSchema = z
   .object({
     action: z.enum(["create_issue", "re_poll", "refresh_issue"]),
