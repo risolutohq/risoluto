@@ -282,7 +282,9 @@ export async function startTestServer(overrides: TestServerOverrides = {}): Prom
     orchestrator,
     tracker,
     logger,
-    eventBus: eventBus ?? undefined,
+    // archiveDir is always set here, so the run-create routes are active and HttpServer now requires
+    // an eventBus (else it refuses to start). Default to a throwaway bus when a test didn't supply one.
+    eventBus: eventBus ?? new TypedEventBus<RisolutoEventMap>(),
     webhookHandlerDeps,
     archiveDir: dataDir,
     configStore: overrides.configStore,

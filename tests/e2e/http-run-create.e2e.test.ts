@@ -184,31 +184,14 @@ describe("HTTP API create-run e2e (audit T-2)", () => {
     }
   }, 10_000);
 
-  it("bites: create without the top-level eventBus archives intent.v1 but leaves review.v1 absent", async () => {
+  it("bites: an HttpServer with archiveDir but no top-level eventBus refuses to start (T-6 invariant)", async () => {
+    // The run-create route emits workflow_run.accepted on the top-level eventBus; without it an
+    // API-created run would strand in `accepted` forever. The dep validator now fails closed at
+    // startup rather than letting that misconfiguration ship — a future mis-wiring can't pass CI.
     const archiveDir = await makeTempDir("risoluto-e2e-api-bites-");
-    await writeWorkflowFixture();
-    const archive = createWorkflowRunArchive({ archiveDir });
     const logger = buildSilentLogger();
-
-    // eventBus intentionally absent — workflow_run.accepted is never emitted, the driver never runs.
-    const server = new HttpServer({ orchestrator: buildStubOrchestrator(), logger, archiveDir });
-    const { port } = await server.start(0);
-    try {
-      const response = await postCreateRun(`http://127.0.0.1:${port}`);
-      expect(response.status).toBe(201);
-
-      const runs = await archive.listWorkflowRuns();
-      expect(runs).toHaveLength(1);
-      const runId = runs[0]!.id;
-
-      // Intake ran for real — intent.v1 exists.
-      await expect(
-        archive.readWorkflowRunArtifact({ workflowRunId: runId, artifactId: "intent" }),
-      ).resolves.toMatchObject({ contractId: "intent.v1" });
-      // Drive never ran — review.v1 is absent. The positive test would fail here.
-      await expect(archive.readWorkflowRunArtifact({ workflowRunId: runId, artifactId: "review" })).rejects.toThrow();
-    } finally {
-      await server.stop();
-    }
+    expect(() => new HttpServer({ orchestrator: buildStubOrchestrator(), logger, archiveDir })).toThrow(
+      /run-create routes active.*without an eventBus/,
+    );
   }, 10_000);
 });
