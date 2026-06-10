@@ -1,8 +1,14 @@
+import { appendFile, readdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { useTempDirs } from "../helpers.js";
 import { createWorkflowRunArchive } from "../../src/workflow-run/archive.js";
 import { writeWorkflowRunRecord } from "../../src/workflow-run/artifacts.js";
+
+const eventsPathFor = (dataDir: string, runId: string): string =>
+  path.join(dataDir, "archives", "workflow-runs", runId, "events.jsonl");
 
 const createTempDir = useTempDirs("risoluto-workflow-run-archive-");
 
@@ -234,6 +240,98 @@ describe("WorkflowRunArchive", () => {
     // Forge a record with an artifactDir outside the archive root.
     const forgedRun = { ...workflowRun, artifactDir: "/tmp/escape" };
     await expect(writeWorkflowRunRecord(forgedRun, { dataDir })).rejects.toThrow(/artifactDir escapes archive root/);
+  });
+
+  it("tolerates a torn final event line on recovery: still appends and lists (audit T-5)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const run = archive.createWorkflowRunRecord({
+      title: "Torn tail recovery",
+      intent: "A crash mid-append must not poison the next append.",
+      source: "cli",
+      id: () => "wr_torn_tail",
+      now: () => "2026-05-26T18:00:00.000Z",
+    });
+    await archive.storeWorkflowRun(run); // events.jsonl: accepted(seq 1)\n
+
+    // Simulate a crash mid-appendFile: a partial JSON line with no trailing newline.
+    await appendFile(eventsPathFor(dataDir, run.id), '{"at":"2026-05-26T18:00:30.000Z","eventType":"torn');
+
+    // A fresh archive instance has an empty sequence cache → exercises the recovery rewrite path.
+    const recovered = createWorkflowRunArchive({ dataDir });
+    const appended = await recovered.appendWorkflowRunEvents(run.id, [
+      {
+        at: "2026-05-26T18:01:00.000Z",
+        eventType: "operator.note",
+        workflowRunId: run.id,
+        source: "cli",
+        message: "after recovery",
+      },
+    ]);
+
+    // Sequence computed from the valid accepted event (torn line dropped), not a raw SyntaxError.
+    expect(appended.map((event) => event.sequence)).toEqual([2]);
+    // The recovery rewrite removed the torn line, so the appended event is durable and readable.
+    const events = await recovered.readWorkflowRunEvents(run.id);
+    expect(events.map((event) => event.eventType)).toEqual(["workflow_run.accepted", "operator.note"]);
+    await expect(recovered.listWorkflowRuns()).resolves.toHaveLength(1);
+  });
+
+  it("writes run metadata atomically: a status update leaves no temp file behind (audit T-5)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const run = archive.createWorkflowRunRecord({
+      title: "Atomic metadata",
+      intent: "Metadata writes go through write-temp-then-rename.",
+      source: "cli",
+      id: () => "wr_atomic_meta",
+      now: () => "2026-05-26T18:10:00.000Z",
+    });
+    await archive.storeWorkflowRun(run);
+    await archive.updateWorkflowRunStatus(run.id, "running");
+
+    const runDir = path.join(dataDir, "archives", "workflow-runs", run.id);
+    const entries = await readdir(runDir);
+    // The temp file was renamed over metadata.json, never left behind.
+    expect(entries.filter((entry) => entry.includes(".tmp-"))).toEqual([]);
+    expect(entries).toContain("metadata.json");
+    await expect(archive.loadWorkflowRun(run.id)).resolves.toMatchObject({ status: "running" });
+
+    // A stray temp file from an interrupted write does not corrupt reads or listings.
+    await writeFile(path.join(runDir, "metadata.json.tmp-deadbeef"), "{ partial json", "utf8");
+    await expect(archive.loadWorkflowRun(run.id)).resolves.toMatchObject({ status: "running" });
+    await expect(archive.listWorkflowRuns()).resolves.toHaveLength(1);
+  });
+
+  it("steady-state appends use the cached sequence and do not re-read the log (audit T-5)", async () => {
+    const dataDir = await createTempDir();
+    const archive = createWorkflowRunArchive({ dataDir });
+    const run = archive.createWorkflowRunRecord({
+      title: "Sequence cache",
+      intent: "Appends after the first must not re-read the whole log.",
+      source: "cli",
+      id: () => "wr_seq_cache",
+      now: () => "2026-05-26T18:20:00.000Z",
+    });
+    await archive.storeWorkflowRun(run);
+
+    // First append (cache miss) reads the log once and caches the next sequence.
+    const first = await archive.appendWorkflowRunEvents(run.id, [
+      { at: "2026-05-26T18:21:00.000Z", eventType: "operator.note", workflowRunId: run.id, source: "cli" },
+    ]);
+    expect(first.map((event) => event.sequence)).toEqual([2]);
+
+    // Corrupt a NON-final line on disk. If the next append re-read and re-parsed the log it would throw
+    // a parse error on this line; instead it uses the cached sequence and appends without reading.
+    const eventsPath = eventsPathFor(dataDir, run.id);
+    const lines = (await readFile(eventsPath, "utf8")).trimEnd().split("\n");
+    lines[0] = "{ not json";
+    await writeFile(eventsPath, `${lines.join("\n")}\n`, "utf8");
+
+    const second = await archive.appendWorkflowRunEvents(run.id, [
+      { at: "2026-05-26T18:22:00.000Z", eventType: "operator.note", workflowRunId: run.id, source: "cli" },
+    ]);
+    expect(second.map((event) => event.sequence)).toEqual([3]);
   });
 
   it("rejects an unknown artifact contract id before storing the artifact", async () => {
