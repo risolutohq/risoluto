@@ -150,6 +150,11 @@ async function storeWorkflowRunRecord(workflowRun: WorkflowRunStartRecord): Prom
       `${JSON.stringify(toWorkflowRunAcceptedEvent(workflowRun))}\n`,
     ),
   ]);
+  // The log now holds exactly the accepted event (sequence 1), so the next append is 2. Seed the cache
+  // so the first appendWorkflowRunEvents takes the cache-hit fast path (a plain appendFile) instead of
+  // re-reading and atomically rewriting the whole log it just wrote. A crash drops this in-process cache,
+  // so a restart still re-reads and recovers via the cache-miss path.
+  nextSequenceCache.set(workflowRun.artifactDir, 2);
 }
 
 async function listWorkflowRunsInArchive(archiveRoot: string): Promise<WorkflowRunStartRecord[]> {

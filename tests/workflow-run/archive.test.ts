@@ -1,4 +1,4 @@
-import { appendFile, readdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -9,6 +9,9 @@ import { writeWorkflowRunRecord } from "../../src/workflow-run/artifacts.js";
 
 const eventsPathFor = (dataDir: string, runId: string): string =>
   path.join(dataDir, "archives", "workflow-runs", runId, "events.jsonl");
+
+const metadataPathFor = (dataDir: string, runId: string): string =>
+  path.join(dataDir, "archives", "workflow-runs", runId, "metadata.json");
 
 const createTempDir = useTempDirs("risoluto-workflow-run-archive-");
 
@@ -252,12 +255,26 @@ describe("WorkflowRunArchive", () => {
       id: () => "wr_torn_tail",
       now: () => "2026-05-26T18:00:00.000Z",
     });
-    await archive.storeWorkflowRun(run); // events.jsonl: accepted(seq 1)\n
+    // Model the state a restart finds: the run's files were written by a previous process, and a crash
+    // mid-appendFile left a torn final line (partial JSON, no trailing newline). Lay the files down
+    // directly rather than via storeWorkflowRun — whose cache seed would turn the next append into a
+    // cache hit and skip the recovery path under test (a real restart starts with an empty cache).
+    await mkdir(path.dirname(eventsPathFor(dataDir, run.id)), { recursive: true });
+    await writeFile(metadataPathFor(dataDir, run.id), `${JSON.stringify(run, null, 2)}\n`, "utf8");
+    const acceptedLine = JSON.stringify({
+      at: run.createdAt,
+      sequence: 1,
+      eventType: "workflow_run.accepted",
+      workflowRunId: run.id,
+      source: run.source,
+      workflowDefinitionId: run.workflowDefinitionId,
+    });
+    await writeFile(
+      eventsPathFor(dataDir, run.id),
+      `${acceptedLine}\n{"at":"2026-05-26T18:00:30.000Z","eventType":"torn`,
+      "utf8",
+    );
 
-    // Simulate a crash mid-appendFile: a partial JSON line with no trailing newline.
-    await appendFile(eventsPathFor(dataDir, run.id), '{"at":"2026-05-26T18:00:30.000Z","eventType":"torn');
-
-    // A fresh archive instance has an empty sequence cache → exercises the recovery rewrite path.
     const recovered = createWorkflowRunArchive({ dataDir });
     const appended = await recovered.appendWorkflowRunEvents(run.id, [
       {
@@ -334,7 +351,7 @@ describe("WorkflowRunArchive", () => {
     });
     await archive.storeWorkflowRun(run);
 
-    // First append (cache miss) reads the log once and caches the next sequence.
+    // storeWorkflowRun seeded the cache (next sequence 2), so this append is a cache hit from the start.
     const first = await archive.appendWorkflowRunEvents(run.id, [
       { at: "2026-05-26T18:21:00.000Z", eventType: "operator.note", workflowRunId: run.id, source: "cli" },
     ]);
