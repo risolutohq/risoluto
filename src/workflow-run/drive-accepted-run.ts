@@ -27,7 +27,8 @@ import type { PrPublishMode } from "./publish-policy.js";
 import { WorkflowRunActionError } from "./run-action-runner.js";
 import { WorkflowRunRoleDispatchError } from "./run-role-runner.js";
 import { driveWorkflowRun, type DriveWorkflowRunInput } from "./workflow-run-driver.js";
-import { isRecord, toErrorString } from "../utils/type-guards.js";
+import { isErrorCode, isRecord, toErrorString } from "../utils/type-guards.js";
+import type { RisolutoLogger } from "../core/types.js";
 
 export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocation {
   readonly definition: ResolvedWorkflowDefinition;
@@ -68,6 +69,12 @@ export interface DriveAcceptedWorkflowRunInput extends WorkflowRunArchiveLocatio
    * proposals only (NIN-104). Defaults to `"propose_only"`.
    */
   readonly projectMemoryMode?: ProjectMemoryPromotionMode;
+  /**
+   * Optional structured logger for surfacing safe-but-invisible completion-path failures (e.g. a
+   * non-ENOENT read failure while stamping the PR URL). The production daemon driver wires it; the
+   * manual CLI path leaves it unset. Fail-closed behavior is unchanged either way.
+   */
+  readonly logger?: Pick<RisolutoLogger, "warn">;
 }
 
 export interface DriveAcceptedWorkflowRunResult {
@@ -168,6 +175,23 @@ async function finishDrivenRun(
   };
 }
 
+/**
+ * Run the post-publish auto-merge completion callback on the done path. Non-fatal: the run is already
+ * done, so a thrown completion never un-does it — but a throw is unexpected (the callback owns its own
+ * result handling), so it is surfaced via the optional logger instead of swallowed silently.
+ */
+async function runAutoMergeCompletion(input: DriveAcceptedWorkflowRunInput, pullRequestUrl: string): Promise<void> {
+  if (!input.completeAutoMergeOnDone) return;
+  try {
+    await input.completeAutoMergeOnDone({ pullRequestUrl });
+  } catch (error) {
+    input.logger?.warn(
+      { workflowRunId: input.workflowRun.id, error: toErrorString(error) },
+      "auto-merge completion threw on done path; run finalized, PR left open for manual merge",
+    );
+  }
+}
+
 async function finishDoneRun(
   archive: WorkflowRunArchive,
   input: DriveAcceptedWorkflowRunInput,
@@ -187,17 +211,13 @@ async function finishDoneRun(
   }
   await archive.updateWorkflowRunStatus(input.workflowRun.id, "done");
   if (published?.pullRequestUrl) {
-    await updatePublishResultUrl(archive, input.workflowRun.id, published.pullRequestUrl);
+    await updatePublishResultUrl(archive, input.workflowRun.id, published.pullRequestUrl, input.logger);
   }
   if (published) {
     await reconfirmAndPersistVerification(archive, input.workflowRun.id, result, published);
   }
-  if (published?.pullRequestUrl && input.completeAutoMergeOnDone) {
-    try {
-      await input.completeAutoMergeOnDone({ pullRequestUrl: published.pullRequestUrl });
-    } catch {
-      /* auto-merge completion failure is non-fatal — run is already done */
-    }
+  if (published?.pullRequestUrl) {
+    await runAutoMergeCompletion(input, published.pullRequestUrl);
   }
   const handoff = await writeDoneHandoff(
     archive,
@@ -491,11 +511,21 @@ async function updatePublishResultUrl(
   archive: WorkflowRunArchive,
   workflowRunId: string,
   pullRequestUrl: string,
+  logger?: Pick<RisolutoLogger, "warn">,
 ): Promise<void> {
   let payload: { contractId: string; data: unknown };
   try {
     payload = await archive.readWorkflowRunArtifact({ workflowRunId, artifactId: "publish_result" });
-  } catch {
+  } catch (error) {
+    // ENOENT = the publish_result artifact was never written (expected when publish was skipped) → silent.
+    // Anything else (corrupt JSON, EACCES) means the PR URL silently never gets stamped and auto-merge
+    // blocks with no trail — surface it for the operator while still failing closed.
+    if (!isErrorCode(error, "ENOENT")) {
+      logger?.warn(
+        { workflowRunId, error: toErrorString(error) },
+        "publish_result read failed; PR URL not stamped — auto-merge will block",
+      );
+    }
     return;
   }
   if (!isRecord(payload.data) || payload.data["pullRequestUrl"] !== null) {

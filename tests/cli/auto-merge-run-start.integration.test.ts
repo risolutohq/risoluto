@@ -21,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { startAndDriveRunCommand } from "../../src/cli/run-start-command.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive } from "../../src/workflow-run/archive.js";
+import { createMockLogger } from "../helpers.js";
 import {
   workflowRunArtifactIdForContract,
   type WorkflowRunRoleDispatch,
@@ -212,6 +213,7 @@ describe("NIN-75 auto-merge gate wiring from `run start` (hermetic)", () => {
     const requestAutoMerge = vi
       .fn<[{ owner: string; repo: string; pullNumber: number; mergeMethod: string }], Promise<void>>()
       .mockResolvedValue(undefined);
+    const logger = createMockLogger();
 
     // publishOnDone returns a URL (simulating a real git push), but the publish POLICY blocked at
     // operator_approval_required, so publish_result.v1.autoMerge === false. The post-run gate then
@@ -238,6 +240,7 @@ describe("NIN-75 auto-merge gate wiring from `run start` (hermetic)", () => {
         mergePolicyForPublish: vi.fn().mockResolvedValue({ status: "passed", mergeMethod: "squash" }),
         publishOnDone: vi.fn().mockResolvedValue({ pullRequestUrl: FAKE_PR_URL }),
         requestAutoMerge,
+        logger,
       },
     );
 
@@ -255,5 +258,11 @@ describe("NIN-75 auto-merge gate wiring from `run start` (hermetic)", () => {
 
     // (c) requestAutoMerge is never reached.
     expect(requestAutoMerge).not.toHaveBeenCalled();
+
+    // T-4: the blocked auto-merge is no longer discarded — it leaves an operator-visible warn.
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ workflowRunId: runId, reason: "auto_merge_publish_not_ready" }),
+      expect.stringContaining("auto-merge blocked on done path"),
+    );
   });
 });

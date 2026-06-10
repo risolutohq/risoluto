@@ -1,7 +1,7 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import type { ModelSelection, Workspace } from "../core/types.js";
+import type { ModelSelection, RisolutoLogger, Workspace } from "../core/types.js";
 import type { RunAttemptDispatcher } from "../dispatch/types.js";
 import { createWorkflowRunArchive } from "../workflow-run/archive.js";
 import { DEFAULT_WORKFLOW_DEFINITION_ID } from "../workflow-run/artifacts.js";
@@ -72,6 +72,12 @@ export interface RunStartCommandDeps {
    * `auto_merge` and the `evaluateMergePolicy` action effect is wired.
    */
   readonly mergePolicyForPublish?: (workflowRunId: string) => Promise<MergePolicyEvaluation | null>;
+  /**
+   * Optional structured logger for surfacing a blocked auto-merge on the done path. Absent on the
+   * manual CLI path (which prints the run outcome to the console); injected by tests and any future
+   * daemon caller so a blocked auto-merge leaves an operator-visible trail instead of being discarded.
+   */
+  readonly logger?: Pick<RisolutoLogger, "warn">;
 }
 
 export async function startAndDriveRunCommand(argv: string[], deps: RunStartCommandDeps = {}): Promise<number> {
@@ -204,6 +210,7 @@ async function driveWithDeps(
     autoMergeClient,
     publishMode,
     publishHandler,
+    deps.logger,
   );
   return driveAcceptedWorkflowRun({
     dataDir,
@@ -258,6 +265,7 @@ function buildCompleteAutoMergeCallback(
   autoMergeClient: ((request: AutoMergeRequest) => Promise<void>) | undefined,
   publishMode: PrPublishMode | undefined,
   publishHandler: (() => Promise<{ pullRequestUrl: string | null }>) | undefined,
+  logger: Pick<RisolutoLogger, "warn"> | undefined,
 ): ((input: { pullRequestUrl: string }) => Promise<void>) | undefined {
   if (!autoMergeClient || publishMode !== "auto_merge" || !publishHandler) {
     return undefined;
@@ -265,14 +273,21 @@ function buildCompleteAutoMergeCallback(
   return async ({ pullRequestUrl }: { pullRequestUrl: string }) => {
     const pr = parsePrUrl(pullRequestUrl);
     if (!pr) {
+      logger?.warn({ workflowRunId, pullRequestUrl }, "auto-merge skipped: PR URL did not parse as a GitHub PR");
       return;
     }
-    await completeAutoMergeForRun({
+    const completion = await completeAutoMergeForRun({
       dataDir,
       workflowRunId,
       pullRequest: pr,
       requestAutoMerge: autoMergeClient,
     });
+    if (completion.status === "blocked") {
+      logger?.warn(
+        { workflowRunId, reason: completion.reason },
+        "auto-merge blocked on done path; PR left open for manual merge",
+      );
+    }
   };
 }
 

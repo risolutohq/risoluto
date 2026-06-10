@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { WorkflowRunArchiveLocation } from "./archive.js";
 import type { WorkflowRunIntakeExternalObject, WorkflowRunIntakeSource } from "./contracts.js";
+import { isErrorCode } from "../utils/type-guards.js";
 
 const mappingSchema = z.object({
   provider: z.string().min(1),
@@ -184,8 +185,4 @@ function intakeRoot(location: WorkflowRunArchiveLocation): string {
 
 function stableFileName(value: string): string {
   return `${createHash("sha256").update(value).digest("hex")}.json`;
-}
-
-function isErrorCode(error: unknown, code: string): boolean {
-  return error instanceof Error && "code" in error && error.code === code;
 }

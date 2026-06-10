@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { WorkflowRunArtifactReference } from "./artifacts.js";
 import { createWorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import { verifySlackSignature } from "../webhook/signature.js";
+import { isErrorCode } from "../utils/type-guards.js";
 import type { OperatorApprovalArtifact, OperatorPermission } from "./operator-approval-contract.js";
 
 const SLACK_REPLAY_WINDOW_SECONDS = 300;
@@ -140,10 +141,6 @@ class DuplicateSlackApprovalNonceError extends Error {
     super("duplicate Slack approval nonce");
     this.name = "DuplicateSlackApprovalNonceError";
   }
-}
-
-function isErrorCode(error: unknown, code: string): boolean {
-  return error instanceof Error && "code" in error && error.code === code;
 }
 
 function toOperatorApprovalArtifact(

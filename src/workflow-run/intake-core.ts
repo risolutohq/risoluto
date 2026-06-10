@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
 
+import { isErrorCode } from "../utils/type-guards.js";
 import { createWorkflowRunArchive, type WorkflowRunArchive, type WorkflowRunArchiveLocation } from "./archive.js";
 import {
   createWorkflowRunRecord,
@@ -287,8 +288,4 @@ async function runRecordBecomesDurable(location: WorkflowRunArchiveLocation, wor
 
 function nextAttemptNumber(events: readonly { readonly runAttempt?: { readonly attemptNumber?: number } }[]): number {
   return Math.max(0, ...events.map((event) => event.runAttempt?.attemptNumber ?? 0)) + 1;
-}
-
-function isErrorCode(error: unknown, code: string): boolean {
-  return error instanceof Error && "code" in error && error.code === code;
 }
