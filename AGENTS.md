@@ -23,6 +23,28 @@ git submodule update --init research
 
 The `skills/risoluto-features/` skill writes into this submodule and fails hard if it is missing. See the `/init-research` Claude Code skill for a one-shot init.
 
+## Codebase map
+
+TypeScript ESM throughout. Sources in `src/`, mirrored tests in `tests/`. Entry point: `bin/risoluto` execs the compiled `dist/cli/index.js` (run `pnpm run build` first); the CLI source is `src/cli/index.ts`, and `pnpm run dev` runs it through `tsx watch` with no build step.
+
+Top-level layout:
+
+- `src/` — product code, organized by surface and layer (see below).
+- `tests/` — vitest suites split by tier: unit (root + co-located), `integration/`, `e2e/`, `live/`, and the `http/` adapter contracts.
+- `docs/` — foundation docs: the product/technical spines, `adr/`, `decisions.md`, `roadmap.md`, the research-to-shipping pipeline, `prds/`.
+- `skills/` — versioned `risoluto-*` agent skill packs (the planning pipeline); `.claude/skills/` mirrors them for Claude Code, `.claude/hooks/` holds the session-invariants / stop-check hooks.
+- `scripts/` — repo tooling wired to `pnpm` scripts (`reachability-check.ts`, `validate-research.ts`, `prd-reconcile.ts`, `slug-consistency-check.mjs`, …).
+- `bin/` — the `risoluto` launcher. `research/` — the private planning submodule (above).
+
+The authoritative `src/` module map — every directory, with file counts and how they group into Intake / Core engine / Tracker adapters / Support — lives in [`docs/technical-spine.md`](docs/technical-spine.md) (do not duplicate the counts here; they drift). The seams that matter most:
+
+- **Surfaces:** `src/cli/` (primary), `src/http/` (internal/support API), `src/webhook/` + `src/live/` (intake).
+- **Core engine:** `src/orchestrator/` (intake → accepted), `src/workflow-run/` + `src/state/` (accepted → done state machine), `src/workflow-definition/`, `src/dispatch/` (the control-plane / execution-plane seam: local `AgentRunner` vs remote `DispatchClient`).
+- **Adapters (behind typed ports):** `src/tracker/` · `src/linear/` · `src/github/` (`TrackerPort`), `src/agent-runner/` + `src/codex/` (harness `AgentSessionPort`), `src/git/` (PR/MR), `src/persistence/` (SQLite + filesystem).
+- **Platform:** `src/config/`, `src/core/`, `src/secrets/`, `src/docker/`, `src/health/`, `src/observability/` + `src/audit/`, `src/notification/` + `src/alerts/`, and `src/reachability/` (the `reach:check` capability manifest).
+
+Boundary discipline (ports are the contract; hooks ≠ gates ≠ transitions; plane separation) is specified in [`docs/technical-spine.md`](docs/technical-spine.md#boundary-rules) — respect it when adding code.
+
 ## Working Rules
 
 - Use Node.js 22 or newer; package manager is pnpm 11.
