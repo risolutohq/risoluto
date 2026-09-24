@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Working rules and context for any AI agent in this repo (Claude Code, Codex, etc.). `CLAUDE.md` is a one-line redirector that `@`-imports this file — edit here, never there. One source of truth, no symlink (works cross-platform).
+Working rules and context for any AI agent in this repo (Claude Code, Codex, etc.). Claude Code and Codex both read this file directly; keep agent instructions here and add no `CLAUDE.md`.
 
 ## Identity
 
